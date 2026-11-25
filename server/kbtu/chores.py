@@ -54,18 +54,17 @@ async def refresh_chats(cfg: Config, http: httpx.AsyncClient, con) -> None:
 async def chat_card(cfg: Config, http: httpx.AsyncClient, con, cid: int, tg_chat: int) -> bool:
     """An org's chat our bot sits in (PLAN 86): its card from Telegram (getChat: title, about, avatar; getChatMemberCount),
     never a message. False when Telegram won't say (the bot was removed: the t.me page again)."""
-    api = f"https://api.telegram.org/bot{cfg.bot_token}"
     try:
-        r = (await http.post(f"{api}/getChat", json={"chat_id": tg_chat})).json()
+        r = (await _tg(cfg, http, "getChat", {"chat_id": tg_chat})).json()
         if not r.get("ok"):
             if r.get("error_code") in (400, 403):  # no such chat for us any more
                 logic.bot_left(con, tg_chat)
             return False
         ch, card = r["result"], {"title": r["result"].get("title"), "about": r["result"].get("description") or ""}
-        n = (await http.post(f"{api}/getChatMemberCount", json={"chat_id": tg_chat})).json()
+        n = (await _tg(cfg, http, "getChatMemberCount", {"chat_id": tg_chat})).json()
         card["members"] = n.get("result") if n.get("ok") else None
         if fid := (ch.get("photo") or {}).get("big_file_id"):
-            f = (await http.post(f"{api}/getFile", json={"file_id": fid})).json()
+            f = (await _tg(cfg, http, "getFile", {"file_id": fid})).json()
             if f.get("ok") and f["result"].get("file_path") and int(f["result"].get("file_size") or 0) <= media.MAX_BYTES:
                 img = await http.get(f"https://api.telegram.org/file/bot{cfg.bot_token}/{f['result']['file_path']}")
                 if img.status_code == 200:
@@ -135,11 +134,10 @@ async def post_channel(cfg: Config, http: httpx.AsyncClient, con) -> None:
     """The events channel (logic.channel_due): a new post with the cover (or text without one), or the old one edited."""
     if not cfg.events_channel:
         return
-    api = f"https://api.telegram.org/bot{cfg.bot_token}"
     root = Path(cfg.db_path).resolve().parent / "media"
     for post, thread in logic.channel_gone(con):  # deleted events: their posts go (one Telegram refuses, e.g. too old,
         for chat, mid in ((cfg.events_channel, post), *([thread.split()] if thread else [])):  # stays and is logged)
-            r = (await http.post(f"{api}/deleteMessage", json={"chat_id": chat, "message_id": int(mid)})).json()
+            r = (await _tg(cfg, http, "deleteMessage", {"chat_id": chat, "message_id": int(mid)})).json()
             if not r.get("ok"):
                 log.warning("channel delete %s/%s: %s", chat, mid, str(r.get("description"))[:200])
                 if r.get("error_code") != 400:  # a flood wait, Telegram down, no right yet: the next round tries again

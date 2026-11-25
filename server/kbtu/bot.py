@@ -141,8 +141,8 @@ async def _join(cfg: Config, http: httpx.AsyncClient, con, req: dict) -> None:
         chat, who = req["chat"]["id"], req["from"]["id"]
         d = logic.guard_join(con, chat, who)
         url = f"https://{cfg.domain}/?startapp=gq_{logic.guard_token(guard_key(cfg), chat, who, qid)}"
-        r = await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/" + ("sendChatJoinRequestWebApp" if d == "app" else "answerChatJoinRequestQuery"),
-                            json={"chat_join_request_query_id": qid, **({"web_app_url": url} if d == "app" else {"result": d})})
+        r = await _tg(cfg, http, "sendChatJoinRequestWebApp" if d == "app" else "answerChatJoinRequestQuery",
+                      {"chat_join_request_query_id": qid, **({"web_app_url": url} if d == "app" else {"result": d})})
         if not r.json().get("ok"):
             log.warning("guard: %s", str(r.json().get("description"))[:200])
         return
@@ -152,8 +152,7 @@ async def _join(cfg: Config, http: httpx.AsyncClient, con, req: dict) -> None:
         if d not in ("approve", "decline"):  # someone we don't know, or a chat we don't know: its admins decide
             return
         ok = d == "approve"
-    await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/{'approve' if ok else 'decline'}ChatJoinRequest",
-                    json={"chat_id": req["chat"]["id"], "user_id": req["from"]["id"]})
+    await _tg(cfg, http, f"{'approve' if ok else 'decline'}ChatJoinRequest", {"chat_id": req["chat"]["id"], "user_id": req["from"]["id"]})
 
 
 INLINE_EVENTS = 5  # the empty query's upcoming events; a typed one shows up to 20 matches
@@ -506,7 +505,7 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
                     await _tapped(cfg, http, con, upd["callback_query"], cut)
                     continue
                 if "inline_query" in upd:  # "@KBTUappBot ..." typed in any chat (inline mode, BotFather /setinline)
-                    await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/answerInlineQuery", json=inline_answer(cfg, con, upd["inline_query"]))
+                    await _tg(cfg, http, "answerInlineQuery", inline_answer(cfg, con, upd["inline_query"]))
                     continue
                 if "chat_join_request" in upd:
                     if not upd["chat_join_request"].get("query_id"):  # a guarded one was answered above
@@ -608,16 +607,12 @@ async def _postman(cfg: Config, http: httpx.AsyncClient) -> None:
 
 
 async def _call(cfg: Config, http: httpx.AsyncClient, method: str, params: dict, gap: float = SYNC_GAP) -> dict | None:
-    """A paced call beside the ears (the chat sync, /all): a 429 waits as told; None: the network, or still too fast."""
+    """_tg paced beside the ears (the chat sync, /all): a 429 waits as told; None: the network, or still too fast."""
     for _ in range(5):
         await asyncio.sleep(gap)
         try:
-            f = fancy(params)
-            r = await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/{method}", json=f)
+            r = await _tg(cfg, http, method, params)
             answer = r.json()
-            if r.status_code == 400 and f is not params and re.search(r"emoji|entit", str(answer.get("description")), re.I):
-                r = await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/{method}", json=params)  # the pack refused: plain
-                answer = r.json()
         except (httpx.HTTPError, ValueError) as exc:
             log.warning("%s: %s", method, type(exc).__name__)  # the type only: the URL holds the token
             await asyncio.sleep(10)  # the network: again in a while, not in a tight loop
@@ -744,7 +739,7 @@ async def _commands(cfg: Config, http: httpx.AsyncClient) -> None:
     for scope, by_lang in texts.COMMANDS.items():
         for lang, cmds in by_lang.items():
             try:
-                await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/setMyCommands", json={
+                await _tg(cfg, http, "setMyCommands", {
                     "scope": {"type": scope}, **({} if lang == "en" else {"language_code": lang}),
                     "commands": [{"command": c, "description": d} for c, d in cmds]})
             except httpx.HTTPError:
@@ -754,8 +749,7 @@ async def _commands(cfg: Config, http: httpx.AsyncClient) -> None:
               "promote_members", "change_info", "invite_users", "post_stories", "edit_stories", "delete_stories",
               "pin_messages", "manage_topics", "manage_tags")}
     try:
-        res = await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/setMyDefaultAdministratorRights",
-                              json={"rights": {"is_anonymous": False, **rights}})
+        res = await _tg(cfg, http, "setMyDefaultAdministratorRights", {"rights": {"is_anonymous": False, **rights}})
         log.warning("default admin rights: %s", res.text[:200])
     except httpx.HTTPError:
         log.warning("setMyDefaultAdministratorRights failed")

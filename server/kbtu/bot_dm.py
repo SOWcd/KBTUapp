@@ -69,7 +69,7 @@ async def _tg_chat(cfg: Config, http: httpx.AsyncClient | None, url: str) -> dic
     if "/+" in url or http is None:
         return None
     try:
-        r = (await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/getChat", json={"chat_id": "@" + url.rsplit("/", 1)[1]})).json()
+        r = (await _tg(cfg, http, "getChat", {"chat_id": "@" + url.rsplit("/", 1)[1]})).json()
     except (httpx.HTTPError, ValueError, AttributeError):
         return None
     c = r.get("result") if isinstance(r, dict) and r.get("ok") else None
@@ -392,10 +392,9 @@ async def _tapped(cfg: Config, http: httpx.AsyncClient, con, cq: dict, again: bo
     cards (ct:, ps:). The question turns into the answer; someone else's tap does nothing."""
     msg, data = cq.get("message") or {}, str(cq.get("data") or "")
     f = re.fullmatch(r"(ct|ps):(\d+)(?::([0-9a-f]{8}))?(?::([yn]))?|an:([yn])", data)
-    callback = f"https://api.telegram.org/bot{cfg.bot_token}/answerCallbackQuery"
     ack = {"callback_query_id": cq["id"]}
     if not f or f[1] != "ct":
-        await http.post(callback, json=ack)
+        await _tg(cfg, http, "answerCallbackQuery", ack)
     if data.startswith("nf:"):
         await _feedback_tap(cfg, http, con, cq, msg, data)
         return
@@ -405,7 +404,7 @@ async def _tapped(cfg: Config, http: httpx.AsyncClient, con, cq: dict, again: bo
             con.execute("INSERT OR REPLACE INTO broadcast_votes (name, user_id, vote, at) VALUES (?, ?, ?, ?)", (v[2], u["id"], int(v[1]), int(time.time())))
             con.execute("UPDATE users SET n_broadcasts = ? WHERE id = ?", (int(v[1]), u["id"]))  # "don't send these" turns broadcasts off (Settings turns them back on)
         if msg.get("message_id") and (kb := (msg.get("reply_markup") or {}).get("inline_keyboard")):  # the vote row says thanks, the link stays
-            await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/editMessageReplyMarkup", json={
+            await _tg(cfg, http, "editMessageReplyMarkup", {
                 "chat_id": (msg.get("chat") or {}).get("id"), "message_id": msg["message_id"], "reply_markup": {"inline_keyboard": kb[:1]}})
         return
     # the forum's cards: Accept/Decline an offer, stop the pings; an: more messages like the elective's? (the tapper's own row)
@@ -413,7 +412,7 @@ async def _tapped(cfg: Config, http: httpx.AsyncClient, con, cq: dict, again: bo
         u = one(con, "SELECT id, lang FROM users WHERE tg_id = ?", (cq.get("from") or {}).get("id"))
         if not u or not msg:
             if f[1] == "ct":
-                await http.post(callback, json=ack)
+                await _tg(cfg, http, "answerCallbackQuery", ack)
             return
         if f[5]:
             con.execute("UPDATE users SET announce_ok = ? WHERE id = ?", (int(f[5] == "y"), u["id"]))
@@ -426,9 +425,9 @@ async def _tapped(cfg: Config, http: httpx.AsyncClient, con, cq: dict, again: bo
             st = logic.decide_contact(con, u["id"], int(f[2]), f[4] == "y", f[3])  # f[3]: the offer's token
             if not st and one(con, "SELECT 1 FROM contacts WHERE id = ? AND to_id = ? AND token = ? AND withdrawn_at IS NOT NULL",
                               int(f[2]), u["id"], f[3]):
-                await http.post(callback, json={**ack, "text": texts.bot_message(u["lang"], "contact_withdrawn")[0]})
+                await _tg(cfg, http, "answerCallbackQuery", {**ack, "text": texts.bot_message(u["lang"], "contact_withdrawn")[0]})
                 return
-            await http.post(callback, json=ack)
+            await _tg(cfg, http, "answerCallbackQuery", ack)
             said = {"accepted": "contact_yes", "declined": "contact_no"}.get(st or "", "contact_gone")
         chat, thanks = (msg.get("chat") or {}).get("id"), texts.bot_message(u["lang"], said)[0]
         if f[5]:  # the post stays with its link; the question's buttons give way to the thanks

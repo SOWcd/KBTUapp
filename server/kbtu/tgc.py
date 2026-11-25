@@ -76,11 +76,10 @@ def _is_report(cfg: Config, text: str) -> bool:
 
 
 async def _call(cfg: Config, http: httpx.AsyncClient, method: str, body: dict) -> dict:
+    """bot._tg (the packs' emoji, plain again if Telegram refuses them) answered as a dict, {"ok": False} for the network."""
     from . import bot  # here: bot imports this module
     try:
-        r = (await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/{method}", json=bot.fancy(body))).json()
-        if not r.get("ok") and bot.fancy(body) is not body and re.search(r"emoji|entit", str(r.get("description")), re.I):
-            r = (await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/{method}", json=body)).json()  # the pack refused: plain
+        r = (await bot._tg(cfg, http, method, body)).json()
     except (httpx.HTTPError, ValueError) as exc:
         log.warning("tgc %s: %s", method, type(exc).__name__)
         return {"ok": False}
@@ -250,19 +249,6 @@ async def tick(cfg: Config, http: httpx.AsyncClient, con) -> None:
         await _call(cfg, http, "unbanChatMember", {"chat_id": cfg.tgc_chat, "user_id": tg, "only_if_banned": True})
 
 
-async def _premium_send(cfg: Config, http: httpx.AsyncClient, body: dict) -> dict:
-    """sendMessage through bot._send (bot.premium's emoji packs and its plain fallback), answered like _call."""
-    from . import bot  # here: bot imports this module
-    try:
-        r = (await bot._send(cfg, http, body)).json()
-    except (httpx.HTTPError, ValueError) as exc:
-        log.warning("tgc sendMessage: %s", type(exc).__name__)
-        return {"ok": False}
-    if not r.get("ok"):
-        log.warning("tgc sendMessage: %s", str(r.get("description"))[:200])
-    return r
-
-
 async def _upload(cfg: Config, http: httpx.AsyncClient, method: str, body: dict, files: dict) -> dict:
     """A Bot API call with files (multipart), answered like _call."""
     try:
@@ -365,8 +351,8 @@ async def post_tick(cfg: Config, http: httpx.AsyncClient, con) -> None:
     for pid, root in F.rules_due(con):  # the first comment under each post's copy: the rules, and the way to it in the app
         if not F.rules_claim(con, pid):  # claimed (committed) before it goes: once per post, across restarts and workers
             continue
-        # HTML through the bot's own send: its emoji become the packs' animated ones, plain again if Telegram refuses
-        r = await _premium_send(cfg, http, {
+        # HTML through bot._tg (_call): its emoji become the packs' animated ones, plain again if Telegram refuses
+        r = await _call(cfg, http, "sendMessage", {
             "chat_id": cfg.tgc_chat, "text": html.escape(texts.FORUM_RULES), "parse_mode": "HTML", "link_preview_options": {"is_disabled": True},
             "reply_parameters": {"message_id": root},
             "reply_markup": {"inline_keyboard": [[{"text": texts.FORUM_BUTTON, "url": f"https://t.me/{cfg.bot_username}?startapp=fp_{pid}"}]]}})

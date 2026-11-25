@@ -14,7 +14,7 @@ import time
 import httpx
 
 from . import bot, db, logic, media, mtbot, swear, texts, tgc, tiktok
-from .bot import FRESH, _call, _nap, _send, _video_seen, premium
+from .bot import FRESH, _call, _nap, _send, _tg, _video_seen, premium
 from .chores import chat_card
 from .config import Config
 from .logic import one
@@ -57,7 +57,7 @@ async def _member(cfg: Config, http: httpx.AsyncClient, con, upd: dict) -> None:
         return
     invite = None
     try:  # an admin bot is told the chat's primary invite link
-        r = (await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/getChat", json={"chat_id": chat["id"]})).json()
+        r = (await _tg(cfg, http, "getChat", {"chat_id": chat["id"]})).json()
         invite = (r.get("result") or {}).get("invite_link") if r.get("ok") else None
     except (httpx.HTTPError, ValueError) as exc:  # matched by its @name then
         log.warning("bot added: %s", type(exc).__name__)
@@ -135,7 +135,7 @@ async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
     if len(words) == 2 and re.fullmatch(r"/start(@\w+)?", words[0]) and re.fullmatch(r"oc_\d+", words[1]):  # Studio's "Add our bot" deep link identifies the club.
         sender = int((msg.get("from") or {}).get("id") or 0)
         # only the group's own admin links it (whoever added the bot as an admin is one), as for an event's chat
-        me = (await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/getChatMember", json={"chat_id": chat["id"], "user_id": sender})).json()
+        me = (await _tg(cfg, http, "getChatMember", {"chat_id": chat["id"], "user_id": sender})).json()
         if not (me.get("ok") and (me.get("result") or {}).get("status") in ("creator", "administrator")):
             return
         if cid := logic.bot_added(con, sender, chat, cid=int(words[1][3:])):
@@ -153,15 +153,15 @@ async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
         return
     if len(words) != 2 or not re.fullmatch(r"/start(@\w+)?", words[0]) or not words[1].startswith("ec_"):
         return
-    api, sender = f"https://api.telegram.org/bot{cfg.bot_token}", int((msg.get("from") or {}).get("id") or 0)
+    sender = int((msg.get("from") or {}).get("id") or 0)
     # only the group's own admin links it (whoever added the bot as an admin is one): a member can't hand it to an event
-    me = (await http.post(f"{api}/getChatMember", json={"chat_id": chat["id"], "user_id": sender})).json()
+    me = (await _tg(cfg, http, "getChatMember", {"chat_id": chat["id"], "user_id": sender})).json()
     admin = me.get("ok") and (me.get("result") or {}).get("status") in ("creator", "administrator")
     e = logic.chat_claim(con, words[1][3:], sender, chat["id"]) if admin else None
     if not e:
         await _send(cfg, http, {"chat_id": chat["id"], "text": texts.CHAT_BAD, "parse_mode": "HTML"})
         return
-    r = (await http.post(f"{api}/createChatInviteLink", json={"chat_id": chat["id"], "name": e["title"][:32], "creates_join_request": True})).json()
+    r = (await _tg(cfg, http, "createChatInviteLink", {"chat_id": chat["id"], "name": e["title"][:32], "creates_join_request": True})).json()
     if not r.get("ok"):  # the bot isn't an admin that may invite: say what to fix
         log.warning("chat link: %s", str(r.get("description"))[:200])
         await _send(cfg, http, {"chat_id": chat["id"], "text": texts.CHAT_NO_RIGHTS, "parse_mode": "HTML"})
