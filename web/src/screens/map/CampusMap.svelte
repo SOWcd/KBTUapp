@@ -48,9 +48,10 @@
   import MapIcon from '@lucide/svelte/icons/map';
   import Layers from '@lucide/svelte/icons/layers';
   import { close, removeOverlay, hideChrome, say, type Overlay } from '../../lib/state/ui.svelte';
-  import { t, i18n } from '../../lib/i18n/index.svelte';
+  import { t, i18n, placeOf } from '../../lib/i18n/index.svelte';
   import { haptic, inTelegram } from '../../lib/tg';
-  import { SPOTS, roomOf, floorOf, nearRooms, spotOf } from '../../lib/map';
+  import { SPOTS, campusPoint, roomOf, floorOf, nearRooms, spotOf } from '../../lib/map';
+  import { campusPlace } from '../../lib/campusPlace';
   import { FRAMES, HAS, Z0, LEVELS, lngLat, uvOf, zoomFor, widthAt, tilesOf, overview, scan, SCAN_AT, tileSize, roomAt, labelsOf, labelData, type Ver } from '../../lib/mapgl';
   import { Map as GLMap, LngLat, type MapMouseEvent, type StyleSpecification, type SourceSpecification, type LayerSpecification, type GeoJSONSource, type ImageSource } from 'maplibre-gl';
   import 'maplibre-gl/dist/maplibre-gl.css';
@@ -70,8 +71,10 @@
 
   let { overlay, place, exit = false }: { overlay: Overlay; place?: string; exit?: boolean } = $props();
   const ROOMS = uniqRooms as unknown as Record<string, number[][]>[]; // by floor: room → where its number is printed
-  let room = $state(untrack(() => roomOf(place)));
-  let cur = $state(untrack(() => floorOf(place) ?? 1)); // the floor it opens on; the switcher takes over from there
+  const campus = untrack(() => campusPlace(place));
+  const opening = campus && campusPoint(campus, ROOMS);
+  let room = $state(untrack(() => opening ? opening.room || null : roomOf(place)));
+  let cur = $state(untrack(() => opening?.f ?? floorOf(place) ?? 1)); // the floor it opens on; the switcher takes over from there
   const roomFloor = $derived(floorOf(room)); // 0: the basement's 1-99
   const onRoomFloor = $derived(!!room && cur === roomFloor);
   const title = $derived(cur === 0 ? t('map.basement') : t('map.title', { n: cur }));
@@ -532,6 +535,7 @@
   let pad = $state(false);
   // a found place without a number (canteen, Independence Hall); the schedule can open the map on one
   let at = $state<{ f: number; u: number; v: number; label: string } | null>(untrack(() => {
+    if (opening && !room && place) return { f: opening.f, u: opening.u, v: opening.v, label: place };
     const sp = place && !room ? spotOf(place) : null;
     return sp?.f != null ? { f: sp.f, u: sp.u!, v: sp.v!, label: t(`route.spot.${sp.k}` as 'route.spot.canteen') } : null;
   }));
@@ -570,8 +574,8 @@
     if (ver === 'kbtu' || (!f && ver === 'old')) { ver = 'main'; reset(); } // rooms are ringed on Uni-Q's; the basement is there only
     if (f !== cur) { halt(); cur = f; touched++; }
   }
-  const dest = $derived(room ?? at?.label ?? null);
-  const cardTitle = $derived(at ? at.label : room ? (SPOTS.find((x) => x.room === room) ? t(`route.spot.${SPOTS.find((x) => x.room === room)!.k}` as 'route.spot.canteen') : t('map.roomTitle', { room })) : '');
+  const dest = $derived(room ?? (at ? placeOf(at.label) : null));
+  const cardTitle = $derived(at ? dest ?? '' : room ? (SPOTS.find((x) => x.room === room) ? t(`route.spot.${SPOTS.find((x) => x.room === room)!.k}` as 'route.spot.canteen') : t('map.roomTitle', { room })) : '');
   const card = $derived(!pad && !routing && !!dest);
   function clearFound() { haptic.tap(); room = null; at = null; glided = false; clearTimeout(glideT); fit(); }
   /** the whole floor again, gliding */

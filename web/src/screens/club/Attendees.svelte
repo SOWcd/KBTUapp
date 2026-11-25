@@ -15,6 +15,7 @@
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { haptic, inTelegram, openLink } from '../../lib/tg';
   import { eventById, studioChanged } from '../../lib/state/data.svelte';
+  import { readState } from '../../lib/state/readState.svelte';
   import { session } from '../../lib/state/session.svelte';
   import { may } from '../../lib/perms';
   import { sheets } from '../../lib/state/sheets';
@@ -32,14 +33,15 @@
   import Notice from '../../ui/Notice.svelte';
   import SearchField from '../../ui/SearchField.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
+  import Skeleton from '../../ui/Skeleton.svelte';
   import { checkinMessages } from './checkinMessages';
   import SortChip from '../../ui/SortChip.svelte';
   import { sorted, byName, newest, usual, type Order } from '../../lib/sort.svelte';
 
   let { overlay, id }: { overlay: Overlay; id: Id } = $props();
 
-  let list = $state<Attendee[] | null>(null);
-  const load = () => api.attendees(id).then((l) => (list = l)).catch(() => (list = []));
+  const { state: roster, load } = readState(() => api.attendees(id));
+  const list = $derived(roster.value);
   onMount(() => { void load(); });
   let q = $state('');
   // the server's: going first, then holds and the waitlist, flagged receipts on top
@@ -96,9 +98,9 @@
     if (!list || !(await sheets.ask({ title: t('att.removeAsk', { name: a.fullName }), text: t(a.receipt ? 'att.removePaid' : 'att.removeText'),
       ok: t('att.remove'), cancel: t('common.cancel'), danger: true }))) return;
     const was = list;
-    list = list.filter((x) => x.person.id !== a.person.id); haptic.tap();
+    roster.value = list.filter((x) => x.person.id !== a.person.id); haptic.tap();
     try { await api.removePerson(id, a.person.id); haptic.ok(); say(t('att.removed'), 'waving_hand_3d_default'); void load(); studioChanged(); } // the waitlist moved in
-    catch (e) { list = was; haptic.error(); say(e instanceof ApiErr && e.message === 'checked_in' ? t('att.removeCame') : t('common.error'), 'warning_3d'); }
+    catch (e) { roster.value = was; haptic.error(); say(e instanceof ApiErr && e.message === 'checked_in' ? t('att.removeCame') : t('common.error'), 'warning_3d'); }
   }
 
   // a seat on this event (a ticket, or a hold waiting on its receipt) until a week after the end: the host's own
@@ -167,6 +169,7 @@
 
 <Sheet {overlay} icon={ClipboardList} full title={t('studio.attendees')}>
   {#if title}<p class="t-foot ev ellipsis">{title}</p>{/if}
+  {#if roster.status === 'error'}<EmptyState onretry={load} />{:else if roster.status === 'loading' && !shown.length}<Skeleton />{/if}
   {#if list}<div class="col">
     <div class="bar"><p class="stats">{t('att.stats', { going, came })}</p>
       {#if list.length && host}<Button kind="secondary" size="s" loading={sending} onclick={exportList}>{#snippet icon()}<FileDown size={16} />{/snippet}{t('att.export')}</Button>{/if}</div>
@@ -179,7 +182,7 @@
     {#if shown.length}
       {#if shown.length > 1}<SortChip list="attendees" orders={ORDERS} />{/if}
       <Group>{@render people(shown)}</Group>
-    {:else}
+    {:else if roster.status === 'ready'}
       <EmptyState inline text={q.trim() ? t('clubs.nothing') : t('att.none')} />
     {/if}
     {#if removed.length && !staff}

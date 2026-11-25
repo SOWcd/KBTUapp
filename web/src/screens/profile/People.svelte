@@ -1,8 +1,8 @@
 <script lang="ts">
-  // "People of the app": what shipped in three numbers, then a card a person: the creator's, the idea's author's, then
-  // everyone's, newest first by the day it shipped: never by amount. A name and a face only after that person's own
-  // yes (server credits.py); without it a line goes in the last card, "Students", each line on its own under its kind:
-  // no face, nothing to tap, nothing that ties two such lines together. A pull request's lines stand under its GitHub
+  // "People of the app": what shipped in three numbers, then a card a person: the creator's, the idea's author's, the
+  // Team's (the core developers the creator picked), then everyone's, newest first by the day it shipped: never by
+  // amount. A name and a face only after that person's own yes (server credits.py); without it a line goes in the last
+  // card, "Students", each line on its own under its kind: no face, nothing to tap, nothing that ties two such lines together. A pull request's lines stand under its GitHub
   // login, its card opens the profile there.
   // The numbers count lines, never people: nameless lines say nothing of how many people they are.
   // The list comes with the app (data.credits): the page never waits.
@@ -37,10 +37,11 @@
   const KINDS: CreditKind[] = ['idea', 'find', 'code'];
   const stats = $derived.by(() => {
     const n: Record<CreditKind, number> = { idea: 0, find: 0, code: 0 };
-    for (const r of c ? [...c.people, ...(c.idea ? [c.idea] : [])] : []) for (const i of r.items) n[i.kind]++;
+    for (const r of c ? [...c.people, ...c.team, ...(c.idea ? [c.idea] : [])] : []) for (const i of r.items) n[i.kind]++;
     return KINDS.filter((k) => n[k]).map((k) => ({ k, n: n[k] }));
   });
   const named = $derived(c ? c.people.filter((r) => r.person || r.gh) : []);
+  const lead = $derived(c ? c.team.length : 0); // the list's cards follow the Team's in
   const anon = $derived(c ? c.people.filter((r) => !r.person && !r.gh).flatMap((r) => r.items) : []); // newest first, as listed
 </script>
 
@@ -92,14 +93,27 @@
           {#if c.idea.items.length}<span class="more"><CreditLines items={c.idea.items} under="idea" /></span>{/if}
         </Card></div>
       {/if}
+      <!-- the Team: the idea's card, one a member, their lines under it (not again in the list) -->
+      {#each c.team as row, i (row.person.id)}
+        {@const p = row.person}
+        <div class="one up" style:--d={Math.min(3 + i, 9)}><Card onclick={() => open(p)}>
+          <span class="star">
+            <Avatar person={p} size={44} tappable={false} />
+            <span class="txt"><span class="lbl">{t('cr.team')}</span><b class="nm">{realOf(p)}</b></span>
+            <span class="mk"><ChevronRight size={18} /></span>
+          </span>
+          {#if row.honor}<span class="more">{t('ach.honor.name')}</span>{/if}
+          {#if row.items.length}<span class="more"><CreditLines items={row.items} /></span>{/if}
+        </Card></div>
+      {/each}
       {#if c.people.length}
-        <h2 class="cap up" style:--d="3">{t('cr.list')}</h2>
+        <h2 class="cap up" style:--d={Math.min(3 + lead, 9)}>{t('cr.list')}</h2>
         <!-- a card a person (or a GitHub login); the nameless lines last, together in one card, each its own line:
              nothing there says two of them are one person's -->
         {#each named as row, i (i)}
           {@const p = row.person}
           {@const gh = !p && row.gh}
-          <div class="one up" style:--d={Math.min(4 + i, 9)}><Card onclick={p ? () => open(p) : gh ? () => { haptic.tap(); openLink(`https://github.com/${gh}`); } : undefined}>
+          <div class="one up" style:--d={Math.min(4 + lead + i, 9)}><Card onclick={p ? () => open(p) : gh ? () => { haptic.tap(); openLink(`https://github.com/${gh}`); } : undefined}>
             <span class="hd">
               {#if p}<Avatar person={p} size={36} tappable={false} /><b class="wn">{p.name}</b><span class="mk"><ChevronRight size={18} /></span>
               {:else if gh}<span class="gh"><GitHubMark size={24} /></span><b class="wn">{gh}</b><span class="mk"><ArrowUpRight size={18} /></span>{/if}
@@ -109,13 +123,13 @@
           </Card></div>
         {/each}
         {#if anon.length}
-          <div class="one up" style:--d={Math.min(4 + named.length, 9)}><Card>
+          <div class="one up" style:--d={Math.min(4 + lead + named.length, 9)}><Card>
             <span class="hd"><span class="gh anon"><UsersRound size={18} /></span><b class="wn">{t('cr.students')}</b></span>
             <CreditLines items={anon} />
           </Card></div>
         {/if}
       {/if}
-      <button class="link code press up" style:--d={Math.min(5 + named.length, 10)} onclick={() => { haptic.tap(); openLink(CODE); }}>
+      <button class="link code press up" style:--d={Math.min(5 + lead + named.length, 10)} onclick={() => { haptic.tap(); openLink(CODE); }}>
         <GitHubMark size={16} /><span>{t('cr.code')}</span><ArrowUpRight size={15} />
       </button>
     {/if}
@@ -124,7 +138,7 @@
 
 <style>
   .ppl { display: flex; flex-direction: column; padding: 0 var(--s-1); }
-  /* the one quiet label: over the numbers, the creator, the idea */
+  /* the one quiet label: over the numbers, the creator, the idea, the Team */
   .lbl { font: 600 var(--fs-micro)/1.3 var(--font-text); letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-3); }
   .ttl { margin: var(--s-5) 0 0; }
 

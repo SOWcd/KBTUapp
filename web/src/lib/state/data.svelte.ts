@@ -529,7 +529,8 @@ export function keepRef(id: Id, code: string): void {
 
 /** Events whose Going waits for the server (paid, full, a form): their buttons show a spinner. */
 export const goingBusy = new SvelteSet<Id>();
-const flying = new Set<Id>();
+// Includes optimistic free sign-ups: a ticket opened now waits for its code in place.
+export const goingPending = new SvelteSet<Id>();
 
 /** Going / cancel. Free → going (or waitlist when full); paid → 30-min hold and the payment sheet. */
 /** team: a team event's way in (create, join by its link, 'solo'); left out, the app asks (sheets.teamPick) */
@@ -566,14 +567,15 @@ export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void, team?: Team
     if (pick === null) return;
     if (pick && !agrees && !(await teamConsentOk())) return; // the teams' own consent, asked once: a no leaves me not signed up
     const joins = pick && pick !== 'solo' ? pick : undefined;
-    if (flying.has(id)) return; // a second tap while the first is on its way
-    flying.add(id);
+    if (goingPending.has(id)) return; // a second tap while the first is on its way
+    goingPending.add(id);
     // a free event with nothing to ask and a seat left: going at once (the speed rule), the server's card settles it;
     // anything else (paid, full, a form) shows the button pressed until the answer
     const sure = !leaving && !before.price && !answers && !phone && !wish && !joins && (before.seats == null || before.taken < before.seats);
     const was = { my: before.my, taken: before.taken };
     if (sure) {
-      before.my = { ...(before.my ?? { cancelReason: null, ticketCode: null, holdUntil: null, checkedInAt: null, receipt: 'none' }), status: 'going' };
+      // Rejoining gets a new code; a cancelled registration's old QR must not reappear.
+      before.my = { ...(before.my ?? { cancelReason: null, holdUntil: null, checkedInAt: null, receipt: 'none' }), status: 'going', ticketCode: null };
       before.taken++;
       haptic.tap();
     } else goingBusy.add(id);
@@ -594,7 +596,7 @@ export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void, team?: Team
       if (sure) { before.my = was.my; before.taken = was.taken; }
       haptic.error();
       say(errorText(e), 'pleading_face_3d');
-    } finally { goingBusy.delete(id); flying.delete(id); taps++; }
+    } finally { goingBusy.delete(id); goingPending.delete(id); taps++; }
   }, 'go_' + id);
 }
 
@@ -612,8 +614,11 @@ export async function askDm(eid?: Id, again = false): Promise<void> {
 /** A leaders meeting (§4.10): "Can't make it" — the answer DMP sees; "I'll be there" is toggleGoing. */
 export function declineInvite(id: Id, note?: string): void {
   asStudent(async () => {
+    if (goingPending.has(id)) return;
+    goingPending.add(id);
     try { put(await api.decline(id, note)); haptic.soft(); say(t('lead.declined'), 'waving_hand_3d_default'); }
     catch (e) { haptic.error(); say(errorText(e), 'pleading_face_3d'); }
+    finally { goingPending.delete(id); }
   });
 }
 

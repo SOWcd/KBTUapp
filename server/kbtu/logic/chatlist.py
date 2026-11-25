@@ -700,7 +700,8 @@ def _with_live(con, known: list[int], tg_from: int, live) -> list[int]:
     if out:
         bad = {r[0] for r in rows(con, f"SELECT tg_id FROM users WHERE banned_at IS NOT NULL AND tg_id IN ({_qs(out)})", *out)}
         out = [t for t in out if t not in bad]
-    return list(dict.fromkeys(known + out))
+    ours = {int(r[0]) for r in rows(con, "SELECT value FROM meta WHERE key = 'userbot_id'")}  # our own userbot (userbot.py), never called
+    return [t for t in dict.fromkeys(known + out) if t not in ours]
 
 
 def _holder(con, tg_chat: int) -> tuple:

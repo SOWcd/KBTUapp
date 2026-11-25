@@ -2,6 +2,7 @@
 // in them. Batched here, sent at most every 60 s and when the page hides; a failure is dropped. Never awaited: a tap
 // costs one Map write.
 import { inTelegram, on, onAndroid, onIos, tg } from './tg';
+import type { Kind as HeroKind } from './hero'; // the Afisha hero's cards by kind (server stats.HERO)
 
 export type Screen = 'tab.afisha' | 'tab.forum' | 'tab.club' | 'tab.profile'
   | 'sheet.event' | 'sheet.club' | 'sheet.ticket' | 'sheet.person' | 'sheet.friends' | 'sheet.compose' | 'sheet.comments'
@@ -13,7 +14,7 @@ type Appeal = 'apl.open' | 'apl.typed' | 'apl.ai' | 'apl.sent' | 'apl.drop' | 'a
 type Source = 'from.none' | 'from.event' | 'from.club' | 'from.friend' | 'from.qr' | 'from.other';
 type Bucket = 0 | 1 | 2 | 3 | 4 | 5;
 type Long = Bucket | 6;
-type Key = Screen | Action | Appeal | Source | `err.${Screen}` | `uniq.${Screen | Action}` | `sess.${Long}` | `time.${Long}`
+type Key = Screen | Action | Appeal | Source | `hero.${'show' | 'tap'}.${HeroKind}` | `err.${Screen}` | `uniq.${Screen | Action}` | `sess.${Long}` | `time.${Long}`
   | `open.${'ios' | 'android' | 'desktop' | 'web'}.${Bucket}`;
 
 const EVERY = 60_000, GAP = 30_000; // GAP: hidden this long, the next showing is a new session

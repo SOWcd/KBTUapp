@@ -212,6 +212,19 @@ def test_nothing_locked(env):
     assert c.post(f"/api/orgs/{oid}/events", headers=tma(PRES), json=paid).status_code == 200
 
 
+def test_round_shows_in_the_clubs_list_at_once(env):
+    """The clubs list keeps each club's shared part a few seconds (core.shared): a round opened or closed meanwhile shows
+    at once, so a student's Apply goes to the round, not to a join request."""
+    c, con, ids, oid = _setup(env)
+    club = lambda: next(o for o in c.get("/api/orgs", headers=tma(A)).json() if o["id"] == oid)  # noqa: E731
+    assert club()["round"] is None  # the list is cached now
+    rnd = {"title": "Fall", "closesAt": logic.now() + 7 * DAY, "departments": []}
+    rid = c.post(f"/api/orgs/{oid}/round", headers=tma(PRES), json=rnd).json()["id"]
+    assert club()["round"]["id"] == rid
+    con.execute("UPDATE rounds SET status = 'closed' WHERE id = ?", (rid,))
+    assert club()["round"] is None
+
+
 def test_stories_open_at_collab(env):
     """Stories (club posts) are an official club's, and an initiative's from the Ascent's collab step on (owner, Nov 7):
     below it a 403 the composer names, the old posts stay, and the step opens them by itself."""
