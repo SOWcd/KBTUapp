@@ -2347,4 +2347,50 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE UNIQUE INDEX one_contact ON contacts(from_id, to_id, COALESCE(ask_id, 0)) WHERE withdrawn_at IS NULL;
     CREATE INDEX contacts_by_sender ON contacts(from_id, created_at);
     CREATE INDEX withdrawn_offer_messages ON contacts(id) WHERE withdrawn_at IS NOT NULL AND offer_message IS NOT NULL;"""),
+    (233, """CREATE TABLE IF NOT EXISTS donations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      source TEXT NOT NULL CHECK (source IN ('stars', 'receipt')),
+      status TEXT NOT NULL CHECK (status IN ('pending', 'confirmed', 'rejected')),
+      amount INTEGER CHECK (amount > 0),
+      stars INTEGER CHECK (stars > 0),
+      star_rate INTEGER CHECK (star_rate > 0),
+      charge_id TEXT UNIQUE,
+      file_id INTEGER REFERENCES files(id),
+      sha256 TEXT,
+      receipt_no TEXT,
+      read_amount INTEGER,
+      recipient_name TEXT,
+      sender_name TEXT,
+      paid_at INTEGER,
+      flags TEXT NOT NULL DEFAULT '',
+      auto INTEGER NOT NULL DEFAULT 0 CHECK (auto IN (0, 1)),
+      consent TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      reviewed_at INTEGER,
+      reviewed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      purge_at INTEGER,
+      revision INTEGER NOT NULL DEFAULT 0,
+      undo TEXT,
+      CHECK (status != 'confirmed' OR amount IS NOT NULL)
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS donations_by_user ON donations(user_id, created_at);
+    CREATE INDEX IF NOT EXISTS donations_by_status ON donations(source, status, created_at);
+    CREATE INDEX IF NOT EXISTS donations_by_sha ON donations(sha256) WHERE sha256 IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS donations_by_no ON donations(receipt_no) WHERE receipt_no IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS donations_by_payment ON donations(paid_at, read_amount, recipient_name);
+    CREATE TABLE IF NOT EXISTS sponsor_consents (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      version TEXT NOT NULL,
+      show INTEGER NOT NULL CHECK (show IN (0, 1)),
+      at INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS sponsor_consents_by_user ON sponsor_consents(user_id, id);
+    CREATE TRIGGER IF NOT EXISTS sponsor_moved AFTER UPDATE OF tg_id ON users
+      WHEN old.tg_id != new.tg_id BEGIN
+        INSERT INTO sponsor_consents (user_id, version, show, at)
+          SELECT user_id, version, 0, unixepoch() FROM sponsor_consents
+          WHERE user_id = old.id ORDER BY id DESC LIMIT 1;
+    END;"""),
 ]

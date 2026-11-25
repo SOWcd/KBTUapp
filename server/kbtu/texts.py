@@ -265,6 +265,8 @@ BOT = {
         "join_no": ("💙 <b>{org}</b> пока не может тебя принять. Загляни в другие клубы — их много.", None),
         "team_ask": ("🙋 {name} из команды просит разрешения прийти гостем на <b>{title}</b>", "Ответить"),
         "team_ask_yes": ("✅ Разрешили — можно записаться на <b>{title}</b>\n🗓 {when} · {place}", "Записаться"),
+        "donation_confirmed": ('💙 Поддержка подтверждена. Спасибо! Медаль SPONSOR — в приложении.', 'Открыть поддержку'),
+        "donation_rejected": ('🧾 Чек поддержки отклонён. Проверь его и при необходимости прикрепи другой.', 'Открыть поддержку'),
         "credit_ask": ("💡 Твоя идея, находка или код уже в KBTU App.\nПоказать твоё имя на экране «Люди приложения»? Решаешь ты.", "Ответить"),
         "santa_news": ("🎅 Тайный Санта уже в KBTU App\n🎁 Запусти для <b>{org}</b> одной кнопкой", "🎄 Запустить"),
         "app_home": ("📱 <b>KBTU App почти как отдельное приложение!</b>", "🎬 Смотреть"),
@@ -485,6 +487,8 @@ BOT = {
         "join_no": ("💙 <b>{org}</b> әзірге сені қабылдай алмайды. Басқа клубтарды қарап шық — таңдау көп.", None),
         "team_ask": ("🙋 Командадан {name} <b>{title}</b> іс-шарасына қонақ ретінде баруға рұқсат сұрайды", "Жауап беру"),
         "team_ask_yes": ("✅ Рұқсат берілді — <b>{title}</b> іс-шарасына жазылуға болады\n🗓 {when} · {place}", "Жазылу"),
+        "donation_confirmed": ('💙 Қолдауың расталды. Рақмет! SPONSOR медалі қосымшада.', 'Қолдауды ашу'),
+        "donation_rejected": ('🧾 Қолдау чегі қабылданбады. Тексеріп, қажет болса басқа чек тірке.', 'Қолдауды ашу'),
         "credit_ask": ("💡 Сенің идеяң, тапқаның немесе кодың енді KBTU App-та.\n«Қосымша адамдары» бетінде атыңды көрсетейік пе? Өзің шешесің.", "Жауап беру"),
         "santa_news": ("🎅 Құпия Санта енді KBTU App-та\n🎁 <b>{org}</b> үшін бір батырмамен баста", "🎄 Бастау"),
         "app_home": ("📱 <b>KBTU App енді жеке қолданбаға ұқсас!</b>", "🎬 Көру"),
@@ -699,6 +703,8 @@ BOT = {
         "join_no": ("💙 <b>{org}</b> can't take you in right now. Have a look at the other clubs — there are plenty.", None),
         "team_ask": ("🙋 {name} from the team asks to come to <b>{title}</b> as a guest", "Answer"),
         "team_ask_yes": ("✅ You're allowed — you can sign up for <b>{title}</b>\n🗓 {when} · {place}", "Sign up"),
+        "donation_confirmed": ('💙 Your support is confirmed. Thank you! Your SPONSOR medal is in the app.', 'Open support'),
+        "donation_rejected": ('🧾 Your support receipt was rejected. Check it and attach another if needed.', 'Open support'),
         "credit_ask": ("💡 Your idea, find or code is now in KBTU App.\nShow your name on the “People of the app” screen? It's your call.", "Answer"),
         "santa_news": ("🎅 Secret Santa is now in KBTU App\n🎁 Start it for <b>{org}</b> with one button", "🎄 Start"),
         "app_home": ("📱 <b>KBTU App is now almost a real app!</b>", "🎬 Watch"),
@@ -859,9 +865,9 @@ BOT = {
 # why a receipt looks wrong, as the student reads it (the flags of logic._receipt_flags)
 # "Support the app" in Telegram Stars (logic/stars.py): the invoice's title (32 characters at most) and description (255)
 STARS_INVOICE = {
-    "ru": ("Поддержка KBTU App", "Добровольная поддержка приложения. Это не покупка: взамен ничего не выдаётся."),
-    "kk": ("KBTU App-ті қолдау", "Қосымшаны ерікті қолдау. Бұл сатып алу емес: орнына ештеңе берілмейді."),
-    "en": ("Support KBTU App", "Voluntary support for the app. This is not a purchase: nothing is given in return."),
+    "ru": ("Поддержка KBTU App", "Добровольная поддержка. Сумма и платёж сохраняются в твоём личном итоге для медали SPONSOR. Публикация имени — только с твоего согласия."),
+    "kk": ("KBTU App-ті қолдау", "Ерікті қолдау. Сома мен төлем SPONSOR медалі үшін жеке қорытындыңда сақталады. Атың тек келісіміңмен жарияланады."),
+    "en": ("Support KBTU App", "Voluntary support. Your payment and amount are saved in your private total for the SPONSOR medal. Your name is published only with your consent."),
 }
 # shown by Telegram when a pre-checkout is refused (bot._checkouts)
 STARS_REFUSED = {"ru": "Не получилось. Попробуй ещё раз.", "kk": "Болмады. Қайта көр.", "en": "That didn't work. Please try again."}

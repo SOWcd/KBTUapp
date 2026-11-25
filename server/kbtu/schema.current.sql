@@ -307,6 +307,33 @@ CREATE TABLE credits (  -- IF NOT EXISTS: tests rewind user_version
       en TEXT NOT NULL,
       shipped_on TEXT,  -- YYYY-MM-DD; NULL: suggested, not listed
       created_at INTEGER NOT NULL, gh TEXT) STRICT;
+CREATE TABLE donations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      source TEXT NOT NULL CHECK (source IN ('stars', 'receipt')),
+      status TEXT NOT NULL CHECK (status IN ('pending', 'confirmed', 'rejected')),
+      amount INTEGER CHECK (amount > 0),
+      stars INTEGER CHECK (stars > 0),
+      star_rate INTEGER CHECK (star_rate > 0),
+      charge_id TEXT UNIQUE,
+      file_id INTEGER REFERENCES files(id),
+      sha256 TEXT,
+      receipt_no TEXT,
+      read_amount INTEGER,
+      recipient_name TEXT,
+      sender_name TEXT,
+      paid_at INTEGER,
+      flags TEXT NOT NULL DEFAULT '',
+      auto INTEGER NOT NULL DEFAULT 0 CHECK (auto IN (0, 1)),
+      consent TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      reviewed_at INTEGER,
+      reviewed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      purge_at INTEGER,
+      revision INTEGER NOT NULL DEFAULT 0,
+      undo TEXT,
+      CHECK (status != 'confirmed' OR amount IS NOT NULL)
+    ) STRICT;
 CREATE TABLE door_guests (
       id         INTEGER PRIMARY KEY,
       event_id   INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
@@ -1092,6 +1119,13 @@ CREATE TABLE skills (
         created_at INTEGER NOT NULL,
         used_at    INTEGER NOT NULL                       -- last added to someone or a request: unused 30 days, out of suggestions
     ) STRICT;
+CREATE TABLE sponsor_consents (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      version TEXT NOT NULL,
+      show INTEGER NOT NULL CHECK (show IN (0, 1)),
+      at INTEGER NOT NULL
+    ) STRICT;
 CREATE TABLE staff_mutes (
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         kind    TEXT NOT NULL,
@@ -1475,6 +1509,11 @@ CREATE UNIQUE INDEX one_contact ON contacts(from_id, to_id, COALESCE(ask_id, 0))
 CREATE INDEX withdrawn_offer_messages ON contacts(id) WHERE withdrawn_at IS NOT NULL AND offer_message IS NOT NULL;
 CREATE INDEX credit_consents_user ON credit_consents (user_id, id);
 CREATE INDEX credits_tg ON credits (tg_id);
+CREATE INDEX donations_by_no ON donations(receipt_no) WHERE receipt_no IS NOT NULL;
+CREATE INDEX donations_by_payment ON donations(paid_at, read_amount, recipient_name);
+CREATE INDEX donations_by_sha ON donations(sha256) WHERE sha256 IS NOT NULL;
+CREATE INDEX donations_by_status ON donations(source, status, created_at);
+CREATE INDEX donations_by_user ON donations(user_id, created_at);
 CREATE INDEX door_guests_by_norm ON door_guests(norm) WHERE user_id IS NULL;
 CREATE INDEX ev_matches_away ON ev_matches(away);
 CREATE INDEX ev_matches_editor ON ev_matches(updated_by);
@@ -1571,6 +1610,7 @@ CREATE INDEX santa_sends_by_user ON santa_sends (user_id, at);
 CREATE INDEX saved_by_event ON saved_events(event_id);
 CREATE INDEX schedule_by_user ON schedule_classes(user_id, weekday);
 CREATE INDEX short_links_by_org ON short_links(org_id);
+CREATE INDEX sponsor_consents_by_user ON sponsor_consents(user_id, id);
 CREATE UNIQUE INDEX students_ms_oid ON students(ms_oid) WHERE ms_oid IS NOT NULL;
 CREATE INDEX subs_by_org ON subscriptions(org_id, created_at);
 CREATE INDEX swear_hits_by_person ON swear_hits(chat_id, tg_id, at);
@@ -1769,6 +1809,12 @@ CREATE TRIGGER fchan_comment_gone AFTER UPDATE OF status ON tgc_comments
       UPDATE fchan_posts SET comments = MAX(0, comments + CASE WHEN NEW.status IN ('deleting', 'deleted', 'restored') THEN -1 ELSE 1 END)
         WHERE id = (SELECT post_id FROM fchan_comments WHERE msg_id = NEW.msg_id AND gone = (NEW.status NOT IN ('deleting', 'deleted', 'restored')));
       UPDATE fchan_comments SET gone = (NEW.status IN ('deleting', 'deleted', 'restored')) WHERE msg_id = NEW.msg_id;
+    END;
+CREATE TRIGGER sponsor_moved AFTER UPDATE OF tg_id ON users
+      WHEN old.tg_id != new.tg_id BEGIN
+        INSERT INTO sponsor_consents (user_id, version, show, at)
+          SELECT user_id, version, 0, unixepoch() FROM sponsor_consents
+          WHERE user_id = old.id ORDER BY id DESC LIMIT 1;
     END;
 CREATE TRIGGER web_sessions_revoke AFTER UPDATE OF banned_at, tg_id ON users
       WHEN new.banned_at IS NOT NULL OR old.tg_id != new.tg_id BEGIN

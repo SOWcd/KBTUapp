@@ -1,7 +1,7 @@
 // Shared data the screens read, kept in one place per entity so a change shows everywhere at once
 // (one home per thing). Actions update optimistically and roll back if the server says no.
-import { api, ApiErr, type AlbumPhoto, type GalleryAlbum, type GalleryPage, type AdminStats, type Inbox, type ClassItem, type Membership, type EventCard, type Chats, type Credits, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type ChatTree, type StaffMute, type TeamMember, type VolLedger, type Appeal, type SgQueue, type Solved, type TeamPick } from '../api';
-import type { MyRegistration, SantaChats } from '../api';
+import { api, ApiErr, type Support, type Sponsor, type AlbumPhoto, type GalleryAlbum, type GalleryPage, type AdminStats, type Inbox, type ClassItem, type Membership, type EventCard, type Chats, type Credits, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type ChatTree, type StaffMute, type TeamMember, type VolLedger, type Appeal, type SgQueue, type Solved, type TeamPick } from '../api';
+import type { DonationReview, MyRegistration, SantaChats } from '../api';
 import { joinClasses } from '../classes';
 import { teamError } from '../teams';
 import { teamConsentOk, TEAM_CONSENT } from '../teamConsent';
@@ -22,6 +22,9 @@ import { clearCache } from './cache';
 import { castingOn } from '../posts';
 
 export const data = $state({
+  support: null as Support | null,
+  sponsors: null as Sponsor[] | null,
+  donations: null as DonationReview[] | null,
   events: [] as EventCard[],
   // events opened outside the afisha (a club's page, a link: an initiative's are only there, server seats.on_afisha),
   // kept for the session so their buttons work; never saved on the phone
@@ -417,6 +420,7 @@ export async function cancelCasting(p: Post): Promise<void> {
 /** Admin → Inbox and Done, the staff's (one request); the shield's number catches up with it. withStats: the admin's
  *  numbers too (the app's start and Admin opening; not after each decision) */
 export async function loadInbox(withStats = false): Promise<void> {
+  void loadDonations();
   if (session.me?.role !== 'admin' && session.me?.role !== 'moderator') { data.inbox = null; return; }
   const admin = staffStill('admin'), staff = staffStill('staff'); // an answer after the role went is not kept
   if (withStats && session.me.role === 'admin') api.adminStats().then((s) => { if (admin()) data.adminStats = s; }).catch(() => {});
@@ -436,7 +440,7 @@ export const decisions = (i: Inbox | null): number => i?.items.filter((x) => x.k
 /** Admin → My notifications, staff only; a failure keeps what it had (the page offers a retry when it has nothing).
  *  An answer asked before a tap (mutedTap) is older than the switch: dropped. */
 onStaffLoss((has) => {
-  if (!has('admin')) data.adminStats = null;
+  if (!has('admin')) { data.adminStats = null; data.donations = null; }
   if (!has('staff')) { data.inbox = null; data.staffMutes = null; }
   else if (!has('admin')) { data.inbox = null; void loadInbox(); } // a moderator's queue, without the admin's cards
 });
@@ -447,6 +451,33 @@ export function loadStaffMutes(): void {
   const at = muteTaps, staff = staffStill('staff');
   data.staffMutesFailed = false;
   api.staffMutes().then((l) => { if (muteTaps === at && staff()) data.staffMutes = l; }).catch(() => (data.staffMutesFailed = !data.staffMutes));
+}
+
+let donationSeq = 0;
+export async function loadDonations(): Promise<boolean> {
+  const uid = session.me?.id, n = ++donationSeq, staff = staffStill('admin');
+  if (!staff() || !session.me?.founder) { data.donations = null; return false; }
+  try {
+    const got = await api.donationQueue();
+    if (n === donationSeq && staff() && session.me?.founder && session.me.id === uid) data.donations = got;
+    return true;
+  } catch { return false; }
+}
+
+/** Private totals live only in memory. A write invalidates older reads and refreshes the medal too. */
+let supportSeq = 0, supportWrites = 0;
+export async function loadSupport(): Promise<void> {
+  const uid = session.me?.id, n = ++supportSeq;
+  if (!uid || session.banned || session.revoked) return;
+  const current = () => n === supportSeq && !supportWrites && session.me?.id === uid && !session.banned && !session.revoked;
+  await Promise.allSettled([
+    api.support().then((got) => { if (current()) data.support = got; }),
+    api.sponsors().then((got) => { if (current()) data.sponsors = got; }),
+  ]);
+}
+export function supportWrite(sending: boolean): void {
+  supportSeq++; supportWrites += sending ? 1 : -1;
+  if (!sending && !supportWrites) { void loadSupport(); void loadMyCard(); void loadMe(); }
 }
 
 /** The people of the app. One read in flight for everyone who asks (the app's start, the bot's link, the screen); who is
