@@ -12,12 +12,12 @@ The board counts each department's taken against its places and shows the funnel
 answers and the team's notes go (keep the least data); who applied and how it ended stay, for "applied before"."""
 from __future__ import annotations
 
-import calendar
 import json
 import re
 import unicodedata
 
 from .db import tx
+from .logic.core import at, day_of, day_start
 from .logic.teams import may_dept
 from .logic import PERSON_COLS, ApiError, Viewer, _may, _once, _qs, banned, can, joined, log_action, need_student, notify, now, one, person_ref, role_in, rows
 
@@ -26,7 +26,7 @@ VERDICTS = ("no", "maybe", "next")
 SOURCES = ("club", "join", "link", "qr", "channel", "friend", "bot")
 LIMIT = {"short": 200, "long": 2000, "link": 300}
 GROUP = re.compile(r"https://t\.me/[\w+/-]{2,120}")  # a Telegram group's invite or @name: nothing else goes to the accepted
-DAY, ASTANA = 86400, 5 * 3600
+DAY = 86400
 
 
 def _live(con, oid: int):
@@ -380,13 +380,6 @@ def send(con, v: Viewer, rid: int, final: bool = True) -> dict:
 
 # ---- interviews
 
-def _at(date: str, hm: str) -> int:
-    """A form's 'YYYY-MM-DD' and 'HH:MM' in Almaty as a timestamp."""
-    y, m, d = (int(x) for x in date.split("-"))
-    h, mi = (int(x) for x in hm.split(":"))
-    return calendar.timegm((y, m, d, h, mi, 0)) - ASTANA
-
-
 def add_slots(con, v: Viewer, rid: int, body: dict) -> list[dict]:
     """A day's slots: from..to every `minutes`, each for `capacity` people (1: one by one, more: a group), at `place`.
     An open window ("just come between 2 and 6"): minutes = the whole from..to, one slot for up to 500."""
@@ -395,7 +388,7 @@ def add_slots(con, v: Viewer, rid: int, body: dict) -> list[dict]:
     if r["status"] == "done":
         raise ApiError("closed")
     try:
-        start, end = _at(str(body["date"]), str(body["from"])), _at(str(body["date"]), str(body["to"]))
+        start, end = at(str(body["date"]), str(body["from"])), at(str(body["date"]), str(body["to"]))
         minutes, cap, place = int(body["minutes"]), int(body.get("capacity") or 1), " ".join(str(body.get("place") or "").split())
     except (KeyError, TypeError, ValueError):
         raise ApiError("bad_input")
@@ -480,7 +473,7 @@ def set_place(con, v: Viewer, sid: int, body: dict) -> dict:
         rid = s["round_id"]
         if place == s["place"]:
             return {"slots": slots(con, v, rid), "notice": "none"}
-        day = (now() + ASTANA) // DAY * DAY - ASTANA
+        day = day_start(now())
         edits, used = one(con, """SELECT COUNT(*), COALESCE(SUM(json_extract(data, '$.told') = 1), 0) FROM audit_log
             WHERE target = ? AND action = 'round_place' AND at >= ?""", f"round:{rid}", day)
         if edits >= PLACE_EDITS:
@@ -560,10 +553,10 @@ def slots(con, v: Viewer, rid: int) -> list[dict]:
     if team:
         for ref, aid, sent, error in rows(con, """SELECT b.ref, a.id, b.sent_at, b.error FROM bot_outbox b
                 JOIN round_apps a ON a.user_id = b.user_id AND a.round_id = ? WHERE b.kind = 'round_call'""", rid):
-            app, sid, at = (int(x) for x in ref.split(":")[1:4])
+            app, sid, t = (int(x) for x in ref.split(":")[1:4])
             if app == aid:  # this round's application, not the same person's in another round
                 # told: what Telegram took; waiting: still in the queue; a failed one (no DMs, blocked) is neither
-                calls.setdefault((sid, at), {})[app] = "told" if sent else None if error else "waiting"
+                calls.setdefault((sid, t), {})[app] = "told" if sent else None if error else "waiting"
         reach = {a[0] for a in rows(con, f"SELECT id FROM round_apps WHERE round_id = ? AND {_CALLED}", rid)}
     out = []
     for s in rows(con, "SELECT s.*, (SELECT minutes FROM round_wide w WHERE w.slot_id = s.id) AS wide FROM round_slots s WHERE s.round_id = ? ORDER BY s.starts_at", rid):
@@ -640,10 +633,10 @@ def book(con, v: Viewer, rid: int, body: dict) -> list[dict]:
             if not s or taken >= _cap(s):
                 raise ApiError("full")
             con.execute("UPDATE round_apps SET slot_id = ? WHERE id = ?", (sid, a["id"]))
-            eve = (s["starts_at"] + ASTANA) // DAY * DAY - ASTANA - 5 * 3600  # 19:00 the day before, Almaty
-            for at, tag in ((eve, "eve"), (s["starts_at"] - 3600, "hour")):
-                if at > now():
-                    notify(con, v.id, "round_iv_remind", f"ivr:{a['id']}:{sid}:{tag}", after=at)
+            eve = day_start(s["starts_at"]) - 5 * 3600  # 19:00 the day before, Almaty: five hours before its midnight
+            for t, tag in ((eve, "eve"), (s["starts_at"] - 3600, "hour")):
+                if t > now():
+                    notify(con, v.id, "round_iv_remind", f"ivr:{a['id']}:{sid}:{tag}", after=t)
     return slots(con, v, rid)
 
 
@@ -659,7 +652,7 @@ def showed(con, v: Viewer, app_id: int, body: dict) -> dict:
 
 def forget(con) -> None:
     """Once a day (the bot's round): sixty days after a round's results, its answers, votes and notes go."""
-    day = (now() + ASTANA) // DAY
+    day = day_of(now())
     if not _once(con, "cast_forget", str(day)):
         return
     old = [r[0] for r in rows(con, "SELECT id FROM rounds WHERE status = 'done' AND sent_at < ?", now() - 60 * DAY)]

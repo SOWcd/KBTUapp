@@ -1,6 +1,7 @@
 """People's pages, awards and friends: streaks, achievements, grants, the first 500, friend requests and links."""
 from __future__ import annotations
 
+import calendar
 import hashlib
 import hmac
 import json
@@ -12,8 +13,8 @@ from collections import Counter
 
 from ..db import maybe, tx
 
-from .core import (ApiError, NO_END, PERSON, PERSON_COLS, PROFILE_QR, SEASON_MONTHS, Viewer, _roles, cards,
-    log_action, need_student, one, org_ref, person_ref, rows, short_name)
+from .core import (TZ, ApiError, NO_END, PERSON, PERSON_COLS, PROFILE_QR, SEASON_MONTHS, Viewer, _roles, cards,
+    day_of, day_start, log_action, need_student, one, org_ref, person_ref, rows, short_name)
 
 
 # ---------------------------------------------------------------- people and awards
@@ -25,15 +26,15 @@ def attended(con, uid: int) -> list[int]:
 
 
 def _season_start(ts: int) -> int:
-    t = time.gmtime(ts + 5 * 3600)
+    t = time.gmtime(ts + TZ)
     y, m = t.tm_year, max((x for x in SEASON_MONTHS if x <= t.tm_mon), default=None)
     if m is None:
         y, m = y - 1, SEASON_MONTHS[-1]
-    return int(time.mktime((y, m, 1, 0, 0, 0, 0, 0, 0))) - time.timezone - 5 * 3600
+    return calendar.timegm((y, m, 1, 0, 0, 0)) - TZ
 
 
 def _week(t: int) -> int:
-    return (t + 5 * 3600 + 3 * 86400) // (7 * 86400)  # Almaty weeks, from Monday
+    return (t + TZ + 3 * 86400) // (7 * 86400)  # Almaty weeks, from Monday
 
 
 def _streak(mine: set[int], busy: set[int], this_week: int) -> tuple[int, int]:
@@ -57,7 +58,7 @@ ACTIVIST_EVENTS = (2, 6, 15, 30)
 
 def _activist_posts(con, uid: int) -> int:
     """Mature public channel posts, at most one per Almaty publication day."""
-    return one(con, """SELECT COUNT(DISTINCT (posted_at + 5 * 3600) / 86400) FROM fchan_posts
+    return one(con, f"""SELECT COUNT(DISTINCT (posted_at + {TZ}) / 86400) FROM fchan_posts
         WHERE user_id = ? AND status = 'live' AND tg_msg > 0 AND posted_at <= ?""", uid, core.now() - 86400)[0]
 
 
@@ -154,7 +155,7 @@ def _counts(con, uid: int, *, with_activist: bool = True) -> dict[str, int]:
     if any(a[0] == "streak" for a in ACHIEVEMENTS):
         # Only public event weeks since the first check-in can affect the streak.
         busy = {_week(r[0]) for r in rows(con, """SELECT starts_at FROM events WHERE status = 'published' AND starts_at >= ?
-            AND visibility = 'public' AND guest_host IS NULL""", _week(times[0]) * 7 * 86400 - 3 * 86400 - 5 * 3600)} if times else set()
+            AND visibility = 'public' AND guest_host IS NULL""", _week(times[0]) * 7 * 86400 - 3 * 86400 - TZ)} if times else set()
         counts["streak"], counts["streak_now"] = _streak({_week(t) for t in times}, busy, _week(core.now()))
     return counts
 
@@ -303,7 +304,7 @@ def grant(con, v: Viewer, uid: object, code: object, org: object = None, reason:
 
 def _grant(con, by: int | None, uid: int, code: str, batch: str | None = None, log: bool = True, note: str | None = None) -> int:
     # a meeting counts once: a second QR opened for it, a card scanned twice. Almaty's day (no meetings table to name it)
-    since = (core.now() + 5 * 3600) // 86400 * 86400 - 5 * 3600 if code == "dmp" else 0
+    since = day_start(core.now()) if code == "dmp" else 0
     if code != "bugs" and one(con, "SELECT 1 FROM achievement_grants WHERE user_id = ? AND code = ? AND created_at >= ?", uid, code, since):
         raise ApiError("conflict")
     before = _levels(con, uid)
@@ -730,7 +731,7 @@ PROFILES_A_DAY = 200  # strangers' profiles a day: browsing needs a few dozen, a
 def _stranger_view(con, v: Viewer, uid: int) -> None:
     """Counts a profile opened by someone who is neither a friend nor a clubmate; past the day's limit, refused. One
     row per (Almaty day, viewer, profile), so reopening the same one is free; old days go in the daily job (stats_day)."""
-    day = (core.now() + 5 * 3600) // 86400
+    day = day_of(core.now())
     if one(con, "SELECT 1 FROM profile_views WHERE day = ? AND viewer_id = ? AND user_id = ?", day, v.id, uid):
         return
     # ponytail: count then insert, a burst can pass 200 by a few

@@ -93,14 +93,14 @@ def invite(con, v: Viewer, eid: int, oid: object) -> dict:
         if one(con, "SELECT 1 FROM org_mutes WHERE org_id = ? AND muted_org_id = ?", oid, e["org_id"]):
             raise ApiError("conflict", "declined")  # "Don't suggest again": the same answer as a no
         if not one(con, f"SELECT {FULL_TOOLS} FROM orgs WHERE id = ?", e["org_id"])[0]:
-            week = f"cohost_wk:{e['org_id']}:{(core.now() + 5 * 3600) // (7 * 86400)}"  # an Almaty week (from Thursday)
+            week = f"cohost_wk:{e['org_id']}:{(core.now() + core.TZ) // (7 * 86400)}"  # an Almaty week (from Thursday)
             sent = one(con, "SELECT value FROM meta WHERE key = ?", week)
             if sent and int(sent[0]) >= INITIATIVE_INVITES_A_WEEK:
                 raise ApiError("rate_limited")
             con.execute("DELETE FROM meta WHERE key LIKE 'cohost_wk:' || ? || ':%' AND key != ?", (e["org_id"], week))
             con.execute("INSERT INTO meta (key, value) VALUES (?, '1') ON CONFLICT (key) DO UPDATE SET value = CAST(value AS INTEGER) + 1", (week,))
         # counted apart from the rows, which a withdrawal deletes: per host club and Almaty day
-        day = f"cohost_inv:{e['org_id']}:{(core.now() + 5 * 3600) // 86400}"
+        day = f"cohost_inv:{e['org_id']}:{core.day_of(core.now())}"
         sent = one(con, "SELECT value FROM meta WHERE key = ?", day)
         if sent and int(sent[0]) >= COHOST_INVITES_A_DAY:
             raise ApiError("rate_limited")

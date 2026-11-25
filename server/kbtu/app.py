@@ -521,7 +521,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     cfg = cfg or config.load()
     logic.core._SHARED.clear(); logic.profiles._RARITY[0] = 0  # per-worker caches belong to one database (tests make many)
     logic.vol.ORG = cfg.volunteers  # the volunteers ledger's club (VOLUNTEERS); empty: off
-    logic.vol.KEY = hmac.new(cfg.token_key, b"kbtu-vol", hashlib.sha256).digest()  # deleted people's import keys, hashed
+    logic.vol.KEY = logic.vol.key(cfg)  # deleted people's import keys, hashed
     def after(con) -> None:
         if not cfg.play_demo:
             web_auth.revoke_demo(con)  # PLAY_DEMO off ends the reviewer's sessions for good, not until it's back on

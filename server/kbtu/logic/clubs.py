@@ -139,7 +139,7 @@ def set_award(con, actor: int | None, oid: int, year: object, title: object, on:
 def hidden_day(con) -> None:
     """11:00 (Almaty) daily: the president of a club under CLUB_MIN hears once that the registry doesn't show it
     (notify's unique key is the once). Two days' grace: a new club is still gathering its people."""
-    local = core.now() + 5 * 3600
+    local = core.now() + core.TZ
     if local % 86400 < 11 * 3600 or not core._once(con, "club_hidden_day", str(local // 86400)):
         return
     for uid, oid in rows(con, """SELECT m.user_id, o.id FROM orgs o JOIN org_members m ON m.org_id = o.id AND m.role = 'president'

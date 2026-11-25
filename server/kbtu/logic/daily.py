@@ -8,7 +8,7 @@ from .. import receipt, texts
 from ..db import tx
 
 from . import notifications
-from .core import ApiError, PERSON, Viewer, _may, _once, _org, _rights_from, can, day_of, evdel, one, rows, shown_name
+from .core import TZ, ApiError, PERSON, Viewer, _may, _once, _org, _rights_from, can, day_of, day_start, evdel, one, rows, shown_name
 
 
 MEMO_ASKS = ("room", "guests", "provide", "promo", "gear", "print", "film")
@@ -35,8 +35,8 @@ def _memo(body: dict, keep: str | None) -> str | None:
 def _next_week(t: int | None = None) -> int:
     """Monday 00:00 (Almaty) of the week the coming Wednesday's memo covers: DMP takes next week's memos on Wednesdays,
     so from Thursday on it's the week after next (1970-01-01 was a Thursday: Monday = 0)."""
-    day = ((t or core.now()) + 5 * 3600) // 86400
-    return (day + (2 - (day + 3) % 7) % 7 + 5) * 86400 - 5 * 3600
+    day = day_of(t or core.now())
+    return (day + (2 - (day + 3) % 7) % 7 + 5) * 86400 - TZ
 
 
 def _room_no(place: str, url: str | None) -> str | None:
@@ -143,7 +143,7 @@ def memo_week(con) -> None:
     """Wednesday 9:00-18:00 (Almaty), once a week: everyone with the club's "memo" right, where next week has events
     asking DMP for something not sent yet, hears the memo is ready (DMP takes them until 18:00 that day; later there's no
     point). The sheet shows who opened it already."""
-    local = core.now() + 5 * 3600
+    local = core.now() + TZ
     if (local // 86400 + 3) % 7 != 2 or not 9 * 3600 <= local % 86400 < 18 * 3600:
         return
     monday = _next_week()
@@ -162,11 +162,11 @@ def memo_week(con) -> None:
 def saved_day(con) -> None:
     """12:00 (Almaty) daily: whoever saved an event that's tomorrow and isn't going to it hears it once (all such events in
     one message), with the 2-hour reminders' switch: "Save" with a purpose (instead of a like)."""
-    local = core.now() + 5 * 3600
+    local = core.now() + TZ
     day = local // 86400
     if local % 86400 < 12 * 3600 or not _once(con, "saved_day", str(day)):
         return
-    lo, hi = (day + 1) * 86400 - 5 * 3600, (day + 2) * 86400 - 5 * 3600
+    lo, hi = (day + 1) * 86400 - TZ, (day + 2) * 86400 - TZ
     for (uid,) in rows(con, """SELECT DISTINCT s.user_id FROM saved_events s JOIN events e ON e.id = s.event_id JOIN users u ON u.id = s.user_id
             WHERE e.status = 'published' AND e.starts_at >= ? AND e.starts_at < ? AND u.n_remind = 1
             AND NOT EXISTS (SELECT 1 FROM registrations r WHERE r.event_id = e.id AND r.user_id = s.user_id AND r.status IN ('going', 'hold', 'waitlist'))""",
@@ -177,13 +177,13 @@ def saved_day(con) -> None:
 def tba_day(con) -> None:
     """10:00 (Almaty) daily: whoever made a published event that still has no place hears it 7, 3 and 1 day before and
     on the day; all of theirs in one message (the bot lists them), until the room is typed in."""
-    local = core.now() + 5 * 3600
+    local = core.now() + TZ
     day = local // 86400
     if local % 86400 < 10 * 3600 or not _once(con, "tba_day", str(day)):
         return
     for e in rows(con, """SELECT created_by, starts_at FROM events WHERE status = 'published' AND place = '' AND created_by IS NOT NULL AND starts_at > ?
             AND id NOT IN (SELECT event_id FROM santa_events)""", core.now()):  # a Santa game (santa.start) has no room to confirm
-        if (e["starts_at"] + 5 * 3600) // 86400 - day in (7, 3, 1, 0):
+        if day_of(e["starts_at"]) - day in (7, 3, 1, 0):
             notify(con, e["created_by"], "place_tba", f"tba:{day}")
 
 
@@ -212,11 +212,11 @@ def guest_age_round(con) -> None:
 def stats_day(con) -> None:
     """Just after midnight (Almaty), once: yesterday's row for the admin's chart. seen_at is the last time someone opened
     the app, so seen_at >= yesterday's start counts exactly who opened it since (a few minutes of today included)."""
-    local = core.now() + 5 * 3600
+    local = core.now() + TZ
     day = local // 86400 - 1
     if local % 86400 >= 3 * 3600 or not _once(con, "stats_day", str(day)):  # later in the day today's visits would count too
         return
-    lo, hi = day * 86400 - 5 * 3600, (day + 1) * 86400 - 5 * 3600
+    lo, hi = day * 86400 - TZ, (day + 1) * 86400 - TZ
     con.execute("INSERT OR REPLACE INTO stats_days (day, active, new, students) VALUES (?, ?, ?, ?)",
                 (day, one(con, "SELECT COUNT(*) FROM users WHERE seen_at >= ?", lo)[0],
                  one(con, "SELECT COUNT(*) FROM users WHERE created_at >= ? AND created_at < ?", lo, hi)[0],
@@ -267,7 +267,7 @@ def admin_stats(con, v: Viewer) -> dict:
     _admin(v)
     t = core.now()
     since = lambda s: one(con, "SELECT COUNT(*) FROM users WHERE seen_at >= ?", t - s)[0]  # noqa: E731
-    today = (t + 5 * 3600) // 86400 * 86400 - 5 * 3600
+    today = day_start(t)
     return {"online": since(600), "day": since(86400), "week": since(7 * 86400), "month": since(30 * 86400),
             "users": one(con, "SELECT COUNT(*) FROM users WHERE tg_id > 0")[0], "students": one(con, f"SELECT COUNT(*) FROM students s WHERE NOT {core.staff_sql()}")[0],
             "newToday": one(con, "SELECT COUNT(*) FROM users WHERE created_at >= ?", today)[0],
@@ -281,13 +281,13 @@ def admin_stats(con, v: Viewer) -> dict:
             "ai": ai_state(con), "today": one(con, "SELECT COUNT(*) FROM visits WHERE day = ?", day_of(t))[0],
             "notificationCounts": notifications.summary(con, t),
             "days": [{"day": r["day"], "active": r["active"], "new": r["new"], "students": r["students"]}
-                     for r in rows(con, "SELECT * FROM stats_days WHERE day >= ? ORDER BY day", (t + 5 * 3600) // 86400 - 30)]}
+                     for r in rows(con, "SELECT * FROM stats_days WHERE day >= ? ORDER BY day", day_of(t) - 30)]}
 
 
 def admin_day(con, v: Viewer, day: int) -> dict:
     """One day of the chart. Only the owner sees the people who visited, during the 30-day retention window."""
     _admin(v)
-    lo = day * 86400 - 5 * 3600
+    lo = day * 86400 - TZ
     who = rows(con, """SELECT u.id, u.tg_first_name, u.tg_last_name, u.tg_username, u.nick, u.created_at >= ? AS new, s.user_id IS NOT NULL AS student,
         EXISTS (SELECT 1 FROM students p WHERE p.user_id = u.id) AS profile
         FROM visits x JOIN users u ON u.id = x.user_id LEFT JOIN students s ON s.user_id = u.id AND s.manual = 0

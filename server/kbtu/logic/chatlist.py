@@ -204,7 +204,7 @@ def suggest_chat(con, uid: int, url: str, kind: str, tg_chat: int | None, peek: 
                                                                        url, tg_chat, peek.get("photo"), peek.get("members"), about, uid, core.now())).lastrowid
         con.execute("INSERT OR IGNORE INTO chat_asks (chat_id, user_id) VALUES (?, ?)", (cid, uid))
         notify_staff(con, [r[0] for r in rows(con, "SELECT id FROM users WHERE role IN ('admin', 'moderator')")], "chat_suggested",
-                     f"cs:{(core.now() + 5 * 3600) // 86400}")
+                     f"cs:{core.day_of(core.now())}")
     return title
 
 
