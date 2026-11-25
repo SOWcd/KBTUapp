@@ -28,7 +28,7 @@ from pathlib import Path
 import anyio.to_thread
 import httpx
 
-from . import ai, casting, checkin, db, download, llm, logic, media, mirror, mtbot, offsite, portal, receipt, swear, texts, tgc, tiktok, userbot, video, youtube
+from . import ai, casting, checkin, db, download, instagram, llm, logic, media, mirror, mtbot, offsite, portal, receipt, swear, texts, tgc, tiktok, userbot, video, youtube
 from .config import Config
 from .logic import notifications, now, one, rows
 from .logic.account import _Taken
@@ -1067,6 +1067,8 @@ async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
         await _userpics(cfg, http, con)  # Telegram photos copied to /media: t.me takes ~1 s on every open
         if await anyio.to_thread.run_sync(logic._once, con, "yt_hour", str(now() // 3600)):
             await youtube.sweep(cfg, http, con)  # hourly: the clubs' YouTube channels' new videos as their posts
+        if cfg.ig_user_id and cfg.ig_token and await anyio.to_thread.run_sync(logic._once, con, "ig_half", str(now() // 1800)):
+            await instagram.sweep(cfg, http, con)  # every half hour: the clubs' Instagram posts as their posts
         if await anyio.to_thread.run_sync(logic._once, con, "chats_day", str(now() // 86400)):
             await refresh_chats(cfg, http, con)  # daily: the chats' avatars and members from their t.me pages
         for m in await anyio.to_thread.run_sync(_due, con):

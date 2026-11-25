@@ -664,6 +664,21 @@ CREATE TABLE helper_offers (
       consent TEXT NOT NULL,
       created_at INTEGER NOT NULL
     ) STRICT;
+CREATE TABLE ig_accounts (
+      org_id     INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      handle     TEXT NOT NULL,
+      ig_id      TEXT,
+      seen_until INTEGER,
+      checked_at INTEGER NOT NULL,
+      PRIMARY KEY (org_id, handle)
+    ) STRICT;
+CREATE TABLE ig_media (
+      media_id     TEXT PRIMARY KEY,
+      org_id       INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      handle       TEXT NOT NULL,
+      post_id      INTEGER REFERENCES posts(id) ON DELETE SET NULL,
+      published_at INTEGER NOT NULL
+    ) STRICT;
 CREATE TABLE join_requests (
   id         INTEGER PRIMARY KEY,
   org_id     INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
@@ -1614,6 +1629,7 @@ CREATE INDEX friendships_b ON friendships(b);
 CREATE INDEX gallery_by_user ON gallery_photos(user_id, created_at);
 CREATE INDEX grant_link_uses_by_user ON grant_link_uses(user_id);
 CREATE INDEX helper_offers_by_user ON helper_offers(user_id, created_at);
+CREATE INDEX ig_media_by_org ON ig_media(org_id, handle);
 CREATE INDEX join_requests_by_user ON join_requests(user_id);
 CREATE UNIQUE INDEX one_pending_request ON join_requests(org_id, user_id) WHERE status = 'pending';
 CREATE INDEX map_flaws_open ON map_flaws(done_at, created_at);
