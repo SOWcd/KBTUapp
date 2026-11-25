@@ -5,7 +5,10 @@ made here with the club's sheet and header names (never the real file)."""
 from __future__ import annotations
 
 import dataclasses
+import io
 import time
+import zipfile
+from xml.sax.saxutils import escape
 
 import pytest
 from fastapi.testclient import TestClient
@@ -16,6 +19,34 @@ from test_core import delete_now, login, tma  # noqa: F401
 from test_core import env  # noqa: F401  (the fixture)
 from test_review_checkin import _scan, _signed
 
+
+def _xlsx(sheets: dict[str, list[list[str]]]) -> bytes:
+    """A minimal .xlsx of inline strings, for the synthetic files below."""
+    def esc(s: str) -> str:
+        return escape(s, {'"': "&quot;"})
+
+    def letters(i: int) -> str:
+        s = ""
+        i += 1
+        while i:
+            i, r = divmod(i - 1, 26)
+            s = chr(65 + r) + s
+        return s
+
+    ns = xlsx._NS
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("[Content_Types].xml", '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>')
+        z.writestr("xl/workbook.xml", f'<?xml version="1.0"?><workbook xmlns="{ns["m"]}" xmlns:r="{ns["r"]}"><sheets>'
+                   + "".join(f'<sheet name="{esc(n)}" sheetId="{i + 1}" r:id="rId{i + 1}"/>' for i, n in enumerate(sheets)) + "</sheets></workbook>")
+        z.writestr("xl/_rels/workbook.xml.rels", f'<?xml version="1.0"?><Relationships xmlns="{ns["p"]}">'
+                   + "".join(f'<Relationship Id="rId{i + 1}" Type="worksheet" Target="worksheets/sheet{i + 1}.xml"/>' for i in range(len(sheets))) + "</Relationships>")
+        for i, grid in enumerate(sheets.values()):
+            body = "".join(f'<row r="{r + 1}">' + "".join(f'<c r="{letters(j)}{r + 1}" t="inlineStr"><is><t>{esc(v)}</t></is></c>' for j, v in enumerate(row) if v != "")
+                           + "</row>" for r, row in enumerate(grid))
+            z.writestr(f"xl/worksheets/sheet{i + 1}.xml", f'<?xml version="1.0"?><worksheet xmlns="{ns["m"]}"><sheetData>{body}</sheetData></worksheet>')
+    return buf.getvalue()
+
 MEM, HRS = "ZhZh \u0443\u0447\u0430\u0441\u0442\u043d\u0438\u043a\u0438", "\u0427\u0430\u0441\u044b 26-27"  # the club's two sheets
 FIO_LAT, KURS, PHONE, TG = "\u0424\u0418\u041e \u043d\u0430 \u043b\u0430\u0442\u0438\u043d\u0438\u0446\u0435", "\u041a\u0443\u0440\u0441", \
     "\u041d\u043e\u043c\u0435\u0440 \u0442\u0435\u043b\u0435\u0444\u043e\u043d\u0430", "\u0422\u0435\u043b\u0435\u0433\u0440\u0430\u043c\u043c \u043d\u0438\u043a"
@@ -24,7 +55,7 @@ P = 9  # the President
 
 
 def _book(extra=()) -> bytes:
-    return xlsx.write({
+    return _xlsx({
         MEM: [["list"], [FIO_LAT, KURS, PHONE, TG], ["Aru Test", "2", "+70000000001", "@aru_t"], ["Bek Test", "3", "", "bek_test"],
               ["Cat Test", "1", "", ""], *extra],
         HRS: [[FIO, TG2, "September deposit", "Total"], ["Aru", "@aru_t", "5", "12,5"], ["Nobody Listed", "@nobody1", "1", "2"]],
@@ -107,7 +138,7 @@ def test_import_refuses_bad_files():
         vol.plan(b"not a zip")
     with pytest.raises(xlsx.Bad):
         vol.plan(b"x" * (xlsx.MAX_FILE + 1))
-    big = xlsx.write({MEM: [[FIO_LAT, TG]] + [["N", "@abcd"]] * (xlsx.MAX_ROWS + 1)})
+    big = _xlsx({MEM: [[FIO_LAT, TG]] + [["N", "@abcd"]] * (xlsx.MAX_ROWS + 1)})
     with pytest.raises(xlsx.Bad):
         vol.plan(big)
 
@@ -367,7 +398,7 @@ def test_access_ends_with_membership(zz):
 
 
 def test_namesake_with_another_telegram_stays_apart():
-    book = xlsx.write({MEM: [[FIO_LAT, TG], ["Aru Test", "@aru_t"]], HRS: [[FIO, TG2], ["Aru Test", "@aru_other"]]})
+    book = _xlsx({MEM: [[FIO_LAT, TG], ["Aru Test", "@aru_t"]], HRS: [[FIO, TG2], ["Aru Test", "@aru_other"]]})
     assert len(vol.plan(book)["people"]) == 2
 
 
@@ -427,8 +458,6 @@ def test_old_or_refused_scan_opens_no_shift(zz):
 
 
 def test_zip_bombs_refused():
-    import io
-    import zipfile
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:                 # one part named by many sheets
         ns = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"'
@@ -462,7 +491,7 @@ def test_a_deleted_duplicate_row_stays_gone(zz):
 
 def test_an_ambiguous_name_matches_nobody():
     """Two Aru Tests on the members sheet (the first without a Telegram): hours by @ go to the right one, by name to neither."""
-    book = xlsx.write({MEM: [[FIO_LAT, TG], ["Aru Test", ""], ["Aru Test", "@aru_two"]],
+    book = _xlsx({MEM: [[FIO_LAT, TG], ["Aru Test", ""], ["Aru Test", "@aru_two"]],
                        HRS: [[FIO, TG2, "Total"], ["Aru Test", "@aru_two", "10"], ["Aru Test", "", "3"]]})
     p = vol.plan(book, "Total")
     by = {(r["tg"], tuple(sorted(r["sheets"]))): r["balance"] for r in p["people"]}
