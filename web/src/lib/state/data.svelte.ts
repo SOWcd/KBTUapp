@@ -1,7 +1,7 @@
 // Shared data the screens read, kept in one place per entity so a change shows everywhere at once
 // (one home per thing). Actions update optimistically and roll back if the server says no.
 import { api, ApiErr, type ResearchAnswers, type ResearchSurvey, type ResearchRequest, type AlbumPhoto, type GalleryAlbum, type GalleryPage, type AdminStats, type Inbox, type ClassItem, type Membership, type EventCard, type Chats, type Credits, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type ChatTree, type StaffMute, type TeamMember, type VolLedger, type Appeal, type SgQueue, type Solved, type TeamPick } from '../api';
-import type { MyRegistration, SantaChats } from '../api';
+import type { MyRegistration, SantaChats, ScreenSession, TeamSetup, MeetupScans } from '../api';
 import { joinClasses } from '../classes';
 import { teamError } from '../teams';
 import { teamConsentOk, TEAM_CONSENT } from '../teamConsent';
@@ -50,6 +50,9 @@ export const data = $state({
   news: null as { casts: Post[]; posts: Post[] } | null, // tab 2 → News for club members: broadcasts, then my clubs' posts
   studio: {} as Record<number, EventCard[]>,  // tab 2 → Studio: each of my clubs' events (the one in view comes with the app)
   team: {} as Record<number, TeamMember[]>,   // tab 2 → Team: each of my clubs' people
+  meetups: null as ScreenSession[] | null,
+  meetupSetup: {} as Record<number, TeamSetup>,
+  meetupScans: {} as Record<number, MeetupScans>,
   appeals: null as Appeal[] | null,           // my appeals to SG: with the app (APPEALS on), never kept on the phone
   solved: [] as Solved[],                     // "Solved by your appeals": with my appeals, one request
   sg: null as SgQueue | null,                 // SG's queue (its granted people): with the app, never kept on the phone
@@ -243,6 +246,19 @@ export async function loadStudio(org: Id): Promise<void> {
 }
 export async function loadTeam(org: Id): Promise<void> {
   try { data.team[org] = await api.team(org); } catch { data.team[org] ??= []; /* the last copy stays; never an endless placeholder */ }
+}
+
+export async function loadMeetupSetup(org: Id): Promise<void> {
+  try { data.meetupSetup[org] = await api.teamSetup(org); } catch { /* keep the last department list */ }
+}
+
+export async function loadMeetups(): Promise<void> {
+  try {
+    data.meetups = await api.screens();
+    for (const s of data.meetups) if (s.meetup && !data.meetupScans[s.session]) {
+      void api.meetupScans(s.session).then((p) => { data.meetupScans[s.session] ??= p; }).catch(() => {});
+    }
+  } catch { /* keep the last list */ }
 }
 
 /** DMP's registry for this month (the overseers' main page), in the background; false when the server said no. */
