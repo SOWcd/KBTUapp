@@ -9,7 +9,7 @@ import types
 
 from fastapi.testclient import TestClient
 
-from kbtu import bot, bot_dm, db, logic, media, outbox, app as server, texts
+from kbtu import bot, bot_dm, bot_groups, db, logic, media, outbox, app as server, texts
 from test_core import delete_now, env, login, tma  # noqa: F401  (env: the fixture)
 
 
@@ -43,7 +43,7 @@ class _ChatHttp:
 
 def _bot_in(cfg, con, tg, chat_id, status="administrator", kind="supergroup", title=None):
     """Our bot added to a chat by `tg` (Telegram's action performer); whose card it is now, if any."""
-    asyncio.run(bot._member(cfg, _ChatHttp(), con, {"chat": {"id": chat_id, "type": kind, "title": title or f"chat {chat_id}"},
+    asyncio.run(bot_groups._member(cfg, _ChatHttp(), con, {"chat": {"id": chat_id, "type": kind, "title": title or f"chat {chat_id}"},
                                                      "from": {"id": tg}, "new_chat_member": {"status": status, "user": {"id": 123}}}))
     r = con.execute("SELECT org_id FROM chats WHERE tg_chat_id = ?", (chat_id,)).fetchone()
     return r and r[0]

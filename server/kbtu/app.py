@@ -35,7 +35,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Resp
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.gzip import GZipMiddleware
 
-from . import ai, auth, bot, bot_dm, calpage, casting, checkin as qr, config, db, docs, llm, logic, media, mirror, msauth, receipt, roster, texts, video
+from . import ai, auth, bot, bot_dm, bot_groups, calpage, casting, checkin as qr, config, db, docs, llm, logic, media, mirror, msauth, receipt, roster, texts, video
 from .logic import ApiError, Viewer, donations
 from .logic import web_auth
 
@@ -1386,7 +1386,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         tg = await run_in_threadpool(logic.chatmod.target, con, v, oid, cid)
         async with httpx.AsyncClient(timeout=10) as http:
             if on:
-                miss = await bot.swear_rights(cfg, http, tg)
+                miss = await bot_groups.swear_rights(cfg, http, tg)
                 if miss is None:
                     raise ApiError("unavailable", "telegram")
                 if miss:
