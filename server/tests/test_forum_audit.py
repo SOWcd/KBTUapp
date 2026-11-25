@@ -52,7 +52,7 @@ def test_reply_cleanup_survives_parent_erasure(env, monkeypatch, purge):
     else:
         F.delete(w.con, logic.Viewer(w.ann["id"], "user", True), w.pid)
     if purge == "account":
-        logic.delete_me(w.con, logic.Viewer(w.ann["id"], "user", True))
+        logic.account.delete_me(w.con, logic.Viewer(w.ann["id"], "user", True))
     else:
         F.sweep(w.con)
     assert not w.con.execute("SELECT 1 FROM fchan_replies WHERE id = ?", (rid,)).fetchone()
@@ -254,7 +254,7 @@ def test_erasure_rejects_stale_post_and_processed_upload(env, monkeypatch, rever
     uid = login(c, 1, "ann")["id"]
     con = db.connect(cfg.db_path)
     v = server._viewer_user(con, con.execute("SELECT * FROM users WHERE id = ?", (uid,)).fetchone())
-    logic.delete_me(con, v)
+    logic.account.delete_me(con, v)
     if reverify:
         set_clock(monkeypatch, lambda: v.student_since + 1)
         login(c, 1, "ann")

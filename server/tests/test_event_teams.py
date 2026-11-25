@@ -340,11 +340,11 @@ def test_cancel_delete_and_account(club):
     _go(c, eid, b, {"join": _mine(c, eid, a)["token"]})
     _go(c, eid, x, {"join": _mine(c, eid, a)["token"]})
     # a deleted account: out of the team, the captaincy passes on
-    logic.delete_me(con, logic.Viewer(_uid(con, a), "user", True))
+    logic.account.delete_me(con, logic.Viewer(_uid(con, a), "user", True))
     t = _mine(c, eid, b)
     assert t["captain"] == _uid(con, b) and [p["id"] for p in t["members"]] == _ids(con, [b, x])
     assert con.execute("SELECT COUNT(*) FROM event_team_members WHERE user_id = ?", (_uid(con, a),)).fetchone()[0] == 0
-    assert ("event_team_members", "user_id") in logic._DEL_GONE
+    assert ("event_team_members", "user_id") in logic.account._DEL_GONE
     # cancelled: the teams go, sign-ups stay as for any cancelled event
     assert c.post(f"/api/events/{eid}/cancel", headers=tma(20)).status_code == 200
     assert con.execute("SELECT COUNT(*) FROM event_teams WHERE event_id = ?", (eid,)).fetchone()[0] == 0
@@ -529,7 +529,7 @@ def test_consent_goes_with_the_account(club):
     (a,) = _people(c, 1)
     uid = _uid(con, a)
     assert con.execute("SELECT 1 FROM team_consents WHERE user_id = ?", (uid,)).fetchone()
-    logic.delete_me(con, logic.Viewer(uid, "user", True))
+    logic.account.delete_me(con, logic.Viewer(uid, "user", True))
     assert not con.execute("SELECT 1 FROM team_consents WHERE user_id = ?", (uid,)).fetchone()
 
 

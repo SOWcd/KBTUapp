@@ -350,7 +350,7 @@ def test_cleanup_and_account_deletion(env, monkeypatch):
     con.execute("UPDATE swear_hits SET at = at - 91 * 86400 WHERE tg_id = 20")
     logic.chatmod.sweep(con)
     assert {h["tg_id"] for h in _hits(con, cid)} == {31}
-    assert ("swear_hits", "user_id") in logic._DEL_GONE
+    assert ("swear_hits", "user_id") in logic.account._DEL_GONE
     delete_now(c, cfg, tma(31))
     assert _hits(con, cid) == []
 

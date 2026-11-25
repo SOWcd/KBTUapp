@@ -23,7 +23,7 @@ def test_schools_seeded(env):
     con = db.connect(cfg.db_path)
     logic.seed_schools(con, Path(cfg.db_path).parent / "media")
     got = con.execute("SELECT slug, name, i18n, logo_file_id, official FROM orgs WHERE kind = 'school' ORDER BY id").fetchall()
-    assert len(got) == len(logic.SCHOOLS) == 11 and all(r["logo_file_id"] and r["official"] for r in got)
+    assert len(got) == len(logic.clubs.SCHOOLS) == 11 and all(r["logo_file_id"] and r["official"] for r in got)
     site = next(r for r in got if r["slug"] == "site")
     assert json.loads(site["i18n"])["en"]["name"] == "School of Information Technology and Engineering"
     # run again: nothing doubles; a hand-made one before the seed is matched by name
@@ -32,7 +32,7 @@ def test_schools_seeded(env):
     logic.seed_schools(con, Path(cfg.db_path).parent / "media")
     law = con.execute("SELECT * FROM orgs WHERE slug = 'handmade'").fetchone()
     assert con.execute("SELECT COUNT(*) FROM orgs WHERE kind = 'school'").fetchone()[0] == 11 and law["logo_file_id"] and law["i18n"]
-    shown = logic.org_ref(con, law)
+    shown = logic.core.org_ref(con, law)
     assert shown["i18n"]["kk"]["name"] and shown["logo"] and shown["i18n"]["ru"]["abbr"] == "\u0428\u041f"
     # version 1 seeded before: the next brings the short names, the name the school typed stays
     con.execute("UPDATE meta SET value = '1' WHERE key = 'schools'")
@@ -497,7 +497,7 @@ def test_schedule_bot_safety(env, monkeypatch):
 
     def meanwhile(html):  # the student deletes the account while the bot reads the page
         week = real(html)
-        logic.delete_me(db.connect(cfg.db_path), logic.Viewer(con.execute("SELECT id FROM users WHERE tg_id = 50").fetchone()[0], "user", True))
+        logic.account.delete_me(db.connect(cfg.db_path), logic.Viewer(con.execute("SELECT id FROM users WHERE tg_id = 50").fetchone()[0], "user", True))
         return week
     monkeypatch.setattr(portal, "parse", meanwhile)
     batch[:] = [{**batch[1], "update_id": 10}]
@@ -525,7 +525,7 @@ def test_schedule_match_unlocked(env, monkeypatch):
     monkeypatch.setattr(account, "_merge", merge)
     assert logic.save_schedule(con, me["id"], [x9], "en")["removed"] == 1 and seen == [False, True]
     assert logic.save_schedule(con, me["id"], [x9], "en")["removed"] == 0
-    monkeypatch.setattr(account, "_merge", lambda *a: (logic.delete_me(other, logic.Viewer(me["id"], "user", True)), real(*a))[1])
+    monkeypatch.setattr(account, "_merge", lambda *a: (logic.account.delete_me(other, logic.Viewer(me["id"], "user", True)), real(*a))[1])
     assert logic.save_schedule(con, me["id"], [x9], "en") is None                    # gone meanwhile: nothing written
     assert con.execute("SELECT count(*) FROM schedule_classes WHERE user_id = ?", (me["id"],)).fetchone()[0] == 0
 

@@ -1,4 +1,4 @@
-"""Lanyards: the clubs' (the server's logic.LANYARDS and the web's awards.ts SKINS + CLUB_LOOKS are one) and the schools'."""
+"""Lanyards: the clubs' (the server's logic.account.LANYARDS and the web's awards.ts SKINS + CLUB_LOOKS are one) and the schools'."""
 import re
 from pathlib import Path
 
@@ -13,9 +13,9 @@ def test_lanyards_match_the_web():
     hand = re.search(r"const SKINS = \{(.*?)\} as const", src, re.S).group(1)
     looks = re.search(r"export const CLUB_LOOKS = \{(.*?)\n\} satisfies", src, re.S).group(1)
     web = re.findall(r"(\w+): '\w+'", hand) + re.findall(r"^  (\w+): \{", looks, re.M)
-    assert len(web) == len(set(web)) and set(web) == set(logic.LANYARDS)
+    assert len(web) == len(set(web)) and set(web) == set(logic.account.LANYARDS)
     schools = re.search(r"export const SCHOOL_LOOKS = \{(.*?)\n\} satisfies", src, re.S).group(1)
-    assert set(re.findall(r"^  (\w+): \{", schools, re.M)) == set(logic.SCHOOL_LANYARDS)
+    assert set(re.findall(r"^  (\w+): \{", schools, re.M)) == set(logic.account.SCHOOL_LANYARDS)
 
 
 def test_school_slug():
@@ -25,8 +25,8 @@ def test_school_slug():
              "\u0428\u041c\u0438\u0417\u0422": "smsgt", "\u0428\u0413": "geology", "\u041a\u041c\u0410": "kma", "\u0428\u041f\u041c": "sam", "\u041c\u0428\u042d": "ise",
              "\u0428\u043a\u043e\u043b\u0430 \u043f\u0440\u0430\u0432\u0430": "law", "\u0428\u043a\u043e\u043b\u0430 \u0441\u043e\u0446\u0438\u0430\u043b\u044c\u043d\u044b\u0445 \u043d\u0430\u0443\u043a": "sss",
              " site ": "site", "\u0414\u0418\u0422": None, "": None, None: None}
-    assert {k: logic.school_slug(k) for k in cases} == cases
-    assert set(logic.SCHOOL_LANYARDS) == {s["slug"] for s in logic.SCHOOLS}
+    assert {k: logic.account.school_slug(k) for k in cases} == cases
+    assert set(logic.account.SCHOOL_LANYARDS) == {s["slug"] for s in logic.clubs.SCHOOLS}
 
 
 def test_school_lanyard(env):

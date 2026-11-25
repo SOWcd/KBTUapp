@@ -44,7 +44,7 @@ def _strip(c, who=STUDENT):
 
 
 def _state(con, pid):
-    return logic.casting_state(con.execute("SELECT * FROM posts WHERE id = ?", (pid,)).fetchone(), logic.core.now())
+    return logic.newsfeed.casting_state(con.execute("SELECT * FROM posts WHERE id = ?", (pid,)).fetchone(), logic.core.now())
 
 
 def _club_page(c, oid, who=STUDENT):

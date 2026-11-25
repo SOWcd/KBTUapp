@@ -79,7 +79,7 @@ def test_delete_my_data(env):
     assert c.post("/api/me/keep", headers=A).json()["deleteAt"] is None                 # changed my mind
     no = con.execute("SELECT card_no FROM users WHERE id = ?", (ali["id"],)).fetchone()[0]
     delete_now(c, cfg, A)
-    left = [(t, col) for t, col, notnull in logic._user_fks(con) if (t, col) not in logic._DEL_KEEP
+    left = [(t, col) for t, col, notnull in logic.account._user_fks(con) if (t, col) not in logic.account._DEL_KEEP
             if con.execute(f"SELECT 1 FROM {t} WHERE {col} = ?", (ali["id"],)).fetchone()]
     assert left == [], left                                                                   # every table, new ones too
     me = c.get("/api/me", headers=A).json()
@@ -131,7 +131,7 @@ def test_delete_lists_cover_schema(env):
     forgotten (H2)."""
     _, cfg = env
     con = db.connect(cfg.db_path)
-    missing = [(t, col) for t, col, notnull in logic._user_fks(con) if notnull and (t, col) not in logic._DEL_GONE | logic._DEL_KEEP]
+    missing = [(t, col) for t, col, notnull in logic.account._user_fks(con) if notnull and (t, col) not in logic.account._DEL_GONE | logic.account._DEL_KEEP]
     assert missing == [], missing
 
 
@@ -158,7 +158,7 @@ def test_delete_with_a_ticket_out_of_sight(env):
     log_ = Path(cfg.db_path).parent / "deletions.log"
     assert log_.read_text().split()[2] == "photos"
     log_.write_text(f"{int(time.time()) - 41 * 86400} {'0' * 32}\n" + log_.read_text() + "12")    # an old line, a torn one
-    logic._prune_deletion_log(con)
+    logic.account._prune_deletion_log(con)
     assert len(log_.read_text().splitlines()) == 1
 
 
@@ -561,7 +561,7 @@ def test_profile_privacy(env, monkeypatch):
     logic.stats_day(con)                                                                    # the night's job clears old days
     assert con.execute("SELECT COUNT(*) FROM profile_views WHERE day < ?", ((later + 5 * 3600) // 86400 - 1,)).fetchone()[0] == 0
     c.get(f"/api/users/{dan}", headers=tma(10))                                                        # dan is someone's stranger too
-    logic.delete_me(con, logic.Viewer(dan, "user", True))
+    logic.account.delete_me(con, logic.Viewer(dan, "user", True))
     assert con.execute("SELECT COUNT(*) FROM profile_views WHERE ? IN (viewer_id, user_id)", (dan,)).fetchone()[0] == 0
 
 
@@ -575,7 +575,7 @@ def test_report_limit(env, monkeypatch):
     assert rep(bob, "Fake name").status_code == 204                                                    # the open one, updated: free
     con = db.connect(cfg.db_path)
     assert [tuple(r) for r in con.execute("SELECT target_id, note FROM reports")] == [(bob, "Fake name")]
-    logic.delete_me(con, logic.Viewer(ann, "user", True))                                              # her words go with her data
+    logic.account.delete_me(con, logic.Viewer(ann, "user", True))                                              # her words go with her data
     assert [tuple(r) for r in con.execute("SELECT reporter_id, target_id, note FROM reports")] == [(None, bob, None)]
 
 
@@ -709,7 +709,7 @@ def test_erasure_removes_all_microsoft_claims_for_owner(env):
     tokens = [logic.ms_hold(con, ann, who) for _ in range(2)]
     logic.ms_release(con, tokens[0])
     other = logic.ms_hold(con, bob, who)
-    logic.delete_me(con, logic.Viewer(ann, "user", True))
+    logic.account.delete_me(con, logic.Viewer(ann, "user", True))
     for token in ("", *tokens):
         assert c.post("/api/ms/claim", headers=tma(91), json={"claim": token}).status_code == 403
     assert [r[0] for r in con.execute("SELECT key FROM meta WHERE key GLOB 'ms_claim:*'")] == [f"ms_claim:{other}"]

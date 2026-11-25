@@ -292,7 +292,7 @@ def test_deleting_an_account_takes_its_record(zz):
     con.execute("INSERT INTO vol_shifts (vol_id, in_at, out_at, in_by) VALUES (?, 0, 60, ?)", (aru, uid))
     other = con.execute("SELECT id FROM vol_people WHERE tg = 'bek_test'").fetchone()[0]
     con.execute("INSERT INTO vol_shifts (vol_id, in_at, out_at, in_by) VALUES (?, 0, 60, ?)", (other, uid))  # a shift she marked
-    assert ("vol_people", "user_id") in logic._DEL_GONE and ("vol_access", "user_id") in logic._DEL_GONE
+    assert ("vol_people", "user_id") in logic.account._DEL_GONE and ("vol_access", "user_id") in logic.account._DEL_GONE
     delete_now(c, cfg, tma(3))
     assert con.execute("SELECT COUNT(*) FROM vol_people WHERE id = ?", (aru,)).fetchone()[0] == 0
     assert con.execute("SELECT COUNT(*) FROM vol_shifts WHERE vol_id = ?", (aru,)).fetchone()[0] == 0
@@ -702,7 +702,7 @@ def test_the_door_handed_over_by_a_link(zz):
     con.execute("DELETE FROM org_members WHERE org_id = ? AND user_id = ?", (org, u4))
     assert c.post(f"/api/screens/{other}/show", headers=tma(4)).status_code == 403
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, 'member', 0)", (org, u4))
-    assert ("vol_hands", "user_id") in logic._DEL_GONE
+    assert ("vol_hands", "user_id") in logic.account._DEL_GONE
     delete_now(c, cfg, tma(4))                                                          # an account deleted: its right goes with it
     assert con.execute("SELECT COUNT(*) FROM vol_hands WHERE user_id = ?", (u4,)).fetchone()[0] == 0
 

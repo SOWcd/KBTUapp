@@ -36,7 +36,7 @@ def test_qr_checkin(env, monkeypatch):
     st = c.get("/api/screen", headers=k).json()
     assert (st["done"], st["pending"], st["expected"]) == (1, 1, 2)
     uid = c.get("/api/me", headers=tma(2)).json()["id"]
-    logic.ms_remember(con, uid, {"oid": "oid-2", "email": "s_new@kbtu.kz", "first": "New", "last": "Person", "employeeId": "", "profile": {}})
+    logic.account.ms_remember(con, uid, {"oid": "oid-2", "email": "s_new@kbtu.kz", "first": "New", "last": "Person", "employeeId": "", "profile": {}})
     assert c.get("/api/me", headers=tma(2)).json()["msPending"]["prefill"] == {"studentId": "24B030001"}
     r = c.post("/api/kbtu/manual", headers=tma(2), json={"studentId": "24B030001", "consentVersion": logic.CONSENT})
     assert r.status_code == 200, r.text
@@ -74,7 +74,7 @@ def test_qr_checkin_edges(env, monkeypatch):
     assert (rows_[1][1], rows_[1][10]) == ("'=Ann Testov", "'+7 (700) 000-00-00")     # no formulas in Excel
     assert c.post("/api/checkin", headers=tma(2), json={"p": p}).status_code == 200       # had a mark: may come back
     uid2, uid4 = (c.get("/api/me", headers=tma(u)).json()["id"] for u in (2, 4))
-    logic.ms_remember(con, uid2, {"oid": "oid-2", "email": "two@kbtu.kz", "first": "Two", "last": "Person", "employeeId": "", "profile": {}})
+    logic.account.ms_remember(con, uid2, {"oid": "oid-2", "email": "two@kbtu.kz", "first": "Two", "last": "Person", "employeeId": "", "profile": {}})
     assert c.post("/api/kbtu/manual", headers=tma(2), json={"studentId": "24B030002", "consentVersion": logic.CONSENT}).status_code == 200
     con.execute("""INSERT INTO students (user_id, student_id, first_name, last_name, course, consent_version, consent_at, verified_at,
         synced_at, manual) VALUES (?, '24B030004', 'Four', 'P', 1, ?, 0, 0, 0, 1)""", (uid4, logic.CONSENT))

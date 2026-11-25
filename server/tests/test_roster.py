@@ -174,8 +174,8 @@ def test_freshmen_prefill(env, monkeypatch, capsys):
     # only the student Microsoft vouches for sees it, and only when the name matches too (Latin vs Cyrillic)
     who = lambda tg, mail, first, last: {"oid": f"oid-{tg}", "email": mail, "first": first, "last": last, "employeeId": "", "profile": {}}  # noqa: E731
     uid = {tg: c.get("/api/me", headers=tma(tg)).json()["id"] for tg in (2, 3, 4, 6, 7)}
-    logic.ms_remember(con, uid[2], who(2, "a_one@kbtu.kz", "Aya", "Ospanova"))
-    logic.ms_remember(con, uid[3], who(3, "z_typo@kbtu.kz", "Zed", "Other"))
+    logic.account.ms_remember(con, uid[2], who(2, "a_one@kbtu.kz", "Aya", "Ospanova"))
+    logic.account.ms_remember(con, uid[3], who(3, "z_typo@kbtu.kz", "Zed", "Other"))
     con.execute("INSERT INTO prefill (email, student_id, last_name, first_name, phone, came) VALUES ('z_typo@kbtu.kz', '25B010050', 'Serikov', 'Bolat', '+77010000099', 1)")
     assert c.get("/api/me", headers=tma(2)).json()["msPending"]["prefill"] == {"studentId": "25B010001"}
     assert c.get("/api/me", headers=tma(3)).json()["msPending"]["prefill"] is None          # another person's name: nothing
@@ -203,12 +203,12 @@ def test_freshmen_prefill(env, monkeypatch, capsys):
     assert ach(uid[3])["init26f"] == 0 and con.execute("SELECT 1 FROM prefill WHERE email = 'z_typo@kbtu.kz'").fetchone()
     assert alerts() == []
     # the name matches but the row's ID is another student's: used, and the owner hears
-    logic.ms_remember(con, uid[6], who(6, "h_eld@kbtu.kz", "Jan", "Ten"))
+    logic.account.ms_remember(con, uid[6], who(6, "h_eld@kbtu.kz", "Jan", "Ten"))
     assert c.post("/api/kbtu/manual", headers=tma(6), json={"studentId": "26B010011", "consentVersion": logic.CONSENT}).status_code == 200
     held = con.execute("SELECT user_id FROM students WHERE student_id = '25B000009'").fetchone()[0]
     assert ach(uid[6])["init26f"] == 1 and alerts() == [("prefill_id_held", f"ph:{uid[6]}:{held}")]
     # the name matches (Cyrillic list, Latin Microsoft) but the student gives another ID than the row's
-    logic.ms_remember(con, uid[7], who(7, "j_ten@kbtu.kz", "Zhan", "Ten"))
+    logic.account.ms_remember(con, uid[7], who(7, "j_ten@kbtu.kz", "Zhan", "Ten"))
     assert c.post("/api/kbtu/manual", headers=tma(7), json={"studentId": "26B010012", "consentVersion": logic.CONSENT}).status_code == 200
     assert alerts()[1:] == [("prefill_other_id", f"pf:{uid[7]}")]
     assert not con.execute("SELECT 1 FROM prefill WHERE email = 'j_ten@kbtu.kz'").fetchone()
@@ -217,8 +217,8 @@ def test_freshmen_prefill(env, monkeypatch, capsys):
         text = bot._render(con, {**dict(out), "lang": "en"})[0]
         assert f"#{ref.split(':')[1]}" in text and "kbtu.kz" not in text and "B0" not in text and "Serikov" not in text
     # deleting an account before it linked: its row goes too
-    logic.ms_remember(con, uid[4], who(4, "b_two@kbtu.kz", "Bek", "Twoev"))
-    logic.delete_me(con, logic.Viewer(uid[4], "user", False))
+    logic.account.ms_remember(con, uid[4], who(4, "b_two@kbtu.kz", "Bek", "Twoev"))
+    logic.account.delete_me(con, logic.Viewer(uid[4], "user", False))
     assert not con.execute("SELECT 1 FROM prefill WHERE email = 'b_two@kbtu.kz'").fetchone()
     con.execute("INSERT INTO prefill (email, student_id) VALUES ('held@kbtu.kz', '25B010010')")   # a student's own mail
     delete_now(c, cfg, tma(1))
@@ -463,14 +463,14 @@ def test_prefill_rest(env, monkeypatch, capsys):
     # Dana signs in with another mail and her own ID: the badge and her phone, the row gone; a namesake's ID row stays
     con.execute("INSERT INTO prefill_rest (student_id, last_name, first_name, came) VALUES ('25B010007', 'Other', 'Person', 1)")
     uid = c.get("/api/me", headers=tma(7)).json()["id"]
-    logic.ms_remember(con, uid, {"oid": "oid-7", "email": "d_bekova@kbtu.kz", "first": "Dana", "last": "Bekov", "employeeId": "", "profile": {}})
+    logic.account.ms_remember(con, uid, {"oid": "oid-7", "email": "d_bekova@kbtu.kz", "first": "Dana", "last": "Bekov", "employeeId": "", "profile": {}})
     assert c.post("/api/kbtu/manual", headers=tma(7), json={"studentId": "25B010007", "consentVersion": logic.CONSENT}).status_code == 200
     assert tuple(con.execute("SELECT student_id, phone, school FROM students WHERE user_id = ?", (uid,)).fetchone()) == ("25B010007", "+77010000007", "ISE")
     assert ach(uid)["init26f"] == 1
     assert [r[0] for r in con.execute("SELECT last_name FROM prefill_rest WHERE student_id = '25B010007'")] == ["Other"]
     con.execute("INSERT INTO prefill_rest (student_id, last_name, first_name) VALUES ('25B010007', 'Bekov', 'Dana')")
     con.execute("INSERT INTO prefill_rest (email, last_name, first_name) VALUES ('d_bekova@kbtu.kz', 'Bekova', 'D')")
-    logic.delete_me(con, logic.Viewer(uid, "user", True))
+    logic.account.delete_me(con, logic.Viewer(uid, "user", True))
     assert [r[0] for r in con.execute("SELECT last_name FROM prefill_rest WHERE student_id = '25B010007' OR email IS NOT NULL")] == ["Other"]
     con.close()
 
@@ -506,7 +506,7 @@ def test_prefill_rest_review_fixes(env, monkeypatch, capsys):
     run("prefill-import", "l1")
     con.execute("UPDATE meta SET value = ? WHERE key = 'prefill_list:l1'", (str(int(time.time()) - 100),))
     uid = c.get("/api/me", headers=tma(22)).json()["id"]
-    logic.ms_remember(con, uid, {"oid": "oid-22", "email": "kept@kbtu.kz", "first": "Kim", "last": "Kept", "employeeId": "", "profile": {}})
+    logic.account.ms_remember(con, uid, {"oid": "oid-22", "email": "kept@kbtu.kz", "first": "Kim", "last": "Kept", "employeeId": "", "profile": {}})
     assert c.post("/api/kbtu/manual", headers=tma(22), json={"studentId": "25B020002", "consentVersion": logic.CONSENT}).status_code == 200
     assert c.patch("/api/me", headers=tma(22), json={"phone": None}).status_code == 200
     con.execute("DELETE FROM prefill WHERE email = 'gone@kbtu.kz'")
@@ -518,7 +518,7 @@ def test_prefill_rest_review_fixes(env, monkeypatch, capsys):
     assert con.execute("SELECT phone FROM students WHERE user_id = ?", (uid,)).fetchone()[0] is None
     assert [tuple(r) for r in con.execute("SELECT last_name, student_id FROM prefill_rest ORDER BY id")] == [
         ("Shared", None), ("Other", None), ("Testov", None), ("Other", None)]
-    logic.delete_me(con, logic.Viewer(ann["id"], "user", True))
+    logic.account.delete_me(con, logic.Viewer(ann["id"], "user", True))
     assert [r[0] for r in con.execute("SELECT first_name FROM prefill_rest ORDER BY id")] == ["Sam", "Oleg", "Person"]
     con.close()
 

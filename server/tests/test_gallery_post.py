@@ -269,12 +269,12 @@ def test_account_deletion_takes_my_photos_and_their_reports(env):
     general, attached = _post(c, AL, 1).json()["id"], _post(c, AL, 2, event=eid).json()["id"]
     assert c.post("/api/reports", headers=tma(BO), json={"target": "photo", "id": general, "reason": "me"}).status_code == 204
     paths = [_path(con, general), _path(con, attached)]
-    _, photos = logic.delete_me(con, logic.Viewer(c.ids[AL], "user", True))
+    _, photos = logic.account.delete_me(con, logic.Viewer(c.ids[AL], "user", True))
     assert sorted(photos) == sorted(paths)
     assert _ids(c, BO) == [] and not con.execute("SELECT 1 FROM gallery_photos UNION ALL SELECT 1 FROM event_photos").fetchone()
     assert not con.execute("SELECT 1 FROM reports WHERE target = 'photo'").fetchone()
     assert not con.execute("SELECT 1 FROM meta WHERE key LIKE 'gal:%'").fetchone()
-    assert ("gallery_photos", "user_id") in logic._DEL_GONE
+    assert ("gallery_photos", "user_id") in logic.account._DEL_GONE
 
 
 # ---- photos of no event: a topic each (gallery.TOPICS), the feed's filter
@@ -384,7 +384,7 @@ def test_account_deletion_leaves_no_topic_photo(env):
     c, con, _ = _app(env)
     fid = _post(c, AL, 1, topic="campus").json()["id"]
     path = _path(con, fid)
-    _, photos = logic.delete_me(con, logic.Viewer(c.ids[AL], "user", True))
+    _, photos = logic.account.delete_me(con, logic.Viewer(c.ids[AL], "user", True))
     server.media.drop(c.media, photos)
     assert photos == [path] and not (c.media / f"{path}.webp").exists()
     assert not con.execute("SELECT 1 FROM gallery_photos UNION ALL SELECT 1 FROM files WHERE id = ?", (fid,)).fetchone()
@@ -409,7 +409,7 @@ def test_place_is_one_of_four_words_and_nothing_finer(env):
     assert "place" not in _post(c, BO, seed=4, place="away").json()
     assert "place" not in _post(c, AL, seed=6, place="main", consent=logic.gallery.DECLINE).json()
     assert _post(c, AL, seed=5, place="dorm").json()["place"] == "dorm"  # stored consent also works
-    logic.delete_me(con, logic.Viewer(c.ids[AL], "user", True))
+    logic.account.delete_me(con, logic.Viewer(c.ids[AL], "user", True))
     assert not con.execute("SELECT 1 FROM gallery_consents WHERE user_id = ?", (c.ids[AL],)).fetchone()
     assert {p["id"], q["id"]} & set(_feed(c, CY)) == {q["id"]}
 

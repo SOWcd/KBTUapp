@@ -106,7 +106,7 @@ def test_h5_walk_ins_never_skip_capacity_or_the_queue(door, path):
             assert organizing.checkin_by_name(con, host, eid, cat["id"])["result"] == "closed"
 
     assert_refused()
-    assert logic.taken(con, eid) == 1
+    assert logic.core.taken(con, eid) == 1
     assert con.execute("SELECT COUNT(*) FROM registrations WHERE event_id = ? AND status = 'waitlist'", (eid,)).fetchone()[0] == 2
     con.execute("UPDATE events SET seats = 2 WHERE id = ?", (eid,))
     assert_refused()

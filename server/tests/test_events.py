@@ -693,9 +693,9 @@ def test_door_guests(env):
     assert c.delete(f"/api/events/1/checkin/{ali['id']}", headers=M).status_code == 204
     assert [tuple(r) for r in came(ali["id"])] == [(1, 0, 1)]
     assert linked("Ali Testov") is None
-    logic.link_door_guests(con, ali["id"])
+    logic.organizing.link_door_guests(con, ali["id"])
     assert [tuple(r) for r in came(ali["id"])] == [(1, 0, 1)]
-    logic.delete_me(con, logic.Viewer(ali["id"], "user", True))
+    logic.account.delete_me(con, logic.Viewer(ali["id"], "user", True))
     assert not con.execute("SELECT 1 FROM door_guests WHERE event_id = 1 AND norm = 'ali testov'").fetchone()
 
 

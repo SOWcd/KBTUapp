@@ -432,7 +432,7 @@ def test_erased_screening_reservation_stays_spent(env, monkeypatch):
     forum = logic.fchannel
     post, _ = forum.reserve(w.con, ann, {"body": "Ideas for this week"})
     reply, _ = forum.reply_reserve(w.con, ann, w.pid, {"body": "What about Monday?"})
-    logic.delete_me(w.con, ann)
+    logic.account.delete_me(w.con, ann)
     replacement, _ = forum.reserve(w.con, bob, {"body": "Lunch at the cafeteria", "anon": True})
     assert replacement > post
     with pytest.raises(logic.ApiError, match="not_found"):

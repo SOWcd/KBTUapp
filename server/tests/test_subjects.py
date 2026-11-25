@@ -462,7 +462,7 @@ def test_hourly_counters_go(subj, monkeypatch):
     con.execute("INSERT INTO meta (key, value) VALUES ('subj:1:5', '3'), ('subj:2:5', '1'), ('fsearch:2:5', '1')")
     c.put(f"/api/subjects/{sid}/me", headers=tma(1), json={})
     assert [r[0] for r in con.execute("SELECT key FROM meta WHERE key LIKE 'subj:1:%'")] == [f"subj:1:{logic.now() // 3600}"]
-    logic.forum_sweep(con)
+    logic.forum.forum_sweep(con)
     assert [r[0] for r in con.execute("SELECT key FROM meta WHERE key LIKE 'subj:%' OR key LIKE 'fsearch:%'")] == [f"subj:1:{logic.now() // 3600}"]
 
 

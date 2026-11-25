@@ -33,7 +33,7 @@ def test_anonymous_line_keeps_no_author(env, monkeypatch):
     assert anon(A, "  the map is slow  ").status_code == 204
     # the schema holds nothing that points at a person or a minute
     assert [r[1] for r in con.execute("PRAGMA table_info(anon_feedback)")] == ["id", "body", "day"]
-    assert ("anon_feedback" not in {t for t, _, _ in logic._user_fks(con)})
+    assert ("anon_feedback" not in {t for t, _, _ in logic.account._user_fks(con)})
     row = con.execute("SELECT * FROM anon_feedback").fetchone()
     assert (row["body"], row["day"]) == ("the map is slow", (t0 + 5 * 3600) // 86400)
     # the creator's push: the template alone, tomorrow 09:00 Almaty, one for the day, nothing of the author in it

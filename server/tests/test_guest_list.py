@@ -29,7 +29,7 @@ def _student(c, con, tg, sid, manual=0):
 
 def _sign_in(c, con, tg, sid, surname="Student"):
     uid = c.get("/api/me", headers=tma(tg)).json()["id"]
-    logic.ms_remember(con, uid, {"oid": f"test-{tg}", "email": f"student{tg}@kbtu.kz", "first": "Test", "last": surname,
+    logic.account.ms_remember(con, uid, {"oid": f"test-{tg}", "email": f"student{tg}@kbtu.kz", "first": "Test", "last": surname,
                                 "employeeId": sid})
     signed = c.post("/api/kbtu/manual", headers=tma(tg), json={"studentId": sid, "consentVersion": logic.CONSENT})
     assert signed.status_code == 200, signed.text
@@ -299,7 +299,7 @@ def test_guest_age_deleted_when_ended_ticket_is_anonymized(door_event):
     guests.import_csv(con, 1, ["24B030001,0,,Jane Testov"])
     end = logic.now() - 1
     con.execute("UPDATE events SET starts_at = ?, ends_at = ? WHERE id = 1", (end - 3600, end))
-    logic.delete_me(con, logic.Viewer(uid, "user", True))
+    logic.account.delete_me(con, logic.Viewer(uid, "user", True))
     assert con.execute("SELECT user_id FROM registrations WHERE event_id = 1").fetchone()[0] != uid
     assert not con.execute("SELECT 1 FROM reg_age").fetchone()
 

@@ -315,7 +315,7 @@ def test_honor_medal(env, monkeypatch, capsys):
     assert not con.execute("SELECT 1 FROM bot_outbox WHERE ref = 'ach:honor:1'").fetchone()
     admin.main(["honor", "--yes", str(uid), reason])
     assert medals()[0]["reason"] == reason
-    assert ("achievement_grants", "user_id") in logic._DEL_GONE
+    assert ("achievement_grants", "user_id") in logic.account._DEL_GONE
     delete_now(c, cfg, tma(62))
     assert not con.execute("SELECT 1 FROM achievement_grants WHERE code = 'honor'").fetchone()
     assert listed() == []
