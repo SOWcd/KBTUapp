@@ -394,6 +394,13 @@ CREATE TABLE event_cohosts (
       decided_at INTEGER,
       PRIMARY KEY (event_id, org_id)
     ) STRICT;
+CREATE TABLE event_covers (
+      event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      format TEXT NOT NULL CHECK (format IN ('feed', 'card', 'list')),
+      file_id INTEGER REFERENCES files(id),
+      focus TEXT,
+      PRIMARY KEY (event_id, format)
+    ) STRICT;
 CREATE TABLE event_crew (
       event_id   INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
       user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -429,6 +436,12 @@ CREATE TABLE event_ratings (
         comment TEXT NOT NULL DEFAULT '' CHECK (length(comment) <= 300),
         created_at INTEGER NOT NULL, public_after INTEGER,
         PRIMARY KEY (event_id, user_id)
+    ) STRICT;
+CREATE TABLE event_reviews (
+      event_id INTEGER PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE,
+      asked_at INTEGER,
+      reason TEXT CHECK (reason IN ('details', 'when', 'cover', 'repeat', 'later')),
+      returned_at INTEGER
     ) STRICT;
 CREATE TABLE event_slides (
       event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,

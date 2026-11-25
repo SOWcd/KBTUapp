@@ -13,7 +13,7 @@
   import { onMount } from 'svelte';
   import { data, goingBusy, phrase, prefetchEvent, toggleGoing, toggleSaved } from '../../lib/state/data.svelte';
   import { touchAhead } from '../../lib/touch';
-  import { focusPos } from '../../lib/photo';
+  import { coverFor, focusPos } from '../../lib/photo';
   import { sheets, takeIris, irisOpen } from '../../lib/state/sheets';
   import { t, fmtNum, money, friendsLine, placeOf } from '../../lib/i18n/index.svelte';
   import { whenLine } from '../../lib/time';
@@ -105,12 +105,13 @@
           <video src={e.video.url} poster={e.video.poster?.url} muted={!sound} loop playsinline preload={i === cur ? 'auto' : 'metadata'} use:playing={i === cur && shown}></video>
         {:else if e.video?.poster}<img src={e.video.poster.url} alt="" decoding="async" loading="lazy" class="still" />
         {:else if e.cover && e.slides?.length}
-          <!-- the cover and its photos, swiped sideways like a TikTok photo post (PLAN 33) -->
+          {@const c = coverFor(e.cover, 'feed')!}
+          <!-- the cover (the Feed's own crop or photo of it) and its photos, swiped sideways like a TikTok photo post (PLAN 33) -->
           <div class="strip" onscroll={(s) => (pic[e.id] = Math.round(s.currentTarget.scrollLeft / s.currentTarget.clientWidth))}>
-            <img src={e.cover.url} alt="" decoding="async" loading={i < 2 ? 'eager' : 'lazy'} style:object-position={focusPos(e.cover)} />
+            <img src={c.url} alt="" decoding="async" loading={i < 2 ? 'eager' : 'lazy'} style:object-position={focusPos(c)} />
             {#each e.slides as p (p.id)}<img src={p.url} alt="" decoding="async" loading="lazy" />{/each}
           </div>
-        {:else if e.cover}<img src={e.cover.url} alt="" decoding="async" loading={i < 2 ? 'eager' : 'lazy'} style:object-position={focusPos(e.cover)} />
+        {:else if e.cover}{@const c = coverFor(e.cover, 'feed')!}<img src={c.url} alt="" decoding="async" loading={i < 2 ? 'eager' : 'lazy'} style:object-position={focusPos(c)} />
         {:else}<span class="art"><Emoji name={e.emoji ?? 'sparkles_3d'} size={170} /></span>{/if}
       </div>
       <div class="shade"></div>
