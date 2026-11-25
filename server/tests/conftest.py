@@ -119,7 +119,8 @@ def fresh_process_memory(monkeypatch):
 def before_notification_migration():
     def rewind(con):
         # Rewind to 212, undoing the newest migrations first.
-        con.executescript("""DROP INDEX one_contact;
+        con.executescript("""ALTER TABLE users DROP COLUMN skin_look;
+            DROP INDEX one_contact;
             DROP INDEX contacts_by_sender;
             DROP INDEX withdrawn_offer_messages;
             ALTER TABLE contacts DROP COLUMN offer_message;
