@@ -920,6 +920,18 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def screen_people(sid: int, con: Con, v: Me):
         return qr.people(con, v, sid)
 
+    @app.get("/api/screens/{sid}")
+    def meetup_session(sid: int, con: Con, v: Me):
+        return qr.meetup_session(con, cfg.token_key, v, sid)
+
+    @app.get("/api/screens/{sid}/scans")
+    def meetup_scans(sid: int, con: Con, v: Me, before: int | None = None):
+        return qr.meetup_scans(con, v, sid, before)
+
+    @app.post("/api/screens/{sid}/scans/{uid}")
+    def meetup_decide(sid: int, uid: int, con: Con, v: Me, body: dict = Body(...)):
+        return qr.meetup_decide(con, v, sid, uid, body.get("add"))
+
     @app.post("/api/screens/{sid}/csv")
     def screen_csv_link(sid: int, con: Con, v: Me):
         return qr.csv_link(con, cfg.token_key, v, sid)

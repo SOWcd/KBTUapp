@@ -14,7 +14,7 @@
   import { keepTickets } from './lib/offlineTickets';
   import { channel, channelUnread, warmChannelFeeds, watchChannelVisit } from './lib/state/channel.svelte';
   import { loadSubjects, subjReady } from './lib/state/subjects.svelte';
-  import { data, loadAfisha, loadSchedule, loadCredits, loadSupport, loadGallery, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadVol, loadAppeals, loadSg, loadAsks, loadHelpq, loadStudio, loadTeam, phrase, studioChanged, eventById, eventDetails, eventTeamChunk, toggleGoing, keepRef, skipped, classKey } from './lib/state/data.svelte';
+  import { data, loadAfisha, loadSchedule, loadCredits, loadSupport, loadGallery, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadVol, loadAppeals, loadSg, loadAsks, loadHelpq, loadStudio, loadTeam, loadMeetups, loadMeetupSetup, phrase, studioChanged, eventById, eventDetails, eventTeamChunk, toggleGoing, keepRef, skipped, classKey } from './lib/state/data.svelte';
   import { burst } from './ui/burst';
   import { hiNow, nextUp, once, opened, returning, seen } from './lib/greet';
   import { visit } from './lib/helpus';
@@ -588,6 +588,15 @@
     if (et) { sheets.teamInvite(et[1]); return; }
     const vh = p.match(/^vh_([0-9a-f]{32})$/); // the volunteers ledger's hand-over link: that session's door, mine to run (server vol.take)
     if (vh) { asStudent(() => void takeDoor(vh[1]), p); return; }
+    const meetup = p.match(/^meet_(\d+)$/);
+    if (meetup) {
+      ui.tab = 'club';
+      asStudent(async () => {
+        try { const s = await api.meetupSession(Number(meetup[1])); sheets.screens(undefined, undefined, s, s.org ?? undefined); }
+        catch { say(t('scr.notYours'), 'warning_3d'); }
+      }, p);
+      return;
+    }
     const sh = p.match(/^sh_([0-9a-f]{16})$/); // /show's pairing QR: only a session's organizers bind it
     if (sh) { asStudent(() => sheets.screens(sh[1])); return; }
     const fp = p.match(/^fp(?:_(\d+))?$/); // the bot's first comment under a post: the Forum tab, that post in view (bare fp: the tab)
@@ -809,6 +818,8 @@
     wasStudent = st;
   });
   function loadMine() {
+    if (session.me?.bigScreen || session.me?.memberships.some((m) => ['president', 'vice', 'head'].includes(m.role))) void loadMeetups();
+    for (const m of session.me?.memberships ?? []) if (may(m, 'events') || m.role === 'head') void loadMeetupSetup(m.org.id);
     void loadFriends(); void loadMyCard(true); void loadNews(true); // StoryRow's refresh at the same launch joins it
     const club = session.me?.memberships.find((m) => m.org.id === ui.club) ?? session.me?.memberships[0];
     if (club) { void loadStudio(club.org.id); void loadTeam(club.org.id); }

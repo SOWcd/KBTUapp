@@ -49,9 +49,9 @@ def test_title_default_and_log(env):
     con = db.connect(cfg.db_path)
     oid = _club_runs(c, con, 9, "dana", "chess")
     s = _new(c, 9, oid).json()
-    assert s["title"].startswith("Meeting \u00b7 ") and s["started"] is None and s["event"] is None
+    assert s["title"].startswith("Team meetup \u00b7 ") and s["started"] is None and s["event"] is None
     assert _new(c, 9, oid, "  \u0412\u0441\u0442\u0440\u0435\u0447\u0430\n\n  " + "x" * 200).json()["title"] == ("\u0412\u0441\u0442\u0440\u0435\u0447\u0430 " + "x" * 200)[:80]
-    assert _new(c, 9, oid, "   ").json()["title"].startswith("Meeting")
+    assert _new(c, 9, oid, "   ").json()["title"].startswith("Team meetup")
     assert con.execute("SELECT COUNT(*) FROM audit_log WHERE action = 'checkin_new'").fetchone()[0] == 3
     assert s["session"] in [x["session"] for x in c.get("/api/screens", headers=tma(9)).json()]   # the organizer's list has it
     con.close()
@@ -101,7 +101,7 @@ def test_who_is_expected_and_who_is_absent(env):
         _join(c, con, oid, tg, name, "member")
         _mail(con, tg, f"{name}@kbtu.kz")
     login(c, 3, "cat")                                                  # not in the club
-    tag = con.execute("INSERT INTO org_tags (org_id, name, color, created_at) VALUES (?, 'Media', 'blue', 0)", (oid,)).lastrowid
+    tag = con.execute("INSERT INTO org_tags (org_id, name, color, created_at, department) VALUES (?, 'Media', 'blue', 0, 1)", (oid,)).lastrowid
     con.execute("INSERT INTO member_tags (tag_id, user_id) SELECT ?, id FROM users WHERE tg_id = 2", (tag,))
     other = _club_runs(c, con, 8, "eve", "go")
     foreign = con.execute("INSERT INTO org_tags (org_id, name, color, created_at) VALUES (?, 'X', 'red', 0)", (other,)).lastrowid
