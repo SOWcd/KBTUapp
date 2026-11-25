@@ -2559,4 +2559,16 @@ MIGRATIONS: list[tuple[int, str]] = [
     (245, """ALTER TABLE push_devices ADD COLUMN provider TEXT NOT NULL DEFAULT 'apns' CHECK (provider IN ('apns', 'fcm'));
     ALTER TABLE push_devices ADD COLUMN dead_at INTEGER;
     ALTER TABLE users ADD COLUMN notify_via TEXT NOT NULL DEFAULT 'app' CHECK (notify_via IN ('app', 'telegram'));"""),
+    # Made together shows contributors by default (logic/credits.py): the creator's name for a Telegram id with no
+    # account yet (`credit add --name`), used only while no account exists; gone with the line's Telegram id
+    (246, "ALTER TABLE credits ADD COLUMN name TEXT;"),
+    # Sponsors are shown by default (logic/donations.py): no answer row no longer means hidden, so an account moved to
+    # another Telegram always gets a hide row while it has donations or answers (another name and face stand there now).
+    # A move to a negative id (admin move's swap, a burnt number) is never listed: no row
+    (247, """DROP TRIGGER IF EXISTS sponsor_moved;
+    CREATE TRIGGER sponsor_moved AFTER UPDATE OF tg_id ON users
+      WHEN old.tg_id != new.tg_id AND new.tg_id > 0 AND (EXISTS (SELECT 1 FROM donations WHERE user_id = old.id)
+                                                         OR EXISTS (SELECT 1 FROM sponsor_consents WHERE user_id = old.id)) BEGIN
+        INSERT INTO sponsor_consents (user_id, version, show, at) VALUES (old.id, 'sp1', 0, unixepoch());
+    END;"""),
 ]

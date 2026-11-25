@@ -1,5 +1,5 @@
 """The people of the app (logic/credits.py): who is named and who is "Student", the order, the bot's one ask, the
-consent's record, and that the API's JSON never carries a Telegram id, a name or a face of someone without a yes."""
+consent's record, and that the API's JSON never carries a Telegram id, a name or a face of someone who hid."""
 from __future__ import annotations
 
 import json
@@ -51,7 +51,8 @@ def _names(got):
 
 
 def test_visibility_matrix(env):
-    """Named only with a shipped line AND their own yes; every other state keeps the line, nameless."""
+    """Shown by default with a shipped line; hidden by a no; a ban, no student row, a deleted account or no account
+    keep the line, nameless."""
     c, cfg = env
     con = _con(cfg)
     login(c, 900, "viewer")
@@ -79,17 +80,17 @@ def test_visibility_matrix(env):
     by_line = {p["items"][0]["text"]["en"]: p for p in got["people"]}
     assert set(by_line) == {f"en {s}" for s in tgs}  # every shipped line listed, no suggested one
     assert all(len(p["items"]) == 1 for p in got["people"])
-    assert {k for k, p in by_line.items() if p["person"]} == {"en yes"}
-    assert by_line["en yes"]["person"]["name"] == "Yes T"
-    # the JSON itself: no Telegram id, no name, no avatar, no user id of anyone but the one who said yes
+    assert {k for k, p in by_line.items() if p["person"]} == {"en yes", "en quiet"}
+    assert by_line["en yes"]["person"]["name"] == "Yes T" and by_line["en quiet"]["person"]["name"] == "Quiet T"
+    # the JSON itself: no Telegram id, no name, no avatar, no user id of anyone but the shown
     raw = json.dumps(got, ensure_ascii=False)
-    yes_id = con.execute("SELECT id FROM users WHERE tg_id = ?", (tgs["yes"],)).fetchone()[0]
+    shown = {con.execute("SELECT id FROM users WHERE tg_id = ?", (tgs[s],)).fetchone()[0] for s in ("yes", "quiet")}
     for s, tg in tgs.items():
         assert str(tg) not in raw, s
-        if s not in ("yes", "nobody", "gone"):
+        if s not in ("yes", "quiet", "nobody", "gone"):
             assert s.title() not in raw.replace(f"en {s}", ""), s
     assert "Guestname" not in raw and "tg_id" not in raw and "whose" not in raw
-    assert [p["person"]["id"] for p in got["people"] if p["person"]] == [yes_id]
+    assert {p["person"]["id"] for p in got["people"] if p["person"]} == shown
     assert set(got) == {"founder", "idea", "team", "people", "mine", "version"} and got["team"] == []
     assert all(set(p) == {"person", "items"} and all(set(i) == {"kind", "text", "on"} for i in p["items"]) for p in got["people"])
     # the deleted account: its line stays, with no Telegram id left on it, and its answers are gone
@@ -98,7 +99,39 @@ def test_visibility_matrix(env):
     assert ("credit_consents", "user_id") in logic._DEL_GONE
     # a yes again after a withdrawal names them again
     assert _yes(c, tgs["back"]).status_code == 200
-    assert _names(_get(c)) == {"Yes T", "Back T"}
+    assert _names(_get(c)) == {"Yes T", "Quiet T", "Back T"}
+
+
+def test_name_without_account(env, capsys, monkeypatch):
+    """No account yet: the creator's --name stands on their lines (one card, no face); once they open the app their
+    own profile does, and they can hide; a deleted account takes the name off its lines."""
+    c, cfg = env
+    con = _con(cfg)
+    monkeypatch.setattr(admin.config, "load", lambda: cfg)
+    login(c, 900, "viewer")
+    for bad in (["credit", "add", "gh:octo", "idea", "a", "b", "c", "--name", "Octo"], ["credit", "add", "7000951", "idea", "a", "b", "c", "--name", " "],
+                ["credit", "add", "7000951", "idea", "a", "b", "c", "--name", "x" * 61], ["credit", "add", "7000951", "idea", "a", "b", "c", "--name", "A", "--name", "B"]):
+        with pytest.raises(SystemExit):
+            admin.main(bad)
+    admin.main(["credit", "add", "7000951", "idea", "ru one", "kk one", "en one", "--name", " Dana  K "])
+    admin.main(["credit", "add", "7000951", "find", "ru two", "kk two", "en two", "--gh", "dana-k", "--name", "Dana K"])
+    _line(con, 7000952, word="plain")  # no name given: "Student"
+    ids = [r[0] for r in con.execute("SELECT id FROM credits WHERE tg_id = 7000951 ORDER BY id")]
+    credits.ship(con, ids[0], "2026-11-01")
+    credits.ship(con, ids[1], "2026-11-02")
+    capsys.readouterr()
+    admin.main(["credit", "list"])
+    assert "tg 7000951 (no account) + name Dana K" in capsys.readouterr().out
+    got = _get(c)
+    assert sorted((p.get("name", ""), p.get("gh", ""), p["person"] or {}, [i["text"]["en"] for i in p["items"]]) for p in got["people"]) == [
+        ("", "", {}, ["en plain"]), ("Dana K", "dana-k", {}, ["en two", "en one"])]
+    login(c, 7000951, "dana")  # opened the app: their own profile, shown by default
+    got = _get(c, 7000951)
+    assert ("Dana T", ["en two", "en one"]) in _who(got) and "Dana K" not in json.dumps(got)
+    assert _no(c, 7000951).status_code == 200  # hidden: nameless, the team's name doesn't come back
+    assert "Dana" not in json.dumps(_get(c))
+    delete_now(c, cfg, tma(7000951))
+    assert con.execute("SELECT COUNT(*) FROM credits WHERE name IS NOT NULL").fetchone()[0] == 0
 
 
 def test_routes_are_never_cached(env):
@@ -124,10 +157,11 @@ def test_order_and_grouping(env):
     _line(con, 7000203, "idea", "2026-08-01")
     _line(con, 7000299, "idea", "2026-10-20", "stranger a")  # no account, two lines
     _line(con, 7000299, "find", "2026-10-21", "stranger b")
-    _line(con, 7000204, "idea", "2026-10-19", "shy a")       # an account without a yes, two lines
+    _line(con, 7000204, "idea", "2026-10-19", "shy a")       # an account that hid, two lines
     _line(con, 7000204, "find", "2026-10-18", "shy b")
     for tg in (7000201, 7000202, 7000203):
         assert _yes(c, tg).status_code == 200
+    assert _no(c, 7000204).status_code == 200
     assert _who(_get(c, 7000203)) == [
         ("Late T", ["en w202"]),
         (None, ["en stranger b"]), (None, ["en stranger a"]), (None, ["en shy a"]), (None, ["en shy b"]),
@@ -143,8 +177,8 @@ def test_order_and_grouping(env):
 
 def test_creator_and_idea_author(env):
     """The creator is named without a consent row, on purpose: he is public as the creator everywhere (person.founder),
-    and only his person reference is here, none of his lines. The idea's author is named only after her own yes; until
-    then her other lines stand as nameless rows, not under the idea."""
+    and only his person reference is here, none of his lines. The idea's author is shown by default with her lines under
+    the idea; hidden, they stand as nameless rows."""
     c, cfg = env
     con = _con(cfg)
     boss, muse = login(c, 7000301, "boss"), login(c, 7000302, "muse")
@@ -158,12 +192,11 @@ def test_creator_and_idea_author(env):
     assert got["founder"]["id"] == boss["id"] and set(got["founder"]) <= {"id", "name", "nick", "avatar", "founder", "mark", "staff", "realName", "i18n"}
     assert "en boss" not in json.dumps(got)
     item = {"kind": "find", "text": {"ru": "ru muse", "kk": "kk muse", "en": "en muse"}, "on": "2026-11-01"}
-    assert got["idea"] == {"person": None, "items": []} and got["people"] == [{"person": None, "items": [item]}]
-    assert "Muse" not in json.dumps(_get(c, 7000301))
-    assert got["mine"] == {"consent": None, "rev": None, "idea": True, "items": [item]}
-    got = _yes(c, 7000302).json()
     assert got["idea"] == {"person": got["idea"]["person"], "items": [item]} and got["idea"]["person"]["id"] == muse["id"]
-    assert got["people"] == [] and got["mine"]["consent"] is True
+    assert got["people"] == [] and got["mine"] == {"consent": None, "rev": None, "idea": True, "items": [item]}
+    got = _no(c, 7000302).json()
+    assert got["idea"] == {"person": None, "items": []} and got["people"] == [{"person": None, "items": [item]}]
+    assert got["mine"]["consent"] is False and "Muse" not in json.dumps(_get(c, 7000301))
 
 
 def _team(got):
@@ -173,8 +206,8 @@ def _team(got):
 
 def test_team_order_and_consent(env, monkeypatch, capsys):
     """The Team (`kbtu.admin team add|del`, audited): first added first; a member's lines under their card and not
-    again below; only after their own yes (before it: not in the block, their lines nameless below); a member with
-    no line can say yes too (the bot asks them); off the Team, their lines go back to the list."""
+    again below; shown by default, hidden by their no (then not in the block, their lines nameless below); a member
+    with no line can answer too (the bot asks them); off the Team, their lines go back to the list."""
     c, cfg = env
     con = _con(cfg)
     monkeypatch.setattr(admin.config, "load", lambda: cfg)
@@ -192,10 +225,10 @@ def test_team_order_and_consent(env, monkeypatch, capsys):
     assert capsys.readouterr().out.strip().endswith("already")
     assert [tuple(r) for r in con.execute("SELECT action, target FROM audit_log WHERE action LIKE 'team_%' ORDER BY id")] == [
         ("team_add", f"user:{u['id']}") for u in (bo, ada, shy, new)]
-    # nobody has said yes: no Team, every line nameless in the list
+    # nobody has answered: all of them, first added first, the line of one with no account nameless in the list
     got = _get(c)
-    assert got["team"] == [] and _who(got) == [(None, ["en other"]), (None, ["en ada b"]), (None, ["en shy"]), (None, ["en ada a"])]
-    assert "Ada" not in json.dumps(got) and "Bo T" not in json.dumps(got)
+    assert _team(got) == [("Bo T", []), ("Ada T", ["en ada b", "en ada a"]), ("Shy T", ["en shy"]), ("New T", [])]
+    assert _who(got) == [(None, ["en other"])]
     # the Team is something of mine to answer for, lines or not
     assert _get(c, 7000802)["mine"] == {"consent": None, "rev": None, "idea": False, "items": [], "team": True}
     con.execute("UPDATE users SET can_dm = 1")  # the bot can write to them (ask only queues reachable people)
@@ -244,11 +277,11 @@ def test_consent_record(env):
     got = con.execute("SELECT user_id, show, version, at FROM credit_consents ORDER BY id").fetchall()
     assert [tuple(r)[:3] for r in got] == [(me["id"], 1, credits.CONSENT), (me["id"], 0, credits.CONSENT), (me["id"], 0, credits.CONSENT)]
     assert all(r[3] > 0 for r in got)
-    # a yes to an older text is not a yes to this one: nameless, asked again
+    # a yes to an older text is not an answer to this one: asked again, and shown as anyone who hasn't hidden
     con.execute("INSERT INTO credit_consents (user_id, show, version, at) VALUES (?, 1, 'cr0', 1)", (me["id"],))
     con.commit()
     got = _get(c, 7000401)
-    assert got["mine"]["consent"] is None and got["people"][0]["person"] is None
+    assert got["mine"]["consent"] is None and got["people"][0]["person"]["id"] == me["id"]
 
 
 def test_stale_yes_never_undoes_a_withdrawal(env):
@@ -278,7 +311,7 @@ def test_one_eligibility_rule(env):
     for tg in (7000801, 7000802, 7000803):
         _line(con, tg)
     assert _yes(c, 7000801).status_code == 200 and _yes(c, 7000802).status_code == 200
-    assert _names(_get(c, 7000802)) == {"Typed T", "Fine T"}
+    assert _names(_get(c, 7000802)) == {"Typed T", "Fine T", "Later T"}
     con.execute("UPDATE students SET manual = 1 WHERE user_id IN (?, ?)", (ids["typed"], ids["later"]))
     con.commit()
     assert _names(_get(c, 7000802)) == {"Fine T"}  # the old yes no longer names a typed-in row
@@ -349,13 +382,13 @@ def test_ask_once(env, capsys, monkeypatch):
     assert _yes(c, tg["two"]).status_code == 200
     assert outbox._render(con, m) is None  # answered before it went out: quiet
     # a reworded sheet: those with a yes to the old text are asked once for the new one; the no stays unasked
-    monkeypatch.setattr(credits, "CONSENT", "cr2")
-    monkeypatch.setattr(credits, "_ASKABLE", credits._ASKABLE.replace("'cr1'", "'cr2'"))
-    assert credits.ask(con, dry=True) == 3 and credits.ask(con) == 3  # two, old, muse (her ask was for cr1)
+    monkeypatch.setattr(credits, "CONSENT", "cr3")
+    monkeypatch.setattr(credits, "_ASKABLE", credits._ASKABLE.replace("'cr2'", "'cr3'"))
+    assert credits.ask(con, dry=True) == 3 and credits.ask(con) == 3  # two, old, muse (her ask was for cr2)
     assert credits.ask(con) == 0
     assert ids["said"] not in sent() and sent().count(ids["old"]) == 1 and sent().count(ids["two"]) == 2
     # the count is of rows queued, not of people looked at: a row already there (another run got in first) is not counted
-    con.execute("DELETE FROM bot_outbox WHERE kind = 'credit_ask' AND ref = 'cra:cr2' AND user_id != ?", (ids["old"],))
+    con.execute("DELETE FROM bot_outbox WHERE kind = 'credit_ask' AND ref = 'cra:cr3' AND user_id != ?", (ids["old"],))
     con.commit()
     monkeypatch.setattr(credits, "rows", lambda con_, sql, *a: [{"id": ids["old"]}, {"id": ids["two"]}] if "bot_outbox" in sql else logic.rows(con_, sql, *a))
     assert credits.ask(con) == 1
@@ -502,7 +535,7 @@ def test_github_login(env, capsys, monkeypatch):
     got = _get(c)
     assert sorted((p.get("gh", ""), [i["text"]["en"] for i in p["items"]]) for p in got["people"] if not p["person"]) == [
         ("", ["en plain"]), ("Octo-Cat", ["en one", "en two"]), ("other", ["en three"])]
-    assert got["idea"] == {"person": None, "items": []} and got["mine"] is None  # an idea line by login: not the idea's
+    assert got["idea"]["items"] == [] and got["mine"] is None  # an idea line by login: not the idea's
     for bad in (["credit", "add", "gh:-bad", "code", "a", "b", "c"], ["credit", "add", "gh:a_b", "code", "a", "b", "c"],
                 ["credit", "add", "gh:" + "x" * 40, "code", "a", "b", "c"], ["credit", "bind", "octo-cat", "7000702"]):
         with pytest.raises(SystemExit):
@@ -514,8 +547,8 @@ def test_github_login(env, capsys, monkeypatch):
 
 
 def test_telegram_and_github(env, capsys, monkeypatch):
-    """One person known by both: after their yes one card, their name and face with the login (and that login's own
-    lines) in it; without a yes the login's card and the nameless rows as ever, nothing tying the two."""
+    """One person known by both: shown, one card, their name and face with the login (and that login's own lines) in
+    it; hidden, the login's card and the nameless rows, nothing tying the two."""
     c, cfg = env
     con = _con(cfg)
     monkeypatch.setattr(admin.config, "load", lambda: cfg)
@@ -546,29 +579,19 @@ def test_telegram_and_github(env, capsys, monkeypatch):
     def cards(got):
         return sorted(((p["person"] or {}).get("name", ""), p.get("gh", ""), [i["text"]["en"] for i in p["items"]]) for p in got["people"])
 
-    before = [("", "", ["en a-plain"]), ("", "", ["en b-plain"]),
-              ("", "Octo", ["en a-both", "en a-gh"]), ("", "bee-dev", ["en b-both"])]
+    shown = [("Alpha T", "Octo", ["en a-both", "en a-gh", "en a-plain"]), ("Bee T", "bee-dev", ["en b-both", "en b-plain"])]
     got = _get(c)
-    assert cards(got) == before
-    raw = json.dumps(got, ensure_ascii=False)
-    assert not any(x in raw for x in ("7000801", "7000802", "Alpha T", "Bee T"))
-
-    assert _get(c, 7000801)["mine"]["gh"] == "Octo"  # the consent sheet shows the login a yes will name them with
+    assert cards(got) == shown
+    assert not any(x in json.dumps(got) for x in ("7000801", "7000802"))
+    assert _get(c, 7000801)["mine"]["gh"] == "Octo"  # the sheet shows the login beside their name
     assert _get(c, 7000802)["mine"]["gh"] == "bee-dev"
-    assert _yes(c, 7000801).status_code == 200
-    # a login put beside their Telegram id after a yes they gave without seeing it: refused
-    for bad in (["credit", "gh", str(cid("a-plain")), "other-login"],
-                ["credit", "add", "7000801", "code", "a", "b", "c", "--gh", "other-login"]):
-        with pytest.raises(SystemExit):
-            admin.main(bad)
-    got = _get(c)
-    assert cards(got) == [("", "", ["en b-plain"]), ("", "bee-dev", ["en b-both"]),
-                          ("Alpha T", "Octo", ["en a-both", "en a-gh", "en a-plain"])]
-    raw = json.dumps(got, ensure_ascii=False)
-    assert not any(x in raw for x in ("7000801", "7000802", "Bee T"))  # the other one: untouched, unnamed
 
-    assert _no(c, 7000801).status_code == 200  # taken back: the login's card and the nameless row again
-    assert cards(_get(c)) == before
+    assert _no(c, 7000801).status_code == 200  # hidden: the login's card and the nameless row, the other one untouched
+    got = _get(c)
+    assert cards(got) == [("", "", ["en a-plain"]), ("", "Octo", ["en a-both", "en a-gh"]), shown[1]]
+    assert "Alpha T" not in json.dumps(got, ensure_ascii=False)
+    assert _yes(c, 7000801).status_code == 200  # shown again
+    assert cards(_get(c)) == shown
 
 
 def test_contribution_medals(env):

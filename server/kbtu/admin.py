@@ -59,10 +59,11 @@
                                 @username or Telegram ID queues it for one person first; --platform: only people who
                                 opened the app on that kind of device in the last 90 days (a preview goes regardless)
   .venv/bin/python -m kbtu.admin team add|del <@username | telegram id>   People of the app's Team (core developers), audited
-  .venv/bin/python -m kbtu.admin credit add <telegram id | gh:login> <idea | find | code> "<ru>" "<kk>" "<en>" [--gh <login>]   "People of the app"
+  .venv/bin/python -m kbtu.admin credit add <telegram id | gh:login> <idea | find | code> "<ru>" "<kk>" "<en>" [--gh <login>] [--name "<name>"]   "People of the app"
                                 (logic/credits.py): a line in OUR words about what they gave (an account isn't needed;
                                 gh:login: a pull request's author, listed under the public login; --gh: the same person's
-                                login beside a Telegram id, shown on their named card only after their yes);
+                                login beside a Telegram id, on their named card; --name: what to call a Telegram id with
+                                no account yet, shown until they open the app; shown by default, a person can hide in Settings);
                                 credit gh <id> <login> puts a login on a line already written;
                                 gender-neutral, no name, handle, link or identifying detail: it is shown under "Student";
                                 credit ship <id> [YYYY-MM-DD] lists it (today), credit list, credit del <id>;
@@ -72,8 +73,8 @@
                                 shipped line and no answer; prints how many were queued; a no is never asked again
   .venv/bin/python -m kbtu.admin donation add <telegram id> <amount KZT> [YYYY-MM-DD] [--again]   a Kaspi transfer the
                                 creator checked by hand (outside the app): a confirmed donation, the sponsor medal follows;
-                                the same amount on the same day again only with --again. Never makes anyone public: the name
-                                is the donor's own yes on the Support page. A donor who also uploaded this transfer's
+                                the same amount on the same day again only with --again. Shown on the Sponsors list (name and
+                                total) unless the donor hid it on the Support page. A donor who also uploaded this transfer's
                                 receipt in the app would be counted twice: check `donation list` first.
                                 donation list: id, user id (internal), amount, source, date, public (no names, no
                                 Telegram ids); donation remove <id>: a manual row typed wrong goes, the medal follows
@@ -585,8 +586,9 @@ def main(args: list[str]) -> None:
         _broadcast(con, *rest, platform=platform)
     elif cmd == "credit" and args[1:2] in (["add"], ["gh"], ["ship"], ["list"], ["del"], ["ask"]):  # the people of the app (logic/credits.py)
         try:
-            if args[1] == "add" and (len(args) == 7 or (len(args) == 9 and args[7] == "--gh")):
-                print(f"credit {credits.add(con, *args[2:7], *args[8:])} (suggested; `credit ship` lists it)")
+            if (args[1] == "add" and len(args) in (7, 9, 11) and len(opts := dict(zip(args[7::2], args[8::2]))) * 2 == len(args) - 7
+                    and opts.keys() <= {"--gh", "--name"}):
+                print(f"credit {credits.add(con, *args[2:7], gh=opts.get('--gh'), name=opts.get('--name'))} (suggested; `credit ship` lists it)")
                 print(f"check before shipping: {credits.REMIND}")
             elif args[1] == "gh" and len(args) == 4:
                 credits.set_gh(con, int(args[2]), args[3])
@@ -602,7 +604,7 @@ def main(args: list[str]) -> None:
                 for r in rows(con, f"""SELECT c.*, u.id AS uid, k.id AS rev, k.show, k.version FROM credits c
                         LEFT JOIN users u ON u.tg_id = c.tg_id AND u.tg_id > 0 {credits._LAST} ORDER BY c.id"""):
                     tg = None if r["tg_id"] is None else f"tg {r['tg_id']}" + ("" if r["uid"] else " (no account)")
-                    who = " + ".join(x for x in (tg, r["gh"] and f"gh {r['gh']}") if x) or "deleted account"
+                    who = " + ".join(x for x in (tg, r["gh"] and f"gh {r['gh']}", r["name"] and f"name {r['name']}") if x) or "deleted account"
                     said = {None: "no answer", True: "yes", False: "no"}[credits._said(r)]
                     print(f"#{r['id']}  {r['shipped_on'] or 'suggested'}  {r['kind']}  {who}, {said}  {r['ru']} | {r['kk']} | {r['en']}")
             else:
@@ -627,7 +629,7 @@ def main(args: list[str]) -> None:
             sys.exit(f"{e.code} {e.message}".strip())
         sum_ = donations.total(con, u["id"])
         print(f"donation {did}: total {sum_} KZT, tier {donations.tier(sum_)}, "
-              + ("public" if donations.public(con, u["id"]) else "not public (their own yes on the Support page)"))
+              + ("public" if donations.public(con, u["id"]) else "hidden (their own switch on the Support page)"))
     elif cmd == "donation" and args[1:2] == ["remove"] and len(args) == 3 and args[2].isdigit():  # a manual row typed wrong
         from .logic import donations
         try:
