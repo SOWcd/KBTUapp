@@ -1,9 +1,11 @@
 <script module lang="ts">
   // the light on its way back to the button after a close: it outlives its sheet, so the next opening can take it over
-  // mid-air (take: where it is now, how much of the colonnade is left in it, and the button's veil to hand on)
+  // mid-air (take: where it is now, how much of the light is left in it, and the button's veil to hand on)
   let back: { take: () => { x: number; y: number; r: number; m: number; veil: Animation } } | null = null;
   const FLY = 520, ACROSS = 'cubic-bezier(.4, 0, .2, 1)', ALONG = 'cubic-bezier(.2, .8, .25, 1)';
-  const turnOf = (e: Element) => e.getAnimations({ subtree: true }).find((a) => (a.effect as KeyframeEffect | null)?.pseudoElement === '::before');
+  // a copy of the light takes its endless motion (the breath, the grains' turn) where the original's is, not from the start
+  const loops = (e: Element) => e.getAnimations({ subtree: true }).filter((a): a is CSSAnimation => a instanceof CSSAnimation && a.effect?.getTiming().iterations === Infinity);
+  const sync = (from: Element, to: Element) => { const was = loops(from); loops(to).forEach((a, i) => { if (was[i]?.animationName === a.animationName) a.currentTime = was[i].currentTime; }); };
 </script>
 
 <script lang="ts">
@@ -57,12 +59,13 @@
   import { PSYCHOLOGIST } from '../../lib/academic';
   import Sheet from '../../ui/Sheet.svelte';
   import Sparkles from '@lucide/svelte/icons/sparkles';
+  import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
   import Button from '../../ui/Button.svelte';
   import IconButton from '../../ui/IconButton.svelte';
   import Composer from '../../ui/Composer.svelte';
   import Group from '../../ui/Group.svelte';
   import Row from '../../ui/Row.svelte';
-  import KbtuMark from '../../ui/KbtuMark.svelte';
+  import Orb from '../../ui/Orb.svelte';
   import { keyboard as kbd } from '../../lib/state/keyboard.svelte';
   import { resting, rest, setKriGoogle } from '../../lib/kriGoogle';
 
@@ -84,7 +87,7 @@
   // pressed and takes its place in the middle, over the greeting, while the Sheet's circle opens from that same button, waits beside
   // "thinking", and stands over the newest answer only. It flies in the footer (the body clips at the footer's edge) and
   // hands over on landing. Power saving, less motion, a conversation to read: no flight, it is in its place
-  // The round button itself turns into the light: its glyph fades into the colonnade on the way up, the button is not
+  // The round button itself turns into the light: its glyph fades out inside the glass on the way up, the button is not
   // seen while the light is out of it. On any close from the empty opening the light goes back the same road,
   // over the leaving sheet, and the next opening tapped meanwhile takes it from where it is
   // svelte-ignore state_referenced_locally
@@ -110,15 +113,14 @@
       f.animate({ transform: [`translateY(${dy}px) scale(${(from.r * 2) / b.width})`, 'none'] }, { duration: FLY, easing: ALONG })
         .finished.catch(() => {}).finally(() => (flying = false));
       if (!mid) f.animate({ opacity: [0, 1] }, { duration: 90 }); // over the button as that fades: no pop
-      f.querySelector('.mark')!.animate({ opacity: [m, 1] }, { duration: FLY * 0.45 });
       f.querySelector('.glyph')!.animate({ opacity: [1 - m, 0] }, { duration: FLY * 0.45, fill: 'forwards' });
     });
     ro.observe(o);
     return () => ro.disconnect();
   });
   // The way back. A copy of the light on the page itself (the sheet clips its own and goes), from where the light is
-  // now (at rest, moved by the keyboard, or still flying in) to the button: transform and opacity only, the colonnade
-  // fading back into the button's glyph, the button showing through at the end. Not from a conversation (its small
+  // now (at rest, moved by the keyboard, or still flying in) to the button: transform and opacity only, the button's
+  // glyph coming back inside the glass, the button showing through at the end. Not from a conversation (its small
   // light is over an answer, often scrolled away: the sheet's own circle closes into the button as before), not with
   // less motion or power saving. After Sheet's own look at the close (typed text may ask first): a microtask
   let gone = false;
@@ -127,35 +129,36 @@
     const src = flying ? fly : orb;
     if (!btn?.el || !src || !orb || tight || getComputedStyle(src).visibility === 'hidden' && src === fly || matchMedia('(prefers-reduced-motion: reduce)').matches) { veil?.cancel(); veil = null; return; }
     const b = src.getBoundingClientRect(), w = orb.offsetWidth, el = orb.cloneNode(true) as HTMLElement;
-    const mark = el.querySelector<HTMLElement>('.mark')!, glyph = el.querySelector<HTMLElement>('.glyph')!;
-    const m = Number(getComputedStyle(src.querySelector('.mark')!).opacity), at = turnOf(src)?.currentTime;
+    const glyph = el.querySelector<HTMLElement>('.glyph')!;
+    const m = 1 - Number(getComputedStyle(src.querySelector('.glyph')!).opacity);
     el.classList.remove('hid', 'land');
     el.style.cssText = `position:fixed;left:${b.left + b.width / 2 - w / 2}px;top:${b.top + b.height / 2 - w / 2}px;margin:0;z-index:calc(var(--z-sheet) + 4);pointer-events:none;visibility:visible`;
     orb.style.visibility = 'hidden'; if (fly) fly.style.visibility = 'hidden'; // one light on the screen
     document.body.append(el);
-    const spin = turnOf(el); if (spin && at != null) spin.currentTime = at; // its colours where they were, not from the start
+    sync(src, el);
     const dx = btn.x - b.left - b.width / 2, dy = btn.y - b.top - b.height / 2;
     el.animate({ translate: ['0 0', `${dx}px 0`] }, { duration: FLY, easing: ACROSS, fill: 'forwards' });
     const a = el.animate({ transform: [`scale(${b.width / w})`, `translateY(${dy}px) scale(${(btn.r * 2) / w})`] }, { duration: FLY, easing: ALONG, fill: 'forwards' });
     el.animate({ opacity: [1, 1, 0], offset: [0, 0.72, 1] }, { duration: FLY, fill: 'forwards' });
-    mark.animate({ opacity: [m, 0] }, { duration: FLY * 0.45, fill: 'forwards' });
     glyph.animate({ opacity: [1 - m, 1] }, { duration: FLY * 0.45, fill: 'forwards' });
     // the button comes through as the light fades over it; this veil takes over from the opening's
     const show = btn.el.animate({ opacity: [0, 0, 1], offset: [0, 0.72, 1] }, { duration: FLY });
     veil?.cancel(); veil = null;
     const me = (back = { take: () => {
-      const r = el.getBoundingClientRect(), left = Number(getComputedStyle(mark).opacity);
+      const r = el.getBoundingClientRect(), left = 1 - Number(getComputedStyle(glyph).opacity);
       el.remove(); back = null;
       return { x: r.left + r.width / 2, y: r.top + r.height / 2, r: r.width / 2, m: left, veil: show };
     } });
     void a.finished.catch(() => {}).finally(() => { el.remove(); if (back === me) back = null; });
   }
   const first = $derived((session.me?.student?.firstName || session.me?.tg.firstName || '').trim());
+  const hello = $derived(t('as.hello', { name: '\n' }).split('\n')); // the words round the name: it is set in its own weight
   let draft = $state(untrack(() => keyboard?.value ?? ''));
   const busy = $derived(chat.busy);
   let list = $state<HTMLDivElement>();
   // The opening (as Gemini opens): the light in the middle
-  // with the colonnade in it, the greeting, one starter under it that keeps changing, all of them low over the field
+  // of the air, and at the foot, set left like a headline, the greeting (the name in the heavier weight) and one
+  // starter under it that keeps changing: a text link with the accent on its arrow
   const SUGGEST = $derived(chat.ctx?.kind === 'event' ? ['as.e1', 'as.e2', 'as.e3'] as const
     : chat.ctx?.kind === 'club' ? ['as.c1', 'as.c2'] as const : ['as.s1', 'as.s2', 'as.s3', 'as.s4'] as const);
   let qi = $state(0); // the question on show
@@ -176,14 +179,16 @@
     if (on) void setKriGoogle(true);
     else { haptic.tap(); rest(); later = true; }
   }
-  // The keyboard: Sheet raises the footer over the body and the body stays as it is, so the middle moves itself to the
-  // middle of what is left in view (a transform on the keyboard's timing, no layout), smaller; no room for it: it fades.
+  // The keyboard: Sheet raises the footer over the body and the body stays as it is, so the words ride up with the
+  // footer and the light goes to the middle of what is left over them, smaller (transforms on the keyboard's timing,
+  // no layout); no room for it: the middle fades.
   // Not under a light still flying to its place: it lands first, then goes up
   const kb = $derived(flying ? 0 : kbd.h);
-  // (room for what the middle holds at its smaller size and 8 px over and under it; layout sizes, not the moved box's)
+  // (room over the words for the light at its smaller size with air round it: 144 = the foot's 20, 76 of light, 24 over
+  // and under it; layout sizes, not the moved boxes')
   const tight = $derived.by(() => {
-    const last = orb?.parentElement?.lastElementChild as HTMLElement | null;
-    return kb > 0 && !!orb && !!last && (list?.clientHeight ?? 0) - kb < 0.8 * (last.offsetTop + last.offsetHeight - orb.offsetTop) + 16;
+    const words = orb?.nextElementSibling as HTMLElement | null, last = orb?.parentElement?.lastElementChild as HTMLElement | null;
+    return kb > 0 && !!words && !!last && (list?.clientHeight ?? 0) - kb < last.offsetTop + last.offsetHeight - words.offsetTop + 144;
   });
   const down = () => setTimeout(() => list?.lastElementChild?.scrollIntoView({ block: 'end', behavior: 'smooth' }), 30);
   $effect(() => { void chat.turns.length; untrack(down); });
@@ -287,11 +292,11 @@
   <div class="list" class:flown={!!from} bind:this={list}>
     {#if !chat.turns.length}
       <div class={['mid', { up: kb > 0, tight }]} style:--kb="{kb}px">
-        <i class="orb big live" class:hid={flying} class:land={!from} bind:this={orb} aria-hidden="true"><span class="mark"><KbtuMark /></span><span class="mark glyph"><Sparkles strokeWidth={2} /></span></i>
-        <h2 class="greeting clamp-2">{chat.ctx ? t('as.about', { title: chat.ctx.title }) : t('as.hello', { name: first ? ', ' + first : '' })}</h2>
+        <i class="lt" class:hid={flying} class:land={!from} bind:this={orb} aria-hidden="true"><Orb size={168}><span class="glyph"><Sparkles strokeWidth={2} /></span></Orb></i>
+        <h2 class="greeting clamp-2">{#if chat.ctx}{t('as.about', { title: chat.ctx.title })}{:else}{hello[0]}{#if first}, <b>{first}</b>{/if}{hello[1]}{/if}</h2>
         <!-- every question in one cell: the tallest holds the height, a change moves nothing -->
         <button class="rot" onclick={() => pick(SUGGEST[qi])}>
-          {#each SUGGEST as k, i (k)}<span class:on={i === qi} aria-hidden={i !== qi}>{t(k)}</span>{/each}
+          {#each SUGGEST as k, i (k)}<span class:on={i === qi} aria-hidden={i !== qi}>{t(k)}<ArrowUpRight size={18} strokeWidth={1.75} /></span>{/each}
         </button>
       </div>
     {:else if chat.ctx}
@@ -348,7 +353,7 @@
   </div>
 
   {#snippet footer()}
-    {#if flying}<i class="orb live fly" bind:this={fly} aria-hidden="true"><span class="mark"><KbtuMark /></span><span class="mark glyph"><Sparkles strokeWidth={2} /></span></i>{/if}
+    {#if flying}<i class="lt fly" bind:this={fly} aria-hidden="true"><Orb size={168}><span class="glyph"><Sparkles strokeWidth={2} /></span></Orb></i>{/if}
     {#if !chat.turns.length}
       <!-- the starters in the footer: they ride over the keyboard with the field, nothing of the body has to scroll -->
       <div class="over">
@@ -377,26 +382,41 @@
 <style>
   .list { display: flex; flex-direction: column; gap: var(--s-3); min-height: 100%; padding: 6px 0 4px; }
   .list:has(> .mid) { padding: 0; }
-  /* empty: the light in the middle of the body with the words under it. The keyboard: Sheet raises the footer over the
-     body, the middle moves itself (a transform, no layout) or, with no room, fades */
-  .mid { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: var(--s-2) var(--s-1);
-    transition: transform 250ms cubic-bezier(.2, .8, .3, 1), opacity 180ms ease-out; }
-  .mid.up { transform: translateY(calc(var(--kb) / -2)) scale(0.8); }
+  /* empty: the light in the middle of the air, the words at the foot, set left in display type (two weights). The
+     keyboard: Sheet raises the footer over the body, the words ride up with it and the light moves to the middle of
+     what is left, smaller (transforms, no layout) or, with no room, the middle fades */
+  .mid { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; padding: 0 var(--s-2) var(--s-5); transition: opacity 180ms ease-out; }
   .mid.tight { opacity: 0; pointer-events: none; }
-  .greeting { max-width: 100%; margin-top: var(--s-5); font: 700 var(--fs-t1)/1.1 var(--font-display); letter-spacing: -0.03em; overflow-wrap: anywhere; text-wrap: balance; animation: down 480ms var(--ease) var(--land, 0ms) backwards; }
-  .rot { display: grid; max-width: 100%; padding: var(--s-2) var(--s-3); border-radius: var(--r-m); color: var(--text-3);
-    font: 600 var(--fs-row)/1.25 var(--font-display); letter-spacing: -0.016em; text-wrap: balance;
-    animation: down 480ms var(--ease) calc(var(--land, 0ms) + 50ms) backwards; transition: opacity var(--t-fast); }
+  .lt, .greeting, .rot { transition: transform 250ms cubic-bezier(.2, .8, .3, 1); }
+  .mid.up .lt { transform: translateY(calc(var(--kb) / -2)) scale(0.45); }
+  .mid.up .greeting, .mid.up .rot { transform: translateY(calc(var(--kb) * -1)); }
+  .greeting { max-width: 100%; font: var(--fw-light) var(--fs-title)/1.06 var(--font-display); letter-spacing: -0.045em; overflow-wrap: anywhere; animation: down 480ms var(--ease) var(--land, 0ms) backwards; }
+  .greeting b { font-weight: 600; }
+  .rot { display: grid; justify-items: start; max-width: 100%; margin-top: var(--s-1); padding: var(--s-1) 0; color: var(--text-3); text-align: left;
+    font: var(--fw-light) var(--fs-sec)/1.2 var(--font-display); letter-spacing: -0.03em;
+    animation: down 480ms var(--ease) calc(var(--land, 0ms) + 50ms) backwards; transition: opacity var(--t-fast), transform 250ms cubic-bezier(.2, .8, .3, 1); }
   .rot:active { opacity: 0.6; }
   /* one leaves, then the next comes up: the two are never read through each other */
   .rot span { grid-area: 1 / 1; align-self: center; opacity: 0; transform: translateY(6px); transition: opacity 240ms ease-in, transform 240ms ease-in; }
   .rot span.on { opacity: 1; transform: none; transition: opacity 420ms var(--ease) 220ms, transform 420ms var(--ease) 220ms; }
+  /* the screen's one accent: the link's arrow */
+  .rot :global(svg) { display: inline; margin-left: 6px; vertical-align: -1px; color: var(--accent-text); }
   .flown { --land: 380ms; } /* the light is flying in: the words wait until it is over them, not on them; no flight, no wait */
   @keyframes down { from { opacity: 0; transform: translateY(-12px); } }
   .ctx { align-self: center; display: inline-flex; align-items: center; gap: 6px; max-width: 86%; height: 28px; padding: 0 12px; border-radius: var(--r-full);
     background: var(--fill); color: var(--text-2); font: 600 var(--fs-cap)/1 var(--font-text); }
 
-  /* the light: two flat gradients, the lower one turning where it is alive; no blur, no filter */
+  /* the light of the opening: the orb (ui/Orb) in a box of its own, which is what flies, lands and hides */
+  .lt { position: relative; flex: none; display: block; align-self: center; width: 168px; height: 168px; margin: auto; }
+  .lt.land { animation: land 520ms var(--ease) backwards; } /* no button to fly from: it comes up in its place */
+  @keyframes land { from { opacity: 0; transform: scale(0.6); } }
+  .lt.hid { visibility: hidden; }
+  .lt.fly { position: absolute; z-index: 1; margin: 0; visibility: hidden; pointer-events: none; }
+  /* the button's own glyph inside the glass, its size there (24 of 54) when the light is the button's size: seen only in flight */
+  .glyph { display: grid; place-items: center; width: 100%; height: 100%; opacity: 0; }
+  .glyph :global(svg) { width: 44.4%; height: auto; }
+  /* the small light of a conversation (over the newest answer, beside "thinking"): two flat gradients, the lower one
+     turning where it is alive; no blur, no filter */
   .orb { position: relative; flex: none; display: block; width: 20px; height: 20px; border-radius: 50%; overflow: hidden; }
   .orb::before { content: ''; position: absolute; inset: -20%; border-radius: 50%;
     background: conic-gradient(from 200deg, var(--accent), var(--tile-teal), var(--accent-2), var(--tile-purple), var(--accent)); }
@@ -404,18 +424,6 @@
     background: radial-gradient(circle at 30% 24%, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0) 52%), radial-gradient(circle, rgba(8, 10, 40, 0) 52%, rgba(8, 10, 40, 0.3)); }
   .orb.live::before { animation: turn 7s linear infinite; animation-play-state: var(--sheet-loop, running); }
   @keyframes turn { to { transform: rotate(360deg); } }
-  .orb.big { width: 84px; height: 84px; }
-  .orb.big, .orb.fly { box-shadow: 0 10px 28px -8px rgba(98, 104, 255, 0.6); }
-  .orb.land { animation: land 520ms var(--ease) backwards; } /* no button to fly from: it comes up in its place */
-  @keyframes land { from { opacity: 0; transform: scale(0.6); } }
-  .orb.hid { visibility: hidden; }
-  .orb.fly { position: absolute; z-index: 1; visibility: hidden; pointer-events: none; }
-
-  .mark { position: absolute; inset: 0; z-index: 1; display: grid; place-items: center; color: rgb(255, 255, 255); }
-  .mark :global(svg) { width: 44%; height: auto; }
-  /* the button's own glyph, its size there (24 of 54) when the light is the button's size: seen only in flight */
-  .glyph { opacity: 0; }
-  .glyph :global(svg) { width: 44.4%; }
   /* Gemini's card and the starters in one cell: one shows, the other keeps its place hidden */
   .over { display: grid; margin-bottom: var(--s-2); }
   .over > * { grid-area: 1 / 1; transition: opacity 220ms var(--ease), visibility 0s; }
@@ -424,10 +432,12 @@
   .gt { font: 600 var(--fs-body)/1.25 var(--font-text); }
   .gx { font: 450 var(--fs-sub)/1.35 var(--font-text); color: var(--text-2); text-wrap: pretty; }
   .gb { display: flex; gap: var(--s-2); margin-top: var(--s-2); }
-  /* the starters over the field, two by two, the words on two lines; an odd last one takes the row */
+  /* the starters over the field, two by two, the words on two lines; an odd last one takes the row. One family with
+     the app's small buttons: the lens glass (tokens.css --lg-*) on the --fill body, not flat grey tiles */
   .eg { align-self: end; display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-2); }
-  .eg button { display: flex; align-items: center; min-height: var(--ctl-l); padding: var(--s-2) var(--s-3); border-radius: var(--r-m); background: var(--fill); color: var(--text);
-    font: 600 var(--fs-sub)/1.25 var(--font-text); text-align: left; text-wrap: balance; overflow-wrap: anywhere; transition: transform var(--t-fast); }
+  .eg button { display: flex; align-items: center; min-height: var(--ctl-l); padding: var(--s-2) var(--s-3); border-radius: var(--r-m); color: var(--text-2);
+    background: linear-gradient(180deg, var(--lg-sheen), transparent 60%), var(--fill); box-shadow: var(--lg-bevel), var(--lg-lift);
+    font: 500 var(--fs-sub)/1.25 var(--font-text); text-align: left; text-wrap: balance; overflow-wrap: anywhere; transition: transform var(--t-fast); }
   .eg button:active { transform: scale(0.96); }
   .eg button:last-child:nth-child(odd) { grid-column: 1 / -1; }
 
@@ -461,7 +471,7 @@
   :global(html.lowfx) .orb::before, :global(html.lowfx) .think .orb { animation: none; }
   @media (prefers-reduced-motion: reduce) {
     .list *, .orb, .orb::before { animation: none !important; }
-    .mid, .rot span, .over > * { transition: none !important; }
+    .mid, .lt, .greeting, .rot, .rot span, .over > * { transition: none !important; }
   }
 
   .bar { display: flex; align-items: flex-end; gap: var(--s-2); }
