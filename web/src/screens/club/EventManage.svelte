@@ -16,9 +16,10 @@
   import MonitorUp from '@lucide/svelte/icons/monitor-up';
   import { onMount } from 'svelte';
   import ClipboardCheck from '@lucide/svelte/icons/clipboard-check';
-  import { api, ApiErr, staffEvents, type EventFull, type DoorAudience, type TeamList, type Attendee, type EventCard, type Id, type PersonRef, type TeamAsk } from '../../lib/api';
+  import { api, ApiErr, staffEvents, type EventFull, type DoorAudience, type Attendee, type EventCard, type Id, type PersonRef, type TeamAsk } from '../../lib/api';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
   import { data, eventById, phrase, studioChanged } from '../../lib/state/data.svelte';
+  import { readState } from '../../lib/state/readState.svelte';
   import { sheets, registration } from '../../lib/state/sheets';
   import { session } from '../../lib/state/session.svelte';
   import { t, money, placeOf } from '../../lib/i18n/index.svelte';
@@ -36,6 +37,8 @@
   import Row from '../../ui/Row.svelte';
   import Avatar from '../../ui/Avatar.svelte';
   import Button from '../../ui/Button.svelte';
+  import EmptyState from '../../ui/EmptyState.svelte';
+  import Skeleton from '../../ui/Skeleton.svelte';
   import IconButton from '../../ui/IconButton.svelte';
   import X from '@lucide/svelte/icons/x';
   import Gift from '@lucide/svelte/icons/gift';
@@ -67,8 +70,9 @@
   const reports = $derived(!!session.me?.reports && !staff && may(mem, 'reports') && live && started);
 
   // everything below comes from the attendee list (Head+), asked again whenever Studio changes (a receipt checked)
-  let list = $state<Attendee[] | null>(null);
-  $effect(() => { void data.rev; if (head) api.attendees(id).then((l) => (list = l)).catch(() => (list = [])); });
+  const { state: roster, load: loadRoster } = readState(() => api.attendees(id));
+  const list = $derived(roster.value);
+  $effect(() => { void data.rev; if (head) void loadRoster(); });
   const of = (s: Attendee['status']) => (list ?? []).filter((a) => a.status === s);
   const going = $derived(of('going'));
   const came = $derived(going.filter((a) => a.checkedInAt).length);
@@ -140,8 +144,9 @@
   // with the page and every 10 s (it runs in the page above this one)
   const teamMark = $derived(head && !plain && !!e && e.status !== 'cancelled');
   // the team's count from the Mark screen's own list (server checkin.team): the same numbers there and here
-  let team = $state<TeamList | null>(null);
-  $effect(() => { void tick; if (teamMark && !e?.guestHost) api.teamList(id).then((x) => (team = x)).catch(() => {}); });
+  const { state: teamRoster, load: loadTeam } = readState(() => api.teamList(id));
+  const team = $derived(teamRoster.value);
+  $effect(() => { void tick; if (teamMark && !e?.guestHost) void loadTeam(); });
   async function openChat() {
     haptic.tap();
     if (chat) { openLink(chat); return; }
@@ -243,7 +248,9 @@
   let aud = $state<DoorAudience>('both');
   $effect(() => { if (audienced) api.event(id).then((x) => (aud = x.audience ?? 'both')).catch(() => {}); });
   const AUD = { both: 'mk.aBoth', guests: 'mk.aGuests', team: 'mk.aTeam' } as const;
-  const teamLine = $derived(team && aud !== 'guests' && team.rows.length ? t('mk.team', { n: team.rows.filter((r) => r.at).length, m: team.rows.length }) : undefined);
+  const showTeam = $derived(teamMark && !e?.guestHost && (started || doorDay) && aud !== 'guests');
+  const teamOnly = $derived(showTeam && aud === 'team');
+  const teamLine = $derived(showTeam && team && (team.rows.length || teamOnly) ? t('mk.team', { n: team.rows.filter((r) => r.at).length, m: team.rows.length }) : undefined);
   async function setAud(a: DoorAudience) {
     const was = aud;
     aud = a; haptic.tap();
@@ -317,16 +324,25 @@
           menu={(['both', 'guests', 'team'] as const).map((a) => ({ label: t(AUD[a]), checked: a === aud, onselect: () => void setAud(a) }))} /></Group>
       {/if}
 
-      {#if head && list}
+      {#if head}
+        {#if roster.status === 'error'}<EmptyState onretry={loadRoster} />{:else if !list}<Skeleton n={1} />{/if}
+        {#if showTeam}
+          {#if teamRoster.status === 'error'}<EmptyState onretry={loadTeam} />{:else if !team}<Skeleton n={1} />{/if}
+        {/if}
+        {#if list || teamLine || (e.needsVolunteers && e.volunteersAsked)}
         <Group>
-          {#if (started || doorDay) && aud === 'team' && teamLine}<Row icon={UsersRound} title={teamLine} accessory="chevron" onclick={() => sheets.doorPeople(id)} /><!-- a team-only door: no guests' row -->
-          {:else if started || doorDay}<Row icon={UsersRound} title={t('mg.cameOf', { n: came, m: going.length })} subtitle={teamLine} accessory="chevron" onclick={() => sheets.attendees(id)} />
-          {:else}<Row icon={UsersRound} title={t('mg.going')} value="{going.length}{e.seats ? ' / ' + e.seats : ''}" accessory="chevron" onclick={() => sheets.attendees(id)} />{/if}
+          {#if teamOnly && teamLine}
+            <Row icon={UsersRound} title={teamLine} accessory="chevron" onclick={() => sheets.doorPeople(id)} />
+          {:else if !teamOnly && list}
+            {#if started || doorDay}<Row icon={UsersRound} title={t('mg.cameOf', { n: came, m: going.length })} subtitle={teamLine} accessory="chevron" onclick={() => sheets.attendees(id)} />
+            {:else}<Row icon={UsersRound} title={t('mg.going')} value="{going.length}{e.seats ? ' / ' + e.seats : ''}" accessory="chevron" onclick={() => sheets.attendees(id)} />{/if}
+          {/if}
           {#if toCheck}<Row icon={TriangleAlert} title={t('mg.check')} count={toCheck} accessory="chevron" onclick={() => sheets.attendees(id)} />{/if}
           {#if price && of('hold').length}<Row title={t('mg.holds')} value={String(of('hold').length)} accessory="chevron" onclick={() => sheets.attendees(id)} />{/if}
           {#if of('waitlist').length}<Row title={t('mg.waitlist')} value={String(of('waitlist').length)} accessory="chevron" onclick={() => sheets.attendees(id)} />{/if}
           {#if e.needsVolunteers && e.volunteersAsked}<Row icon={HandHeart} title={t('vol.list')} count={e.volunteersAsked} accessory="chevron" onclick={() => sheets.volunteers(id, e.needsVolunteers!)} />{/if}
         </Group>
+        {/if}
       {/if}
 
       {#if head && e.santa}

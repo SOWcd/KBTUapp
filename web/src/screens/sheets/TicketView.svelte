@@ -11,7 +11,8 @@
   import { onMount } from 'svelte';
   import type { Id } from '../../lib/api';
   import { close, removeOverlay, hideChrome, type Overlay } from '../../lib/state/ui.svelte';
-  import { eventById, toggleGoing, declineInvite, askDm } from '../../lib/state/data.svelte';
+  import { data, eventById, toggleGoing, goingPending, declineInvite, askDm } from '../../lib/state/data.svelte';
+  import WifiOff from '@lucide/svelte/icons/wifi-off';
   import { session } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t, money, placeOf } from '../../lib/i18n/index.svelte';
@@ -38,9 +39,10 @@
   const e = $derived(eventById(id));
   $effect(() => { overlay.title = t('cap.ticket'); overlay.icon = Ticket; overlay.theme = 'dark'; }); // the capsule (SPEC §8.2), dark as the scrim
   const my = $derived(e?.my);
+  const pending = $derived(goingPending.has(id));
   const valid = $derived(!!e && e.status !== 'cancelled' && my?.status === 'going' && !!my.ticketCode);
   // no ticket of mine here (the entrance's QR, an old link): the event instead, its sign-up or sign-in
-  $effect(() => { if (e && !overlay.closing && !valid && !my?.ticketCode) { close(overlay.id); sheets.event(id); } });
+  $effect(() => { if (e && !overlay.closing && !pending && !valid && (!my?.ticketCode || my.status === 'cancelled')) { close(overlay.id); sheets.event(id); } });
   const started = $derived(!!e && e.startsAt <= nowTs());
   const st = $derived(session.me?.student);
   const holder = $derived(st ? `${st.lastName} ${st.firstName}` : session.me?.name ?? '');
@@ -85,18 +87,17 @@
   }
 
   async function cancelReg() {
+    if (pending) return;
     if (e?.meeting) { // a club meeting (§2b): "can't make it" says why
       const why = await sheets.askText({ title: t('meet.whyTitle'), text: t('meet.whyText'), ok: t('meet.send'), cancel: t('common.cancel'),
         placeholder: t('meet.whyPh'), max: 140 });
       if (!why) return;
       declineInvite(id, why);
-      close(overlay.id);
       return;
     }
     const yes = await sheets.ask({ title: t('tk.cancelAsk'), text: t('tk.cancelText'), ok: t('tk.cancelGo'), cancel: t('tk.keep'), danger: true });
     if (!yes) return;
     toggleGoing(id);
-    close(overlay.id);
   }
 </script>
 
@@ -132,6 +133,8 @@
               <div><i>{t('tk.holder')}</i><b class="ellipsis">{holder}</b></div>
               <div class="code"><i>{t('tk.code')}</i><b class="num">{my.ticketCode.replace(/^(\w{2})(\w{2})$/, '$1 $2')}</b></div>
             </div>
+          {:else if pending}
+            <p class="void" role="status">{t('tk.loading')}</p>
           {:else}
             <p class="void">{e.status === 'cancelled' ? t('event.cancelledLong') : t('tk.none')}</p>
           {/if}
@@ -139,7 +142,7 @@
       </div>
     </div>
 
-    {#if valid && !my?.checkedInAt}<p class="hint">{t('tk.hint')}</p>{/if}
+    {#if valid && !my?.checkedInAt}<p class="hint">{#if data.offline}<span class="off"><WifiOff size={13} />{t('tk.offline')}</span>{/if}{t('tk.hint')}</p>{/if}
     <!-- the receipt looks wrong (§4.3): why, and another file in its place, in the pay sheet -->
     {#if valid && my?.receiptFlags?.length}<button class="pill glass glass-pill doubt" use:glass onclick={() => { close(overlay.id); sheets.pay(id); }}><TriangleAlert size={17} />{t('tk.receiptDoubt')}</button>{/if}
     <!-- the bot may not write yet: no reminders, no ticket in the chat -->
@@ -147,9 +150,9 @@
     <div class="acts">
       {#if valid && !started}
         <button class="pill glass glass-pill" use:glass onclick={() => openLink(calendarUrl(e))}><CalendarPlus size={18} />{t('tk.calendar')}</button>
-        <button class="pill glass glass-pill danger" use:glass onclick={cancelReg}>{t('event.cancelReg')}</button>
+        <button class="pill glass glass-pill danger" use:glass disabled={pending} onclick={cancelReg}>{t('event.cancelReg')}</button>
       {:else if valid && e?.lateSignup && !my?.checkedInAt && (e.endsAt ?? e.startsAt + 3 * 3600) > nowTs()}<!-- late sign-up: one may step out until the end -->
-        <button class="pill glass glass-pill danger" use:glass onclick={cancelReg}>{t('event.cancelReg')}</button>
+        <button class="pill glass glass-pill danger" use:glass disabled={pending} onclick={cancelReg}>{t('event.cancelReg')}</button>
       {/if}
     </div>
   {/if}
@@ -272,6 +275,9 @@
   @media (max-width: 359px) { .main, .stub { padding-left: 16px; padding-right: 16px; } .ttl { font-size: var(--fs-t3); } .qrbox { width: 210px; } }
 
   .hint { font: 550 13px/1.3 var(--font-text); color: rgba(255, 255, 255, 0.62); }
+  /* the code is the kept copy (no network): said quietly, before the hint, on the scrim's own dark in both themes */
+  .off { display: inline-flex; align-items: center; gap: 4px; margin-inline-end: 8px; padding: 3px 9px; border-radius: var(--r-full);
+    background: rgba(255, 255, 255, 0.12); color: white; vertical-align: 1px; }
   .acts { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
   .pill { position: relative; display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 24px; border-radius: var(--r-full); color: #fff; font: 650 15px/1 var(--font-text); background-color: rgba(255, 255, 255, 0.1); }
   .pill:active { transform: scale(0.96); }

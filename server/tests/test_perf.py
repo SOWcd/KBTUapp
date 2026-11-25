@@ -53,13 +53,17 @@ def test_best_effort_write_skips_a_busy_lock(env):
 
 
 def test_public_files_cache_and_304(env):
-    """4 and 9: emoji are kept a day and revalidate to a 304; the page is never cached; big JSON goes gzipped."""
+    """4 and 9: emoji are kept a day and revalidate to a 304; the page and the service worker are never cached (a deploy
+    reaches the next launch); big JSON goes gzipped."""
     c, _ = env
     r = c.get("/emoji/party_popper_3d.webp")
     assert r.headers["cache-control"] == "public, max-age=300, stale-while-revalidate=86400"
     assert c.get("/emoji/party_popper_3d.webp", headers={"If-None-Match": r.headers["etag"]}).status_code == 304
     assert c.get("/", headers={"If-None-Match": r.headers["etag"]}).headers["cache-control"] == "no-cache"
     assert c.get("/assets/a.js").headers["cache-control"].endswith("immutable")
+    assert c.get("/sw.js").headers["cache-control"] == "no-cache"
+    assert c.get("/assets/gone-Ab12.js").status_code == 404  # a past deploy's chunk: never the page under its name
+    assert c.get("/x/assets/gone.js").status_code == 200  # (a deep path still gets the page: the app routes itself)
     me = c.get("/api/me", headers={**tma(8), "Accept-Encoding": "gzip"})
     assert me.status_code == 200 and (me.headers.get("content-encoding") == "gzip") == (len(me.content) >= 1024)
 

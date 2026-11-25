@@ -309,8 +309,9 @@ def _feed_cards(con, v: Viewer, ps, hearts=None, comments=None) -> list[dict]:
              "faces": faces.get(p["id"], []), "reactions": _top(p["reactions"]),
              "hot": bool(discussion and (p["comments"] >= HOT and discussion["busy"] >= HOT
                      or p["id"] in live and discussion["talked"] >= TALK_MIN)),  # being discussed (one label, in place): a busy hour, or several people over the day
-             # my own held post: the AI passed it to a person (why != 'check': not still being checked); nobody else's
-             "human": p["user_id"] == v.id and p["status"] == "held" and p["why"] != "check",
+             # my own held post: the AI passed it to a person (why != 'check': not still being checked), or its look is
+             # clearly over with no answer (the moderators' queue has it then too: CHECK_OVER); nobody else's
+             "human": p["user_id"] == v.id and p["status"] == "held" and (p["why"] != "check" or p["created_at"] < _now() - CHECK_OVER),
              # why my held post waits, to me alone (it survives a reload): I sent it to a moderator, it has photos and
              # is anonymous, or the AI's own words (reason, its tip, the piece it stopped at) once it gave them
              **({"review": _review(p)} if p["user_id"] == v.id and p["status"] == "held" and p["why"] != "check" else {})})
@@ -410,6 +411,7 @@ def reserve(con, v: Viewer, body: dict) -> tuple[int, str]:
     if not _meaningful(text):
         raise ApiError("bad_input", "short")
     with tx(con):
+        core.need_current_student(con, v)
         # the pace: two in any ten minutes; a post the AI called noise doesn't count (its author rewrites it now: told
         # why, ChannelCompose gives the words back); an ad does, and so does one I deleted myself (a
         # delete refunds nothing, else post-delete-post floods the channel)
@@ -458,8 +460,10 @@ def photo_room(con, v: Viewer) -> None:
     pass the last one). Its own count: putting photos on a post, deleting them or a failed upload give
     nothing back. ponytail: an hour's bucket, so up to twice PHOTO_UPLOADS across its edge; a sliding window if abused"""
     need_student(v)
-    n = one(con, """INSERT INTO meta (key, value) VALUES (?, '1') ON CONFLICT (key) DO UPDATE SET value = CAST(value AS INTEGER) + 1
-                    RETURNING CAST(value AS INTEGER)""", f"fchup:{v.id}:{_now() // 3600}")[0]
+    with tx(con):
+        core.need_current_student(con, v)
+        n = one(con, """INSERT INTO meta (key, value) VALUES (?, '1') ON CONFLICT (key) DO UPDATE SET value = CAST(value AS INTEGER) + 1
+                        RETURNING CAST(value AS INTEGER)""", f"fchup:{v.id}:{_now() // 3600}")[0]
     if n > PHOTO_UPLOADS:
         raise ApiError("rate_limited", "photos")
 
@@ -473,8 +477,10 @@ def add_photo(con, v: Viewer, saved: dict) -> dict:
     need_student(v)
     if max(saved["width"], saved["height"]) > PHOTO_RATIO * min(saved["width"], saved["height"]):
         raise ApiError("bad_input", "photo_shape")
-    fid = con.execute("INSERT INTO fchan_photos (user_id, path, width, height, color, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-                      (v.id, saved["path"], saved["width"], saved["height"], saved["color"], _now())).lastrowid
+    with tx(con):
+        core.need_current_student(con, v)
+        fid = con.execute("INSERT INTO fchan_photos (user_id, path, width, height, color, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                          (v.id, saved["path"], saved["width"], saved["height"], saved["color"], _now())).lastrowid
     return {"id": fid} | _pic(saved)
 
 
@@ -577,6 +583,7 @@ def _refused(pid: int, text: str) -> str:
     return hashlib.sha256(f"{pid}\0{text}".encode()).hexdigest()
 
 
+CHECK_OVER = 60       # a post still 'check' this long after it was written got no AI answer: a moderator's now
 APPEALS_A_DAY = 3      # an author's "Send to a moderator" a day: a human's time is the scarce thing
 APPEAL_WINDOW = 3600   # a refusal can be appealed this long after it (the app asks right away; a reload loses it anyway)
 
@@ -642,8 +649,8 @@ def why_reply(con, v: Viewer, rid: int) -> tuple[str, str]:
     """The same for my reply the AI held (through the post: no user id on a reply)."""
     need_student(v)
     with tx(con):
-        r = one(con, """SELECT r.* FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id WHERE r.id = ? AND p.user_id = ?
-                        AND r.status = 'held' AND r.why IN ('person', 'ai') AND r.explained IS NULL AND r.created_at > ?""", rid, v.id, _now() - APPEAL_WINDOW)
+        r = one(con, """SELECT r.* FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id LEFT JOIN fchan_signed s ON s.reply_id = r.id
+                        WHERE r.id = ? AND (s.user_id = ? OR s.user_id IS NULL AND p.user_id = ?) AND r.status = 'held' AND r.why IN ('person', 'ai') AND r.explained IS NULL AND r.created_at > ?""", rid, v.id, v.id, _now() - APPEAL_WINDOW)
         if not r:
             raise ApiError("not_found")
         con.execute("UPDATE fchan_replies SET explained = 1 WHERE id = ?", (rid,))
@@ -678,7 +685,8 @@ def delete(con, v: Viewer, pid: int) -> None:
             raise ApiError("not_found")
         con.execute("DELETE FROM fchan_hearts WHERE post_id = ?", (pid,))
         _unpost(con, p, "author")
-        _post_off(con, pid)
+        con.execute("""UPDATE fchan_replies SET status = 'gone', why = 'author', body = '', ai_reason = NULL,
+            drop_at = CASE WHEN tg_msg >= 0 THEN ? END WHERE post_id = ?""", (_now(), pid))
         con.execute("""UPDATE fchan_posts SET status = 'gone', body = '', sign = NULL, why = NULL, tg_msg = NULL, ai_reason = NULL, ai_fix = NULL,
                        ai_quote = NULL, refused = NULL WHERE id = ?""", (pid,))
         con.execute("DELETE FROM fchan_photos WHERE post_id = ?", (pid,))  # its photos with the words (their files: the bot's round)
@@ -925,8 +933,13 @@ def sweep(con) -> None:
     if not core._once(con, "fch_sweep", str(_now() // 300)):
         return
     # (an appealed one stays its day from the appeal: appeals_left counts it)
-    con.execute("DELETE FROM fchan_posts WHERE status = 'gone' AND created_at < ? AND COALESCE(appealed_at, 0) < ? OR status = 'hidden' AND created_at < ?",
-                (_now() - 86400, _now() - 86400, _now() - 30 * 86400))
+    expired = "status = 'gone' AND created_at < ? AND COALESCE(appealed_at, 0) < ? OR status = 'hidden' AND created_at < ?"
+    cutoff = (_now() - 86400, _now() - 86400, _now() - 30 * 86400)
+    with tx(con):
+        con.execute(f"""INSERT OR IGNORE INTO meta (key, value) SELECT 'fchdrop:' || tg_msg,
+            ? || CASE WHEN status = 'hidden' THEN ':moderator' ELSE '' END FROM fchan_replies
+            WHERE tg_msg > 0 AND post_id IN (SELECT id FROM fchan_posts WHERE {expired})""", (_now(), *cutoff))
+        con.execute("DELETE FROM fchan_posts WHERE " + expired, cutoff)
     con.execute("DELETE FROM fchan_photos WHERE post_id IS NULL AND created_at < ?", (_now() - PHOTO_FRESH,))  # picked, never posted
     con.execute("DELETE FROM meta WHERE key >= 'fchup:' AND key < 'fchup;' AND CAST(substr(key, length(rtrim(key, '0123456789')) + 1) AS INTEGER) < ?",
                 (_now() // 3600 - 1,))  # the upload counts of past hours
@@ -988,7 +1001,7 @@ def mod_queue(con, v: Viewer) -> dict:
     author's name; anonymous ones show nobody, to moderators too."""
     _mod(v)
     # 'check' is also the AI's look under way (seconds): shown once it's clearly over (no answer, or the server restarted)
-    held = rows(con, "SELECT * FROM fchan_posts WHERE status = 'held' AND (why != 'check' OR created_at < ?) ORDER BY id", _now() - 60)
+    held = rows(con, "SELECT * FROM fchan_posts WHERE status = 'held' AND (why != 'check' OR created_at < ?) ORDER BY id", _now() - CHECK_OVER)
     live = rows(con, "SELECT * FROM fchan_posts WHERE status = 'live' AND created_at > ? ORDER BY id DESC LIMIT 50", _now() - MOD_RECENT)
     # removed by a moderator this week (by the take-down's audit line, newest first): the way back for a wrong call
     removed = rows(con, """SELECT p.*, MAX(a.at) AS gone_at FROM fchan_posts p
@@ -1092,6 +1105,8 @@ def reveal(con, v: Viewer, pid: int) -> dict:
 # whose Telegram link the author pasted, checked against fchan_comments. Its own AI look, then the bot sends it once
 # (no pause). Stored without a user id: the post
 # is the only way to its author (the owner's reveal, account deletion), and the replies go with it.
+# A signed comment (comment_*) is the other kind of row in the same table: fchan_signed names its commenter, it is
+# signed with their short name, and is never an anonymous author's (the caps and views below split on that table).
 
 REPLY_GAP = 10            # seconds between an author's replies (a minute stalls a live talk)
 # a post's replies a day: the others' comments under it the bot saw (fchan_comments: students', still up or not; the
@@ -1119,9 +1134,10 @@ def _reply_shape(r) -> dict:
 def replies(con, v: Viewer, pid: int) -> list[dict]:
     """My replies under my post, newest first (the author's own view, the only one that ties them to anyone)."""
     need_student(v)
-    if not one(con, "SELECT 1 FROM fchan_posts WHERE id = ? AND user_id = ? AND anon = 1", pid, v.id):
+    if not one(con, "SELECT 1 FROM fchan_posts WHERE id = ? AND user_id = ? AND anon = 1 AND status != 'gone'", pid, v.id):
         raise ApiError("not_found")
-    return [_reply_shape(r) for r in rows(con, "SELECT * FROM fchan_replies WHERE post_id = ? AND status != 'gone' OR post_id = ? AND why = 'missing' ORDER BY id DESC LIMIT 30", pid, pid)]
+    return [_reply_shape(r) for r in rows(con, """SELECT * FROM fchan_replies WHERE post_id = ? AND (status != 'gone' OR why = 'missing')
+        AND id NOT IN (SELECT reply_id FROM fchan_signed) ORDER BY id DESC LIMIT 30""", pid)]
 
 
 def reply_reserve(con, v: Viewer, pid: int, body: dict) -> tuple[int, str]:
@@ -1136,13 +1152,16 @@ def reply_reserve(con, v: Viewer, pid: int, body: dict) -> tuple[int, str]:
         comment = None
         if link:
             m = COMMENT_LINK.fullmatch(link)
-            if not m or int(m[2]) != p["tg_msg"] or not one(con, "SELECT 1 FROM fchan_comments WHERE msg_id = ? AND post_id = ? AND gone = 0", int(m[3]), pid):
+            # a student's comment from Telegram, or one signed in the app (the bot's message: fchan_comments never sees it)
+            if not m or int(m[2]) != p["tg_msg"] or not (one(con, "SELECT 1 FROM fchan_comments WHERE msg_id = ? AND post_id = ? AND gone = 0", int(m[3]), pid)
+                    or one(con, "SELECT 1 FROM fchan_replies r JOIN fchan_signed s ON s.reply_id = r.id WHERE r.tg_msg = ? AND r.post_id = ? AND r.status = 'live'", int(m[3]), pid)):
                 raise ApiError("bad_input", "comment")
             comment = int(m[3])
-        last = one(con, """SELECT MAX(r.created_at) FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id WHERE p.user_id = ?""", v.id)[0]
+        last = one(con, """SELECT MAX(r.created_at) FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id
+                           WHERE p.user_id = ? AND r.id NOT IN (SELECT reply_id FROM fchan_signed)""", v.id)[0]
         if last and last > _now() - REPLY_GAP:
             raise ApiError("rate_limited", "replies")
-        if one(con, "SELECT COUNT(*) FROM fchan_replies WHERE post_id = ? AND created_at > ?", pid, _now() - 86400)[0] >= reply_cap(con, p):
+        if one(con, "SELECT COUNT(*) FROM fchan_replies WHERE post_id = ? AND id NOT IN (SELECT reply_id FROM fchan_signed) AND created_at > ?", pid, _now() - 86400)[0] >= reply_cap(con, p):
             raise ApiError("rate_limited", "replies")
         rid = _next_id(con, "fchan_replies")
         con.execute("INSERT INTO fchan_replies (id, post_id, comment_msg, body, status, why, created_at) VALUES (?, ?, ?, ?, 'held', 'check', ?)",
@@ -1155,15 +1174,65 @@ def reply_cap(con, p) -> int:
     comments deleted in Telegram still count (no delete event reaches the bot); each reply still has its AI look and
     REPLY_GAP. Count DISTINCT user_id if friends ever farm it."""
     return one(con, """SELECT COUNT(*) FROM fchan_comments c JOIN students s ON s.user_id = c.user_id
-                       WHERE c.post_id = ? AND c.user_id != ?""", p["id"], p["user_id"])[0] + REPLIES_MORE
+                       WHERE c.post_id = ? AND c.user_id != ?""", p["id"], p["user_id"])[0] + REPLIES_MORE + \
+        one(con, """SELECT COUNT(*) FROM fchan_replies r JOIN fchan_signed s ON s.reply_id = r.id
+                    WHERE r.post_id = ? AND s.user_id != ? AND r.status != 'held'""", p["id"], p["user_id"])[0]  # the signed ones from the app, past their check
+
+
+COMMENTS_DAY = 60  # a person's signed comments a day, all posts (their own rows counted: deleting one buys nothing back)
+
+
+def comment_reserve(con, v: Viewer, pid: int, body: dict) -> tuple[int, str]:
+    """A signed comment under any live post of the channel (not my own anonymous one: there I answer as the mask),
+    held ('check') before the AI looks, REPLY_GAP apart and COMMENTS_DAY a day, counted in the same transaction. It
+    goes under the post's copy in the group, signed with my short name, once the AI's yes or a moderator's."""
+    need_student(v)
+    text = _clean(body.get("body"))
+    if not _meaningful(text):
+        raise ApiError("bad_input", "short")
+    with tx(con):
+        p = one(con, "SELECT * FROM fchan_posts WHERE id = ? AND status = 'live' AND tg_msg > 0", pid)
+        if not p:
+            raise ApiError("not_found", "post")
+        if not one(con, "SELECT 1 FROM meta WHERE key = ?", f"fchcopy:{p['tg_msg']}"):
+            raise ApiError("not_found", "copy")
+        if p["anon"] and p["user_id"] == v.id:
+            raise ApiError("conflict", "own")
+        mine = "FROM fchan_replies r JOIN fchan_signed s ON s.reply_id = r.id WHERE s.user_id = ?"
+        last = one(con, "SELECT MAX(r.created_at) " + mine, v.id)[0]
+        if last and last > _now() - REPLY_GAP:
+            raise ApiError("rate_limited", "comments")
+        if one(con, "SELECT COUNT(*) " + mine + " AND r.created_at > ?", v.id, _now() - 86400)[0] >= COMMENTS_DAY:
+            raise ApiError("rate_limited", "comments")
+        rid = _next_id(con, "fchan_replies")
+        con.execute("INSERT INTO fchan_replies (id, post_id, body, status, why, created_at) VALUES (?, ?, ?, 'held', 'check', ?)", (rid, pid, text, _now()))
+        con.execute("INSERT INTO fchan_signed (reply_id, user_id) VALUES (?, ?)", (rid, v.id))
+        return rid, text
+
+
+def thread(con, v: Viewer, pid: int) -> list[dict]:
+    """The comments written in the app under a live post, oldest first: the sent ones (signed with a name, or an anonymous
+    author's mark: the same for every viewer) and my own signed ones with where each stands. Comments written in
+    Telegram aren't here: the app never keeps other people's words."""
+    p = one(con, "SELECT * FROM fchan_posts WHERE id = ? AND status = 'live' AND tg_msg > 0", pid)
+    if not p:
+        raise ApiError("not_found")
+    rs = rows(con, """SELECT r.*, s.user_id AS who FROM fchan_replies r LEFT JOIN fchan_signed s ON s.reply_id = r.id
+                      WHERE r.post_id = ? AND (r.status = 'live' AND r.tg_msg > 0 OR s.user_id = ? AND r.status IN ('held', 'live'))
+                      ORDER BY r.id DESC LIMIT 100""", pid, v.id)[::-1]
+    ids = sorted({r["who"] for r in rs if r["who"]})
+    names = {x["id"]: x for x in rows(con, f"{PERSON} WHERE u.id IN ({','.join('?' * len(ids))})", *ids)} if ids else {}
+    return [{"id": r["id"], "body": r["body"], "at": r["created_at"], "state": _reply_shape(r)["state"] if r["who"] == v.id else "sent",
+             "mine": r["who"] == v.id, "anon": r["who"] is None, "nick": _nick(p) if r["who"] is None else None,
+             "name": short_name(names[r["who"]]) if r["who"] in names else None} for r in rs]
 
 
 def reply_settle(con, v: Viewer, pid: int, rid: int, verdict: str | None) -> dict:
     """The AI's word (ai.screen_reply): 'ok' goes out; 'person', 'flag' or no answer wait for a moderator."""
     with tx(con):
-        if not one(con, """SELECT 1 FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id
-                WHERE r.id = ? AND p.id = ? AND p.user_id = ?""", rid, pid, v.id):
-            raise ApiError("not_found")
+        if not one(con, """SELECT 1 FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id LEFT JOIN fchan_signed s ON s.reply_id = r.id
+                WHERE r.id = ? AND p.id = ? AND (s.user_id = ? OR s.user_id IS NULL AND p.user_id = ?)""", rid, pid, v.id, v.id):
+            raise ApiError("not_found", "settle")
         if verdict == "ok":
             con.execute("UPDATE fchan_replies SET status = 'live', why = NULL, send_at = ? WHERE id = ? AND status = 'held' AND why = 'check'", (_now(), rid))
         else:
@@ -1181,9 +1250,10 @@ def _drop(con, r, why: str, status: str = "gone", delay: int = 0) -> None:
 
 
 def reply_delete(con, v: Viewer, rid: int) -> None:
-    """The author deletes their reply: through the post (no user id on the reply)."""
+    """The author deletes their reply: through the post (no user id on an anonymous reply); a signed comment, by its commenter."""
     with tx(con):
-        r = one(con, "SELECT r.* FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id WHERE r.id = ? AND p.user_id = ? AND r.status != 'gone'", rid, v.id)
+        r = one(con, """SELECT r.* FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id LEFT JOIN fchan_signed s ON s.reply_id = r.id
+                        WHERE r.id = ? AND (s.user_id = ? OR s.user_id IS NULL AND p.user_id = ?) AND r.status != 'gone'""", rid, v.id, v.id)
         if not r:
             raise ApiError("not_found")
         _drop(con, r, "author")
@@ -1203,12 +1273,16 @@ def reply_reported(con, reporter_tg: int, msg_id: int) -> bool:
     """/report on the bot's reply in the group (tgc._report): once per reporter (fchan_reply_reports), the reporter told
     as for a comment, the moderators pinged at once (one note a reply, at its first report; the Admin sheet lists it). REPLY_HIDE_AT
     long-verified reporters take it down at once (as a moderator's take-down: Undo, Bring back). False: not ours."""
-    from .tgcomments import REPORTER_AGE, _mods
-    r = one(con, "SELECT r.*, p.user_id AS author FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id WHERE r.tg_msg = ? AND r.tg_msg > 0 AND r.status = 'live'", msg_id)
-    u = one(con, "SELECT id FROM users WHERE tg_id = ?", reporter_tg)
-    if not r or not u:
-        return bool(r)
+    from .tgcomments import REPORTER_AGE, _mods, report_closed
     with tx(con):
+        r = one(con, """SELECT r.*, COALESCE(s.user_id, p.user_id) AS author FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id
+            LEFT JOIN fchan_signed s ON s.reply_id = r.id
+            WHERE r.tg_msg = ? AND r.tg_msg > 0 AND r.status = 'live' AND p.status = 'live'""", msg_id)
+        u = one(con, "SELECT id FROM users WHERE tg_id = ?", reporter_tg)
+        if not r or not u:
+            return bool(r)
+        if report_closed(con, u["id"]):
+            return True
         if u["id"] != r["author"] and con.execute("INSERT OR IGNORE INTO fchan_reply_reports (reply_id, user_id, at) VALUES (?, ?, ?)",
                                                   (r["id"], u["id"], _now())).rowcount:
             notify_staff(con, _mods(con), "fch_reply_queue", f"rq:{r['id']}")
@@ -1226,11 +1300,19 @@ def reply_reported(con, reporter_tg: int, msg_id: int) -> bool:
 def replies_to_send(con) -> list:
     """Replies due now: live, the post live in the channel, its author not banned: (id, words, the
     message to answer: the comment or the post's copy in the group, the signature: the post's nick or the plain mark)."""
-    return [(r["id"], r["body"], r["comment_msg"] or int(r["root"]),
-             texts.FCH_REPLY_NICK.format(nick=texts.nick(r["nick_a"], r["nick_n"])) if r["nick_a"] is not None else texts.FCH_REPLY_SIGN)
-            for r in rows(con, """SELECT r.*, m.value AS root, p.nick_a, p.nick_n FROM fchan_replies r
+    out = []
+    for r in rows(con, """SELECT r.*, m.value AS root, p.nick_a, p.nick_n, s.user_id AS who FROM fchan_replies r
         JOIN fchan_posts p ON p.id = r.post_id AND p.status = 'live' AND p.tg_msg > 0 JOIN users u ON u.id = p.user_id AND u.banned_at IS NULL
-        JOIN meta m ON m.key = 'fchcopy:' || p.tg_msg WHERE r.status = 'live' AND r.tg_msg IS NULL AND r.send_at <= ? ORDER BY r.send_at LIMIT 5""", _now())]
+        LEFT JOIN fchan_signed s ON s.reply_id = r.id LEFT JOIN users c ON c.id = s.user_id
+        JOIN meta m ON m.key = 'fchcopy:' || p.tg_msg WHERE r.status = 'live' AND r.tg_msg IS NULL AND r.send_at <= ?
+        AND (s.user_id IS NULL OR c.banned_at IS NULL) ORDER BY r.send_at LIMIT 5""", _now()):
+        if r["who"]:  # a signed comment: the commenter's short name, as a signed post's
+            who = one(con, PERSON + " WHERE u.id = ?", r["who"])
+            sign = short_name(who) if who else "?"
+        else:
+            sign = texts.FCH_REPLY_NICK.format(nick=texts.nick(r["nick_a"], r["nick_n"])) if r["nick_a"] is not None else texts.FCH_REPLY_SIGN
+        out.append((r["id"], r["body"], r["comment_msg"] or int(r["root"]), sign))
+    return out
 
 
 def reply_sending(con, rid: int) -> bool:
@@ -1239,11 +1321,17 @@ def reply_sending(con, rid: int) -> bool:
 
 def reply_sent(con, rid: int, msg_id: int) -> None:
     """Its message id kept; it or its post deleted or taken down meanwhile, it leaves the group right away (a post's
-    take-down keeps its undo minute: _post_off stamped drop_at). ponytail: an account deleted while one is on its way
-    takes the row with a non-live post (cascade) and the message stays; a one-second window in the bot's one process"""
-    con.execute("UPDATE fchan_replies SET tg_msg = ? WHERE id = ? AND tg_msg = 0", (msg_id, rid))
-    con.execute("""UPDATE fchan_replies SET drop_at = COALESCE(drop_at, ?) WHERE id = ? AND (status != 'live'
-        OR post_id IN (SELECT id FROM fchan_posts WHERE status != 'live'))""", (_now(), rid))
+    take-down keeps its undo minute: _post_off stamped drop_at). An erased row still queues its delivered message."""
+    with tx(con):
+        if con.execute("UPDATE fchan_replies SET tg_msg = ? WHERE id = ? AND tg_msg = 0", (msg_id, rid)).rowcount:
+            r = one(con, "SELECT r.post_id, s.user_id FROM fchan_replies r JOIN fchan_signed s ON s.reply_id = r.id WHERE r.id = ?", rid)
+            if r:  # a signed comment counts on its post, and tells its author as a comment from Telegram does
+                con.execute("UPDATE fchan_posts SET comments = comments + 1 WHERE id = ?", (r["post_id"],))
+                _comment_note(con, r["post_id"], r["user_id"], False)
+        elif not one(con, "SELECT 1 FROM fchan_replies WHERE id = ? AND tg_msg = ?", rid, msg_id):  # not a repeat of this send
+            con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, ?)", (f"fchdrop:{msg_id}", _now()))
+        con.execute("""UPDATE fchan_replies SET drop_at = COALESCE(drop_at, ?) WHERE id = ? AND (status != 'live'
+            OR post_id IN (SELECT id FROM fchan_posts WHERE status != 'live'))""", (_now(), rid))
 
 
 def reply_unsend(con, rid: int) -> None:
@@ -1252,7 +1340,8 @@ def reply_unsend(con, rid: int) -> None:
 
 def reply_missing(con, rid: int) -> None:
     """Telegram: the comment answered is gone. The reply is dropped (never sent elsewhere), its author told."""
-    r = one(con, "SELECT p.user_id FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id WHERE r.id = ? AND r.tg_msg = 0", rid)
+    r = one(con, """SELECT COALESCE(s.user_id, p.user_id) AS user_id FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id
+                    LEFT JOIN fchan_signed s ON s.reply_id = r.id WHERE r.id = ? AND r.tg_msg = 0""", rid)
     if r:
         con.execute("UPDATE fchan_replies SET status = 'gone', why = 'missing', body = '', ai_reason = NULL, tg_msg = NULL WHERE id = ?", (rid,))
         notify(con, r["user_id"], "fch_reply_gone", f"fg:{rid}")
@@ -1266,30 +1355,36 @@ def replies_lost(con) -> None:
 def reply_drops(con) -> list:
     """Replies to take out of the group now: (id, message, why) deleted by the author, taken down, or their post left."""
     return [tuple(r) for r in rows(con, """SELECT r.id, r.tg_msg, CASE WHEN r.status = 'hidden' THEN 'moderator' ELSE 'author' END FROM fchan_replies r
-        JOIN fchan_posts p ON p.id = r.post_id WHERE r.tg_msg > 0 AND r.drop_at <= ? AND (r.status != 'live' OR p.status != 'live') LIMIT 20""", _now())]
+        JOIN fchan_posts p ON p.id = r.post_id WHERE r.tg_msg > 0 AND r.drop_at <= ? AND (r.status != 'live' OR p.status != 'live')
+        UNION ALL SELECT 0, CAST(substr(key, 9) AS INTEGER), CASE WHEN value LIKE '%:moderator' THEN 'moderator' ELSE 'author' END FROM meta
+        WHERE key >= 'fchdrop:' AND key < 'fchdrop;' AND CAST(value AS INTEGER) <= ? LIMIT 20""", _now(), _now())]
 
 
-def reply_dropped(con, rid: int) -> None:
+def reply_dropped(con, rid: int, msg_id: int) -> None:
     """Out of the group: a live one whose post left is removed with it."""
     con.execute("""UPDATE fchan_replies SET tg_msg = NULL, drop_at = NULL, status = CASE WHEN status = 'live' THEN 'hidden' ELSE status END,
         why = CASE WHEN status = 'live' THEN 'post' ELSE why END WHERE id = ?""", (rid,))
+    con.execute("DELETE FROM meta WHERE key = ?", (f"fchdrop:{msg_id}",))
 
 
-def reply_drop_later(con, rid: int) -> None:
+def reply_drop_later(con, rid: int, msg_id: int) -> None:
     con.execute("UPDATE fchan_replies SET drop_at = ? WHERE id = ?", (_now() + 600, rid))
+    con.execute("UPDATE meta SET value = ? || CASE WHEN value LIKE '%:moderator' THEN ':moderator' ELSE '' END WHERE key = ?", (_now() + 600, f"fchdrop:{msg_id}"))
 
 
 # moderators (the Admin sheet): held replies, this week's live ones (reported first), this week's take-downs
 
 def _reply_mod_shape(r) -> dict:
-    return {"id": r["id"], "body": r["body"], "post": r["post_id"], "postBody": r["pbody"], "why": r["why"], "reports": r["reports"], "anon": bool(r["anon"]), "nick": _nick(r),
+    signed = r["who"] is not None  # a signed comment: not an anonymous author's, whatever its post is
+    return {"id": r["id"], "body": r["body"], "post": r["post_id"], "postBody": r["pbody"], "why": r["why"], "reports": r["reports"], "anon": bool(r["anon"]) and not signed,
+            "nick": None if signed else _nick(r),
             "aiWhy": r["ai_reason"], "at": r["created_at"], "undo": bool(r["tg_msg"]) and (r["drop_at"] or 0) > _now()}
 
 
 def reply_mod_queue(con) -> dict:
     """Shown as anonymous posts are: the words and the post they answer, never whose (the author is the post's)."""
-    q = """SELECT r.*, p.body AS pbody, p.anon, p.nick_a, p.nick_n, (SELECT COUNT(*) FROM fchan_reply_reports x WHERE x.reply_id = r.id) AS reports
-        FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id WHERE """
+    q = """SELECT r.*, p.body AS pbody, p.anon, p.nick_a, p.nick_n, (SELECT user_id FROM fchan_signed s WHERE s.reply_id = r.id) AS who, (SELECT COUNT(*) FROM fchan_reply_reports x WHERE x.reply_id = r.id) AS reports
+        FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id WHERE p.status != 'gone' AND """
     held = rows(con, q + "r.status = 'held' AND (r.why != 'check' OR r.created_at < ?) ORDER BY r.id", _now() - 60)
     # reported ones whatever their age (a report must reach someone), first; then this week's
     live = rows(con, q + """r.status = 'live' AND p.status = 'live' AND (r.created_at > ? OR EXISTS (SELECT 1 FROM fchan_reply_reports x WHERE x.reply_id = r.id))
@@ -1300,10 +1395,11 @@ def reply_mod_queue(con) -> dict:
 
 def _mod_reply(con, v: Viewer, rid: int, where: str):
     _mod(v)
-    r = one(con, "SELECT r.*, p.user_id FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id WHERE r.id = ? AND " + where, rid)
+    r = one(con, """SELECT r.*, p.user_id AS post_user, s.user_id AS who FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id
+                    LEFT JOIN fchan_signed s ON s.reply_id = r.id WHERE r.id = ? AND """ + where, rid)
     if not r:
         raise core.decided(con, f"fchanr:{rid}") if one(con, "SELECT 1 FROM fchan_replies WHERE id = ?", rid) else ApiError("not_found")
-    if r["user_id"] == v.id and not _owner(con, v):  # their own post's: another moderator decides (the founder alone may)
+    if v.id in (r["post_user"], r["who"]) and not _owner(con, v):  # their own post's or comment: another moderator decides (the founder alone may)
         raise ApiError("forbidden")
     return r
 

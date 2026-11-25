@@ -208,9 +208,9 @@ def test_migration_marks_existing_library_only():
     con.executescript("CREATE TABLE forms (id INTEGER PRIMARY KEY, slug TEXT, spec TEXT); CREATE TABLE users (id INTEGER PRIMARY KEY);")
     con.execute("INSERT INTO forms VALUES (1, 'library', ?)", ('{"title":"Library","intro":"Quiet rooms"}',))
     con.execute("INSERT INTO forms VALUES (2, 'other', ?)", ('{"title":"Other","intro":"Elsewhere"}',))
-    con.executescript(dict(db.MIGRATIONS)[228])
+    con.executescript(dict(db.MIGRATIONS)[236])
     assert con.execute("SELECT * FROM research_forms").fetchall() == [(1, "Quiet rooms")]
-    con.executescript(dict(db.MIGRATIONS)[228])  # safe when migration tests rewind user_version
+    con.executescript(dict(db.MIGRATIONS)[236])  # safe when migration tests rewind user_version
     assert con.execute("SELECT COUNT(*) FROM research_forms").fetchone()[0] == 1
 
 

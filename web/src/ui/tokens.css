@@ -29,6 +29,7 @@
   --ctl-l: 50px; --ctl-m: 44px; --ctl-s: 36px;
   --row-h: 50px; --row-h2: 60px; --row-dense: 44px;
   --fw-row: 450; /* a row's title, every row system (Row, .set-row) */
+  --fw-light: 300; /* display type's second voice: a headline's light line beside its 600 one (Afisha's date, KRI's greeting, an empty state's title) */
 
   /* row icon tiles: one flat iOS colour each, a white glyph (Settings' palette) */
   --tile-gray: #8E8E93; --tile-indigo: #5856D6; --tile-red: #FF3B30; --tile-orange: #FF9500; --tile-green: #34C759;
@@ -71,9 +72,14 @@
      or our own capsule outside Telegram; one value for every page, so no screen grows its own gap (owner, Oct 24) */
   --head-bottom: max(46px, calc(var(--safe-top) + var(--tg-head) / 2 + 19px)); /* the capsule's lower edge (Capsule.svelte .cap) */
   --page-top: calc(var(--head-bottom) + 14px);
+  /* the scroll edge under the top bar, one on every screen (App's .tab mask, full sheets, Pane, Lab): content stays crisp
+     until it reaches the bar and goes in a short soft edge around the bar's lower edge, as on iOS (owner, Nov 25: it
+     ran down to --page-top, a dark band under the bar) */
+  --edge-from: calc(var(--head-bottom) - 10px);
+  --edge-to: calc(var(--head-bottom) + 4px);
   --nav-h: 64px;
   --bottom: calc(var(--safe-bottom) + var(--nav-h) + 12px);
-  /* a full-screen overlay's band for its round × (CloseX: 16 px up, 52 px tall, 12 px clear above it) */
+  /* a full-screen overlay's band for its round × (CloseX: 16 px up, --ctl-l 50 px tall, 14 px clear above it) */
   --close-room: calc(var(--safe-bottom) + 80px);
 }
 
@@ -106,10 +112,9 @@
   --line: rgba(255, 255, 255, 0.08);
   --line-2: rgba(255, 255, 255, 0.13);
   --separator: rgba(255, 255, 255, 0.1); /* 0.5 px between rows */
-  /* gray controls: buttons, chips, inputs, the segmented track (iOS's secondary fill); -2 pressed; the segmented thumb */
+  /* gray controls: buttons, chips, inputs, the segmented track (iOS's secondary fill); -2 pressed */
   --fill: rgba(235, 235, 245, 0.12);
   --fill-2: rgba(235, 235, 245, 0.2);
-  --thumb: rgba(235, 235, 245, 0.24);
   /* the tab bar (Opal's): a smoky body; the active tab on a raised, lighter glass pill with its
      icon in the accent (Nov 1: the darker pill merged into the bar, you couldn't tell which tab was on) */
   --dock: rgba(28, 28, 30, 0.45);
@@ -153,6 +158,16 @@
   --lg-bevel: inset 0 1px 1px rgba(255, 255, 255, 0.16), inset 0 -8px 14px -8px rgba(0, 0, 0, 0.3),
     inset 1.5px 0 1px -0.5px rgba(255, 120, 200, 0.32), inset -1.5px 0 1px -0.5px rgba(90, 190, 255, 0.36);
   --lg-lift: 0 8px 18px -10px rgba(0, 0, 0, 0.7);
+  /* the orb (ui/Orb): a glass ball with a light inside. A drawing, so its glass is its own: the shell, the light's two
+     colours and the bloom between them, the light it throws behind it, the rim with the glass's fringes, the window
+     light on top, its glow on the ground */
+  --orb-shell: radial-gradient(circle, rgba(170, 180, 255, 0) 52%, rgba(170, 180, 255, 0.1) 80%, rgba(200, 208, 255, 0.34) 98%), rgba(14, 15, 26, 0.86);
+  --orb-core-a: rgba(140, 84, 255, 0.95); --orb-core-b: rgba(59, 107, 255, 0.9); --orb-hot: rgba(206, 214, 255, 0.5);
+  --orb-halo: rgba(86, 96, 255, 0.36); --orb-halo-2: rgba(124, 77, 255, 0.12);
+  --orb-rim: inset 0 0 0 0.5px rgba(255, 255, 255, 0.2), inset 0 1px 1px rgba(255, 255, 255, 0.55), inset 0 -18px 26px -16px rgba(0, 0, 0, 0.6),
+    inset 4px 0 6px -4px rgba(255, 120, 200, 0.4), inset -4px 0 6px -4px rgba(90, 190, 255, 0.45);
+  --orb-gloss: rgba(255, 255, 255, 0.08);
+  --orb-floor: rgba(96, 106, 255, 0.36);
 }
 
 :root[data-theme='light'],
@@ -171,7 +186,6 @@
   --separator: rgba(60, 60, 67, 0.16);
   --fill: rgba(11, 20, 51, 0.075);
   --fill-2: rgba(11, 20, 51, 0.13);
-  --thumb: #FFFFFF;
   --dock: rgba(250, 251, 255, 0.62);
   --lens: rgba(255, 255, 255, 0.92);
   --lens-top: rgba(255, 255, 255, 0);
@@ -213,4 +227,12 @@
   --lg-bevel: inset 0 1.5px 1px #fff, inset 0 -10px 16px -10px rgba(11, 20, 51, 0.14),
     inset 3px 0 3px -1px rgba(255, 110, 190, 0.45), inset -3px 0 3px -1px rgba(70, 170, 255, 0.5);
   --lg-lift: 0 6px 14px -8px rgba(24, 36, 90, 0.32), 0 1px 2px rgba(24, 36, 90, 0.08);
+  /* the orb on the pale ground: a frosted pearl, its shadow under it */
+  --orb-shell: radial-gradient(circle, rgba(255, 255, 255, 0) 40%, rgba(255, 255, 255, 0.7) 76%, #fff 97%), #E9ECFB;
+  --orb-core-a: rgba(124, 77, 255, 0.78); --orb-core-b: rgba(59, 107, 255, 0.74); --orb-hot: rgba(255, 255, 255, 0.55);
+  --orb-halo: rgba(59, 107, 255, 0.17); --orb-halo-2: rgba(124, 77, 255, 0.06);
+  --orb-rim: inset 0 0 0 0.5px rgba(11, 20, 51, 0.08), inset 0 2px 2px #fff, inset 0 -18px 26px -16px rgba(24, 36, 90, 0.24),
+    inset 4px 0 6px -4px rgba(255, 110, 190, 0.4), inset -4px 0 6px -4px rgba(70, 170, 255, 0.45);
+  --orb-gloss: rgba(255, 255, 255, 0.9);
+  --orb-floor: rgba(24, 36, 90, 0.2);
 }

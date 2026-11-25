@@ -246,11 +246,15 @@ export const sheets = {
   /** a new post to the forum channel (the Forum tab's plus); draft: the words back after a refused send */
   /** my anonymous post: a reply in its comments through the bot, and how my replies stand */
   channelReply: (_post: { id: Id; body: string }) => {},
+  /** a channel post's comments, written and read in the app; link: the same thread in Telegram, for the rest */
+  channelThread: (_post: { id: Id; body: string; mine: boolean; anon: boolean; link: string }) => {},
   askPeople: (_ask: Id, _title: string) => {},
   /** every chat of the directory */
   chats: (_chats: Chat[]) => {},
   /** the AI page in Admin: the translator's state and work */
   adminAi: () => {},
+  /** the creator's private donation receipts */
+  adminDonations: () => {},
   /** the owner's audit log */
   adminAudit: () => {},
   /** suggest any chat for the catalog: paste @name or a link */

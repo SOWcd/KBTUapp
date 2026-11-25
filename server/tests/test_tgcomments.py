@@ -202,12 +202,13 @@ def test_reports_ai_gate_and_moderators(env, monkeypatch):
     assert con.execute("SELECT status FROM tgc_comments").fetchone()[0] == "queued"
     hear(cfg, tg, report(63, 22, bad), report(64, 20, bad))                      # his own comment: ignored
     cid, status, review = con.execute("SELECT id, status, review FROM tgc_comments").fetchone()
-    assert (status, review) == ("deleting", 1) and outbox(con, "tgc_removed") == [(author, f"tr:{cid}")]
+    assert (status, review) == ("deleting", 1) and not outbox(con, "tgc_removed")
     assert con.execute("SELECT COUNT(*) FROM tgc_reports WHERE outcome IS NOT NULL").fetchone()[0] == 0  # only a person decides
     tg.calls.clear()
     tick(cfg, tg, con)
     assert tg.of("deleteMessage") == [{"chat_id": G, "message_id": 50}]
     assert con.execute("SELECT status FROM tgc_comments").fetchone()[0] == "deleted"
+    assert outbox(con, "tgc_removed") == [(author, f"tr:{cid}")]
     m = bot._render(con, {"kind": "tgc_removed", "ref": f"tr:{cid}", "lang": "en", "user_id": author})
     assert "bad words" not in m[0]                                               # his words: in the app, not the bot's DM
 
@@ -471,6 +472,7 @@ def test_verdict_edits_the_first_message(env, monkeypatch):
     hear(cfg, tg, report(64, 21, msg(52, 20, "bad words!")), report(65, 22, msg(52, 20, "bad words!")))
     c3 = con.execute("SELECT id FROM tgc_comments WHERE msg_id = 52").fetchone()[0]
     con.execute("UPDATE users SET can_dm = 0 WHERE tg_id = 20")
+    tick(cfg, tg, con)
     assert c.get("/api/me", headers=tma(20)).json().get("tgComment") is True
     assert c.post("/api/me/tg-comment", headers=tma(20)).json()["verdict"] == "pending"
     assert c.post(f"/api/admin/reports/tgc/{c3}", headers=tma(24), json={"remove": True, "rule": "pdata"}).status_code == 204
