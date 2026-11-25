@@ -24,7 +24,7 @@
   // title: null = the live status speaks; neither: the capsule fades away (an empty glass pill between Telegram's buttons
   // looked broken). mark: the icon alone (a sheet that names itself in its own header)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  // tint: the page on top is tinted (the event editor's overlay.tint): in power saving the solid glass takes its colour
+  // tint: the page on top is tinted (the event editor's overlay.tint): wherever the glass goes solid it takes its colour
   type Props = { live?: Live | null; title?: string | null; icon?: Component<any> | null; spin?: boolean; mark?: boolean; tint?: string | null };
   let { live = null, title = null, icon = null, spin = false, mark = false, tint = null }: Props = $props();
 
@@ -86,7 +86,7 @@
   });
 </script>
 
-<div class="cap glass glass-pill" class:wide={wideClose} class:boot={booting} class:none={mode === 'none'} class:tinted={!!tint} class:flat={onAndroid} style:--cap-tint={tint} use:glass={{ bloom: true }} use:chrome>
+<div class="cap glass glass-pill" class:wide={wideClose} class:boot={booting} class:none={mode === 'none'} class:tinted={!!tint} class:flat={onAndroid} style:--chrome-tint={tint} use:glass={{ bloom: true }} use:chrome>
   <span class="tone-base" aria-hidden="true"></span><span class="tone-feed" aria-hidden="true"></span>
   <!-- live status -->
   <button class="layer live" class:off={mode !== 'live'} onclick={() => live?.onopen?.()} aria-label={live?.title}>
@@ -120,9 +120,6 @@
   .cap.boot { width: min(152px, calc(100vw - 230px)); }
   .cap > .tone-base { background: var(--glass-clear); }
   .cap > .tone-feed { background-color: rgb(var(--feed-rgb, 24 28 44) / 0.45); }
-  /* power saving: no blur, so no colour comes through the glass; a solid fill takes it instead (a flat
-     grey capsule on a tinted page). The page's own mix (its tint under the ground's veil), a step lighter (--fill) */
-  :global(html.lowfx) .cap.tinted > .tone-base { background: linear-gradient(var(--fill), var(--fill)), linear-gradient(var(--tint-veil), var(--tint-veil)), var(--cap-tint); }
   :global(html.lowfx) .cap > .tone-feed { background-color: rgb(var(--feed-rgb, 24 28 44) / 0.9); } /* the Feed's slide, near solid */
   /* over the Feed (chrome.ts): dark glass tinted by the slide, the dark palette past the halfway point */
   .cap:global([data-feed]) { --text: #FFFFFF; --text-2: rgba(255, 255, 255, 0.72); --bg: #0A0F24; }
@@ -130,6 +127,12 @@
   :global(html[data-sheet]) .cap { z-index: calc(var(--z-sheet) + 5); pointer-events: none; }
   /* light theme under a sheet: clear glass over the dark scrim made its ink unreadable; solid glass there */
   :global(html[data-theme='light'][data-sheet]) .cap > .tone-base { background: var(--glass-solid); }
+  /* solid over a tinted page (Android, power saving, the theme switch, glass-wake, light under a sheet): no colour comes
+     through a solid fill, so it takes the page's own mix (its tint under the ground's veil), a step lighter (--fill),
+     never plain --glass-solid (a black pill on a blue page). StandaloneBar's side pills do the same */
+  :global(html:is(.lowfx, .vt-solid, .glass-wake)) .cap.tinted > .tone-base, .cap.flat.tinted > .tone-base,
+  :global(html[data-theme='light'][data-sheet]) .cap.tinted > .tone-base {
+    background: linear-gradient(var(--fill), var(--fill)), linear-gradient(var(--tint-veil), var(--tint-veil)), var(--chrome-tint); }
   /* nothing to say (a tab whose large title is in view, no live status): the glass fades away */
   .cap.none { opacity: 0; transform: translateY(-4px) scale(0.94); pointer-events: none; transition: width 400ms cubic-bezier(.25, .8, .3, 1), opacity var(--t-base), transform var(--t-base) var(--ease); }
   .cap:not(.none) { transition: width 400ms cubic-bezier(.25, .8, .3, 1), opacity var(--t-base), transform 360ms var(--ease-spring); }

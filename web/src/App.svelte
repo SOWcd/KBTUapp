@@ -969,13 +969,12 @@
       </section>
     {/each}
 
-    <!-- scrolled content fades under the clock and Telegram's buttons instead of running into them;
-         the same glow and background as the pages, so at rest it can't be seen; the feed's posters go full height -->
-    <div class="topfade" aria-hidden="true" use:unfeed></div><div class="botfade" aria-hidden="true" use:unfeed></div>
+    <!-- the feed's posters go full height (the top's fade is the tab's own mask, .tab below) -->
+    <div class="botfade" aria-hidden="true" use:unfeed></div>
     <div class="tgfade" aria-hidden="true"></div>
     <div class="cap-theme {capOf?.theme ? `theme-${capOf.theme}` : ''}"><Capsule {live} title={capTitle} icon={capIcon} spin={!!ui.busy} mark={!ui.busy && !!capOf?.mark} tint={capOf?.tint} /></div>
     <Nav {tabs} labels={tabs.map((k) => TAB_LABEL[k]())} dot={tabs.map((k) => TAB_DOT[k]())} />
-    {#if StandaloneBar && !gated}<StandaloneBar back={showBack} />{/if}
+    {#if StandaloneBar && !gated}<StandaloneBar back={showBack} tint={capOf?.tint} />{/if}
 
     {#if gated}
       {#await consentGate() then m}<m.default oncancel={() => (asked = false)} />{/await}
@@ -1010,15 +1009,6 @@
   .bico { width: 72px; height: 72px; border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, var(--danger) 16%, transparent); color: var(--danger-text); }
   .banned p { max-width: 320px; color: var(--text-2); overflow-wrap: anywhere; }
   .bapp { margin-top: 8px; height: 44px; padding: 0 20px; border-radius: var(--r-full); background: var(--surface-2); font: 650 15px/1 var(--font-text); }
-  .topfade { position: absolute; inset: 0; z-index: calc(var(--z-capsule) - 1); pointer-events: none; background: color-mix(in srgb, var(--bg) 88%, transparent);
-    /* eased, not linear: a linear fade ends in a kink the eye reads as a hard line under the head (owner, Nov 23) */
-    --a: calc(var(--head-bottom) - 4px); --d: calc(var(--page-top) - var(--a));
-    -webkit-mask-image: linear-gradient(#000 var(--a), rgba(0, 0, 0, 0.92) calc(var(--a) + var(--d) * 0.1), rgba(0, 0, 0, 0.75) calc(var(--a) + var(--d) * 0.25),
-      rgba(0, 0, 0, 0.5) calc(var(--a) + var(--d) * 0.42), rgba(0, 0, 0, 0.27) calc(var(--a) + var(--d) * 0.6), rgba(0, 0, 0, 0.1) calc(var(--a) + var(--d) * 0.78),
-      rgba(0, 0, 0, 0.025) calc(var(--a) + var(--d) * 0.92), transparent var(--page-top));
-    mask-image: linear-gradient(#000 var(--a), rgba(0, 0, 0, 0.92) calc(var(--a) + var(--d) * 0.1), rgba(0, 0, 0, 0.75) calc(var(--a) + var(--d) * 0.25),
-      rgba(0, 0, 0, 0.5) calc(var(--a) + var(--d) * 0.42), rgba(0, 0, 0, 0.27) calc(var(--a) + var(--d) * 0.6), rgba(0, 0, 0, 0.1) calc(var(--a) + var(--d) * 0.78),
-      rgba(0, 0, 0, 0.025) calc(var(--a) + var(--d) * 0.92), transparent var(--page-top)); }
   /* and under the bottom bar, softer: the glass still has something to bend (mockup v23) */
   /* fullscreen only: Telegram draws its own dark scrim behind its buttons; our page-coloured fade over the page makes it read as ours.
      --top is 0 outside fullscreen, so the height is 0 there (the min() adds the 12 px only when there is an inset) */
@@ -1034,7 +1024,18 @@
      breathing in place ("they look sealed, they should float") */
   /* a tab away sits under the one shown (same box), so it never takes a tap: `pointer-events` is inherited, and
      flipping it restyled every node of the tab on each switch (the Forum: 1100 nodes, ~100 ms at 4x CPU) */
-  .tab { position: absolute; inset: 0; visibility: hidden; z-index: -1; }
+  .tab { position: absolute; inset: 0; visibility: hidden; z-index: -1;
+    /* scrolled content fades out under the clock and Telegram's buttons instead of running into them: a mask on the tab,
+       never a strip of --bg over it (that was a band over any other ground, and its color-mix() is dropped on iOS < 16.2).
+       To 12% up there, the strip's old depth. Eased, not linear: a linear fade ends in a kink the eye reads as a hard
+       line under the head (owner, Nov 23) */
+    --a: calc(var(--head-bottom) - 4px); --d: calc(var(--page-top) - var(--a));
+    -webkit-mask-image: linear-gradient(rgba(0, 0, 0, 0.12) var(--a), rgba(0, 0, 0, 0.19) calc(var(--a) + var(--d) * 0.1), rgba(0, 0, 0, 0.34) calc(var(--a) + var(--d) * 0.25),
+      rgba(0, 0, 0, 0.56) calc(var(--a) + var(--d) * 0.42), rgba(0, 0, 0, 0.76) calc(var(--a) + var(--d) * 0.6), rgba(0, 0, 0, 0.91) calc(var(--a) + var(--d) * 0.78),
+      rgba(0, 0, 0, 0.98) calc(var(--a) + var(--d) * 0.92), #000 var(--page-top));
+    mask-image: linear-gradient(rgba(0, 0, 0, 0.12) var(--a), rgba(0, 0, 0, 0.19) calc(var(--a) + var(--d) * 0.1), rgba(0, 0, 0, 0.34) calc(var(--a) + var(--d) * 0.25),
+      rgba(0, 0, 0, 0.56) calc(var(--a) + var(--d) * 0.42), rgba(0, 0, 0, 0.76) calc(var(--a) + var(--d) * 0.6), rgba(0, 0, 0, 0.91) calc(var(--a) + var(--d) * 0.78),
+      rgba(0, 0, 0, 0.98) calc(var(--a) + var(--d) * 0.92), #000 var(--page-top)); }
   /* where the engine has it, a tab away is skipped whole (no style, layout or paint while it waits; its scroll and
      layout kept): flipping `visibility` restyled every node of the tab on each switch (5k on a full Afisha: 65 ms) */
   @supports (content-visibility: hidden) { .tab { visibility: visible; content-visibility: hidden; } .tab.drawing { content-visibility: visible; opacity: 0; } }
