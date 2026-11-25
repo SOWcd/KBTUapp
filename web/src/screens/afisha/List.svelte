@@ -287,7 +287,7 @@
       <button class="hit" onpointerdown={(ev) => touchAhead(ev, () => prefetchEvent(e.id))} onclick={(ev) => sheets.event(e.id, ev.currentTarget.parentElement?.querySelector('.poster'))} aria-label={e.title}></button>
       <span class="art"><Poster item={e} big radius={0} /></span>
       <div class="shade"></div>
-      <div class="slab">
+      <div class="slab glass glass-sheet">
         <span class="hero-tx">
           <b class="clamp-2">{e.title}</b>
           <span class="where"><span class="ellipsis"><b class="num">{multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : time(e.startsAt)}</b> · {soon(e.startsAt, now)} · {placeOf(e.place, e.online)}</span><span class="by ellipsis">&nbsp;· {shortOf(e.org)}{#if e.coHost} × {shortOf(e.coHost)}{/if}</span></span>
@@ -469,27 +469,27 @@
 
   /* the hero: the one rich visual, kept calm (owner, Nov 22: the blurred cover and the circling light read as
      childish). The cover sharp edge to edge, a little dimmed, and most of the card (owner, Nov 24); the words on
-     a low slab of the app's own glass along the bottom (--glass-bg, the fringes: the capsule's and the tab bar's family; it
+     a low slab of the app's own sheet glass along the bottom (base.css .glass-sheet: the sheets' and menus' family; it
      follows the theme and stays legible whatever the cover is): the title, one line of when and where, and my ticket and the way
-     there as two round icons at its end */
-  .hero { --glow: 0.62; position: relative; isolation: isolate; display: flex; flex-direction: column; justify-content: flex-end; min-height: 196px; padding: 72px 6px 6px; /* the picture always keeps its strip, a two-line title under it too */
-    border-radius: var(--r-xl); background: var(--media); box-shadow: 0 12px 26px -16px rgba(0, 0, 0, 0.5); transition: transform var(--t-fast) var(--ease); }
+     there as two round icons at its end. No drop shadow of its own: the halo is the card's light */
+  .hero { --halo: 0.62; position: relative; isolation: isolate; display: flex; flex-direction: column; justify-content: flex-end; min-height: 196px; padding: 72px 6px 6px; /* the picture always keeps its strip, a two-line title under it too */
+    border-radius: var(--r-xl); background: var(--media); transition: transform var(--t-fast) var(--ease); }
   .hero:has(> .hit:active) { transform: scale(0.985); }
   /* Opal's neon under the card, in the cover's own colour (--c): a close halo and a wide pool below. It blooms once as
      the page opens and rests; the shadow is painted once and only its opacity moves. The card no longer clips (the
      cover does), so the light can leave it */
-  .hero::before { content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none; opacity: var(--glow);
+  .hero::before { content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none; opacity: var(--halo);
     box-shadow: 0 0 14px 0 var(--c, transparent), 0 16px 38px -10px var(--c, transparent); animation: bloom 2.2s var(--ease) 0.2s backwards; }
   /* the halo always shows against the theme (owner: a pale cover's light vanished on the light ground): the cover's hue,
      but at least this much colour, lifted on black and deepened on light. Where relative colour isn't known (older
      iOS) none of it applies and the cover's own colour stays */
-  :global(:root[data-theme='light']) .hero { --glow: 0.5; }
+  :global(:root[data-theme='light']) .hero { --halo: 0.5; }
   @supports (color: oklch(from red l c h)) {
     .hero::before { box-shadow: 0 0 14px 0 var(--cg), 0 16px 38px -10px var(--cg); }
     .hero { --cg: oklch(from var(--c, transparent) max(l, 0.66) max(c, 0.14) h); }
-    :global(:root[data-theme='light']) .hero { --glow: 0.62; --cg: oklch(from var(--c, transparent) min(l, 0.58) max(c, 0.16) h); }
+    :global(:root[data-theme='light']) .hero { --halo: 0.62; --cg: oklch(from var(--c, transparent) min(l, 0.58) max(c, 0.16) h); }
   }
-  @keyframes bloom { from { opacity: 0; } 40% { opacity: calc(var(--glow) * 1.5); } }
+  @keyframes bloom { from { opacity: 0; } 40% { opacity: calc(var(--halo) * 1.5); } }
   .art, .shade, .rim { position: absolute; inset: 0; }
   .art, .shade, .rim { border-radius: inherit; pointer-events: none; }
   .art { overflow: hidden; }
@@ -511,13 +511,10 @@
     animation: arrive 1.8s var(--ease-spring) 0.25s backwards; }
   @keyframes arrive { from { transform: rotate(-200deg); } }
   @media (prefers-reduced-motion: reduce) { .hero::before, .rim::before { animation: none; } }
-  /* the slab: a static blur over a still picture (never animated); 6px in, so its corners follow the card's. In the
-     dark it also dims what is under it: white words hold 4.5:1 over a white cover */
-  .slab { --dim: 0.7; --edge: rgba(255, 255, 255, 0.16); position: relative; z-index: 2; /* over the card's own tap: its blur makes it a stacking context, so the buttons' own z-index never left it */ display: flex; align-items: center; gap: 10px; padding: 9px 10px 10px 14px;
-    border-radius: var(--r-l); color: var(--text); background: var(--glass-bg); pointer-events: none;
-    box-shadow: inset 0 1px 0 var(--edge), inset 0 0 0 0.5px var(--edge), inset 1.5px 0 1px -0.5px rgba(255, 120, 200, 0.22), inset -1.5px 0 1px -0.5px rgba(90, 190, 255, 0.26);
-    -webkit-backdrop-filter: blur(28px) saturate(150%) brightness(var(--dim)); backdrop-filter: blur(28px) saturate(150%) brightness(var(--dim)); }
-  :global(:root[data-theme='light']) .slab { --dim: 1; --edge: rgba(255, 255, 255, 0.8); }
+  /* the slab: the shared sheet glass (body, blur, rim and fringes all from base.css, by theme), a static blur over a
+     still picture; 6px in, so its corners follow the card's */
+  .slab { position: relative; z-index: 2; /* over the card's own tap: its blur makes it a stacking context, so the buttons' own z-index never left it */ display: flex; align-items: center; gap: 10px; padding: 9px 10px 10px 14px;
+    border-radius: var(--r-l); color: var(--text); pointer-events: none; }
   .acts { position: relative; z-index: 2; flex: none; display: flex; gap: 8px; max-width: 55%; pointer-events: auto; }
   .acts :global(.btn) { min-width: 0; }
   .acts :global(.btn.round)::before { inset: -4px; } /* 36 seen, 44 to the finger on every side; 8px apart, so two meet and never overlap */
