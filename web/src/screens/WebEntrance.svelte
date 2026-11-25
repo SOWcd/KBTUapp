@@ -48,6 +48,19 @@
   // the last signed-in account's own upcoming tickets, for the door without the network (lib/offlineTickets)
   let kept = $state<OfflineTicket[]>([]);
 
+  // the stores' reviewers have no Telegram: a code from the review notes opens the demo account (android/README.md).
+  // In plain sight, never hidden (App Review 2.5.19); for everyone else a wrong code just says so
+  let coding = $state(false), code = $state(''), codeFailed = $state(false);
+  async function byCode(e: SubmitEvent) {
+    e.preventDefault();
+    if (busy || !code.trim()) return;
+    busy = true;
+    codeFailed = false;
+    try { await api.webDemo(code.trim()); await enter(); }
+    catch { codeFailed = true; }
+    finally { busy = false; }
+  }
+
   async function login(user: unknown) {
     if (busy) return;
     busy = true;
@@ -154,6 +167,17 @@
           <p class="fine fs-cap in" style:--i={9}>{t('web.cookie')} <a href="/privacy?lang={i18n.lang}" target="_blank" rel="noopener">{t('web.policy')}</a></p>
           {#if onIos && !installed}<p class="fine hint fs-cap in" style:--i={10}><SquareArrowUp size={14} /><span>{t('web.install')}</span></p>{/if}
           {#if onComputer}<a class="fine fs-cap in" style:--i={10} href="/show">{t('tgo.show')}</a>{/if}
+          {#if coding}
+            <form class="code" onsubmit={byCode}>
+              <!-- svelte-ignore a11y_autofocus -->
+              <input class="fs-body" bind:value={code} autofocus autocomplete="off" autocapitalize="off" spellcheck="false"
+                aria-label={t('web.code')} placeholder={t('web.code')} disabled={busy} />
+              <Button kind="secondary" type="submit" loading={busy} disabled={!code.trim()}>{t('web.codeGo')}</Button>
+            </form>
+            {#if codeFailed}<p class="fine fs-cap" role="alert">{t('web.codeWrong')}</p>{/if}
+          {:else}
+            <button class="fine link fs-cap in" style:--i={11} type="button" onclick={() => (coding = true)}>{t('web.codeLink')}</button>
+          {/if}
         {/if}
       </div>
     {/if}
@@ -217,6 +241,13 @@
   .fine { max-width: 36ch; margin-top: var(--s-4); color: var(--text-3); font-weight: 450; line-height: 1.4; text-wrap: balance; }
   .fine a, a.fine { color: var(--text-2); text-decoration: underline; text-decoration-color: var(--line-2); text-underline-offset: 3px; }
   .hint { margin-top: var(--s-3); }
+  .link { padding: 0; border: 0; background: none; color: var(--text-2); text-decoration: underline;
+    text-decoration-color: var(--line-2); text-underline-offset: 3px; cursor: pointer; }
+  /* the reviewer's code: a field and its button on one line, the dock's width */
+  .code { display: flex; gap: var(--s-2); width: 100%; margin-top: var(--s-4); }
+  .code input { flex: 1; min-width: 0; height: 44px; padding: 0 var(--s-4); border: 0; border-radius: var(--r-full); background: var(--fill);
+    color: var(--text); outline: none; }
+  .code input:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
   .hint :global(svg) { display: inline; margin-inline-end: var(--s-1); vertical-align: -2px; }
 
   .spinner { position: absolute; display: flex; color: var(--text); animation: turn 900ms linear infinite; }

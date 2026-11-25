@@ -755,6 +755,8 @@ def person(con, v: Viewer, uid: int) -> dict:
     team = uid != v.id and one(con, "SELECT 1 FROM org_members a JOIN org_members b ON b.org_id = a.org_id WHERE a.user_id = ? AND b.user_id = ?",
                                v.id, uid) is not None
     state = "none" if uid == v.id else friendship(con, v.id, uid)
+    block = uid != v.id and blocked(con, v.id, uid)
+    mine_block = block and bool(one(con, "SELECT 1 FROM blocks WHERE user_id = ? AND blocked_id = ?", v.id, uid))
     close = uid == v.id or link is not None or team
     if not close:
         _stranger_view(con, v, uid)
@@ -812,7 +814,8 @@ def person(con, v: Viewer, uid: int) -> dict:
         "skin": _skin(con, uid) if close else "sower" if u["is_founder"] and u["skin_pick"] in ("sower", None)
                 else u["skin_org"] if u["skin_pick"] == "org" and _skin_ok(con, uid, u["skin_org"]) else None,
         **({} if close else {"limited": True}),
-        **({"closed": True} if state == "none" and not u["can_friend"] else {}),  # no "Add friend" for them (their setting)
+        **({"closed": True} if state == "none" and (not u["can_friend"] or block) else {}),  # no "Add friend": their setting, or a block
+        **({"blocked": True} if mine_block else {}),  # I blocked them: the card's Unblock (forum.block)
     }
 
 
@@ -903,12 +906,18 @@ def find_student(con, v: Viewer, username: str) -> dict:
         _stranger_view(con, v, p["id"])
     s = one(con, "SELECT course, school FROM students WHERE user_id = ?", p["id"])
     out = {"person": person_ref(p), "course": s["course"], "school": s["school"], "friendship": state, "me": me}
-    return {**out, "closed": True} if state == "none" and not _can_friend(con, p["id"]) else out
+    return {**out, "closed": True} if state == "none" and not _can_friend(con, p["id"], v.id) else out
 
 
-def _can_friend(con, uid: int) -> bool:
-    """Their "Can add me as a friend" (Settings): off, nobody may send them a new request."""
-    return bool(one(con, "SELECT can_friend FROM users WHERE id = ?", uid)[0])
+def _can_friend(con, uid: int, me: int) -> bool:
+    """Their "Can add me as a friend" (Settings): off, nobody may send them a new request; nor across a block either
+    way (forum.block), which looks the same: requests closed"""
+    return bool(one(con, "SELECT can_friend FROM users WHERE id = ?", uid)[0]) and not blocked(con, me, uid)
+
+
+def blocked(con, a: int, b: int) -> bool:
+    """Either of the two blocked the other (forum.block)"""
+    return bool(one(con, "SELECT 1 FROM blocks WHERE (user_id = ? AND blocked_id = ?) OR (user_id = ? AND blocked_id = ?)", a, b, b, a))
 
 
 def ask_friend(con, v: Viewer, uid: int) -> dict:
@@ -928,7 +937,7 @@ def ask_friend(con, v: Viewer, uid: int) -> dict:
                                          (v.id, uid, core.now() - REASK_AFTER)).rowcount:
         state = "requested"  # one I took back after a quiet decline, asked again inside its 30 days: waiting again for me, nobody is told
     elif state == "none":
-        if not _can_friend(con, uid):
+        if not _can_friend(con, uid, v.id):
             raise ApiError("closed")
         _stranger_view(con, v, uid)  # a person opened the profile already (free); a script walking ids meets the 200 a day
         if one(con, "SELECT COUNT(*) FROM friend_requests WHERE from_id = ? AND created_at > ?", v.id, core.now() - 86400)[0] >= FRIEND_ASKS_A_DAY:
@@ -1004,6 +1013,8 @@ def add_by_link(con, v: Viewer, code: object) -> dict:
             return {**out, "friendship": "requested", "created": False}
         if friendship(con, v.id, p["id"]) == "friends":
             return {**out, "friendship": "friends", "created": False}
+        if blocked(con, v.id, p["id"]):  # a block either way (forum.block): as if their requests were off
+            raise ApiError("closed")
         # ponytail: counts every new friend of mine today, not only by links; a per-link log if that ever bites
         if one(con, "SELECT COUNT(*) FROM friendships WHERE (a = ? OR b = ?) AND created_at > ?", v.id, v.id, core.now() - 86400)[0] >= FRIEND_ASKS_A_DAY:
             raise ApiError("rate_limited")  # a stranger collecting posted links for friends' full names and plans

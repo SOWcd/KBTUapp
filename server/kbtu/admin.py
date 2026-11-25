@@ -93,8 +93,10 @@
                                 (guests and event-new also take `--gz <base64 gzip>` at the end instead of stdin)
   .venv/bin/python -m kbtu.admin reg-until <event id> <ISO time with offset>   close an event's sign-up at that time (an organizer's ask)
   .venv/bin/python -m kbtu.admin event-link <event id> <https url>   change an event's "register elsewhere" link (an organizer's ask)
-  .venv/bin/python -m kbtu.admin play-demo [revoke]   Google Play's reviewer link to the made-up demo account (PLAY_DEMO on;
+  .venv/bin/python -m kbtu.admin play-demo [revoke]   the store reviewers' link to the made-up demo account (PLAY_DEMO on;
                                 android/README.md); revoke signs every demo session out (after changing PLAY_DEMO)
+  .venv/bin/python -m kbtu.admin play-demo seed <event id>...   a demo ticket with its QR to each coming free event
+                                (the owner's own; its door list shows "Demo Reviewer"; nobody messaged); unseed: all back
   .venv/bin/python -m kbtu.admin groups-draw <event id> <teams per group> <advance>   draw an event's group stage (an organizer's ask)
                                 JSON: title, description, starts_at and optional ends_at (ISO with offsets), place,
                                 optional poster_b64, guest_list: true, age_check: true. Prints the id and link.
@@ -286,6 +288,25 @@ def _event_time(value: object, field: str) -> int:
     sys.exit(f"{field}: expected ISO date and time with an offset")
 
 
+def _demo_seed(con, eids: list[int]) -> None:
+    """The stores' reviewers see the app with something in it (android/README.md): the demo account gets a ticket with
+    its QR to each event given (a coming, published, free one the owner's own club runs; its door list shows the made-up
+    name). No seat check and no bot message: nobody real is told. `play-demo unseed` takes them all back."""
+    from .logic import seats, web_auth
+    t = now()
+    with db.tx(con):
+        uid = web_auth.demo_user(con, t)
+        for eid in eids:
+            e = one(con, "SELECT starts_at, status, price, hidden_at FROM events WHERE id = ?", eid)
+            if not e or e["status"] != "published" or e["hidden_at"] or e["starts_at"] <= t or e["price"]:
+                sys.exit(f"event {eid}: not a coming, published, free event (nothing seeded)")
+            con.execute("""INSERT INTO registrations (event_id, user_id, status, ticket_code, created_at, updated_at)
+                VALUES (?, ?, 'going', ?, ?, ?) ON CONFLICT (event_id, user_id) DO UPDATE SET status = 'going', cancel_reason = NULL""",
+                        (eid, uid, seats._ticket_code(con, eid), t, t))
+        log_action(con, None, "demo_seed", "demo", json.dumps({"events": eids}))
+    print(len(eids), "demo tickets")
+
+
 def _event_new(con, cfg: config.Config, org_ref: str, gz: bytes | None = None) -> None:
     from tempfile import TemporaryDirectory
     from .logic import add_photo, publish_event, staff_create_event
@@ -464,6 +485,14 @@ def main(args: list[str]) -> None:
             else:
                 web_auth.demo_user(con, now())
         print("demo sessions signed out" if args[1:] else f"https://{cfg.domain}/play-demo?k={cfg.play_demo}")
+    elif cmd == "play-demo" and args[1:2] == ["seed"] and len(args) >= 3 and all(re.fullmatch(r"[0-9]{1,9}", a) for a in args[2:]):
+        _demo_seed(con, [int(a) for a in args[2:]])
+    elif cmd == "play-demo" and args[1:] == ["unseed"]:
+        from .logic import web_auth
+        with db.tx(con):
+            n = con.execute("DELETE FROM registrations WHERE user_id IN (SELECT id FROM users WHERE tg_id = ?)", (web_auth.DEMO_TG_ID,)).rowcount
+            log_action(con, None, "demo_unseed", "demo", json.dumps({"tickets": n}))
+        print(n, "demo tickets removed")
     elif cmd == "event-new" and len(args) == 2:
         _event_new(con, cfg, args[1], gz)
     elif cmd == "roster" and args[1:2] == ["load"] and (len(args) == 4 or (len(args) == 2 and gz is not None)):

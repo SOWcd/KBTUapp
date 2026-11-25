@@ -18,9 +18,9 @@ const authHeaders = (webWrite = false): Record<string, string> => ({
 });
 export const WEB_SESSION_CHANGE = 'kb-web-session-change';
 
-async function changeWebSession(path: '/web/login' | '/web/logout' | '/web/logout-all', body?: unknown): Promise<void> {
+async function changeWebSession(path: '/web/login' | '/web/demo' | '/web/logout' | '/web/logout-all', body?: unknown): Promise<void> {
   await call('POST', path, body);
-  if (!tg.initData && path !== '/web/login') dispatchEvent(new Event('kb:signedOut'));
+  if (!tg.initData && path !== '/web/login' && path !== '/web/demo') dispatchEvent(new Event('kb:signedOut'));
   try { localStorage.setItem(WEB_SESSION_CHANGE, crypto.randomUUID()); } catch { /* storage may be blocked */ }
 }
 
@@ -194,6 +194,7 @@ export const server = {
   donationImage: (id: Id): Promise<string> => receiptImage(`/api/donate/receipts/${id}/image`),
   me: (withReportLog = false): Promise<Me & { reportLog?: ReportLogEntry[] }> => call('GET', withReportLog ? '/me' : '/me?reportLog=false'),
   webLogin: (widget: unknown): Promise<void> => changeWebSession('/web/login', widget),
+  webDemo: (code: string): Promise<void> => changeWebSession('/web/demo', { code }), // the stores' reviewers (android/README.md)
   webLogout: (): Promise<void> => changeWebSession('/web/logout'),
   webLogoutAll: (): Promise<void> => changeWebSession('/web/logout-all'),
   msStart: (): Promise<{ url: string }> => call('POST', '/ms/start'), // the KBTU Microsoft sign-in link, opened outside Telegram

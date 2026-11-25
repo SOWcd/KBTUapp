@@ -214,6 +214,46 @@ def test_link_keeps_a_real_session(demo):
         assert enter(fresh).status_code == 303 and fresh.cookies[web_auth.COOKIE] != demo_token  # the demo again: a new one
 
 
+def test_code_typed_on_the_sign_in_page(demo):
+    """The visible "Sign in with a code": the same key, typed; a wrong one, or the switch off, is a 404 and no cookie"""
+    c, cfg = demo
+    post = {**WEB, "Origin": ORIGIN}
+    assert c.post("/api/web/demo", headers=post, json={"code": "k" * 39}).status_code == 404
+    assert c.post("/api/web/demo", headers=post, json={"code": 5}).status_code == 404
+    assert c.post("/api/web/demo", headers=WEB, json={"code": KEY}).status_code == 403  # no Origin: refused as cross-site
+    assert web_auth.COOKIE not in c.cookies
+    assert c.post("/api/web/demo", headers=post, json={"code": KEY}).status_code == 204
+    assert c.get("/api/me", headers=WEB).json()["student"] is None
+    off = TestClient(server.create(replace(cfg, play_demo="")), base_url=ORIGIN)
+    assert off.post("/api/web/demo", headers=post, json={"code": KEY}).status_code == 404
+
+
+def test_seed_gives_the_demo_tickets(demo, monkeypatch, capsys):
+    """admin play-demo seed: a ticket with its QR on each coming free event given, nobody messaged; unseed takes them back"""
+    c, cfg = demo
+    monkeypatch.setattr(config, "load", lambda: cfg)
+    org = login(c, 59, "org")
+    t = logic.now()
+    with db.connect(cfg.db_path) as con:
+        con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT', 'IT', 'laptop_3d', 0)")
+        for eid, at in ((1, t + 86400), (2, t - 86400)):
+            con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, emoji, color, tint, created_by, created_at, updated_at)
+                VALUES (?, 1, 'published', 'Talk', '305', ?, 'laptop_3d', '#3B6BFF', '#2C50BF', ?, 0, 0)""", (eid, at, org["id"]))
+        outbox = con.execute("SELECT COUNT(*) FROM bot_outbox").fetchone()[0]
+    with pytest.raises(SystemExit):
+        admin.main(["play-demo", "seed", "2"])  # a past event: nothing seeded
+    admin.main(["play-demo", "seed", "1"])
+    admin.main(["play-demo", "seed", "1"])  # again: the same ticket, no error
+    enter(c)
+    mine = c.get("/api/events/1", headers=WEB).json()
+    assert mine["my"]["status"] == "going" and mine["my"]["ticketCode"]
+    with db.connect(cfg.db_path) as con:
+        assert con.execute("SELECT COUNT(*) FROM bot_outbox").fetchone()[0] == outbox
+    admin.main(["play-demo", "unseed"])
+    assert "1 demo tickets removed" in capsys.readouterr().out
+    assert c.get("/api/events/1", headers=WEB).json().get("my") is None
+
+
 def test_admin_prints_and_revokes(demo, monkeypatch, capsys):
     c, cfg = demo
     monkeypatch.setattr(config, "load", lambda: cfg)
