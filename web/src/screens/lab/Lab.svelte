@@ -366,8 +366,8 @@
 <style>
   .cap-theme { display: contents; }
   .topfade { position: absolute; inset: 0; z-index: calc(var(--z-capsule) - 1); pointer-events: none; background: var(--bg);
-    -webkit-mask-image: linear-gradient(black calc(var(--head-bottom) - 4px), transparent var(--page-top));
-    mask-image: linear-gradient(black calc(var(--head-bottom) - 4px), transparent var(--page-top)); }
+    -webkit-mask-image: linear-gradient(black var(--edge-from), transparent var(--edge-to));
+    mask-image: linear-gradient(black var(--edge-from), transparent var(--edge-to)); }
   .lab { position: absolute; inset: 0; padding: var(--page-top) var(--gutter) 0; display: flex; flex-direction: column; gap: var(--s-3); background: var(--bg); }
   .lab > :global(*) { flex-shrink: 0; }
   .head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); margin: 6px 4px 0; }
