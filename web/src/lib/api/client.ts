@@ -1,7 +1,7 @@
 import type { ChatFill } from '../eventFill';
 // The real server (SPEC §6). Calls use signed initData or the browser session; errors come back as
 // { error, message } and become ApiErr.
-import type { Support, Sponsor, DonationReview, ApiError, Credits, ClubApplication, Id, OfficialPath, PersonCard, Video, AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, MemberPatch, Friends, Friendship, FoundStudent, LinkCard, PersonRef, Media, GalleryPage, AlbumPhoto, Attendee, DoorPerson, EventUpdate, PostInput, CheckinResult, ClassItem, JoinRequest, CohostInvite, CrewKind, CrewMember, EventReport, ReportPatch, EventCard, EventFull, EventInput, Me, Org, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, ChatSection, Chats, ClubApplicationInput, OfficialRequest, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, LentStudio, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp, TeamAsk, TeamPick, TeamInvite, TeamsBoard, ShortLink, StudioChat, ChatTree, WaitingChat, SwearRow, ChatRoles, RosterRequest, Skill, ForumMe, ForumCard, Ask, AskInput, Contact, ForumMod, AssistReply, Fixable, TgComment, TgcRule, VolLedger, VolPerson, VolDoor, Appeal, AppealHelp, AppealTopic, AppealStatus, SgQueue, Solved, Subjects, SubjectCard, RejectWhy } from './types';
+import type { ResearchAnswers, ResearchSurvey, ResearchInput, ResearchRequest, Support, Sponsor, DonationReview, ApiError, Credits, ClubApplication, Id, OfficialPath, PersonCard, Video, AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, MemberPatch, Friends, Friendship, FoundStudent, LinkCard, PersonRef, Media, GalleryPage, AlbumPhoto, Attendee, DoorPerson, EventUpdate, PostInput, CheckinResult, ClassItem, JoinRequest, CohostInvite, CrewKind, CrewMember, EventReport, ReportPatch, EventCard, EventFull, EventInput, Me, Org, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, ChatSection, Chats, ClubApplicationInput, OfficialRequest, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, LentStudio, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp, TeamAsk, TeamPick, TeamInvite, TeamsBoard, ShortLink, StudioChat, ChatTree, WaitingChat, SwearRow, ChatRoles, RosterRequest, Skill, ForumMe, ForumCard, Ask, AskInput, Contact, ForumMod, AssistReply, Fixable, TgComment, TgcRule, VolLedger, VolPerson, VolDoor, Appeal, AppealHelp, AppealTopic, AppealStatus, SgQueue, Solved, Subjects, SubjectCard, RejectWhy } from './types';
 import type { BracketMatch, BracketSeed, EventBracket, EventGroups, EventMatch, MatchScore } from './types';
 import type { ReportLogEntry, ReportMarkPatch, SantaChats, SantaMsg, SantaReport } from './types';
 import type { Graph } from '../route';
@@ -530,6 +530,12 @@ export const server = {
   mapFlaws: (): Promise<{ id: Id; ver: string; floor: number; u: number; v: number; px: number | null; py: number | null; body: string; at: Ts; done: Ts | null }[]> => call('GET', '/map/flaws'), // the admin
   mapFlawsMine: (): Promise<{ id: Id; ver: string; floor: number; u: number; v: number; px: number | null; py: number | null; body: string }[]> => call('GET', '/map/flaws/mine'), // my own open ones, pins on the map
   mapFlawDone: (id: Id, done: boolean): Promise<void> => call('POST', `/map/flaws/${id}/done`, { done }),
+  research: (): Promise<ResearchSurvey[]> => call('GET', '/research'),
+  answerResearch: (slug: string, answers: ResearchAnswers, anonymous: boolean, consent: string): Promise<void> => call('POST', `/research/${encodeURIComponent(slug)}/answers`, { answers, anonymous, consent }),
+  proposeResearch: (body: ResearchInput): Promise<void> => call('POST', '/research/requests', body),
+  researchRequests: (): Promise<ResearchRequest[]> => call('GET', '/admin/research'),
+  approveResearch: (id: Id, approved: boolean): Promise<void> => call('POST', `/admin/research/${id}`, { approved }),
+
   // to the creator (server logic/helpus.py): an anonymous line, a signed offer to help; the admin's list of both
   helpAnon: (body: string): Promise<void> => call('POST', '/helpus/anon', { body }),
   helpOffer: (kinds: string[], note: string, consent: string): Promise<void> => call('POST', '/helpus/offer', { kinds, note, consent }),
@@ -551,7 +557,11 @@ export const server = {
   clubScreen: (org: Id, title: string, who: 'club' | 'all' | Id): Promise<import('./types').ScreenSession> => call('POST', `/orgs/${org}/screens`, { title, who }), // a club's own session, no event (who runs its sessions; capped); who: the expected list frozen now (a tag's id: its people)
   screenBadge: (id: Id, qr: string): Promise<{ person: string; done: boolean }> => call('POST', `/screens/${id}/badge`, { qr }), // marked by hand: a student's badge QR scanned by who runs it
   screenPeople: (id: Id): Promise<{ came: string[]; other: string[]; absent: string[] }> => call('GET', `/screens/${id}/people`), // the host's three lists: the members who came, who came not on the list, the members who haven't
-  crewScreen: (event: Id, title: string): Promise<import('./types').ScreenSession> => call('POST', `/events/${event}/crew-screen`, { title }), // an event's team marked: its club's session, made once (the one there is after)
+  meetupSession: (id: Id): Promise<import('./types').ScreenSession> => call('GET', `/screens/${id}`),
+  meetupScans: (id: Id, before?: Id): Promise<import('./types').MeetupScans> => call('GET', `/screens/${id}/scans${before ? `?before=${before}` : ''}`),
+  meetupDecide: (id: Id, user: Id, add: boolean): Promise<import('./types').MeetupScans> => call('POST', `/screens/${id}/scans/${user}`, { add }),
+  existingCrewScreen: (event: Id): Promise<import('./types').ScreenSession | null> => call('GET', `/events/${event}/crew-screen`),
+  crewScreen: (event: Id, title: string, who: 'club' | Id = 'club'): Promise<import('./types').ScreenSession> => call('POST', `/events/${event}/crew-screen`, { title, who }), // an event's team marked: its club's session, made once (the one there is after)
   screenCsv: (id: Id): Promise<{ url: string; name: string }> => call('POST', `/screens/${id}/csv`), // a short-lived link for Telegram's download
   screenGrant: (id: Id, code: string): Promise<{ granted: number; batch: string }> => call('POST', `/screens/${id}/grant`, { code }), // the owner: an award to everyone counted (Admin → Awards); undoBatch(batch)
   restore: (target: TakenDown['target'], id: Id): Promise<void> => call('POST', `/admin/taken-down/${target}/${id}/restore`), // admin: undo one

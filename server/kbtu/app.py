@@ -926,6 +926,18 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def screen_people(sid: int, con: Con, v: Me):
         return qr.people(con, v, sid)
 
+    @app.get("/api/screens/{sid}")
+    def meetup_session(sid: int, con: Con, v: Me):
+        return qr.meetup_session(con, cfg.token_key, v, sid)
+
+    @app.get("/api/screens/{sid}/scans")
+    def meetup_scans(sid: int, con: Con, v: Me, before: int | None = None):
+        return qr.meetup_scans(con, v, sid, before)
+
+    @app.post("/api/screens/{sid}/scans/{uid}")
+    def meetup_decide(sid: int, uid: int, con: Con, v: Me, body: dict = Body(...)):
+        return qr.meetup_decide(con, v, sid, uid, body.get("add"))
+
     @app.post("/api/screens/{sid}/csv")
     def screen_csv_link(sid: int, con: Con, v: Me):
         return qr.csv_link(con, cfg.token_key, v, sid)
@@ -2370,6 +2382,31 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             board_writer(request, board_viewer(request, v), con)
         logic.mapflaws.report(con, v, body, student)
 
+    # Native research: verified students answer once; proposals are reviewed only in Admin.
+    research_body = Depends(json_body(logic.research.BODY_MOST))
+
+    @app.get("/api/research")
+    def research_surveys(con: Con, v: Me, response: Response):
+        response.headers["Cache-Control"] = "no-store"
+        return logic.research.surveys(con, v)
+
+    @app.post("/api/research/requests", status_code=204)
+    def research_propose(con: Con, v: Me, body: object = research_body):
+        logic.research.propose(con, v, body)
+
+    @app.post("/api/research/{slug}/answers", status_code=204)
+    def research_answer(slug: str, con: Con, v: Me, body: object = Depends(json_body(logic.forms.MOST))):
+        logic.research.answer(con, v, slug, body)
+
+    @app.get("/api/admin/research")
+    def research_requests(con: Con, v: Me, response: Response):
+        response.headers["Cache-Control"] = "no-store"
+        return logic.research.requests(con, v)
+
+    @app.post("/api/admin/research/{rid}", status_code=204)
+    def research_approve(rid: int, con: Con, v: Me, body: object = research_body):
+        logic.research.approve(con, v, rid, body)
+
     # to the creator (logic/helpus.py): an anonymous line (no author kept), a signed offer to help; the admin's list
     helpus_body = Depends(json_body(logic.helpus.BODY_MOST))
 
@@ -3245,7 +3282,7 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
     # public forms (logic/forms.py): no account, nothing about the sender kept
     @app.get("/f/{slug}")
     def form_page(con: Con, slug: str):
-        status, body = logic.forms.page(con, slug)
+        status, body = logic.forms.page(con, slug, f"https://t.me/{cfg.bot_username}?startapp=research")
         return Response(body, status_code=status, media_type="text/html", headers={
             "Cache-Control": "no-cache", "Referrer-Policy": "no-referrer", "Content-Security-Policy": logic.forms.CSP})
 
@@ -3266,10 +3303,11 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
             return None
         # Vite puts a content hash into every name under assets/, so those never change; nor do the map's tiles, whose
         # folder names their cut (map/u2/: a new cut gets a new folder). The rest of public/ (emoji, icons, the howto
-        # video) changes rarely: a day, then revalidated in the background; a page (.html) and the manifest (the home-screen
-        # name iOS reads when adding; a stale one kept "KBTU" after the rename) are always asked again
+        # video) changes rarely: a day, then revalidated in the background; a page (.html), the manifest (the home-screen
+        # name iOS reads when adding; a stale one kept "KBTU" after the rename) and the service worker (a deploy reaches
+        # the next launch, web/src/sw.ts) are always asked again
         cache = ("public, max-age=31536000, immutable" if path.startswith(("assets/", "map/")) else
-                 "no-cache" if f.suffix == ".html" or path == "manifest.json" else "public, max-age=300, stale-while-revalidate=86400")  # art is sometimes replaced in place: 5 min fresh, revalidated after
+                 "no-cache" if f.suffix == ".html" or path in ("manifest.json", "sw.js") else "public, max-age=300, stale-while-revalidate=86400")  # art is sometimes replaced in place: 5 min fresh, revalidated after
         if f.suffix in (".mp4", ".webm", ".mov", ".m4a", ".mp3"):
             cache += ", no-transform"  # the CDN gzipped a video and dropped Range: iOS shows it black (owner, Nov 23)
         headers, send = {"Cache-Control": cache}, f
@@ -3316,6 +3354,8 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
             return RedirectResponse(f"https://t.me/{cfg.bot_username}?startapp", status_code=302)
         if f := file(path, request) or (path.isalpha() and file(f"{path}.html", request)):  # kbtu.sow.kz/pitch: pitch.html
             return f
+        if path.startswith("assets/") or path == "sw.js":  # gone with a deploy: a 404, never the page under a .js name
+            raise ApiError("not_found")  # (the service worker would keep it as code; a build without sw.js stops its updates)
         to = None
         if logic.SHORT.fullmatch(path.strip("/").lower()):
             with pool.conn() as con:  # only past the files (else every asset takes a connection)

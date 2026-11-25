@@ -11,9 +11,10 @@
   import { askAfterTeamMark } from './lib/reports';
   import { achItem } from './lib/awards';
   import { readCache, writeCache } from './lib/state/cache';
+  import { keepTickets } from './lib/offlineTickets';
   import { channel, channelUnread, warmChannelFeeds, watchChannelVisit } from './lib/state/channel.svelte';
   import { loadSubjects, subjReady } from './lib/state/subjects.svelte';
-  import { data, loadAfisha, loadSchedule, loadCredits, loadSupport, loadGallery, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadVol, loadAppeals, loadSg, loadAsks, loadHelpq, loadStudio, loadTeam, phrase, studioChanged, eventById, eventDetails, eventTeamChunk, toggleGoing, keepRef, skipped, classKey } from './lib/state/data.svelte';
+  import { data, resetResearch, loadResearch, loadResearchRequests, loadAfisha, loadSchedule, loadCredits, loadSupport, loadGallery, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadVol, loadAppeals, loadSg, loadAsks, loadHelpq, loadStudio, loadTeam, loadMeetups, loadMeetupSetup, phrase, studioChanged, eventById, eventDetails, eventTeamChunk, toggleGoing, keepRef, skipped, classKey } from './lib/state/data.svelte';
   import { burst } from './ui/burst';
   import { hiNow, nextUp, once, opened, returning, seen } from './lib/greet';
   import { visit } from './lib/helpus';
@@ -139,11 +140,26 @@
   $effect(() => { if (data.events.some((e) => e.teamMax) || data.past.some((e) => e.teamMax)) void eventTeamChunk().catch(() => {}); });
   const warmPages = () => { [feedPage, newsPage, clubListPage, friendsPage, settingsList, peoplePage, photoViewer, albumGrid, galleryPage].forEach(warm); if (session.me?.bigScreen) warm(screenSheet); if (!session.me?.memberships.length) return; warm(studioPage); warm(teamPage); };
   // the forum's chunk and its feed with the app, so the tab opens full (the speed rule)
-  const warmChannel = () => { if (!session.channel) return; void loadPage('forum').catch(() => {}); warmChannelFeeds(); };
+  const researchSheet = () => import('./screens/forum/Research.svelte');
+  const researchForm = () => import('./screens/forum/ResearchForm.svelte');
+  const researchPropose = () => import('./screens/forum/ResearchPropose.svelte');
+  const warmChannel = () => { if (!session.channel) return; void loadPage('forum').catch(() => {}); warmChannelFeeds(); warm(researchSheet); warm(researchForm); warm(researchPropose); };
   // the subjects' list with the app (the Forum tab's row, my timetable's classes open their card in the tap's frame)
   const warmSubjects = () => { if (subjReady()) idle(() => { void loadSubjects(); void import('./screens/subjects/Subjects.svelte'); void import('./screens/subjects/Subject.svelte'); }); };
   sheets.editor = (org, id, staff) => lazy(() => import('./screens/club/EventEditor.svelte'), { org, id, staff }, 'sheet.editor', id == null ? null : `${org}:${id}:${!!staff}`);
   sheets.deepLink = (p) => deepLink(p);
+  sheets.research = () => { void loadResearch(); void lazy(researchSheet, {}); };
+  const asResearchStudent = (action: () => void) => asStudent(() => {
+    const student = session.me?.student;
+    if (!student || student.manual || student.studentId.startsWith('staff') || student.consent === 'staff') {
+      say(t('research.studentOnly'), 'warning_3d');
+      return;
+    }
+    action();
+  }, 'research');
+  sheets.researchForm = (survey) => asResearchStudent(() => void lazy(researchForm, { survey }));
+  sheets.researchPropose = () => asResearchStudent(() => void lazy(researchPropose, {}));
+  sheets.adminResearch = () => { void loadResearchRequests(); void lazy(() => import('./screens/admin/AdminResearch.svelte'), {}); };
   sheets.scanner = (id, names, qr, ondone) => lazy(() => import('./screens/club/Scanner.svelte'), { id, names, qr, ondone }, 'sheet.scanner', `${id}:${!!names}:${!!qr}`);
   sheets.scannerOnly = (id) => lazy(() => import('./screens/club/Scanner.svelte'), { id, qr: true, only: true }, 'sheet.scanner', `only:${id}`); // a scan-only helper: the Mark screen, no lists
   // vol: these close together when the ledger is no longer mine to see (data.svelte.ts volGone)
@@ -319,6 +335,13 @@
   // the bar's tabs: the forum only where the server opened it (FORUM_CHANNEL; its policy section in force)
   const tabs = $derived(TABS.filter((k) => k !== 'forum' || session.channel));
   $effect(() => { if (session.boardKnown && !session.channel && ui.tab === 'forum') ui.tab = 'afisha'; }); // the server's word, not the launch copy's
+  $effect(() => {
+    const uid = session.me?.id, blocked = session.banned || session.revoked;
+    untrack(() => {
+      resetResearch();
+      if (uid && !blocked) { if (session.channel) void loadResearch(); void loadResearchRequests(); }
+    });
+  });
   const forumViewer = $derived(!session.banned && !session.revoked && session.boardKnown && session.channel ? session.me?.id : null);
   $effect(() => { if (forumViewer) return watchChannelVisit(); });
   // a role changes a tab's content, never its name
@@ -592,8 +615,18 @@
     if (et) { sheets.teamInvite(et[1]); return; }
     const vh = p.match(/^vh_([0-9a-f]{32})$/); // the volunteers ledger's hand-over link: that session's door, mine to run (server vol.take)
     if (vh) { asStudent(() => void takeDoor(vh[1]), p); return; }
+    const meetup = p.match(/^meet_(\d+)$/);
+    if (meetup) {
+      ui.tab = 'club';
+      asStudent(async () => {
+        try { const s = await api.meetupSession(Number(meetup[1])); sheets.screens(undefined, undefined, s, s.org ?? undefined); }
+        catch { say(t('scr.notYours'), 'warning_3d'); }
+      }, p);
+      return;
+    }
     const sh = p.match(/^sh_([0-9a-f]{16})$/); // /show's pairing QR: only a session's organizers bind it
     if (sh) { asStudent(() => sheets.screens(sh[1])); return; }
+    if (p === 'research') { if (session.channel) ui.tab = 'forum'; sheets.research(); return; }
     const fp = p.match(/^fp(?:_(\d+))?$/); // the bot's first comment under a post: the Forum tab, that post in view (bare fp: the tab)
     if (fp) { channel.focus = fp[1] ? Number(fp[1]) : null; if (session.channel) ui.tab = 'forum'; return; }
     const sj = p.match(/^sj_([0-9a-f]{10})$/); // the bot: my listing on a subject was hidden: its card
@@ -758,6 +791,7 @@
       out.push(`${JSON.stringify(k)}:${json}`);
     }
     writeCache(`{${out.join(',')}}`);
+    keepTickets(data.events); // the door's copy: outlives the snapshot's week (lib/offlineTickets)
   };
   $effect(() => {
     void [data.kept, ...Object.values(snap()), ...Object.values(data.studio), ...Object.values(data.team)]; // a club's list loaded: a new key
@@ -774,13 +808,22 @@
     let leftAt = 0;
     const left = () => { leftAt ||= Date.now(); };
     const back = () => {
-      if (leftAt && Date.now() - leftAt >= 30_000) { void loadMe(true); void loadAfisha(); loadMine(); void loadInbox(); void loadCredits(); }
+      if (leftAt && Date.now() - leftAt >= 30_000) {
+        void loadMe(true); void loadAfisha(); loadMine(); void loadInbox(); void loadCredits();
+        if (session.channel || data.research) void loadResearch();
+        void loadResearchRequests();
+      }
       leftAt = 0;
     };
     const seen = () => (document.hidden ? left() : back());
     document.addEventListener('visibilitychange', seen);
     const offs = [on('deactivated', left), on('activated', back)];
-    return () => { document.removeEventListener('visibilitychange', away); document.removeEventListener('visibilitychange', seen); offs.forEach((f) => f()); };
+    // the network gone: the kept tickets at once; back: the lists and the account again (the offline note goes with the answer)
+    const offline = () => { data.offline = true; };
+    const online = () => { if (data.offline) { void loadMe(true); void loadAfisha(); } };
+    addEventListener('offline', offline);
+    addEventListener('online', online);
+    return () => { document.removeEventListener('visibilitychange', away); document.removeEventListener('visibilitychange', seen); removeEventListener('offline', offline); removeEventListener('online', online); offs.forEach((f) => f()); };
   });
 
   // The API and cache already translate the first load. Walk the reactive stores only when the language changes.
@@ -807,6 +850,8 @@
     wasStudent = st;
   });
   function loadMine() {
+    if (session.me?.bigScreen || session.me?.memberships.some((m) => ['president', 'vice', 'head'].includes(m.role))) void loadMeetups();
+    for (const m of session.me?.memberships ?? []) if (may(m, 'events') || m.role === 'head') void loadMeetupSetup(m.org.id);
     void loadFriends(); void loadMyCard(true); void loadNews(true); // StoryRow's refresh at the same launch joins it
     const club = session.me?.memberships.find((m) => m.org.id === ui.club) ?? session.me?.memberships[0];
     if (club) { void loadStudio(club.org.id); void loadTeam(club.org.id); }

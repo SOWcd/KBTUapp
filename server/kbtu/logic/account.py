@@ -1341,11 +1341,15 @@ _DEL_GONE = {
     ("chat_asks", "user_id"),  # the chats I suggested, waiting to tell me
     ("event_crew", "user_id"),  # my door-helper rights (crew.py)
     ("qr_helpers", "user_id"),  # my right to help run a check-in (checkin.py)
+    ("qr_meet_scans", "user_id"),  # every scan of a team meetup, including membership exceptions
     ("fchan_hearts", "user_id"),
     ("fchan_signed", "user_id"),  # who my signed comments under channel posts are (the comments are deleted above, with their messages in the group)
     ("fchan_comments", "user_id"),  # my face under channel posts (the comments stay in Telegram, Telegram's own)
     ("fchan_reply_reports", "user_id"),  # my /report on an anonymous author's reply
     ("staff_mutes", "user_id"),  # the staff notifications I muted
+    ("research_requests", "user_id"),  # signed research proposals
+    ("research_answers", "user_id"),  # delete signed answer contents; anonymous answers have no account link
+    ("research_participants", "user_id"),  # only the fact that I answered, never a link to an answer
     ("helper_offers", "user_id"),  # my offers to help the app (helpus.py)
     ("team_asks", "user_id"),  # my asks to come to my club's event as a guest
     ("credit_team", "user_id"),  # my place in People of the app's Team

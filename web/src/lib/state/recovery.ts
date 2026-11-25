@@ -3,6 +3,7 @@ import { tg } from '../tg';
 
 export const ACCOUNT_KEY = 'kb-recovery-account';
 export const DRAFT_AGE = 7 * 24 * 60 * 60_000;
+export const TICKETS_AGE = 30 * 24 * 60 * 60_000; // the offline tickets (lib/offlineTickets.ts): until their events end, a month at most
 const V = 1;
 
 interface Account { tg: number; user: number; epoch: string }
@@ -50,7 +51,7 @@ export function recoveryStore(storage: () => Storage, now = clock, web = false) 
       else if (key.startsWith(prefix)) {
         if (!scope || !key.startsWith(scope)) { remove(key); continue; }
         if (key === scope + 'student' || key === scope + 'auth' || key === scope + 'snapshot') continue;
-        const ttl = key.endsWith(':kb-again') ? 30 * 60_000 : DRAFT_AGE;
+        const ttl = key.endsWith(':kb-again') ? 30 * 60_000 : key.endsWith(':tickets') ? TICKETS_AGE : DRAFT_AGE;
         if (!fresh(parse<RecordOf<unknown>>(get(key))?.at ?? NaN, ttl)) remove(key);
       }
     }
@@ -94,6 +95,9 @@ export function recoveryStore(storage: () => Storage, now = clock, web = false) 
     cached = raw;
     return scopeOf(a);
   };
+  /** The launch's account before the server has answered: Telegram's user (tg) if it is that one, else (outside
+   *  Telegram, no tg) the last one signed in on this browser. */
+  const last = (tg?: number) => peek(tg ?? account(launch)?.tg);
   function readRecord<T>(key: string, age: number): RecordOf<T> | null {
     const r = parse<RecordOf<T>>(get(key));
     return r?.v === V && fresh(r.at, age) ? r : null;
@@ -114,7 +118,12 @@ export function recoveryStore(storage: () => Storage, now = clock, web = false) 
   function clear(owner: string | null, key: string) {
     if (owner && scope() === owner) remove(owner + key);
   }
-  return { accountKey, verify, invalidate, scope, peek, read, write, clear, now, lost: () => !stopped && (lease ?? cached) !== null && (lease ?? cached) !== marker(), superseded: () => stopped };
+  /** A record of the launch's account removed before any verify (the server said this browser is signed out). */
+  function drop(key: string) {
+    const owner = scope() ?? last();
+    if (owner) remove(owner + key);
+  }
+  return { accountKey, verify, invalidate, scope, peek, last, read, write, clear, drop, now, lost: () => !stopped && (lease ?? cached) !== null && (lease ?? cached) !== marker(), superseded: () => stopped };
 }
 
 export const recovery = recoveryStore(() => localStorage, clock, !tg.initData);
