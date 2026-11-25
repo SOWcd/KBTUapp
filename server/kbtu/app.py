@@ -3053,6 +3053,18 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         verdict = await ai.screen_reply(cfg, ai_http(), text, **_ai_eu())
         return await run_in_threadpool(F.reply_settle, con, v, pid, rid, verdict) | {"ai": verdict in ("person", "flag")}  # held by the AI: /why
 
+    # a signed comment written in the app (fchannel.comment_*): the same AI look and moderators as a reply, sent by the bot
+    # under the person's short name; the thread shows what was written in the app
+    @app.get("/api/forum-posts/{pid}/thread")
+    def fchan_thread(pid: int, con: Con, v: FChan):
+        return F.thread(con, v, pid)
+
+    @app.post("/api/forum-posts/{pid}/thread")  # not /comments: /api/{kind}s/{tid}/comments takes that path
+    async def fchan_comment(pid: int, con: Con, v: FChanWrite, body: dict = Body(...)):
+        rid, text = await run_in_threadpool(F.comment_reserve, con, v, pid, body)
+        verdict = await ai.screen_reply(cfg, ai_http(), text, **_ai_eu())
+        return await run_in_threadpool(F.reply_settle, con, v, pid, rid, verdict) | {"ai": verdict in ("person", "flag")}
+
     @app.delete("/api/forum-replies/{rid}", status_code=204)
     def fchan_reply_drop(rid: int, con: Con, v: FChan):
         F.reply_delete(con, v, rid)
