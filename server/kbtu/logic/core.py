@@ -734,12 +734,9 @@ STAFF_KINDS = {"club_application": "club_application", "club_path": "club_path",
 
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
-from .clubs import org, orgs  # noqa: E402
 from .cohosts import cohost_view, cohosts_of  # noqa: E402
 from . import evteams, santa  # noqa: E402
 from .crew import kind as crew_kind, view as crew_view  # noqa: E402
 from .organizing import _album_view, _rating_view  # noqa: E402
-from .oversight import staff  # noqa: E402
-from .profiles import friends  # noqa: E402
 from .queues import video_shape  # noqa: E402
 from .seats import _chat_ok, _volunteers_view, ics_sig  # noqa: E402

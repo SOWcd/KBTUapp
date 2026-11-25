@@ -564,6 +564,5 @@ def _now() -> int:
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
 from . import core, pymk, subjects  # noqa: E402
-from .account import me  # noqa: E402
 from .oversight import _mod  # noqa: E402
 from .seats import notify  # noqa: E402

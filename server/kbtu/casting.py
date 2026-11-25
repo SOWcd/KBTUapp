@@ -419,9 +419,9 @@ def drop_slot(con, v: Viewer, sid: int) -> list[dict]:
     if not s:
         raise ApiError("not_found")
     _may(con, v, s["org_id"], "casting")
-    if one(con, "SELECT 1 FROM round_apps WHERE slot_id = ? AND stage != 'withdrawn'", sid):
-        raise ApiError("conflict")
     with tx(con):  # its waiting place notices go with it: SQLite may hand the id to the next slot made
+        if one(con, "SELECT 1 FROM round_apps WHERE slot_id = ? AND stage != 'withdrawn'", sid):  # under the lock: a booking a moment ago stands
+            raise ApiError("conflict")
         con.execute("DELETE FROM round_slots WHERE id = ?", (sid,))
         con.execute("DELETE FROM bot_outbox WHERE kind = 'round_place' AND sent_at IS NULL AND ref LIKE ?", (f"ivp:%:{sid}:%",))
         con.execute("DELETE FROM bot_outbox WHERE kind = 'round_call' AND sent_at IS NULL AND ref LIKE ?", (f"ivc:%:{sid}:%",))

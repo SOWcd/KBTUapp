@@ -515,7 +515,7 @@ def lent_studio(con, v: Viewer, oid: int) -> dict:
 
 def me(con, v: Viewer) -> dict:
     from .. import checkin, roster
-    if v.student and roster._mine(con, v.id)[1]:  # a read first: the write lock only when a row may be mine
+    if v.student and roster.due(con, v.id):  # a read first: the write lock only when a row would join
         db.maybe(con, roster.match, con, v.id)  # A matching club roster row can add a membership. Skip the match if the database is busy.
     u = one(con, "SELECT * FROM users WHERE id = ?", v.id)
     s = one(con, "SELECT * FROM students WHERE user_id = ?", v.id)
@@ -1021,7 +1021,7 @@ def set_photo(con, v: Viewer, saved: dict) -> list[str]:
         VALUES (?, 'avatar', 'image/webp', ?, ?, ?, ?, ?, ?, ?)""", (saved["sha256"], saved["bytes"], saved["width"], saved["height"],
                                                                 saved["path"], v.id, core.now(), saved["color"])).lastrowid
     con.execute("UPDATE users SET avatar_file_id = ?, avatar_tg = 0 WHERE id = ?", (fid, v.id))
-    return _drop_photo(con, old) if old and old != fid else []
+    return _drop_unused(con, old) if old and old != fid else []  # a take-down's undo may still hold it
 
 
 def drop_my_photo(con, v: Viewer) -> list[str]:
@@ -1030,7 +1030,7 @@ def drop_my_photo(con, v: Viewer) -> list[str]:
     need_student(v)
     old = one(con, "SELECT avatar_file_id FROM users WHERE id = ?", v.id)[0]
     con.execute("UPDATE users SET avatar_file_id = NULL, avatar_tg = 1 WHERE id = ?", (v.id,))
-    return _drop_photo(con, old) if old else []
+    return _drop_unused(con, old) if old else []  # a take-down's undo may still hold it
 
 
 DELETE_WAIT = 7 * 86400
@@ -1713,9 +1713,8 @@ def drop_my_schedule(con, v: Viewer) -> None:
 
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
-from . import chatlist, core, credits, fchannel, guests, inbox, profiles, santa  # noqa: E402
-from .clubs import TRANSLIT, orgs, stories_open  # noqa: E402
-from .moderation import _about  # noqa: E402
+from . import chatlist, core, credits, guests, inbox, profiles, santa  # noqa: E402
+from .clubs import TRANSLIT, stories_open  # noqa: E402
 from .newsfeed import unread_broadcasts  # noqa: E402
 from .organizing import kz_phone, link_door_guests  # noqa: E402
 from .profiles import ACHIEVEMENTS, _celebrate, _levels, brought, first_fifty, unlocked  # noqa: E402
