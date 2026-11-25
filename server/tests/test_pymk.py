@@ -55,7 +55,7 @@ def test_opt_in_and_reciprocal(env):
     assert _sug(c, 11) is None and _sug(c, 10) == []
     assert not con.execute("SELECT 1 FROM pymk WHERE user_id = ? OR other_id = ?", (ben["id"], ben["id"])).fetchone()
     assert not con.execute("SELECT 1 FROM pymk_consents WHERE user_id = ?", (ben["id"],)).fetchone()
-    assert c.patch("/api/me", headers=tma(30, "Gus"), json={"suggestMe": True}).status_code == 403  # a guest can't
+    assert c.patch("/api/me", headers=tma(30, "Gus"), json={"suggestMe": True}).status_code == 401  # a guest can't
 
 
 def test_who_never_appears(env):
@@ -111,7 +111,7 @@ def test_barred_pairs(env):
     assert _sug(c, 10) == []                                    # at once, not tomorrow
     for bad in ("x", True, ann, None):
         assert c.post("/api/pymk/dismiss", headers=tma(10), json={"id": bad}).status_code == 400
-    assert c.post("/api/pymk/dismiss", headers=tma(30, "Gus"), json={"id": ann}).status_code == 403
+    assert c.post("/api/pymk/dismiss", headers=tma(30, "Gus"), json={"id": ann}).status_code == 401
 
 
 def test_hidden_probation_and_big_clubs_count_nothing(env):
