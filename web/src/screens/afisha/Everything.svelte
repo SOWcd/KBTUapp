@@ -98,7 +98,7 @@
       club: rank(q, [...data.orgs, ...data.small], (o) => namesOf(o, 'name', 'short', 'abbr')),
       person: rank(q, people, (p) => (farPeople.has(p.person.id) ? Math.max(1, score(q, p.names)) : p.names)),
       // a post's title as a name; its text only by whole words, a step below
-      news: rank(q, news, (p) => Math.max(score(q, namesOf(p, 'title')), textScore(q, p.body) - 1)),
+      news: rank(q, news, (p) => Math.max(score(q, [p.title, typeof p.orig?.title === 'string' ? p.orig.title : null]), textScore(q, p.body) - 1)),
       forum: rank(q, posts, (p) => (farPosts.has(p.id) ? Math.max(2, textScore(q, p.body)) : textScore(q, p.body))),
       // a room typed by its number ("305", "aud. 251a") is a place too, its floor circled on the map
       place: [...(room && floor != null ? [{ item: { name: t('map.roomTitle', { room }), names: [], open: room, floor }, score: 3 }] : []),
