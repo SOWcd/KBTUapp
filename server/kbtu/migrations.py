@@ -2289,9 +2289,15 @@ MIGRATIONS: list[tuple[int, str]] = [
       at INTEGER NOT NULL,
       PRIMARY KEY (name, user_id)
     ) STRICT;"""),
+    # People of the app's Team: the core developers the creator picked (`kbtu.admin team add|del`, credits.py), shown
+    # only after their own yes. Not users.mark: that goes out with every person_ref, consent or not
+    (227, """CREATE TABLE IF NOT EXISTS credit_team (
+      user_id INTEGER PRIMARY KEY NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      added_at INTEGER NOT NULL
+    ) STRICT;"""),
     # logic/pymk.py, People you may know: my "Suggest me" (a row = on, with the consent text it answered), tonight's
     # suggestions (counts only, never which clubs) and the pairs never suggested again (a dismissal, an unfriend)
-    (227, """CREATE TABLE IF NOT EXISTS pymk_consents (
+    (228, """CREATE TABLE IF NOT EXISTS pymk_consents (
       user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
       version TEXT NOT NULL,
       at INTEGER NOT NULL) STRICT;

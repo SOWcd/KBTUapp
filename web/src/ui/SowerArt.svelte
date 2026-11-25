@@ -1,31 +1,19 @@
 <script lang="ts">
-  // The creator's own lanyard (from scratch, his avatar itself): the photo's horns hand screened again at
-  // the card's size on its torn white paper, the creator's seal held between its two fingers (Hero: .sower .medal), on
-  // the avatar's charcoal checker that turns into a print's halftone behind it; crop marks, one red dot. Layers far to
-  // near (assets/lanyards/sower, made by .claude/reports/club-lanyards/owner/round1/gen/gen-owner.py; as pictures:
-  // tools/scene-rasters.mjs): the checker moving with the tilt (base.css .z), the marks still, the hand moving the
-  // most. `wide`: the profile's card and its back; else the full-screen badge (MyQr).
-  import far from '../assets/lanyards/sower/far-card.webp';
-  import mid from '../assets/lanyards/sower/mid-card.webp';
-  import near from '../assets/lanyards/sower/near-card.webp';
+  // The creator's own lanyard, "matte black, one red" (.claude/reports/sower-badge, card C): a graphite card lit from
+  // its top right corner, faint tone-on-tone rings spreading from there, a hairline edge. No pictures: the hand is his
+  // photo's tile (Hero), the one red is the strap's stitch, the role's dot and the strip's № (Hero, LanyardHolo).
+  // `wide`: the profile's card and its back; else the full-screen badge (MyQr), the rings a little smaller.
   let { wide = false }: { wide?: boolean } = $props();
 </script>
 
-<div class="sa" class:wide aria-hidden="true">
-  <img class="far z" src={far} alt="" /><img src={mid} alt="" /><img class="near z" src={near} alt="" />
-  <i class="gloss"></i>
-</div>
+<div class="sa" class:wide aria-hidden="true"><i class="rings"></i></div>
 
 <style>
   .sa { position: absolute; inset: 0; overflow: hidden; border-radius: inherit; pointer-events: none;
-    background: linear-gradient(160deg, rgb(46, 46, 46), rgb(28, 28, 28) 50%, rgb(14, 14, 14)); }
-  img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 100% 100%; pointer-events: none; user-select: none; -webkit-user-drag: none; }
-  .far { --z: -2; --zs: 1.03; }
-  .near { --z: 3; --zs: 1.03; }
-  /* the badge: the scene a little smaller in its top right corner, so the hand stands whole above the QR */
-  .sa:not(.wide) img { left: auto; top: -4px; width: 82%; height: auto; aspect-ratio: 340 / 164; bottom: auto;
-    -webkit-mask: linear-gradient(180deg, black 72%, transparent); mask: linear-gradient(180deg, black 72%, transparent); }
-  i { position: absolute; display: block; pointer-events: none; }
-  .gloss { inset: 0; border-radius: inherit; background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.1), transparent 65%), linear-gradient(180deg, transparent 65%, rgba(0, 0, 0, 0.18));
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), inset 0 -2px 8px rgba(0, 0, 0, 0.25); }
+    background: radial-gradient(90% 120% at 100% 0%, rgb(44, 44, 46), transparent 55%), linear-gradient(165deg, rgb(28, 28, 30), rgb(10, 10, 11) 70%);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.16); }
+  .rings { position: absolute; right: -90px; top: -90px; width: 380px; height: 380px; border-radius: 50%;
+    background: repeating-radial-gradient(circle, transparent 0 13px, rgba(255, 255, 255, 0.035) 13px 14px);
+    -webkit-mask: radial-gradient(circle, black 20%, transparent 68%); mask: radial-gradient(circle, black 20%, transparent 68%); }
+  .sa:not(.wide) .rings { right: -110px; top: -110px; }
 </style>

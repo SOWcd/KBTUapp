@@ -1012,18 +1012,20 @@
   .bapp { margin-top: 8px; height: 44px; padding: 0 20px; border-radius: var(--r-full); background: var(--surface-2); font: 650 15px/1 var(--font-text); }
   .topfade { position: absolute; inset: 0; z-index: calc(var(--z-capsule) - 1); pointer-events: none; background: color-mix(in srgb, var(--bg) 88%, transparent);
     /* eased, not linear: a linear fade ends in a kink the eye reads as a hard line under the head (owner, Nov 23) */
-    --a: calc(var(--head-bottom) - 4px); --d: calc(var(--page-top) - var(--a));
+    --a: var(--edge-from); --d: calc(var(--edge-to) - var(--a));
     -webkit-mask-image: linear-gradient(#000 var(--a), rgba(0, 0, 0, 0.92) calc(var(--a) + var(--d) * 0.1), rgba(0, 0, 0, 0.75) calc(var(--a) + var(--d) * 0.25),
       rgba(0, 0, 0, 0.5) calc(var(--a) + var(--d) * 0.42), rgba(0, 0, 0, 0.27) calc(var(--a) + var(--d) * 0.6), rgba(0, 0, 0, 0.1) calc(var(--a) + var(--d) * 0.78),
-      rgba(0, 0, 0, 0.025) calc(var(--a) + var(--d) * 0.92), transparent var(--page-top));
+      rgba(0, 0, 0, 0.025) calc(var(--a) + var(--d) * 0.92), transparent var(--edge-to));
     mask-image: linear-gradient(#000 var(--a), rgba(0, 0, 0, 0.92) calc(var(--a) + var(--d) * 0.1), rgba(0, 0, 0, 0.75) calc(var(--a) + var(--d) * 0.25),
       rgba(0, 0, 0, 0.5) calc(var(--a) + var(--d) * 0.42), rgba(0, 0, 0, 0.27) calc(var(--a) + var(--d) * 0.6), rgba(0, 0, 0, 0.1) calc(var(--a) + var(--d) * 0.78),
-      rgba(0, 0, 0, 0.025) calc(var(--a) + var(--d) * 0.92), transparent var(--page-top)); }
+      rgba(0, 0, 0, 0.025) calc(var(--a) + var(--d) * 0.92), transparent var(--edge-to)); }
   /* and under the bottom bar, softer: the glass still has something to bend (mockup v23) */
-  /* fullscreen only: Telegram draws its own dark scrim behind its buttons; our page-coloured fade over the page makes it read as ours.
-     --top is 0 outside fullscreen, so the height is 0 there (the min() adds the 12 px only when there is an inset) */
-  .tgfade { position: absolute; top: 0; left: 0; right: 0; height: calc(var(--top) + min(var(--top), 12px)); z-index: calc(var(--z-capsule) - 1); pointer-events: none;
+  /* Telegram fullscreen only: Telegram draws its own dark scrim behind its buttons; our page-coloured fade over the page makes
+     it read as ours. It ends with Telegram's row (--top: 0 outside fullscreen); the home-screen app has no such scrim (its
+     --top is the bar's room, and this ran 60 px past the bar there) */
+  .tgfade { position: absolute; top: 0; left: 0; right: 0; height: var(--top); z-index: calc(var(--z-capsule) - 1); pointer-events: none;
     background: linear-gradient(var(--bg), transparent); }
+  :global(html[data-web]) .tgfade { display: none; }
   .botfade { position: absolute; inset: 0; z-index: calc(var(--z-nav) - 1); pointer-events: none; background: var(--bg);
     -webkit-mask-image: linear-gradient(0deg, rgba(0, 0, 0, 0.85), transparent calc(var(--bottom) + 40px));
     mask-image: linear-gradient(0deg, rgba(0, 0, 0, 0.85), transparent calc(var(--bottom) + 40px)); }

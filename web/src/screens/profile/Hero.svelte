@@ -35,6 +35,7 @@
   import jccPhoto from '../../assets/lanyards/jcc-top-photo.webp';
   import jccLeft from '../../assets/lanyards/jcc-top-left.webp';
   import jccRight from '../../assets/lanyards/jcc-top-right.webp';
+  import sowerHand from '../../assets/lanyards/sower/hand.webp'; // the creator's photo's horns hand, cut out (SOWER's photo)
 
   // qr: my badge QR code (Me only; me.qr), a random code a door scanner checks, so an id can't be turned into a QR.
   // live: the badge's screen is open (Me: the Profile tab; a sheet: always). onphoto: my photo tapped (Me: settings, or
@@ -147,13 +148,14 @@
       haptic.soft();
       await tick();
       requestAnimationFrame(() => {
+        if (!swing) return; // the profile closed mid-turn (a sheet's hero, Back): nothing left to land
         const back = swing.animate([{ transform: 'rotateY(-90deg)' }, { transform: 'none' }], { duration: 400, easing: LAND });
         out.cancel();
         shade.getAnimations().forEach((x) => x.cancel());
         shade.animate([{ opacity: 0.55, background: 'linear-gradient(100deg, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.5))' },
           { opacity: 0.5, background: 'linear-gradient(100deg, rgba(255, 255, 255, 0.0), rgba(255, 255, 255, 0.22))', offset: 0.45 },
           { opacity: 0, background: 'linear-gradient(100deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.22))' }], { duration: 400, easing: LAND });
-        back.onfinish = () => { swing.style.willChange = ''; spinning = false; if (untrack(() => look) !== face) change(); };
+        back.onfinish = () => { spinning = false; if (!swing) return; swing.style.willChange = ''; if (untrack(() => look) !== face) change(); };
       });
     };
   }
@@ -185,7 +187,14 @@
     return () => stop(id);
   });
   function flip(to: boolean) {
-    if (spinning || flipped === to) return;
+    if (flipped === to) return;
+    if (spinning) {
+      // a turn under way (Back right after "show my QR"): it goes back from where it is, never lost; a lanyard's
+      // change (no turn of the card) still has the badge to itself
+      const run = card.getAnimations({ subtree: true });
+      if (run.length) { flipped = side = to; haptic.soft(); run.forEach((a) => a.reverse()); }
+      return;
+    }
     backed = true;
     haptic.soft();
     flipped = to;
@@ -256,6 +265,8 @@
 <!-- JCC's top layer (their own split): their sakura over the photo, its frame and the strip, where their mock puts
      it; part of their lanyard, not a frame (a frame worn with it stays under it) -->
 {#snippet sakura()}{#if face === 'japanesecultureclub'}<img class="jt jp" src={jccPhoto} alt="" />{/if}{/snippet}
+<!-- the photo; SOWER's is his hand on a dark tile (card C), the same on every phone and to everyone -->
+{#snippet pic(size: number)}{#if face === 'sower'}<span class="hand"><img src={sowerHand} alt="" draggable="false" /></span>{:else}<Avatar person={h.person} {size} tappable={false} />{/if}<Frame id={h.frame} />{@render sakura()}{/snippet}
 
 <section class="h">
 <div class="hang {face}" class:club={!!club} class:ink={!!club?.ink} style={lookVars(face) + halo} class:rest={!live || !seen || covered}>
@@ -272,11 +283,11 @@
       {#if mine}<button class="medal" onclick={toBack} aria-label={t('me.qr')}><OrgMedal look={face} logo={medalLogo} /><span class="qrhint"><QrCode size={10} strokeWidth={2.4} /></span></button>
       {:else}<span class="medal"><OrgMedal look={face} logo={medalLogo} /></span>{/if}
       <div class="top" class:mine>
-        {#if mine}<button class="photo" onclick={(e) => onphoto?.(e.currentTarget)} aria-label={t('look.photo')}><Avatar person={h.person} size={74} tappable={false} /><Frame id={h.frame} />{@render sakura()}</button>
-        {:else if h.person.avatar}<button class="photo" onclick={bigPhoto} aria-label={t('person.photo')}><Avatar person={h.person} size={86} tappable={false} /><Frame id={h.frame} />{@render sakura()}</button>
-        {:else}<span class="photo"><Avatar person={h.person} size={86} tappable={false} /><Frame id={h.frame} />{@render sakura()}</span>{/if}
+        {#if mine}<button class="photo" onclick={(e) => onphoto?.(e.currentTarget)} aria-label={t('look.photo')}>{@render pic(74)}</button>
+        {:else if h.person.avatar}<button class="photo" onclick={bigPhoto} aria-label={t('person.photo')}>{@render pic(86)}</button>
+        {:else}<span class="photo">{@render pic(86)}</span>{/if}
         <span class="id">
-          <b class="nm" use:fit={h.name + face}><span class="ellipsis">{h.name}</span>{#if h.status}<button class="seal" onclick={sealTap} aria-label={h.status}><Founder size={20} idea={!p.founder} /></button>{/if}{#if staff}<button class="seal" onclick={() => sheets.award(staffItem(staff), p.id === session.me?.id)} aria-label={staffItem(staff).name}><Shield size={19} role={staff} /></button>{/if}</b>
+          <b class="nm" use:fit={h.name + face}><span class="ellipsis">{h.name}</span>{#if h.status}<button class="seal" onclick={sealTap} aria-label={h.status}><Founder size={face === 'sower' ? 16 : 20} idea={!p.founder} /></button>{/if}{#if staff}<button class="seal" onclick={() => sheets.award(staffItem(staff), p.id === session.me?.id)} aria-label={staffItem(staff).name}><Shield size={19} role={staff} /></button>{/if}</b>
           {#if h.nick}<span class="meta nick ellipsis">{h.nick}</span>{/if}<!-- the real name first, the nick under it -->
           <span class="role clamp">{h.title}</span>
           <span class="meta clamp">{h.line}</span>
@@ -387,7 +398,7 @@
     background: white; color: rgb(14, 20, 48); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35); }
 
   .photo { position: relative; z-index: 1; flex: none; padding: 3px; border-radius: 21px; background: rgba(255, 255, 255, 0.16); }
-  .cheer .photo, .knights .photo, .moments .photo, .faces .photo, .studex .photo, .sower .photo { background: #fff; }
+  .cheer .photo, .knights .photo, .moments .photo, .faces .photo, .studex .photo { background: #fff; }
   .photo :global(.av), .photo :global(.av img), .photo :global(.ini) { border-radius: 18px; }
   /* a halo under the text on every look's art (hard to read; better still): four soft layers in
      the look's own dark (--sh), a hairline round the letters out to a wide one that dims the art just behind the lines;
@@ -436,22 +447,32 @@
   .faces { --sh: 0, 0, 0; }
   .studex .meta { color: rgba(255, 255, 255, 0.8); }
   .studex .strap { background: linear-gradient(90deg, #A9271E, #CF3428 50%, #A9271E); }
-  /* SOWER, the creator's alone (ui/SowerArt, lib/awards.ts SOWER): his photo's graphite and white paper */
-  .sower { --role: rgb(192, 193, 190); }
-  .sower .meta { color: rgba(232, 232, 231, 0.7); }
-  .sower { --sh: 14, 14, 14; } /* over the print's halftone */
-  .sower .badge { background: rgb(30, 30, 30); }
-  .sower .medal { right: 20px; } /* the seal between the hand's two raised fingers (gen-owner.py GAP) */
-  /* the name's lines end before the hand's paper (its left edge 97 px in from the card's): a long name cuts, a long title wraps */
-  .sower .id { padding-right: 84px; }
-  .sower .nm, .sower .id > .role { padding-right: 0; }
+  /* SOWER, the creator's alone, "matte black, one red" (.claude/reports/sower-badge, card C; the card's ground:
+     ui/SowerArt): his hand on a dark tile, a white KBTU tile, no halo, one red dot before the role, the meta on one line */
+  .sower .badge { padding: 40px 0 16px; border-radius: var(--r-xl); background: rgb(10, 10, 11); box-shadow: 0 30px 50px -26px rgba(0, 0, 0, 0.75); }
+  .sower .badge::after { opacity: 0.5; } /* matte: a fainter sheen */
+  .sower .back { border-radius: var(--r-xl); }
+  .sower .slot { height: 7px; background: black; box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.8), 0 1px 0 rgba(255, 255, 255, 0.08); }
+  .sower .photo { padding: 0; background: none; border-radius: 27%; }
+  .hand { position: relative; display: block; width: 82px; height: 82px; overflow: hidden; border-radius: 27%;
+    background: radial-gradient(90% 90% at 30% 15%, rgb(58, 58, 60), rgb(11, 11, 12) 75%);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 8px 18px rgba(0, 0, 0, 0.55); }
+  .hand img { position: absolute; left: 50%; top: 52%; height: 86%; transform: translate(-50%, -50%); pointer-events: none; user-select: none; -webkit-user-drag: none; }
+  .sower .medal { top: 16px; right: 16px; width: 44px; height: 44px; }
+  .sower .qrhint { width: 17px; height: 17px; background: rgb(28, 28, 30); color: rgb(245, 245, 247); box-shadow: 0 0 0 1.5px rgb(245, 245, 247); }
+  .sower .id { text-shadow: none; }
+  .sower .top .nm { gap: 6px; font-size: var(--fs-sec); font-weight: 700; color: rgb(245, 245, 247); } /* 22 on mine too */
+  .sower .id > .role { display: flex; align-items: center; gap: 6px; margin-top: 8px; white-space: nowrap; font-weight: 600; font-size: calc(var(--fs-tab) * 0.86); letter-spacing: 0.16em; color: rgb(245, 245, 247); }
+  .sower .id > .role::before { content: ''; flex: none; width: 5px; height: 5px; border-radius: 50%; background: rgb(255, 59, 48); box-shadow: 0 0 8px rgb(255, 59, 48); }
+  .sower .id > .meta { display: block; margin-top: 6px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-weight: 500; font-size: var(--fs-cap); color: rgb(134, 134, 139); }
+  .sower .foot { margin-top: 28px; }
+  .sower .strap { background: linear-gradient(rgba(255, 59, 48, 0.9), rgba(255, 59, 48, 0.9)) 3px 0 / 1px 100% no-repeat, linear-gradient(90deg, rgb(17, 17, 17), rgb(29, 29, 31) 45%, rgb(29, 29, 31) 55%, rgb(12, 12, 12)); }
+  .sower .strap span { color: rgb(161, 161, 166); letter-spacing: 0.28em; } /* a red stitch down its edge */
+  .sower .clip { background: linear-gradient(180deg, rgb(58, 58, 60), rgb(28, 28, 30)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 2px 5px rgba(0, 0, 0, 0.7); }
   /* Dice and Destiny: the lines end before the dragon's wing (a long name cuts, a long title wraps) */
   .diceanddestinykbtu .id { padding-right: 104px; }
   .diceanddestinykbtu .nm, .diceanddestinykbtu .id > .role { padding-right: 0; }
   @media (max-width: 359px) { .diceanddestinykbtu .id { padding-right: 88px; } }
-  .sower .role { letter-spacing: 0.07em; } /* "CREATOR · KBTU APP" on one line beside the hand at 375 */
-  .sower .strap { background: linear-gradient(90deg, rgb(206, 206, 202), rgb(246, 246, 244) 50%, rgb(206, 206, 202)); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3); } /* the strip's white paper: graphite vanished on the dark page */
-  .sower .strap span { color: rgb(30, 30, 30); letter-spacing: 0.3em; }
   /* the template's clubs (lib/awards.ts CLUB_LOOKS, as CSS variables): the card under the band, the strap, the photo's
      ring; the role's colour comes as --role itself */
   .club .badge { background: linear-gradient(155deg, var(--c1), var(--c2) 55%, var(--c3)); }

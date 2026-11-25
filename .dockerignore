@@ -10,3 +10,4 @@ server/tests
 web/node_modules
 web/dist
 tmp-serve
+**/*cookies*.txt

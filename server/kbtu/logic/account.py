@@ -1280,6 +1280,7 @@ _DEL_GONE = {
     ("staff_mutes", "user_id"),  # the staff notifications I muted
     ("helper_offers", "user_id"),  # my offers to help the app (helpus.py)
     ("team_asks", "user_id"),  # my asks to come to my club's event as a guest
+    ("credit_team", "user_id"),  # my place in People of the app's Team
     ("credit_consents", "user_id"),  # my answers to "shall we name you?" (credits.py); my lines stay nameless (credits.gone)
     ("fchan_photos", "user_id"),  # my photos picked for a post and never posted (posted ones go with their post)
     ("fchan_posts", "user_id"),  # what's left of my channel posts: held, hidden or deleted ones (the live ones moved on)

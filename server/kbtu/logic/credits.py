@@ -1,4 +1,4 @@
-"""The people of the app: the creator, the idea's author, and everyone whose idea, find (a bug) or code is in it.
+"""The people of the app: the creator, the idea's author, the Team, and everyone whose idea, find (a bug) or code is in it.
 
 The honor medal also qualifies a holder for the consent sheet. Only a current yes adds their medal to this list.
 The inscription stays on the profile. Revoking the medal leaves any shipped lines and their consent intact.
@@ -18,6 +18,10 @@ lines shown and those added later (the sheet says so). Every answer is a row of 
 no, to which text), never replaced: the latest one counts. A yes names the latest row the app saw (`rev`) and is
 refused if a newer answer exists: a late or repeated yes never undoes a withdrawal. Asked by the bot's template once
 per person and text version (`ask`), answered in the app, changed in Settings.
+
+The Team (`credit_team`, `kbtu.admin team add|del`, audited): the core developers the creator picked, first added first,
+each a card with their lines under it (not again below). Being on it is something to say yes to, as a line is; without
+that yes a member is not in the block at all, their lines stay below as anyone's.
 
 The creator alone is named without a consent row: on purpose, he is public as the creator everywhere already
 (`person.founder`, /api/me's support), and nothing else of his is shown here. The idea's author follows the rule.
@@ -47,7 +51,8 @@ _CAN = "(u.tg_id > 0 AND u.banned_at IS NULL AND s.user_id IS NOT NULL AND s.man
 # the latest answer, joined as k
 _LAST = "LEFT JOIN credit_consents k ON k.id = (SELECT x.id FROM credit_consents x WHERE x.user_id = u.id ORDER BY x.id DESC LIMIT 1)"
 _HONOR = "EXISTS (SELECT 1 FROM achievement_grants g WHERE g.user_id = u.id AND g.code = 'honor')"
-_HAS = f"((u.is_founder = 0 AND {_HONOR}) OR u.mark = 'idea' OR EXISTS (SELECT 1 FROM credits c WHERE c.tg_id = u.tg_id AND c.shipped_on IS NOT NULL))"
+_TEAM = "EXISTS (SELECT 1 FROM credit_team t WHERE t.user_id = u.id)"
+_HAS = f"((u.is_founder = 0 AND ({_HONOR} OR {_TEAM})) OR u.mark = 'idea' OR EXISTS (SELECT 1 FROM credits c WHERE c.tg_id = u.tg_id AND c.shipped_on IS NOT NULL))"
 _COLS = f"{PERSON_COLS}, u.tg_id, u.banned_at, {_CAN} AS can, k.id AS rev, k.show, k.version"
 
 
@@ -57,7 +62,7 @@ def _said(r) -> bool | None:
 
 
 def _state(con, uid: int):
-    return one(con, f"SELECT {_COLS}, {_HONOR} AS honor, {_HAS} AS has FROM users u LEFT JOIN students s ON s.user_id = u.id {_LAST} WHERE u.id = ?", uid)
+    return one(con, f"SELECT {_COLS}, {_HONOR} AS honor, {_TEAM} AS team, {_HAS} AS has FROM users u LEFT JOIN students s ON s.user_id = u.id {_LAST} WHERE u.id = ?", uid)
 
 
 # ------------------------------------------------------------ the list
@@ -76,9 +81,9 @@ def _tie(cid: int) -> str:
 
 
 def listing(con, v: Viewer) -> dict:
-    """GET /api/credits: the whole screen in three reads. Nobody's Telegram id, row id or answer leaves here; a line
+    """GET /api/credits: the whole screen in four reads. Nobody's Telegram id, row id or answer leaves here; a line
     without its person's yes is a row of its own with `person: null`."""
-    if not con.in_transaction:  # one snapshot for all three reads: an answer landing between them can't pair an old
+    if not con.in_transaction:  # one snapshot for all the reads: an answer landing between them can't pair an old
         con.execute("BEGIN")    # yes with a newer line
         try:
             return listing(con, v)
@@ -89,6 +94,11 @@ def listing(con, v: Viewer) -> dict:
         WHERE (u.is_founder = 1 OR u.mark = 'idea' OR g.id IS NOT NULL) AND u.tg_id > 0""")
     founder = next((p for p in top if p["is_founder"]), None)
     idea = next((p for p in top if p["mark"] == "idea" and not p["is_founder"]), None)
+    # the Team: only who said yes; the creator and the idea's author have their own cards
+    team = [r for r in rows(con, f"""SELECT {_COLS}, {_HONOR} AS honored FROM credit_team t JOIN users u ON u.id = t.user_id
+        LEFT JOIN students s ON s.user_id = u.id {_LAST}
+        WHERE u.is_founder = 0 AND u.mark IS NOT 'idea' ORDER BY t.added_at, t.user_id""") if _named(r)]
+    team_items: dict[int, list] = {r["tg_id"]: [] for r in team}
     me = _state(con, v.id)
     got = rows(con, f"""SELECT c.id AS cid, c.tg_id AS whose, c.gh, c.kind, c.ru, c.kk, c.en, c.shipped_on, {_COLS}
         FROM credits c LEFT JOIN users u ON u.tg_id = c.tg_id AND u.tg_id > 0 LEFT JOIN students s ON s.user_id = u.id {_LAST}
@@ -103,6 +113,9 @@ def listing(con, v: Viewer) -> dict:
         if _named(idea) and r["whose"] == idea["tg_id"]:
             idea_items.append(_item(r))
             continue
+        if r["whose"] in team_items:
+            team_items[r["whose"]].append(_item(r))
+            continue
         named = _named(r)
         # a named person's lines together, where their newest stands; a GitHub login's too; a nameless line alone
         gh = None if named else r["gh"]  # newest first: the row shows its newest line's spelling
@@ -111,22 +124,25 @@ def listing(con, v: Viewer) -> dict:
         row["items"].append(_item(r))
     # Only a named holder gets a medal entry. A shipped credit keeps its own anonymity and sort order.
     for r in top:
-        if r["honored"] is None or not _named(r) or r["is_founder"] or r["mark"] == "idea":
+        if r["honored"] is None or not _named(r) or r["is_founder"] or r["mark"] == "idea" or r["tg_id"] in team_items:
             continue
         day = time.strftime("%Y-%m-%d", time.gmtime(r["honored"] + 5 * 3600))
         row = people.setdefault(r["tg_id"], {"person": person_ref(r), "gh": None, "items": [], "at": (day, _tie(r["id"]))})
         row["honor"] = True
     is_idea = bool(idea and idea["id"] == v.id)
+    is_team = bool(me["team"]) and not is_idea and not me["is_founder"]
     said = _said(me)
     return {
         "founder": person_ref(founder) if founder and founder["banned_at"] is None else None,
         "idea": {"person": person_ref(idea) if _named(idea) else None, "items": idea_items,
                  **({"honor": True} if _named(idea) and idea["honored"] is not None else {})} if idea else None,
+        "team": [{"person": person_ref(r), "items": team_items[r["tg_id"]], **({"honor": True} if r["honored"] else {})} for r in team],
         "people": [{"person": p["person"], "items": p["items"], **({"honor": True} if p.get("honor") else {})} | ({"gh": p["gh"]} if p["gh"] else {}) for p in sorted(people.values(), key=lambda p: p["at"], reverse=True)],
         # what is mine here, for the consent sheet and Settings' switch (kept while a yes stands, to take it back);
         # rev: my latest answer, which a yes must name. Nothing of mine: null, and nothing is offered
-        "mine": {"consent": said, "rev": me["rev"], "idea": is_idea, "items": my_items, **({"honor": True} if me["honor"] and not me["is_founder"] else {})}
-        if me["can"] and (my_items or is_idea or said or (me["honor"] and not me["is_founder"])) else None,
+        "mine": {"consent": said, "rev": me["rev"], "idea": is_idea, "items": my_items, **({"honor": True} if me["honor"] and not me["is_founder"] else {}),
+                 **({"team": True} if is_team else {})}
+        if me["can"] and (my_items or is_idea or is_team or said or (me["honor"] and not me["is_founder"])) else None,
         "version": CONSENT,
     }
 
@@ -162,7 +178,7 @@ _ASKABLE = f"""{_CAN} AND u.is_founder = 0 AND {_HAS} AND (k.id IS NULL OR (k.sh
 
 def ask(con, dry: bool = False) -> int:
     """`kbtu.admin credit ask`: the bot's "shall we name you?" once per person and text version: those with a shipped
-    line (or the idea's author) who can answer (`_CAN`, and the bot can write to them) and have not: never answered,
+    line (or the idea's author, or on the Team) who can answer (`_CAN`, and the bot can write to them) and have not: never answered,
     or said yes to an older text. An explicit no is never asked again. The number of messages actually queued."""
     ref = f"cra:{CONSENT}"
     to = rows(con, f"""SELECT u.id FROM users u LEFT JOIN students s ON s.user_id = u.id {_LAST}
@@ -197,7 +213,7 @@ def moved(con, uid: int, old_tg: int, new_tg: int, merge: bool = False) -> None:
     con.execute("UPDATE credits SET tg_id = ? WHERE tg_id = ?", (new_tg, old_tg))
     # always a new "no" row where there is anything to answer about: a yes still on its way from the old Telegram names
     # an older answer (or none) and is refused, whatever the last answer was
-    if (one(con, "SELECT 1 FROM achievement_grants WHERE user_id = ? AND code = 'honor'", uid)
+    if (one(con, "SELECT 1 FROM achievement_grants WHERE user_id = ? AND code = 'honor'", uid) or one(con, "SELECT 1 FROM credit_team WHERE user_id = ?", uid)
             or one(con, "SELECT 1 FROM credits WHERE tg_id = ?", new_tg) or one(con, "SELECT 1 FROM credit_consents WHERE user_id = ?", uid)):
         con.execute("INSERT INTO credit_consents (user_id, show, version, at) VALUES (?, 0, ?, ?)", (uid, CONSENT, core.now()))
 
@@ -234,6 +250,17 @@ def ship(con, cid: int, day: str | None = None) -> str:
         if not con.execute("UPDATE credits SET shipped_on = ? WHERE id = ?", (day, cid)).rowcount:
             raise ValueError(f"no credit {cid}")
     return day
+
+
+def team(con, uid: int, on: bool) -> bool:
+    """`kbtu.admin team add|del`: the creator puts a person on the Team or takes them off, in the audit log. Whether
+    anything changed."""
+    with tx(con):
+        n = (con.execute("INSERT OR IGNORE INTO credit_team (user_id, added_at) VALUES (?, ?)", (uid, core.now())) if on
+             else con.execute("DELETE FROM credit_team WHERE user_id = ?", (uid,))).rowcount
+        if n:
+            core.log_action(con, None, "team_add" if on else "team_del", f"user:{uid}")
+    return bool(n)
 
 
 def delete(con, cid: int) -> None:

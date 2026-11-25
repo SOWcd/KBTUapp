@@ -19,7 +19,7 @@
   import { onMount, untrack } from 'svelte';
   import { keyboard, KB_MS, kbEase, riseMs, roomAbove } from '../lib/state/keyboard.svelte';
   import { removeOverlay, close, hideChrome, overlays, type Overlay } from '../lib/state/ui.svelte';
-  import { haptic, onAndroid, tg } from '../lib/tg';
+  import { haptic, onAndroid } from '../lib/tg';
   import { glass } from './glass';
   import { unsent } from './guard';
 
@@ -52,8 +52,6 @@
   let gone = false;
   const born = performance.now();
   let scrolled = $state(false);
-  // Android redraws a moving blur every frame of the rise (jank): the blur comes on once the sheet stands
-  let rising = $state(tg.platform === 'android');
   // Keep the covered sheet's lighting still. Entrance animations must finish so their content is visible on Back.
   const under = $derived(overlays.some((o) => o.id > overlay.id && !o.closing));
 
@@ -71,12 +69,10 @@
     const box = panel.getBoundingClientRect(), h = box.height, dh = h - height;
     if (!lift && iris) {
       height = h; lift = irisOpen(panel, iris);
-      if (rising) lift.finished.catch(() => {}).finally(() => (rising = false));
       return;
     }
     if (!lift) {
       height = h; lift = panel.animate([{ transform: `translate3d(0,${h}px,0)` }, { transform: 'translate3d(0,0,0)' }], motion());
-      if (rising) lift.finished.catch(() => {}).finally(() => (rising = false));
       return;
     }
     height = h;
@@ -244,7 +240,7 @@
 
 <!-- (the second tap of a double tap on what opened it lands on the new scrim: not a close) -->
 <div class="scrim" class:clear={see} bind:this={scrim} onclick={(e) => { if (e.timeStamp - born > 350) close(overlay.id, true); }} role="presentation"></div>
-<div class="sheet glass glass-sheet" use:glass class:tall class:full class:see class:hasfoot={!!footer} class:rising class:flat={onAndroid} class:under class:ground bind:this={panel} role="dialog" aria-modal="true" aria-label={title || undefined} tabindex="-1" style={tint ? `--tint:${tint}` : ground ? `--ground:${ground}` : ''}>
+<div class="sheet glass glass-sheet" use:glass class:tall class:full class:see class:hasfoot={!!footer} class:flat={onAndroid} class:under class:ground bind:this={panel} role="dialog" aria-modal="true" aria-label={title || undefined} tabindex="-1" style={tint ? `--tint:${tint}` : ground ? `--ground:${ground}` : ''}>
   {#if tint}<div class="tint" aria-hidden="true"></div>{/if}
   {#if !full}<div class="grip" aria-hidden="true"></div>{/if}
   <!-- the scroll edge: what scrolls up fades out under the top (the grip, the capsule) instead of running into it -->
@@ -269,7 +265,6 @@
   }
   .under { --sheet-loop: paused; }
   .under, .under :global(*) { --gx: 0 !important; --gy: 0 !important; }
-  .rising { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
   /* Android (the sheet's blur dropped tiles frame by frame, bands and whole cards blinked blank as a
      person's card opened over the member list): the sheet stays solid there, as under power saving. ponytail: no glass on
      Android sheets; a one-off blurred snapshot behind them is the upgrade */
@@ -303,8 +298,8 @@
   .hasfoot .body { --pb: var(--s-4); }
   /* Keep the moving scroll body free of an extra masked layer on Android. */
   .sheet:not(.flat) .scrolled { -webkit-mask-image: linear-gradient(transparent, black 18px); mask-image: linear-gradient(transparent, black 18px); }
-  .full:not(.flat) .scrolled { -webkit-mask-image: linear-gradient(transparent calc(var(--head-bottom) - 4px), black var(--page-top));
-    mask-image: linear-gradient(transparent calc(var(--head-bottom) - 4px), black var(--page-top)); }
+  .full:not(.flat) .scrolled { -webkit-mask-image: linear-gradient(transparent var(--edge-from), black var(--edge-to));
+    mask-image: linear-gradient(transparent var(--edge-from), black var(--edge-to)); }
   /* the heading row: the title wraps (a long word at its soft hyphen or the edge), the actions keep their place */
   .hd { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s-3); margin: var(--s-1) 2px var(--s-4); }
   .hdt { min-width: 0; padding-top: 8px; font: 700 var(--fs-sec)/1.18 var(--font-display); letter-spacing: -0.018em; overflow-wrap: break-word; }

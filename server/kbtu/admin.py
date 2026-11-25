@@ -53,6 +53,7 @@
   .venv/bin/python -m kbtu.admin broadcast-votes <name>   the broadcast's Interesting / Not interesting counts
                                 creator only: queue a bot template once per reachable user. --dry counts new recipients;
                                 @username or Telegram ID queues it for one person first
+  .venv/bin/python -m kbtu.admin team add|del <@username | telegram id>   People of the app's Team (core developers), audited
   .venv/bin/python -m kbtu.admin credit add <telegram id | gh:login> <idea | find | code> "<ru>" "<kk>" "<en>"   "People of the app"
                                 (logic/credits.py): a line in OUR words about what they gave (an account isn't needed;
                                 gh:login: a pull request's author, listed under the public login, never tied to an account);
@@ -518,6 +519,11 @@ def main(args: list[str]) -> None:
                 sys.exit(__doc__)
         except ValueError as exc:
             sys.exit(str(exc))
+    elif cmd == "team" and len(args) == 3 and args[1] in ("add", "del"):  # People of the app's Team (logic/credits.py)
+        u = _user(con, args[2])
+        changed = credits.team(con, u["id"], args[1] == "add")
+        print(f"@{u['tg_username'] or u['tg_id']}: " + ("on the Team (shown after their yes; `credit ask` asks)" if args[1] == "add" else "off the Team")
+              + ("" if changed else " already"))
     elif cmd == "team-consent-ask" and args[1:] in ([], ["--dry"]):  # signed up before the sign-up became the consent
         from .logic import evteams
         n = evteams.consent_ask(con, dry=bool(args[1:]))

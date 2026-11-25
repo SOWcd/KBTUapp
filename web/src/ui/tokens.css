@@ -71,6 +71,11 @@
      or our own capsule outside Telegram; one value for every page, so no screen grows its own gap (owner, Oct 24) */
   --head-bottom: max(46px, calc(var(--safe-top) + var(--tg-head) / 2 + 19px)); /* the capsule's lower edge (Capsule.svelte .cap) */
   --page-top: calc(var(--head-bottom) + 14px);
+  /* the scroll edge under the top bar, one on every screen (App .topfade, full sheets, Pane, Lab): content stays crisp
+     until it reaches the bar and goes in a short soft edge around the bar's lower edge, as on iOS (owner, Nov 25: it
+     ran down to --page-top, a dark band under the bar) */
+  --edge-from: calc(var(--head-bottom) - 10px);
+  --edge-to: calc(var(--head-bottom) + 4px);
   --nav-h: 64px;
   --bottom: calc(var(--safe-bottom) + var(--nav-h) + 12px);
   /* a full-screen overlay's band for its round × (CloseX: 16 px up, 52 px tall, 12 px clear above it) */
