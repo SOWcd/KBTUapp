@@ -65,38 +65,39 @@ def comments(con, v: Viewer, kind: str, tid: int) -> dict:
 
 
 def add_comment(con, v: Viewer, kind: str, tid: int, body: object, as_org: object, reply_to: object = None) -> dict:
-    need_student(v)
-    t = _thread(con, v, kind, tid)
-    text = str(body or "").strip()
-    col = "post_id" if kind == "post" else "event_id"
-    to = None
-    if reply_to is not None:  # a reply: to a comment still up in this thread
-        to = one(con, f"SELECT id, user_id FROM comments WHERE id = ? AND {col} = ? AND deleted_at IS NULL", reply_to, tid) if isinstance(reply_to, int) else None
-        if not to:
+    with tx(con):
+        need_student(v)
+        t = _thread(con, v, kind, tid)
+        text = str(body or "").strip()
+        col = "post_id" if kind == "post" else "event_id"
+        to = None
+        if reply_to is not None:  # a reply: to a comment still up in this thread
+            to = one(con, f"SELECT id, user_id FROM comments WHERE id = ? AND {col} = ? AND deleted_at IS NULL", reply_to, tid) if isinstance(reply_to, int) else None
+            if not to:
+                raise ApiError("bad_input")
+        if not 1 <= len(text) <= 500:
             raise ApiError("bad_input")
-    if not 1 <= len(text) <= 500:
-        raise ApiError("bad_input")
-    if not t["comments_on"]:
-        raise ApiError("closed")
-    lead = head = can(con, v, t["org_id"], "posts")
-    if as_org and not lead:
-        raise ApiError("forbidden")
-    if one(con, "SELECT COUNT(*) FROM comments WHERE user_id = ? AND created_at > ?", v.id, core.now() - 60)[0] >= COMMENTS_A_MINUTE:
-        raise ApiError("rate_limited")
-    askers: list[tuple[int]] = []
-    if kind == "event":  # the bot: a question pings the club's Head+ (hourly at most); an answer (the club's
-        # Head+ write, as the club or as themselves) pings the askers
-        if lead:
-            askers = [(u,) for u in sorted({r["user_id"] for r in _asking(con, tid)})]
-        else:
-            heads = rows(con, "SELECT user_id FROM org_members WHERE org_id = ? AND role IN ('president', 'vice', 'head') AND user_id != ?", t["org_id"], v.id)
-    cid = con.execute(f"INSERT INTO comments ({col}, user_id, as_org, body, created_at, reply_to) VALUES (?, ?, ?, ?, ?, ?)",
-                      (tid, v.id, int(bool(as_org)), text, core.now(), to["id"] if to else None)).lastrowid
-    if kind == "event":
-        for (uid,) in (askers if lead else heads):
-            notify(con, uid, "comment_answer", f"ca:{tid}:{cid}") if lead else notify(con, uid, "comment_question", f"cq:{tid}:{core.now() // 3600}")
-    if to and to["user_id"] != v.id and (to["user_id"],) not in askers:  # its author hears it, replies in a thread merged by the hour
-        notify(con, to["user_id"], "comment_reply", f"cr:{kind}:{tid}:{core.now() // 3600}")
+        if not t["comments_on"]:
+            raise ApiError("closed")
+        lead = can(con, v, t["org_id"], "posts")
+        if as_org and not lead:
+            raise ApiError("forbidden")
+        if one(con, "SELECT COUNT(*) FROM comments WHERE user_id = ? AND created_at > ?", v.id, core.now() - 60)[0] >= COMMENTS_A_MINUTE:
+            raise ApiError("rate_limited")
+        askers: list[tuple[int]] = []
+        if kind == "event":  # the bot: a question pings the club's Head+ (hourly at most); an answer (the club's
+            # Head+ write, as the club or as themselves) pings the askers
+            if lead:
+                askers = [(u,) for u in sorted({r["user_id"] for r in _asking(con, tid)})]
+            else:
+                heads = rows(con, "SELECT user_id FROM org_members WHERE org_id = ? AND role IN ('president', 'vice', 'head') AND user_id != ?", t["org_id"], v.id)
+        cid = con.execute(f"INSERT INTO comments ({col}, user_id, as_org, body, created_at, reply_to) VALUES (?, ?, ?, ?, ?, ?)",
+                          (tid, v.id, int(bool(as_org)), text, core.now(), to["id"] if to else None)).lastrowid
+        if kind == "event":
+            for (uid,) in (askers if lead else heads):
+                notify(con, uid, "comment_answer", f"ca:{tid}:{cid}") if lead else notify(con, uid, "comment_question", f"cq:{tid}:{core.now() // 3600}")
+        if to and to["user_id"] != v.id and (to["user_id"],) not in askers:  # its author hears it, replies in a thread merged by the hour
+            notify(con, to["user_id"], "comment_reply", f"cr:{kind}:{tid}:{core.now() // 3600}")
     return comments(con, v, kind, tid)
 
 
@@ -126,51 +127,52 @@ def report(con, v: Viewer, target: object, tid: object, reason: object, note: ob
     """"Report" → the moderators' queue (one sheet for every thing: a reason and, if they like, a few words). One open
     report per person and thing: a repeat while it waits updates it, free; after a decision they may report again.
     20 new a day."""
-    need_student(v)
-    # a photo's own three with the Gallery on (GALLERY): "breaks the rules", "not from this event" (a meme), "I'm in it and against it"
-    if target not in ("post", "comment", "event", "user", "photo", "ask", "fpost") \
-            or reason not in (("rules", "offtopic", "me") if target == "photo" and gallery.on(v) else ()) + ("spam", "insult", "danger", "other") \
-            or not isinstance(tid, int) or isinstance(tid, bool) or not (note is None or isinstance(note, str)):
-        raise ApiError("bad_input")
-    note = (note or "").strip() or None
-    if note and len(note) > REPORT_NOTE:
-        raise ApiError("bad_input")
-    if target == "photo":  # an album or Gallery photo (its file id): hidden for me at once, for everyone at PHOTO_HIDE people
-        # one file can sit in several albums (the same picture added twice): any album I can see will do
-        ps = rows(con, "SELECT event_id, added_by FROM event_photos WHERE file_id = ?", tid)
-        g = one(con, "SELECT user_id, event_id FROM gallery_photos WHERE file_id = ?", tid)
-        if (g and g["user_id"] == v.id) or any(p["added_by"] == v.id for p in ps) \
-                or not (any(_sees_event(con, v, p["event_id"]) for p in ps) or (g and g["event_id"] is None and gallery.on(v))):
-            raise ApiError("not_found")
-    elif target == "user":  # a profile: its nick, own photo and "about me"
-        if tid == v.id or not one(con, "SELECT 1 FROM students WHERE user_id = ?", tid):
-            raise ApiError("not_found")
-    elif target == "ask":  # a forum request (forum.py): not my own, still up, one this caller may see
-        if not one(con, "SELECT 1 FROM asks WHERE id = ? AND status = 'live' AND user_id != ?", tid, v.id) or not may_touch_ask(con, tid):
-            raise ApiError("not_found")
-    elif target == "fpost":  # a post in the forum channel (fchannel.py): in the channel now, not my own; whose stays hidden
-        if not one(con, "SELECT 1 FROM fchan_posts WHERE id = ? AND status = 'live' AND tg_msg > 0 AND user_id != ?", tid, v.id):
-            raise ApiError("not_found")
-    elif target == "comment":
-        c = one(con, "SELECT post_id, event_id, user_id FROM comments WHERE id = ? AND deleted_at IS NULL", tid)
-        if not c or c["user_id"] == v.id:  # my own comment I delete, not report
-            raise ApiError("not_found")
-        _thread(con, v, "post" if c["post_id"] else "event", c["post_id"] or c["event_id"])
-    else:
-        _thread(con, v, target, tid)
-    if con.execute("UPDATE reports SET reason = ?, note = COALESCE(?, note) WHERE reporter_id = ? AND target = ? AND target_id = ? AND status = 'open'",
-                   (reason, note, v.id, target, tid)).rowcount:
-        return
-    if one(con, "SELECT COUNT(*) FROM reports WHERE reporter_id = ? AND created_at > ?", v.id, core.now() - 86400)[0] >= REPORTS_A_DAY:
-        raise ApiError("rate_limited")
-    con.execute("INSERT OR IGNORE INTO reports (reporter_id, target, target_id, reason, note, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-                (v.id, target, tid, reason, note, core.now()))
-    if target == "user":  # never suggested to each other (People you may know), the report resolved later included
-        pymk.forget(con, v.id, tid)
-    if target == "event":
-        _urgent_event(con, tid)
-    if target == "fpost":  # one with photos leaves the channel at two people's reports
-        fchannel.reported(con, tid)
+    with tx(con):
+        need_student(v)
+        # a photo's own three with the Gallery on (GALLERY): "breaks the rules", "not from this event" (a meme), "I'm in it and against it"
+        if target not in ("post", "comment", "event", "user", "photo", "ask", "fpost") \
+                or reason not in (("rules", "offtopic", "me") if target == "photo" and gallery.on(v) else ()) + ("spam", "insult", "danger", "other") \
+                or not isinstance(tid, int) or isinstance(tid, bool) or not (note is None or isinstance(note, str)):
+            raise ApiError("bad_input")
+        note = (note or "").strip() or None
+        if note and len(note) > REPORT_NOTE:
+            raise ApiError("bad_input")
+        if target == "photo":  # an album or Gallery photo (its file id): hidden for me at once, for everyone at PHOTO_HIDE people
+            # one file can sit in several albums (the same picture added twice): any album I can see will do
+            ps = rows(con, "SELECT event_id, added_by FROM event_photos WHERE file_id = ?", tid)
+            g = one(con, "SELECT user_id, event_id FROM gallery_photos WHERE file_id = ?", tid)
+            if (g and g["user_id"] == v.id) or any(p["added_by"] == v.id for p in ps) \
+                    or not (any(_sees_event(con, v, p["event_id"]) for p in ps) or (g and g["event_id"] is None and gallery.on(v))):
+                raise ApiError("not_found")
+        elif target == "user":  # a profile: its nick, own photo and "about me"
+            if tid == v.id or not one(con, "SELECT 1 FROM students WHERE user_id = ?", tid):
+                raise ApiError("not_found")
+        elif target == "ask":  # a forum request (forum.py): not my own, still up, one this caller may see
+            if not one(con, "SELECT 1 FROM asks WHERE id = ? AND status = 'live' AND user_id != ?", tid, v.id) or not may_touch_ask(con, tid):
+                raise ApiError("not_found")
+        elif target == "fpost":  # a post in the forum channel (fchannel.py): in the channel now, not my own; whose stays hidden
+            if not one(con, "SELECT 1 FROM fchan_posts WHERE id = ? AND status = 'live' AND tg_msg > 0 AND user_id != ?", tid, v.id):
+                raise ApiError("not_found")
+        elif target == "comment":
+            c = one(con, "SELECT post_id, event_id, user_id FROM comments WHERE id = ? AND deleted_at IS NULL", tid)
+            if not c or c["user_id"] == v.id:  # my own comment I delete, not report
+                raise ApiError("not_found")
+            _thread(con, v, "post" if c["post_id"] else "event", c["post_id"] or c["event_id"])
+        else:
+            _thread(con, v, target, tid)
+        if con.execute("UPDATE reports SET reason = ?, note = COALESCE(?, note) WHERE reporter_id = ? AND target = ? AND target_id = ? AND status = 'open'",
+                       (reason, note, v.id, target, tid)).rowcount:
+            return
+        if one(con, "SELECT COUNT(*) FROM reports WHERE reporter_id = ? AND created_at > ?", v.id, core.now() - 86400)[0] >= REPORTS_A_DAY:
+            raise ApiError("rate_limited")
+        con.execute("INSERT OR IGNORE INTO reports (reporter_id, target, target_id, reason, note, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                    (v.id, target, tid, reason, note, core.now()))
+        if target == "user":  # never suggested to each other (People you may know), the report resolved later included
+            pymk.forget(con, v.id, tid)
+        if target == "event":
+            _urgent_event(con, tid)
+        if target == "fpost":  # one with photos leaves the channel at two people's reports
+            fchannel.reported(con, tid)
 
 
 EVENT_ALARM = 3  # different people's open reports of an event: the moderators hear at once (it isn't hidden)

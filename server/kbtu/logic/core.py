@@ -115,6 +115,7 @@ class Viewer:
     lent_role: str = "president"
     lent_rights: str | None = None
     used: list = field(default_factory=list, compare=False, hash=False)
+    student_since: int | None = None  # reject writes from before account erasure and re-verification
 
 
 def titled(r, key: str = "title") -> dict:
@@ -134,12 +135,13 @@ def one(con: sqlite3.Connection, sql: str, *args) -> sqlite3.Row | None:
     return con.execute(sql, args).fetchone()
 
 
-def next_id(con, table: str) -> int:
+def next_id(con, table: str, *, floor: int = 0) -> int:
     """A new row's id that no row ever had (asks, contacts: SQLite gives a deleted newest row's id to the next insert,
     and a stale button, report or verdict then lands on someone else's). A high-water mark in meta, moved inside the
     caller's transaction; table: a name from our code only."""
     key = f"seq:{table}"
-    n = max(int((one(con, "SELECT value FROM meta WHERE key = ?", key) or [0])[0]), one(con, f"SELECT COALESCE(MAX(id), 0) FROM {table}")[0]) + 1
+    n = max(floor, int((one(con, "SELECT value FROM meta WHERE key = ?", key) or [0])[0]),
+            one(con, f"SELECT COALESCE(MAX(id), 0) FROM {table}")[0]) + 1
     con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (key, str(n)))
     return n
 
@@ -216,6 +218,13 @@ def staff_sql(a: str = "s") -> str:
 
 def need_student(v: Viewer) -> None:
     if not v.student:
+        raise ApiError("need_student")
+
+
+def need_current_student(con, v: Viewer) -> None:
+    """Recheck a verified account inside a write that may follow an account erasure."""
+    s = one(con, "SELECT verified_at FROM students WHERE user_id = ? AND manual = 0", v.id)
+    if not s or (v.student_since is not None and s[0] != v.student_since):
         raise ApiError("need_student")
 
 
@@ -701,7 +710,7 @@ def _doc_view(con, eid: int) -> dict | None:
 # is the switch (both backup messages are one). Moderators get the last four only (the callers pick who).
 STAFF_KINDS = {"club_application": "club_application", "club_path": "club_path", "backup_failed": "backup", "backup_ok": "backup",
                "chat_suggested": "chat_suggested", "tgc_queue": "tgc_queue", "fch_appeal": "fch_appeal", "fch_reply_queue": "fch_reply_queue",
-               "event_reported": "event_reported", "santa_reported": "event_reported"}
+               "event_reported": "event_reported", "santa_reported": "event_reported", "tgc_delete_failed": "tgc_queue"}
 
 
 # the other domains', imported last: they import this one too, and each needs the other's names only

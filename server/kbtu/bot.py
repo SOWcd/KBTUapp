@@ -220,9 +220,7 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         a = one(con, "SELECT * FROM asks WHERE id = ? AND status = 'live' AND expires_at > ?", int(ref[1]), logic.now())
         if not a or not one(con, "SELECT ask_pings FROM users WHERE id = ?", m["user_id"])[0]:
             return None
-        sk = one(con, """SELECT s.name FROM ask_skills k JOIN skills s ON s.id = k.skill_id WHERE k.ask_id = ?
-            ORDER BY EXISTS (SELECT 1 FROM user_skills u WHERE u.user_id = ? AND u.skill_id = s.id) DESC, s.name""", a["id"], m["user_id"])
-        return (*texts.bot_message(lang, kind, skill=sk["name"] if sk else ""), f"fa_{a['id']}")
+        return (*texts.bot_message(lang, kind), f"fa_{a['id']}")
     if kind == "org_ask":  # oa:<event>:<organizer>, payload nick: write to the event's organizer (no username of mine to give
         # him). The ask's own rules (organizing._reach) again: quiet once my seat or the event is gone (cancelled, a
         # week after the end), he lost the club's right or is banned, either of us blocked the other, or his username
@@ -247,9 +245,8 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         if not p:
             return None
         a = one(con, "SELECT title, subject FROM asks WHERE id = ?", c["ask_id"]) if c["ask_id"] else None
-        skills = ", ".join(s["name"] for s in rows(con, "SELECT s.name FROM user_skills k JOIN skills s ON s.id = k.skill_id WHERE k.user_id = ? ORDER BY s.name", p["id"]))
         kind = ("contact_subj" if a["subject"] else "contact_ask") if a else "contact_ask_plain"  # a subject's: its catalogue name
-        text = texts.bot_message(lang, kind, name=logic.short_name(p), title=a["title"] if a else "", skills=skills or "\u2014")[0]
+        text = texts.bot_message(lang, kind, name=logic.short_name(p), title=a["title"] if a else "")[0]
         yes, no = texts.bot_message(lang, "contact_buttons")
         k = f"ct:{c['id']}:{tok}"
         return text, None, [[{"text": yes, "callback_data": f"{k}:y"}, {"text": no, "callback_data": f"{k}:n"}]]
@@ -1047,6 +1044,8 @@ async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
                 if to is None:
                     _mark(con, m, False, "gone")
                     continue
+            if m["kind"] in tgc.AUTHOR and not one(con, "SELECT 1 FROM users WHERE id = ? AND tg_id = ?", m["user_id"], to):
+                continue  # the account moved after the batch was read; the retry will use the new chat
             body = {"chat_id": to, "text": text, "parse_mode": "HTML", "link_preview_options": {"is_disabled": True}}
             if isinstance(start, list):  # the whole keyboard; "start" buttons open the app there
                 body["reply_markup"] = {"inline_keyboard": [[{"text": b["text"], "url": f"https://t.me/{cfg.bot_username}?startapp={b['start']}"}
