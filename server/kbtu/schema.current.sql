@@ -883,8 +883,16 @@ CREATE TABLE qr_marks (
       session_id INTEGER NOT NULL REFERENCES qr_sessions(id) ON DELETE CASCADE,
       user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       scanned_at INTEGER NOT NULL,
-      done_at    INTEGER, left_at INTEGER, marked_by INTEGER REFERENCES users(id) ON DELETE SET NULL, hand INTEGER NOT NULL DEFAULT 0,
+      done_at    INTEGER, left_at INTEGER, marked_by INTEGER REFERENCES users(id) ON DELETE SET NULL, hand INTEGER NOT NULL DEFAULT 0, meetup_review TEXT CHECK (meetup_review IN ('added', 'declined')),
       PRIMARY KEY (session_id, user_id)
+    ) STRICT;
+CREATE TABLE qr_meet_scans (
+      id INTEGER PRIMARY KEY,
+      session_id INTEGER NOT NULL REFERENCES qr_sessions(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      scanned_at INTEGER NOT NULL,
+      phase TEXT NOT NULL CHECK (phase IN ('in', 'out')),
+      flag TEXT CHECK (flag IN ('outsider', 'department', 'unassigned'))
     ) STRICT;
 CREATE TABLE qr_screens (
       code       TEXT PRIMARY KEY,
@@ -900,7 +908,7 @@ CREATE TABLE qr_sessions (
       started_at INTEGER,
       ended_at   INTEGER,
       created_at INTEGER NOT NULL
-    , org_id INTEGER REFERENCES orgs(id) ON DELETE SET NULL, event_id INTEGER REFERENCES events(id) ON DELETE SET NULL, phase TEXT NOT NULL DEFAULT 'in' CHECK (phase IN ('in', 'out')), lease_until INTEGER, help_until INTEGER, help_gen INTEGER NOT NULL DEFAULT 0, crew_event_id INTEGER REFERENCES events(id) ON DELETE SET NULL) STRICT;
+    , org_id INTEGER REFERENCES orgs(id) ON DELETE SET NULL, event_id INTEGER REFERENCES events(id) ON DELETE SET NULL, phase TEXT NOT NULL DEFAULT 'in' CHECK (phase IN ('in', 'out')), lease_until INTEGER, help_until INTEGER, help_gen INTEGER NOT NULL DEFAULT 0, crew_event_id INTEGER REFERENCES events(id) ON DELETE SET NULL, meetup INTEGER NOT NULL DEFAULT 0 CHECK (meetup IN (0, 1)), department_id INTEGER REFERENCES org_tags(id) ON DELETE SET NULL, department_name TEXT) STRICT;
 CREATE TABLE receipt_auto_checks (  -- IF NOT EXISTS: tests rewind user_version
       receipt_id INTEGER PRIMARY KEY REFERENCES receipts(id) ON DELETE CASCADE
     ) STRICT;
@@ -975,6 +983,34 @@ CREATE TABLE "reports" (
         created_at INTEGER NOT NULL,
         resolved_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
         resolved_at INTEGER
+    ) STRICT;
+CREATE TABLE research_answers (
+      id TEXT PRIMARY KEY NOT NULL,
+      form_id INTEGER NOT NULL REFERENCES forms(id) ON DELETE CASCADE,
+      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      answers TEXT NOT NULL,
+      consent TEXT NOT NULL,
+      day INTEGER CHECK ((day IS NULL) = (user_id IS NULL))
+    ) STRICT, WITHOUT ROWID;
+CREATE TABLE research_forms (
+      form_id INTEGER PRIMARY KEY REFERENCES forms(id) ON DELETE CASCADE,
+      about TEXT NOT NULL CHECK (length(about) BETWEEN 1 AND 200)
+    ) STRICT;
+CREATE TABLE research_participants (
+      form_id INTEGER NOT NULL REFERENCES forms(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (form_id, user_id)
+    ) STRICT, WITHOUT ROWID;
+CREATE TABLE research_requests (
+      id INTEGER PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title TEXT NOT NULL CHECK (length(title) BETWEEN 1 AND 120),
+      goal TEXT NOT NULL CHECK (length(goal) BETWEEN 1 AND 1200),
+      questions TEXT NOT NULL CHECK (length(questions) BETWEEN 1 AND 4000),
+      organizer TEXT NOT NULL CHECK (length(organizer) BETWEEN 1 AND 200),
+      consent TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      approved_at INTEGER
     ) STRICT;
 CREATE TABLE retired_tickets (
         ticket_code TEXT PRIMARY KEY,
@@ -1595,6 +1631,8 @@ CREATE INDEX pymk_other ON pymk (other_id);
 CREATE INDEX pymk_dismissed_other ON pymk_dismissed (other_id);
 CREATE INDEX qr_expected_by_email ON qr_expected(email);
 CREATE UNIQUE INDEX qr_expected_door_key ON qr_expected(door_key);
+CREATE INDEX qr_meet_scans_session ON qr_meet_scans(session_id, id);
+CREATE INDEX qr_meet_scans_user ON qr_meet_scans(user_id);
 CREATE INDEX qr_screens_by_ip ON qr_screens(ip) WHERE session_id IS NULL;
 CREATE INDEX qr_screens_by_session ON qr_screens(session_id);
 CREATE INDEX qr_running ON qr_sessions(id) WHERE started_at IS NOT NULL AND ended_at IS NULL;
@@ -1614,6 +1652,10 @@ CREATE INDEX regs_holds ON registrations(hold_until) WHERE status = 'hold';
 CREATE UNIQUE INDEX one_removal_ask ON removal_requests(org_id, user_id) WHERE status = 'pending';
 CREATE UNIQUE INDEX one_report ON reports(reporter_id, target, target_id) WHERE status = 'open';
 CREATE INDEX reports_by_target ON reports (target, target_id);
+CREATE INDEX research_answers_by_form ON research_answers(form_id);
+CREATE INDEX research_answers_by_user ON research_answers(user_id);
+CREATE INDEX research_participants_by_user ON research_participants(user_id);
+CREATE INDEX research_requests_by_user ON research_requests(user_id, created_at);
 CREATE INDEX retired_tickets_event ON retired_tickets(event_id);
 CREATE INDEX roster_by_email ON roster_pending(email);
 CREATE INDEX roster_by_org ON roster_pending(org_id);

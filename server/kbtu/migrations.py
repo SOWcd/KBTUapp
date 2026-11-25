@@ -2400,6 +2400,60 @@ MIGRATIONS: list[tuple[int, str]] = [
       reply_id INTEGER PRIMARY KEY REFERENCES fchan_replies(id) ON DELETE CASCADE,
       user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE
     ) STRICT;"""),
+    # Meetup scans keep each attempt, apart from attendance's one row.
+    (235, """ALTER TABLE qr_sessions ADD COLUMN meetup INTEGER NOT NULL DEFAULT 0 CHECK (meetup IN (0, 1));
+    ALTER TABLE qr_sessions ADD COLUMN department_id INTEGER REFERENCES org_tags(id) ON DELETE SET NULL;
+    ALTER TABLE qr_sessions ADD COLUMN department_name TEXT;
+    ALTER TABLE qr_marks ADD COLUMN meetup_review TEXT CHECK (meetup_review IN ('added', 'declined'));
+    CREATE TABLE IF NOT EXISTS qr_meet_scans (
+      id INTEGER PRIMARY KEY,
+      session_id INTEGER NOT NULL REFERENCES qr_sessions(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      scanned_at INTEGER NOT NULL,
+      phase TEXT NOT NULL CHECK (phase IN ('in', 'out')),
+      flag TEXT CHECK (flag IN ('outsider', 'department', 'unassigned'))
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS qr_meet_scans_session ON qr_meet_scans(session_id, id);
+    CREATE INDEX IF NOT EXISTS qr_meet_scans_user ON qr_meet_scans(user_id);
+    UPDATE qr_sessions SET meetup = 1 WHERE crew_event_id IS NOT NULL OR (org_id IS NOT NULL AND event_id IS NULL);
+    """),
+    # Forum research: native student surveys and signed proposals; approval never creates a form.
+    (236, """CREATE TABLE IF NOT EXISTS research_forms (
+      form_id INTEGER PRIMARY KEY REFERENCES forms(id) ON DELETE CASCADE,
+      about TEXT NOT NULL CHECK (length(about) BETWEEN 1 AND 200)
+    ) STRICT;
+    INSERT OR IGNORE INTO research_forms (form_id, about)
+      SELECT id, substr(COALESCE(NULLIF(trim(replace(json_extract(spec, '$.intro'), char(10), ' ')), ''),
+        json_extract(spec, '$.title')), 1, 200) FROM forms WHERE slug = 'library';
+    CREATE TABLE IF NOT EXISTS research_requests (
+      id INTEGER PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title TEXT NOT NULL CHECK (length(title) BETWEEN 1 AND 120),
+      goal TEXT NOT NULL CHECK (length(goal) BETWEEN 1 AND 1200),
+      questions TEXT NOT NULL CHECK (length(questions) BETWEEN 1 AND 4000),
+      organizer TEXT NOT NULL CHECK (length(organizer) BETWEEN 1 AND 200),
+      consent TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      approved_at INTEGER
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS research_requests_by_user ON research_requests(user_id, created_at);
+    CREATE TABLE IF NOT EXISTS research_answers (
+      id TEXT PRIMARY KEY NOT NULL,
+      form_id INTEGER NOT NULL REFERENCES forms(id) ON DELETE CASCADE,
+      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      answers TEXT NOT NULL,
+      consent TEXT NOT NULL,
+      day INTEGER CHECK ((day IS NULL) = (user_id IS NULL))
+    ) STRICT, WITHOUT ROWID;
+    CREATE INDEX IF NOT EXISTS research_answers_by_form ON research_answers(form_id);
+    CREATE INDEX IF NOT EXISTS research_answers_by_user ON research_answers(user_id);
+    -- No timestamp, answer key or insertion sequence: participation cannot identify an anonymous answer.
+    CREATE TABLE IF NOT EXISTS research_participants (
+      form_id INTEGER NOT NULL REFERENCES forms(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (form_id, user_id)
+    ) STRICT, WITHOUT ROWID;
+    CREATE INDEX IF NOT EXISTS research_participants_by_user ON research_participants(user_id);"""),
     # a club's Instagram posts in its news (instagram.py): each linked handle with its account id (NULL: no business or
     # creator account there, asked again a day later) and how far it was taken; each post brought once (its media id),
     # with the app post it became. Only the club's own media: nothing about people

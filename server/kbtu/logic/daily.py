@@ -242,6 +242,7 @@ def stats_day(con) -> None:
     stats.forget(con)  # the anonymous usage counters: 180 days
     appeals.forget(con)  # appeals to SG: 90 days after closing, 180 at most
     mapflaws.sweep(con)
+    research.sweep(con)  # proposals: 180 days; survey answers: a year after closure
     donations.sweep(con)
     helpus.sweep(con)  # anonymous lines to the creator: 90 days; offers to help: 180
     forms.forget(con)  # public-form answers: one year after closure
@@ -348,7 +349,7 @@ from .account import _prune_deletion_log, me  # noqa: E402
 from .forum import asks, forum_sweep  # noqa: E402
 from .moderation import TAKEDOWN_KEEP  # noqa: E402
 from .newsfeed import wipe_post  # noqa: E402
-from . import appeals, assistant, chatlist, chatmod, chatsync, donations, forms, helpus, mapflaws, santa, stats, web_auth  # noqa: E402
+from . import appeals, assistant, chatlist, chatmod, chatsync, donations, forms, helpus, mapflaws, research, santa, stats, web_auth  # noqa: E402
 from .oversight import _admin, _owner  # noqa: E402
 from .queues import AI_TRIES, ai_state  # noqa: E402
 from .seats import notify  # noqa: E402
