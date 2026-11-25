@@ -60,8 +60,6 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
             int(ref[1]), m["user_id"], m["tg_id"])
         template = "fch_reply_answer" if json.loads(m["payload"]).get("answer") else kind
         return (*texts.bot_message(lang, template), f"fp_{post['id']}") if post else None
-    if kind == "fch_reply_answer":  # a retiring bot queued this after migration 203 folded pending answers into fch_comments
-        return None
     if kind == "fch_reply_gone":  # fg:<reply>, to the post's author (through the post): its card
         r = one(con, "SELECT p.id FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id WHERE r.id = ? AND p.user_id = ? AND p.status = 'live'",
                 int(ref[1]), m["user_id"])
@@ -153,7 +151,7 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         return (*texts.bot_message(lang, kind, title=a["title"], why=why), f"sj_{a['subject']}" if a["subject"] else f"fa_{ref[1]}") if why else None
     if kind in ("backup_failed", "backup_ok", "userbot_off", "userbot_ok"):  # bf/bo:<day> to the admins; uo/ub:<since> to the owner
         return (*texts.bot_message(lang, kind), "")
-    if kind in ("prefill_no_match", "prefill_other_id", "prefill_id_held"):  # pn/pf:<user>, ph:<user>:<holder>, to the owner (account.ms_link)
+    if kind in ("prefill_other_id", "prefill_id_held"):  # pf:<user>, ph:<user>:<holder>, to the owner (account.ms_link)
         return (*texts.bot_message(lang, kind, user=ref[1], holder=ref[-1]), "")
     if kind == "channel_ask":  # ca:<org>, to the club's President (admin channel-ask): gone once the club has its channel
         o = one(con, """SELECT o.name FROM orgs o JOIN org_members m ON m.org_id = o.id AND m.user_id = ? AND m.role = 'president'

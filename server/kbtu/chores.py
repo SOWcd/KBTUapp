@@ -82,13 +82,16 @@ async def chat_card(cfg: Config, http: httpx.AsyncClient, con, cid: int, tg_chat
     return True
 
 
-async def _userpics(cfg: Config, http: httpx.AsyncClient, con, n: int = 5) -> None:
+USERPICS = 5  # photos copied per postman round
+
+
+async def _userpics(cfg: Config, http: httpx.AsyncClient, con) -> None:
     """Copy new Telegram photos first, then refresh stale copies for recently seen users."""
     root = Path(cfg.db_path).resolve().parent / "media"
     t = now()
     for u in logic.rows(con, """SELECT id, tg_photo_url, tg_photo_path, tg_photo_src FROM users WHERE tg_photo_url IS NOT NULL
             AND (tg_photo_src IS NOT tg_photo_url OR (seen_at >= ? AND (tg_photo_at IS NULL OR tg_photo_at < ?)))
-            ORDER BY tg_photo_src IS NOT tg_photo_url DESC LIMIT ?""", t - 86400, t - 3 * 86400, n):
+            ORDER BY tg_photo_src IS NOT tg_photo_url DESC LIMIT ?""", t - 86400, t - 3 * 86400, USERPICS):
         old_path = u["tg_photo_path"]
         path = None
         try:
