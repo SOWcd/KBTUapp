@@ -2,10 +2,13 @@
 // holds (screens/afisha/List.svelte builds them); each kind has a fixed base, times what this person taps, learned on
 // this phone only: the server gets anonymous totals per kind (logic/stats.py HERO), never who or which item.
 
-/** In the base's order. The server's stats.HERO_KINDS has the same names (a test checks). */
-export const KINDS = ['ticket', 'friends', 'club', 'news', 'forum', 'class', 'next'] as const;
+import { dayNo } from './time';
+
+/** In the base's order. The server's stats.HERO_KINDS has the same names (a test checks). today, week: the lead's
+ *  (lead() below), never ranked. */
+export const KINDS = ['ticket', 'friends', 'club', 'news', 'forum', 'class', 'next', 'today', 'week'] as const;
 export type Kind = (typeof KINDS)[number];
-const BASE: Record<Kind, number> = { ticket: 7, friends: 6, club: 5, news: 4, forum: 3, class: 2, next: 1 };
+const BASE: Record<Kind, number> = { ticket: 7, friends: 6, club: 5, news: 4, forum: 3, class: 2, next: 1, today: 1, week: 1 };
 
 /** key: the item (e12, p7, f3, c...), the same whatever kind it is now; today: my ticket for today, always first. */
 export type Pick = { key: string; kind: Kind; today?: boolean };
@@ -33,6 +36,30 @@ export function rank<T extends Pick>(items: T[], m: Mem, today: number, n = 3): 
     best.set(x.kind, x); used.add(x.key);
   }
   return [...best.values()].sort((a, b) => +!!b.today - +!!a.today || score(b.kind, m) - score(a.kind, m)).slice(0, n);
+}
+
+/** The lead (owner, Nov 25): the first card is what matters to this person right now, by the clock, ahead of the learned
+ *  picks: my ticket starting within SOON (or on now, begun under 12 h ago: a festival of days isn't "soon" all week), else
+ *  today's biggest event still to come or on, else the week's most popular. Biggest: the most people signed up, then the
+ *  most friends, a cover, the sooner, the older. Only events the store holds, re-read on the page's clock: it changes
+ *  through the day by itself. no: yesterday's untapped hero (stale), never my ticket's. */
+export const SOON = 3 * 3600;
+type Ev = { id: number; startsAt: number; endsAt: number | null; taken: number; friends: unknown[]; cover: unknown; status: string;
+  my: { status: string } | null; visibility?: string; meeting?: boolean };
+export function lead<E extends Ev>(evs: E[], now: number, no = ''): { kind: 'ticket' | 'today' | 'week'; e: E } | null {
+  // begun over 12 h ago (a festival, an exhibition of weeks): on, but never the moment's, for any of the three
+  const on = evs.filter((e) => e.status === 'published' && (e.endsAt ?? e.startsAt + 3 * 3600) > now && now - e.startsAt < 12 * 3600);
+  const mine = on.filter((e) => e.my?.status === 'going' && e.startsAt - now <= SOON)
+    .sort((a, b) => a.startsAt - b.startsAt)[0];
+  if (mine) return { kind: 'ticket', e: mine };
+  // a club's meeting or a team-only event is no one else's "biggest"
+  const open = on.filter((e) => (!e.visibility || e.visibility === 'public') && !e.meeting && 'e' + e.id !== no);
+  const best = (xs: E[]) => xs.sort((a, b) => b.taken - a.taken || b.friends.length - a.friends.length || +!!b.cover - +!!a.cover
+    || a.startsAt - b.startsAt || a.id - b.id)[0];
+  const today = best(open.filter((e) => dayNo(e.startsAt) <= dayNo(now)));
+  if (today) return { kind: 'today', e: today };
+  const week = best(open.filter((e) => e.startsAt < now + 7 * 86400));
+  return week ? { kind: 'week', e: week } : null;
 }
 
 /** A new day: today's first card becomes the day before's. */
