@@ -197,8 +197,8 @@
     saveHero(mem);
   }
   // a new lead fades in on top; the old one stays whole under it as long, then goes (a plain crossfade dipped to the ground)
-  const into = (): TransitionConfig => ({ duration: calm() ? 0 : 420, easing: cubicOut, css: (k) => `opacity: ${k}; z-index: 1` });
-  const under = (): TransitionConfig => ({ duration: calm() ? 0 : 420, css: () => 'z-index: 0' });
+  const into = (_: Element): TransitionConfig => ({ duration: calm() ? 0 : 420, easing: cubicOut, css: (k) => `opacity: ${k}; z-index: 1` });
+  const under = (_: Element): TransitionConfig => ({ duration: calm() ? 0 : 420, css: () => 'z-index: 0' });
   function slid(ev: Event) {
     const el = ev.currentTarget as HTMLElement, a = el.children[0] as HTMLElement, b = el.children[1] as HTMLElement | undefined;
     at = b ? Math.round(el.scrollLeft / (b.offsetLeft - a.offsetLeft)) : 0; // one card's step
