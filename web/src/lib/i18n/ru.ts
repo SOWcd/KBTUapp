@@ -798,6 +798,7 @@ const ru = {
   'list.classes': 'Пары',
   'list.title': 'События',
   'list.yours': 'Твои события',
+  'list.heroPicks': 'Для тебя сегодня',
   'list.moreSoon': "Скоро будет больше событий",
   'list.moreSoonText': "Клубы только приходят в KBTU App. Подпишись на свои — бот напишет, как только появится новое.",
   'list.toClubs': "К клубам",

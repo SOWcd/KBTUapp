@@ -798,6 +798,7 @@ const kk: Dict = {
   'list.classes': 'Сабақтар',
   'list.title': 'Іс-шаралар',
   'list.yours': 'Сенің іс-шараларың',
+  'list.heroPicks': 'Бүгін саған',
   'list.moreSoon': "Жақында іс-шаралар көбейеді",
   'list.moreSoonText': "Клубтар KBTU App-қа енді келіп жатыр. Өз клубтарыңа жазыл — жаңасы шыққанда бот жазады.",
   'list.toClubs': "Клубтарға",
