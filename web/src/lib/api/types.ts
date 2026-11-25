@@ -106,6 +106,9 @@ export interface ChannelMod { held: ChannelModPost[]; live: ChannelModPost[]; re
 /** My reply, as the anonymous author, in my post's comments (server fchannel.reply_*): comment, the comment answered
  *  (its message id; null: the thread); state where it stands. Only I see these as mine. */
 export interface ChannelReply { id: Id; body: string; comment: number | null; state: 'checking' | 'held' | 'maybe' | 'soon' | 'sent' | 'removed' | 'missing'; at: Ts; ai?: boolean }
+/** A comment written in the app under a channel post (server fchannel.thread): signed with a name, or an anonymous
+ *  author's mark (anon, nick); mine: only for my own signed ones, with state (where it stands; others' are all 'sent'). */
+export interface ChannelComment { id: Id; body: string; at: Ts; state: ChannelReply['state']; mine: boolean; anon: boolean; nick: [number, number] | null; name: string | null }
 /** A reply in the moderators' list: the words and the post they answer, never whose; reports: /report in the group */
 export interface ChannelModReply { id: Id; body: string; post: Id; postBody: string; why: string | null; aiWhy?: string | null; reports: number; at: Ts; undo: boolean; anon: boolean; nick: Nick }
 /** A check-in session I run (/show, server checkin.py): the screen's numbers plus how many screens show it. */

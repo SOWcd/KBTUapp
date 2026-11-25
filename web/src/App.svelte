@@ -288,6 +288,7 @@
   sheets.forumSkills = (onsaved) => lazy(() => import('./screens/forum/SkillsSheet.svelte'), { onsaved });
   sheets.newAsk = (onmade) => lazy(() => import('./screens/forum/NewAsk.svelte'), { onmade });
   sheets.channelReply = (post) => lazy(() => import('./screens/forum/ChannelReply.svelte'), { post });
+  sheets.channelThread = (post) => lazy(() => import('./screens/forum/ChannelThread.svelte'), { post });
   sheets.askPeople = (ask, title) => lazy(() => import('./screens/forum/AskPeople.svelte'), { ask, title });
   sheets.chats = (chats) => lazy(() => import('./screens/sheets/ChatsSheet.svelte'), { chats });
   sheets.clubList = (view) => lazy(clubListPage, { view });
