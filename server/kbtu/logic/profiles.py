@@ -785,6 +785,9 @@ def person(con, v: Viewer, uid: int) -> dict:
         going = cards(con, v, [e for e in rows(con, """SELECT e.* FROM registrations r JOIN events e ON e.id = r.event_id
             WHERE r.user_id = ? AND r.status = 'going' AND e.status = 'published' AND e.starts_at > ? ORDER BY e.starts_at""", uid, core.now())
             if _visible(con, v, e, roles, hidden)])
+    # "Bring a friend": the upcoming events I already invited them to, so the Invite sheet opens with them "Invited"
+    invited = [r[0] for r in rows(con, """SELECT i.event_id FROM friend_invites i JOIN events e ON e.id = i.event_id
+        WHERE i.from_id = ? AND i.to_id = ? AND e.starts_at > ?""", v.id, uid, core.now())] if link else []
     earned = rows(con, """SELECT e.* FROM registrations r JOIN events e ON e.id = r.event_id
         WHERE r.user_id = ? AND r.checked_in_at IS NOT NULL AND e.badge_name IS NOT NULL ORDER BY e.starts_at DESC""", uid) if close else []
     # the role shows only to the club's own team: outside, just the club
@@ -813,7 +816,7 @@ def person(con, v: Viewer, uid: int) -> dict:
         # the showcase as picked (achievements earned, badges owned), in order; empty = never picked, the badge shows a default
         "shelf": [k for k in picked if any(a["code"] == k and a["level"] > 0 for a in ach) or any(f"b{b['eventId']}" == k for b in badges)],
         "awards": {"achievements": ach, "badges": badges},
-        "friendship": state, "friendsSince": link["created_at"] if link else None, "going": going,
+        "friendship": state, "friendsSince": link["created_at"] if link else None, "going": going, "invited": invited,
         "username": u["tg_username"] if team else None,
         # a badge picked to be shown, shows; the one that came by itself from a club would tell a stranger the club
         "frame": u["frame"] if u["frame"] in FRAMES else None,  # on the lanyard, as the photo under it: seen by anyone who sees the card
