@@ -23,7 +23,7 @@
   import { say, close, type Overlay } from '../../lib/state/ui.svelte';
   import { session, loadMe, saveSwitch } from '../../lib/state/session.svelte';
   import { onDestroy, onMount } from 'svelte';
-  import { data, phrase, loadMyCard, loadCredits, loadSupport } from '../../lib/state/data.svelte';
+  import { data, phrase, loadMyCard, loadCredits, loadSupport, loadFriends } from '../../lib/state/data.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { api, ApiErr, type Fixable } from '../../lib/api';
   import { inner } from '../../lib/perms';
@@ -61,7 +61,7 @@
   // a switch saves at once and puts itself back if the server says no
   // (quiet: no toast, the label says it all: whether friends see where I'm going)
   let undo = $state(0); // the reports' consent switch, redrawn as it was after a "no" in its question
-  async function set(k: (typeof notificationSettings)[number][0] | 'showGoing' | 'canFriend', on: boolean, quiet = false) {
+  async function set(k: (typeof notificationSettings)[number][0] | 'showGoing' | 'canFriend' | 'suggestMe', on: boolean, quiet = false) {
     haptic.tap();
     try {
       if (await saveSwitch(k, on) && !quiet) say(phrase(on ? 'say.notifyOn' : 'say.notifyOff'), on ? 'megaphone_3d' : 'crescent_moon_3d');
@@ -297,6 +297,10 @@
       <div class="gap"><Group>
         <Row title={t('set.showGoing')} accessory="switch" checked={me.settings.showGoing} onchange={(on) => set('showGoing', on, true)} />
         <Row title={t('set.canFriend')} accessory="switch" checked={me.settings.canFriend} onchange={(on) => set('canFriend', on, true)} />
+        <!-- People you may know (lib/pymk.ts), its own consent: on shows its words first, off takes me out both ways at once; the Friends page follows -->
+        {#key undo}<Row title={t('set.suggestMe')} accessory="switch" checked={me.settings.suggestMe}
+          onchange={async (on) => { if (on && !(await sheets.ask({ title: t('pymk.askTitle'), text: t('pymk.askText'), ok: t('pymk.on'), cancel: t('common.cancel') }))) { undo++; return; }
+            await set('suggestMe', on, true); void loadFriends(); }} />{/key}
         {#if me.city}<Row title={t('set.hideCity')} accessory="switch" checked={me.city.hidden} onchange={(on) => cityHidden(on)} />{/if}
         <!-- People of the app, my own consent (lib/credits.ts): only while something there is mine, or my yes stands.
              The switch shows what is SAVED: a tap on goes back at once and opens the sheet (what everyone would see, the

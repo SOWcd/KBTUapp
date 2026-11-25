@@ -104,12 +104,15 @@
   .ly.moments .hl { background: linear-gradient(100deg, #F2DEC8, #E3A985, #C9C391); }
   .ly.faces .st { background: linear-gradient(90deg, rgba(0, 0, 0, 0.3), transparent 35% 65%, rgba(0, 0, 0, 0.3)), linear-gradient(180deg, #6E7BFF, #C04BFF 55%, #FF4F9A); } /* shaded round like the others */
   .ly.faces .hl { background: linear-gradient(100deg, #6E7BFF, #C04BFF, #FF4F9A, #FFA43D); }
-  .ly.sower .st { background: linear-gradient(90deg, #CECECA, #F6F6F4 50%, #CECECA); }
-  .ly.sower .st i { color: #1E1E1E; }
-  .ly.sower .cd { background: radial-gradient(90% 120% at 100% 0%, #5E5E5D, #2E2E2E 62%); }
-  .ly.sower .cd::before { content: ''; position: absolute; right: -30px; top: -30px; width: 76px; height: 76px; border-radius: 50%;
-    background: radial-gradient(circle, rgba(232, 232, 231, 0.3) 1px, transparent 1.5px) 0 0 / 5px 5px; } /* his photo's halftone */
-  .ly.sower .hl { background: #E8E8E7; }
+  /* SOWER: matte black, one red (Hero's card C) */
+  .ly.sower .st { background: linear-gradient(rgb(255, 59, 48), rgb(255, 59, 48)) 1.5px 0 / 1px 100% no-repeat, linear-gradient(90deg, rgb(17, 17, 17), rgb(29, 29, 31) 50%, rgb(12, 12, 12)); }
+  .ly.sower .st i { color: rgb(161, 161, 166); }
+  .ly.sower .cl { background: linear-gradient(180deg, rgb(58, 58, 60), rgb(28, 28, 30)); }
+  .ly.sower .cd { background: radial-gradient(90% 120% at 100% 0%, rgb(44, 44, 46), transparent 55%), linear-gradient(165deg, rgb(28, 28, 30), rgb(10, 10, 11) 70%); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
+  .ly.sower .cd::before { content: ''; position: absolute; right: -30px; top: -30px; width: 90px; height: 90px; border-radius: 50%;
+    background: repeating-radial-gradient(circle, transparent 0 5px, rgba(255, 255, 255, 0.05) 5px 6px); } /* the card's faint rings */
+  .ly.sower .ph { background: rgb(44, 44, 46); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14); }
+  .ly.sower .hl { background: rgba(255, 255, 255, 0.1); box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.14); }
   .ly.locked .cd { background: linear-gradient(135deg, var(--c1, rgb(58, 66, 110)), var(--c2, rgb(22, 26, 48))); }
   .ly.club .st { background: linear-gradient(90deg, var(--s1), var(--s2) 50%, var(--s1)); }
   .ly.club .st i { color: var(--s3); font-size: calc(var(--sf) * 0.6); font-weight: var(--sfw); letter-spacing: var(--sl); line-height: calc(var(--slh) * 0.6); white-space: pre; text-align: center; }

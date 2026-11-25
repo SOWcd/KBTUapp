@@ -572,6 +572,8 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         return None
     if not logic.seats.sees_school(con, m["user_id"], e):  # a school's own event: only to whom it shows (its signed-up keep theirs)
         return None
+    if kind == "remind_2h" and not one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND user_id = ? AND status = 'going'", e["id"], m["user_id"]):
+        return None
     if e["visibility"] != "public" and kind in ("remind_2h", "seat_free", "going_ok", "door_open"):  # a club's own event has no ticket
         kind += "_team"
     if kind.startswith("door_open") and (not one(con, "SELECT n_door FROM users WHERE id = ?", m["user_id"])[0] or not one(
@@ -957,6 +959,7 @@ def _chores(cfg: Config, con) -> None:
     logic.santa.tick(con)  # Secret Santa's clock: the draw at the deadline, the reminders (one read of the games due)
     logic.stats_day(con)  # after midnight: yesterday's row for the admin's stats
     logic.course_day(con)  # September 1: every student's year of study a year on
+    logic.pymk.night(con)  # People you may know: everyone's suggestions afresh, once a day
     casting.forget(con)   # daily: answers and notes of rounds whose results went out 60 days ago
     purge(cfg, con)       # accounts whose week to change their mind ran out
     logic.ms_sweep(con)   # unfinished Microsoft sign-ins after a week, used-link marks after a day
@@ -1871,6 +1874,8 @@ async def _group_video(cfg: Config, http: httpx.AsyncClient, msg: dict, url: str
 
 async def _tiktok(cfg: Config, http: httpx.AsyncClient, msg: dict, url: str, started: float | None = None) -> None:
     started = time.monotonic() if started is None else started
+    # whose link it is: the Instagram session's own caps per chat and per person (tiktok._session_take)
+    asker = tiktok.asker.set((msg["chat"]["id"], int((msg.get("from") or {}).get("id") or 0)))
     chat = {"chat_id": msg["chat"]["id"]}
     if msg.get("is_topic_message") and msg.get("message_thread_id"):
         chat["message_thread_id"] = msg["message_thread_id"]
@@ -1890,7 +1895,10 @@ async def _tiktok(cfg: Config, http: httpx.AsyncClient, msg: dict, url: str, sta
             route = type(exc).__name__
         _video_log.info("group video %s %.3fs", route, time.monotonic() - started)
 
-    await asyncio.gather(action(), reply())
+    try:
+        await asyncio.gather(action(), reply())  # its tasks copy the context: they see the asker
+    finally:
+        tiktok.asker.reset(asker)
 
 
 async def _video_reply(http: httpx.AsyncClient, api: str, chat: dict, mid: int, url: str) -> str:

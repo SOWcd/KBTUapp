@@ -74,7 +74,8 @@ class Config:
     # names Cloudflare for the assistant's questions (app.py); empty: off
     docs: str = ""
     docs_db: str = ""
-    # TIKTOK=1: answer supported group links with the video (tiktok.py)
+    # TIKTOK=1: answer supported group links with the video (tiktok.py). INSTAGRAM_COOKIES (Instagram stories) is
+    # deliberately not here: tiktok.py reads it from the environment at each call, so its path is in no Config, no repr
     tiktok: bool = False
     # REPORTS=1: clubs' event reports and personal attendance logs (logic/evreports.py, privacy policy section 3)
     reports: bool = False

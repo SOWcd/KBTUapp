@@ -13,7 +13,7 @@
   import { readCache, writeCache } from './lib/state/cache';
   import { channel, channelUnread, warmChannelFeeds, watchChannelVisit } from './lib/state/channel.svelte';
   import { loadSubjects, subjReady } from './lib/state/subjects.svelte';
-  import { data, loadAfisha, loadCredits, loadSupport, loadGallery, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadVol, loadAppeals, loadSg, loadAsks, loadHelpq, loadStudio, loadTeam, phrase, studioChanged, eventById, eventDetails, toggleGoing, keepRef, skipped, classKey } from './lib/state/data.svelte';
+  import { data, loadAfisha, loadSchedule, loadCredits, loadSupport, loadGallery, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadVol, loadAppeals, loadSg, loadAsks, loadHelpq, loadStudio, loadTeam, phrase, studioChanged, eventById, eventDetails, toggleGoing, keepRef, skipped, classKey } from './lib/state/data.svelte';
   import { burst } from './ui/burst';
   import { hiNow, nextUp, once, opened, returning, seen } from './lib/greet';
   import { visit } from './lib/helpus';
@@ -61,8 +61,7 @@
     const slow = setTimeout(() => { if (mine === want) say(t('common.offline'), 'pleading_face_3d'); }, 2000);
     return load().then((m) => { clearTimeout(slow); loaded.set(load, m); if (mine === want && !session.revoked && !session.banned) open(m.default, props, stat, key); }).catch(() => { clearTimeout(slow); if (mine === want) say(t('common.offline'), 'pleading_face_3d'); });
   }
-  // the event, person and club sheets are chunks too (out of the start's bundle), fetched with the first API calls (onMount),
-  // so by any tap, or a deep link (it waits for those calls), they open in the same frame as before
+  // The event, person and club sheets are chunks warmed during startup so subsequent taps open in the same frame.
   const eventSheet = () => import('./screens/sheets/EventSheet.svelte');
   const personSheet = () => import('./screens/sheets/PersonSheet.svelte');
   const clubSheet = () => import('./screens/sheets/ClubSheet.svelte');
@@ -603,7 +602,14 @@
         .catch(() => say(t('fr.linkDead'), 'pleading_face_3d'));
       return;
     }
-    if (p === 'sched') { asStudent(() => { void loadAfisha().then(() => sheets.week()); }); return; } // the bot read my week: check it
+    if (p === 'sched') {
+      asStudent(() => {
+        const schedule = loadSchedule(true);
+        if (data.scheduleReady || data.schedule.length) void sheets.week();
+        else void schedule.then(() => sheets.week());
+      }, p);
+      return;
+    }
     if (p === 'rq') { asStudent(() => sheets.rosterRequests()); return; } // the bot: someone says they're in our DMP list
     const ce = p.match(/^ce_(\d+)$/); // the bot's "chat linked to your club": Studio's chats, for "show posts in the feed"
     if (ce) { asStudent(() => sheets.clubEdit(Number(ce[1]), 'chats')); return; }
@@ -907,19 +913,22 @@
         session.me = snap.me; session.ready = true; session.board = !!snap.me?.board; session.channel = !!snap.me?.forumChannel; // the last launch's word until the server's
       }
       data.events = snap.events; data.orgs = snap.orgs; data.schedule = snap.schedule; data.posts = snap.posts; data.castings = snap.castings ?? []; data.friends = snap.friends ?? null; data.myCard = snap.myCard ?? null; data.news = snap.news ?? null; data.studio = snap.studio ?? {}; data.team = snap.team ?? {}; data.eventsReady = true;
+      data.scheduleReady = !!snap.schedule.length; data.postsReady = !!snap.posts.length;
       data.gallery = snap.gallery ?? [];
       data.galleryAlbums = snap.galleryAlbums ?? [];
       data.galleryPost = snap.galleryPost ?? null; // the Gallery's Add from the start (its grid takes it as it opens)
       setTimeout(() => moment(installHint)); // the last launch's word is enough to decide: at once, not after the server
     }
-    Promise.all([inTelegram ? loadMe(false, true) : undefined, loadAfisha()]).then(() => {
+    const account = inTelegram ? loadMe(false, true) : Promise.resolve();
+    const afisha = loadAfisha();
+    // Warm the first event while the lists are on their way.
+    warm(eventSheet);
+    void account.then(() => {
       // People of the app: Profile's row and its screen, ahead of any tap. Something of mine there and never answered:
       // the "show your name?" sheet once on this phone (owner, Nov 20: few open that screen, so ask at the door)
       const credits = loadCredits();
       if (session.banned || session.revoked) return;
       void loadSupport();
-      // An event is the first tap on Afisha. Let that chunk and the first paint get ahead of the other screens.
-      warm(eventSheet);
       requestAnimationFrame(() => setTimeout(warmNavigation));
       // A Microsoft return without a start parameter can still carry a verified pending claim.
       const microsoftReturn = !!session.me?.msPending;
@@ -932,7 +941,10 @@
           msBack(true);
         }, () => {});
       }
-      if (!tg.startParam && !microsoftReturn && !gated && !session.tgComment && !overlays.length) moment(greet); // in the queue: never over a launch sheet (the install offer), after it closes
+      if (!tg.startParam && !microsoftReturn && !gated && !session.tgComment && !overlays.length) {
+        // The greeting names the next class or event, so it still waits for the agenda.
+        void afisha.then(() => { if (!session.banned && !session.revoked) moment(greet); });
+      }
       if (tg.startParam) deepLink();
       else if (session.me?.msPending) msBack();
       void credits.then(() => {
@@ -1018,18 +1030,20 @@
   .bapp { margin-top: 8px; height: 44px; padding: 0 20px; border-radius: var(--r-full); background: var(--surface-2); font: 650 15px/1 var(--font-text); }
   .topfade { position: absolute; inset: 0; z-index: calc(var(--z-capsule) - 1); pointer-events: none; background: color-mix(in srgb, var(--bg) 88%, transparent);
     /* eased, not linear: a linear fade ends in a kink the eye reads as a hard line under the head (owner, Nov 23) */
-    --a: calc(var(--head-bottom) - 4px); --d: calc(var(--page-top) - var(--a));
+    --a: var(--edge-from); --d: calc(var(--edge-to) - var(--a));
     -webkit-mask-image: linear-gradient(#000 var(--a), rgba(0, 0, 0, 0.92) calc(var(--a) + var(--d) * 0.1), rgba(0, 0, 0, 0.75) calc(var(--a) + var(--d) * 0.25),
       rgba(0, 0, 0, 0.5) calc(var(--a) + var(--d) * 0.42), rgba(0, 0, 0, 0.27) calc(var(--a) + var(--d) * 0.6), rgba(0, 0, 0, 0.1) calc(var(--a) + var(--d) * 0.78),
-      rgba(0, 0, 0, 0.025) calc(var(--a) + var(--d) * 0.92), transparent var(--page-top));
+      rgba(0, 0, 0, 0.025) calc(var(--a) + var(--d) * 0.92), transparent var(--edge-to));
     mask-image: linear-gradient(#000 var(--a), rgba(0, 0, 0, 0.92) calc(var(--a) + var(--d) * 0.1), rgba(0, 0, 0, 0.75) calc(var(--a) + var(--d) * 0.25),
       rgba(0, 0, 0, 0.5) calc(var(--a) + var(--d) * 0.42), rgba(0, 0, 0, 0.27) calc(var(--a) + var(--d) * 0.6), rgba(0, 0, 0, 0.1) calc(var(--a) + var(--d) * 0.78),
-      rgba(0, 0, 0, 0.025) calc(var(--a) + var(--d) * 0.92), transparent var(--page-top)); }
+      rgba(0, 0, 0, 0.025) calc(var(--a) + var(--d) * 0.92), transparent var(--edge-to)); }
   /* and under the bottom bar, softer: the glass still has something to bend (mockup v23) */
-  /* fullscreen only: Telegram draws its own dark scrim behind its buttons; our page-coloured fade over the page makes it read as ours.
-     --top is 0 outside fullscreen, so the height is 0 there (the min() adds the 12 px only when there is an inset) */
-  .tgfade { position: absolute; top: 0; left: 0; right: 0; height: calc(var(--top) + min(var(--top), 12px)); z-index: calc(var(--z-capsule) - 1); pointer-events: none;
+  /* Telegram fullscreen only: Telegram draws its own dark scrim behind its buttons; our page-coloured fade over the page makes
+     it read as ours. It ends with Telegram's row (--top: 0 outside fullscreen); the home-screen app has no such scrim (its
+     --top is the bar's room, and this ran 60 px past the bar there) */
+  .tgfade { position: absolute; top: 0; left: 0; right: 0; height: var(--top); z-index: calc(var(--z-capsule) - 1); pointer-events: none;
     background: linear-gradient(var(--bg), transparent); }
+  :global(html[data-web]) .tgfade { display: none; }
   .botfade { position: absolute; inset: 0; z-index: calc(var(--z-nav) - 1); pointer-events: none; background: var(--bg);
     -webkit-mask-image: linear-gradient(0deg, rgba(0, 0, 0, 0.85), transparent calc(var(--bottom) + 40px));
     mask-image: linear-gradient(0deg, rgba(0, 0, 0, 0.85), transparent calc(var(--bottom) + 40px)); }

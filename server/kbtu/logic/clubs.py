@@ -162,8 +162,11 @@ CATEGORIES = ("it", "art", "sport", "business", "science", "volunteer")  # types
 def listed(con, v: Viewer, small: bool = False) -> list[sqlite3.Row]:
     """The clubs the registry shows me (orgs(), search.clubs). A club under CLUB_MIN people isn't a club yet:
     off the registry for everyone but its own (the admin too: one interface); its page (org) and its events
-    stay reachable, and search finds it (small=True, every club not hidden). One subquery for all, never per card."""
-    return rows(con, """SELECT * FROM orgs o WHERE status = 'active' AND kind NOT IN ('office','app')
+    stay reachable, and search finds it (small=True, every club not hidden). One subquery for all, never per card.
+    The open round's id rides along: core.shared() keys a club's cached part by its row, so a round opened or closed
+    shows at once in every worker, not SHARED_TTL later (a student's "Apply" sent a join request meanwhile)."""
+    return rows(con, """SELECT *, (SELECT MAX(r.id) FROM rounds r WHERE r.org_id = o.id AND r.status = 'open') AS open_round
+        FROM orgs o WHERE status = 'active' AND kind NOT IN ('office','app')
         AND (kind != 'club' OR EXISTS (SELECT 1 FROM org_members m WHERE m.org_id = o.id AND m.user_id = ?)
              OR (SELECT COUNT(*) FROM org_members m WHERE m.org_id = o.id) >= ?)""", v.id, 0 if small else CLUB_MIN)
 
