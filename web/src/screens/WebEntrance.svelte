@@ -16,10 +16,10 @@
   import { api, ApiErr } from '../lib/api';
   import { WEB_SESSION_CHANGE } from '../lib/api/client';
   import { i18n, t } from '../lib/i18n/index.svelte';
-  import { loadMe } from '../lib/state/session.svelte';
+  import { loadMe, session } from '../lib/state/session.svelte';
   import { onComputer, onIos } from '../lib/tg';
   import { bootOut, bootOver, bootUnder } from '../lib/boot';
-  import { APPLE_CONSENT, appleToken, native, nonce, pushToken } from '../lib/native';
+  import { APPLE_CONSENT, TG_LINK, appleToken, native, nonce, pushToken } from '../lib/native';
   import { say } from '../lib/state/ui.svelte';
 
   const installed = matchMedia('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone;
@@ -34,15 +34,31 @@
     await loadMe(false, true, await (limit ? Promise.race([me, new Promise<never>((_, no) => setTimeout(() => no(new Error('timeout')), limit))]) : me));
     entered = true;
     void telegramBack();
-    // the iPhone app: Apple's own prompt once, then this phone's token each launch (it can change); for this session only
-    void pushToken().then((token) => { if (token) return api.pushDevice(token, APPLE_CONSENT); }).catch(() => {});
+    void syncPush();
   }
 
-  // back from Telegram's sign-in page (Settings → Link Telegram, logic/apple.py): its proof in #tgAuthResult
+  // the iPhone app: Apple's own prompt once, then this phone's token each launch and return (it can change), for this
+  // session only; notifications turned off in iOS Settings take the token off the server
+  async function syncPush() {
+    try {
+      const r = await pushToken();
+      if (r && 'token' in r) await api.pushDevice(r.token, APPLE_CONSENT);
+      else if (r?.denied) await api.dropPushDevice();
+    } catch { /* again at the next return to the app */ }
+  }
+
+  // back from Telegram's sign-in page (Settings → Link Telegram, logic/apple.py): its proof in #tgAuthResult, linked
+  // only when this tab started it (Settings' one-time state, for this account, within 10 minutes): a link carrying
+  // someone else's proof links nothing
   async function telegramBack() {
     const m = location.hash.match(/tgAuthResult=([\w+/=-]+)/);
     if (!m) return;
+    const state = new URLSearchParams(location.search).get('state');
     history.replaceState(null, '', location.pathname);
+    let mine: { state?: unknown; uid?: unknown; at?: unknown } = {};
+    try { mine = JSON.parse(sessionStorage.getItem(TG_LINK) ?? '{}'); sessionStorage.removeItem(TG_LINK); } catch { /* no storage: no link */ }
+    const age = Date.now() - Number(mine.at);
+    if (!state || mine.state !== state || mine.uid !== session.me?.id || !(age >= 0 && age < 600_000)) return;
     try {
       const bytes = Uint8Array.from(atob(m[1].replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
       await api.linkTelegram(JSON.parse(new TextDecoder().decode(bytes)));
@@ -86,9 +102,15 @@
     void check();
     const ended = () => { if (entered) location.reload(); };
     const switched = (e: StorageEvent) => { if (e.key === WEB_SESSION_CHANGE) location.reload(); };
+    const back = () => { if (entered && document.visibilityState === 'visible') void syncPush(); };
     addEventListener('kb:web-session-ended', ended);
     addEventListener('storage', switched);
-    return () => { removeEventListener('kb:web-session-ended', ended); removeEventListener('storage', switched); };
+    document.addEventListener('visibilitychange', back);
+    return () => {
+      removeEventListener('kb:web-session-ended', ended);
+      removeEventListener('storage', switched);
+      document.removeEventListener('visibilitychange', back);
+    };
   });
 
   // the app is up and painted under the boot screen: it fades away over it

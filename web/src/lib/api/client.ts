@@ -166,9 +166,10 @@ export const server = {
   appleLogin: (p: ApplePass): Promise<void> => changeWebSession('/web/apple', p),
   linkApple: (p: ApplePass): Promise<void> => call('POST', '/me/logins/apple', p),
   unlinkApple: (): Promise<void> => call('DELETE', '/me/logins/apple'),
-  telegramLinkStart: (): Promise<{ url: string }> => call('GET', '/me/logins/telegram'), // Telegram's sign-in page, back with #tgAuthResult
+  telegramLinkStart: (state: string): Promise<{ url: string }> => call('GET', '/me/logins/telegram' + query({ state })), // Telegram's sign-in page, back with #tgAuthResult
   linkTelegram: (widget: unknown): Promise<void> => changeWebSession('/me/logins/telegram', widget), // a new session: the old one ends
   pushDevice: (token: string, consent: string): Promise<void> => call('POST', '/me/devices', { token, consent }),
+  dropPushDevice: (): Promise<void> => call('DELETE', '/me/devices'), // notifications off in iOS Settings
   msStart: (): Promise<{ url: string }> => call('POST', '/ms/start'), // the KBTU Microsoft sign-in link, opened outside Telegram
   msClaim: (claim: string): Promise<{ ok: true }> => call('POST', '/ms/claim', { claim }), // back from /ms.html (startapp=ms_<claim>): only the Telegram that started it takes it
   manualLogin: (i: { firstName: string; lastName: string; studentId: string; course: number }, consentVersion: string): Promise<Me> => call('POST', '/kbtu/manual', { ...i, consentVersion }), // only while it isn't

@@ -2,17 +2,22 @@ import UIKit
 import UserNotifications
 
 // This iPhone's push token for the web (Bridge "push"): Apple's prompt the first time, the token at every launch (it
-// can change). The web hands it to the server for its own session (POST /api/me/devices).
+// can change). The web hands it to the server for its own session (POST /api/me/devices); denied (turned off in iOS
+// Settings) takes it off there (DELETE). Not granted yet, or no token this time: nil, and nothing changes.
 final class Push {
     static let shared = Push()
     private var waiting: [(String?) -> Void] = []
 
-    func token(_ done: @escaping (String?) -> Void) {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
-            DispatchQueue.main.async {
-                guard granted else { return done(nil) }
-                self.waiting.append(done)
-                UIApplication.shared.registerForRemoteNotifications()
+    func token(_ done: @escaping (_ token: String?, _ denied: Bool) -> Void) {
+        let center = UNUserNotificationCenter.current()
+        center.getNotificationSettings { settings in
+            if settings.authorizationStatus == .denied { return DispatchQueue.main.async { done(nil, true) } }
+            center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
+                DispatchQueue.main.async {
+                    guard granted else { return done(nil, false) }
+                    self.waiting.append { done($0, false) }
+                    UIApplication.shared.registerForRemoteNotifications()
+                }
             }
         }
     }

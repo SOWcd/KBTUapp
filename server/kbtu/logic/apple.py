@@ -39,6 +39,7 @@ FRESH = 600          # an identity token older than this (by its iat) is refused
 NONCE = re.compile(r"[A-Za-z0-9_-]{32,128}")
 SUBJECT = re.compile(r"[A-Za-z0-9._-]{1,255}")
 DEVICE = re.compile(r"[0-9a-f]{64,200}")  # an APNs token in hex (32 bytes today, Apple says it may grow)
+DEVICES = 8          # phones one account keeps push tokens for: a new one past it pushes the longest unseen out
 
 _keys: dict[str, rsa.RSAPublicKey] = {}
 _keys_at = 0.0
@@ -144,11 +145,14 @@ def link_apple(con, uid: int, body: dict, sub: str, now: int) -> None:
     core.log_action(con, uid, "login_link", f"user:{uid}", '{"provider": "apple"}')
 
 
-def unlink_apple(con, uid: int) -> None:
-    """Apple taken off my account: only while Telegram still signs me in (never the last way in)."""
+def unlink_apple(con, uid: int, keep: bytes | None) -> None:
+    """Apple taken off my account: only while Telegram still signs me in (never the last way in). Every other session
+    of mine ends with it (and its push tokens, by the foreign key): a session doesn't record which sign-in opened it,
+    and one opened through a stolen Apple ID must not outlive the unlink. keep: the session doing it (None: the Mini App)."""
     if not telegram_linked(con, uid):
         raise ApiError("forbidden", "last_login")
     con.execute("DELETE FROM identities WHERE provider = 'apple' AND user_id = ?", (uid,))
+    con.execute("DELETE FROM web_sessions WHERE user_id = ? AND digest IS NOT ?", (uid, keep))
     core.log_action(con, uid, "login_unlink", f"user:{uid}", '{"provider": "apple"}')
 
 
@@ -176,24 +180,37 @@ def link_telegram(con, uid: int, tg: dict, now: int) -> None:
     core.log_action(con, uid, "login_link", f"user:{uid}", '{"provider": "telegram"}')
 
 
-def telegram_start(bot_token: str, domain: str) -> str:
-    """Telegram's own sign-in page, back to us with #tgAuthResult (the widget's redirect mode, no popup)."""
+def telegram_start(bot_token: str, domain: str, state: str) -> str:
+    """Telegram's own sign-in page, back to us with #tgAuthResult (the widget's redirect mode, no popup). state: the
+    tab's one-time mark (Settings put it in sessionStorage): the page links only a return it started itself, so a link
+    with someone else's proof in it can't put their Telegram on my account (WebEntrance.telegramBack)."""
+    if not NONCE.fullmatch(state):
+        raise ApiError("bad_input")
     return "https://oauth.telegram.org/auth?" + str(httpx.QueryParams({
         "bot_id": bot_token.split(":")[0], "origin": f"https://{domain}", "request_access": "write",
-        "return_to": f"https://{domain}/?link=telegram"}))  # the page reads #tgAuthResult (WebEntrance.telegramBack)
+        "return_to": f"https://{domain}/?link=telegram&state={state}"}))
 
 
 def add_device(con, uid: int, session: bytes, body: dict, now: int) -> None:
     """This iPhone's push token, for this signed-in session only (it goes with the session). The app sends it on every
-    launch: created_at is when it was last seen (push.STALE), and a token marked dead lives again."""
+    launch: created_at is when it was last seen (push.STALE), and a token marked dead lives again. One token a session
+    (a session is one phone) and DEVICES an account: made-up tokens can't pile up work for the postman."""
     _consent(body)
     token = body.get("token")
     if not isinstance(token, str) or not DEVICE.fullmatch(token):
         raise ApiError("bad_input")
+    con.execute("DELETE FROM push_devices WHERE session = ? AND token != ?", (session, token))
     con.execute("""INSERT INTO push_devices (token, session, user_id, consent, created_at) VALUES (?, ?, ?, ?, ?)
         ON CONFLICT (token) DO UPDATE SET session = excluded.session, user_id = excluded.user_id,
         consent = excluded.consent, created_at = excluded.created_at, provider = 'apns', dead_at = NULL""",
         (token, session, uid, CONSENT, now))
+    con.execute("""DELETE FROM push_devices WHERE token IN (SELECT token FROM push_devices WHERE user_id = ? AND token != ?
+        ORDER BY created_at DESC, token LIMIT -1 OFFSET ?)""", (uid, token, DEVICES - 1))  # never the one just seen
+
+
+def drop_device(con, uid: int, session: bytes) -> None:
+    """Notifications turned off in iOS Settings: this session's token goes (the person's other phones keep theirs)."""
+    con.execute("DELETE FROM push_devices WHERE session = ? AND user_id = ?", (session, uid))
 
 
 def keep_devices(con, uid: int, old: list[str], session: bytes, now: int) -> None:

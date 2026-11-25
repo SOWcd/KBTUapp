@@ -42,9 +42,13 @@ export function scan(text: string, onText: (value: string) => boolean): void {
 }
 export const scanClose = (): void => { if (native.has('scan')) void native.call('scanClose').catch(() => {}); };
 
-/** This iPhone's push token once the person allowed notifications (Apple's own prompt, once), else null */
-export async function pushToken(): Promise<string | null> {
+/** This iPhone's push token once the person allowed notifications (Apple's own prompt, once); { denied } once they
+ *  turned them off in iOS Settings; null: not yet asked, or no token this time (nothing to change) */
+export async function pushToken(): Promise<{ token: string } | { denied: true } | null> {
   if (!native.has('push')) return null;
-  try { return (await native.call<{ token: string } | null>('push'))?.token ?? null; }
+  try { return await native.call<{ token: string } | { denied: true } | null>('push'); }
   catch { return null; }
 }
+
+/** sessionStorage key: the Telegram link this tab started (Settings), checked when Telegram sends it back (WebEntrance) */
+export const TG_LINK = 'kb:telegram-link';

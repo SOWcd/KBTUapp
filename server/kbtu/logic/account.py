@@ -531,7 +531,7 @@ def me(con, v: Viewer) -> dict:
         "referrals": {"count": brought(con, v.id), "code": _qr_code(con, v.id, "link_code")} if s else None,
         "role": u["role"], "canDm": bool(u["can_dm"]),
         # notifications on one channel (push.py): my pick, and app: a live app token of mine (Settings shows the pick then)
-        "notify": {"via": u["notify_via"], "app": bool(one(con, f"SELECT {push.LIVE.format('?')}", v.id, core.now() - push.STALE)[0])},
+        "notify": {"via": u["notify_via"], "app": bool(one(con, f"SELECT {push.LIVE.format('?')}", v.id, *push.bounds(core.now()))[0])},
         "founder": bool(u["is_founder"]), "mark": u["mark"], "qr": f"{v.id}_{_qr_code(con, v.id)}" if s else None,
         "evRef": ev_ref(v.id) if s else None,  # "My link"'s code (seats.ev_ref): the plain t.me share carries it, never the badge's
         "no": (0 if u["is_founder"] else u["card_no"]) if s else None,
@@ -549,7 +549,7 @@ def me(con, v: Viewer) -> dict:
         "unlocked": unlocked(con, v),
         "skin": _skin(con, v.id) if s else None,
         "frame": u["frame"] if s and u["frame"] in FRAMES else None,
-        "deleteAt": u["delete_at"] if s or relink else None,  # a relink account's week shows too
+        "deleteAt": u["delete_at"],  # my week to change my mind, whoever may ask it (a student, relink, an Apple account)
         "city": {"name": u["city"], "hidden": bool(u["city_hidden"])} if u["city"] else None,
         "roster": _roster_mine(con, v.id),
         # the capsule's running check-in, and the check-in page's way in: "pair" for who runs a club's events (Studio's

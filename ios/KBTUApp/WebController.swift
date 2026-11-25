@@ -172,7 +172,9 @@ final class WebController: UIViewController, WKNavigationDelegate, WKUIDelegate,
             guard let nonce = body["nonce"] as? String, nonce.count >= 32 else { return reply(nil, "nonce") }
             apple.start(nonce: nonce, window: view.window) { token in reply(token.map { ["token": $0] }, nil) }
         case "push":
-            Push.shared.token { token in reply(token.map { ["token": $0] }, nil) }
+            Push.shared.token { token, denied in
+                if denied { reply(["denied": true], nil) } else { reply(token.map { ["token": $0] }, nil) }
+            }
         case "scan":
             scanner?.dismiss(animated: false)
             let s = Scanner(prompt: body["text"] as? String ?? "") { [weak self] code in self?.scanned(code) }

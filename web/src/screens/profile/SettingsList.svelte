@@ -33,7 +33,7 @@
   import RotateCw from '@lucide/svelte/icons/rotate-cw';
   import KeyRound from '@lucide/svelte/icons/key-round';
   import Trash2 from '@lucide/svelte/icons/trash-2';
-  import { APPLE_CONSENT, appleToken, inApp, native, nonce } from '../../lib/native';
+  import { APPLE_CONSENT, TG_LINK, appleToken, inApp, native, nonce } from '../../lib/native';
   import { ApiErr } from '../../lib/api';
   import { loadMe } from '../../lib/state/session.svelte';
   import { api, type Settings } from '../../lib/api';
@@ -150,10 +150,15 @@
     catch (e) { haptic.error(); say(t(e instanceof ApiErr && e.message === 'apple_taken' ? 'logins.appleTaken' : 'common.error'), 'warning_3d'); }
     finally { linking = false; }
   }
-  // Telegram's own sign-in page, then back here (WebEntrance reads its #tgAuthResult and links it)
+  // Telegram's own sign-in page, then back here (WebEntrance reads its #tgAuthResult and links it): only a return this
+  // tab started, marked by a one-time state for this account, gets linked
   async function linkTelegram() {
     haptic.tap();
-    try { location.assign((await api.telegramLinkStart()).url); } catch { say(t('common.error'), 'warning_3d'); }
+    try {
+      const state = nonce(), { url } = await api.telegramLinkStart(state);
+      sessionStorage.setItem(TG_LINK, JSON.stringify({ state, uid: me?.id, at: Date.now() }));
+      location.assign(url);
+    } catch { say(t('common.error'), 'warning_3d'); }
   }
   // Apple's sheet closed: nothing to say
   async function linkApple() {

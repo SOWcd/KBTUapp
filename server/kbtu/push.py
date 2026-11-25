@@ -13,13 +13,24 @@ import anyio
 
 from . import apns
 from .config import Config
+from .logic import web_auth
 from .logic.core import rows
 
 PROVIDERS = {"apns": apns}
 STALE = 60 * 86400  # the app registers its token on every launch: two months unopened, the bot again
 
-# this user has a live token (format with the user's id column; bind now - STALE): the postman's and Settings' test
-LIVE = "EXISTS (SELECT 1 FROM push_devices p WHERE p.user_id = {} AND p.dead_at IS NULL AND p.created_at > ?)"
+# a live token: seen within STALE, and its session still signs in (web_auth.lookup's idle and age limits) at this very
+# moment, not only once the night's sweep (web_auth.forget) drops it
+_FROM = "push_devices p JOIN web_sessions s ON s.digest = p.session AND s.user_id = p.user_id " \
+        "JOIN users u ON u.id = s.user_id LEFT JOIN students st ON st.user_id = u.id"
+_VALID = f"""p.dead_at IS NULL AND p.created_at > ? AND s.last_used_at > ?
+    AND s.created_at > ? - ({web_auth._AGE_LIMIT}) AND u.banned_at IS NULL AND u.tg_id > 0"""
+# this user has a live token (format with the user's id column; bind *bounds(now)): the postman's and Settings' test
+LIVE = f"EXISTS (SELECT 1 FROM {_FROM} WHERE p.user_id = {{}} AND {_VALID})"
+
+
+def bounds(at: int) -> tuple[int, int, int]:
+    return at - STALE, at - web_auth.IDLE, at
 
 
 def on(cfg: Config) -> bool:
@@ -28,8 +39,8 @@ def on(cfg: Config) -> bool:
 
 def live(con, uid: int, at: int) -> list[tuple[str, str]]:
     """(token, provider) of each live device of this person."""
-    return [(r[0], r[1]) for r in rows(con, """SELECT token, provider FROM push_devices
-        WHERE user_id = ? AND dead_at IS NULL AND created_at > ?""", uid, at - STALE)]
+    return [(r[0], r[1]) for r in rows(con, f"SELECT p.token, p.provider FROM {_FROM} WHERE p.user_id = ? AND {_VALID}",
+                                       uid, *bounds(at))]
 
 
 def _gone(con, token: str, got: str, at: int) -> None:

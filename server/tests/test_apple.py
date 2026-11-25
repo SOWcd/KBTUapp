@@ -95,7 +95,11 @@ def test_link_telegram_to_an_apple_account(phone):
     assert apple_in(c).status_code == 204
     uid = c.get("/api/me", headers=WEB).json()["id"]
     assert c.post("/api/me/devices", headers=WRITE, json={"token": DEVICE, "consent": apple.CONSENT}).status_code == 204
-    assert "oauth.telegram.org/auth" in c.get("/api/me/logins/telegram", headers=WEB).json()["url"]
+    state = secrets.token_hex(16)
+    url = c.get(f"/api/me/logins/telegram?state={state}", headers=WEB).json()["url"]
+    assert "oauth.telegram.org/auth" in url and f"state%3D{state}" in url  # back to the tab that started it, marked
+    for bad in ("", "short", "x" * 40 + "&evil=1"):  # the mark is the tab's own nonce, nothing else rides on the URL
+        assert c.get("/api/me/logins/telegram", params={"state": bad}, headers=WEB).status_code == 400
     c.get("/api/me", headers=tma(816))  # 816 has its own account already: never merged
     assert c.post("/api/me/logins/telegram", headers=WRITE, json=widget(816)).json()["message"] == "telegram_taken"
     old = c.cookies[web_auth.COOKIE]
@@ -110,7 +114,7 @@ def test_link_telegram_to_an_apple_account(phone):
 
 
 def test_link_and_unlink_apple_on_a_telegram_account(phone):
-    c, _ = phone
+    c, cfg = phone
     assert c.post("/api/web/login", headers=WRITE, json=widget(715)).status_code == 204
     uid = c.get("/api/me", headers=WEB).json()["id"]
     assert c.post("/api/me/logins/apple", headers=WRITE, json=proof("sub.715")).status_code == 204
@@ -121,8 +125,14 @@ def test_link_and_unlink_apple_on_a_telegram_account(phone):
     assert apple_in(stranger, proof("sub.other")).status_code == 204  # an Apple-made account
     assert stranger.delete("/api/me/logins/apple", headers=WRITE).json()["message"] == "last_login"  # its only way in
     assert c.post("/api/me/logins/apple", headers=WRITE, json=proof("sub.other")).json()["message"] == "apple_taken"
+    assert fresh.post("/api/me/devices", headers=WRITE, json={"token": DEVICE, "consent": apple.CONSENT}).status_code == 204
     assert c.delete("/api/me/logins/apple", headers=WRITE).status_code == 204
     assert c.get("/api/me", headers=WEB).json()["logins"] == {"telegram": True, "apple": False}
+    # the session Apple opened ends with the unlink (it may be a thief's), its push token with it; mine stays
+    assert fresh.get("/api/me", headers=WEB).status_code == 401
+    with db.connect(cfg.db_path) as con:
+        assert not con.execute("SELECT 1 FROM push_devices").fetchone()
+    assert stranger.get("/api/me", headers=WEB).status_code == 200  # another account's sessions untouched
 
 
 def test_sign_out_and_deletion_take_the_apple_data(phone):
@@ -136,9 +146,51 @@ def test_sign_out_and_deletion_take_the_apple_data(phone):
         assert not con.execute("SELECT 1 FROM push_devices").fetchone()  # signed out: no more pushes to that phone
     assert apple_in(c).status_code == 204
     assert c.post("/api/me/devices", headers=WRITE, json={"token": DEVICE, "consent": apple.CONSENT}).status_code == 204
+    # an Apple account sees its week to change its mind, and can keep itself
+    at = c.post("/api/me/delete", headers=WRITE, json={}).json()["deleteAt"]
+    assert at and c.get("/api/me", headers=WEB).json()["deleteAt"] == at
+    assert c.post("/api/me/keep", headers=WRITE).json()["deleteAt"] is None
     delete_now(c, cfg, WRITE)
     with db.connect(cfg.db_path) as con:
         assert not con.execute("SELECT 1 FROM identities").fetchone() and not con.execute("SELECT 1 FROM push_devices").fetchone()
+
+
+def _tokens(cfg) -> list:
+    with db.connect(cfg.db_path) as con:
+        return sorted(r[0] for r in con.execute("SELECT token FROM push_devices"))
+
+
+def test_push_tokens_bounded_and_withdrawn(phone):
+    c, cfg = phone
+    assert apple_in(c, proof("sub.many")).status_code == 204
+    reg = lambda cl, tok: cl.post("/api/me/devices", headers=WRITE, json={"token": tok, "consent": apple.CONSENT})  # noqa: E731
+    for i in range(20):  # one session is one phone: its last token only
+        assert reg(c, f"{i:02x}" * 32).status_code == 204
+    assert _tokens(cfg) == ["13" * 32]
+    phones = [TestClient(c.app, base_url=ORIGIN) for _ in range(apple.DEVICES + 2)]
+    for i, p in enumerate(phones):
+        assert apple_in(p, proof("sub.many")).status_code == 204 and reg(p, f"{0x40 + i:02x}" * 32).status_code == 204
+    assert len(_tokens(cfg)) == apple.DEVICES  # an account's phones: the longest unseen pushed out
+    # notifications turned off in iOS Settings: this phone's token goes, the others stay
+    last = f"{0x40 + len(phones) - 1:02x}" * 32
+    assert last in _tokens(cfg)  # the newest phone is never the one pushed out
+    assert phones[-1].delete("/api/me/devices", headers=WRITE).status_code == 204
+    assert last not in _tokens(cfg) and len(_tokens(cfg)) == apple.DEVICES - 1
+
+
+def test_push_stops_when_the_session_expires(phone):
+    c, cfg = phone
+    assert apple_in(c).status_code == 204
+    uid = c.get("/api/me", headers=WEB).json()["id"]
+    assert c.post("/api/me/devices", headers=WRITE, json={"token": DEVICE, "consent": apple.CONSENT}).status_code == 204
+    with db.connect(cfg.db_path) as con:
+        assert push.live(con, uid, logic.now()) == [(DEVICE, "apns")]
+        # the session's 90 days are up, the token was seen a minute ago, and the night's sweep hasn't run
+        con.execute("UPDATE web_sessions SET created_at = ?", (logic.now() - web_auth.MAX_AGE - 60,))
+        assert push.live(con, uid, logic.now()) == []
+        assert not con.execute(f"SELECT {push.LIVE.format('?')}", (uid, *push.bounds(logic.now()))).fetchone()[0]
+        con.execute("UPDATE web_sessions SET created_at = ?, last_used_at = ?", (logic.now(), logic.now() - web_auth.IDLE - 1))
+        assert push.live(con, uid, logic.now()) == []  # idle too long: the same
 
 
 def _postman(cfg, telegram: list):

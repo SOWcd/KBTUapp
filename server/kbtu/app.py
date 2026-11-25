@@ -672,14 +672,15 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             logic.apple.link_apple(con, v.id, body, sub, logic.now())
 
     @app.delete("/api/me/logins/apple", status_code=204)
-    def unlink_apple(con: Con, v: Me):
+    def unlink_apple(request: Request, con: Con, v: Me):
+        token = getattr(request.state, "web_token", "")
         with db.tx(con):
-            logic.apple.unlink_apple(con, v.id)
+            logic.apple.unlink_apple(con, v.id, web_auth._digest(token) if token else None)
 
     @app.get("/api/me/logins/telegram")
-    def telegram_start(request: Request, v: Me):
+    def telegram_start(request: Request, v: Me, state: str = ""):
         web_only(request)
-        return {"url": logic.apple.telegram_start(cfg.bot_token, cfg.domain)}
+        return {"url": logic.apple.telegram_start(cfg.bot_token, cfg.domain, state)}
 
     @app.post("/api/me/logins/telegram", status_code=204)
     def link_telegram(request: Request, con: Con, v: Me, body: dict = Body(...)):
@@ -707,6 +708,13 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         token = web_only(request)
         with db.tx(con):
             logic.apple.add_device(con, v.id, web_auth._digest(token), body, logic.now())
+
+    @app.delete("/api/me/devices", status_code=204)
+    def drop_device(request: Request, con: Con, v: Me):
+        """Notifications off in iOS Settings: this session's push token goes (with IOS_BUNDLE_ID off too: a way out)"""
+        token = web_only(request)
+        with db.tx(con):
+            logic.apple.drop_device(con, v.id, web_auth._digest(token))
 
     def kri_google(con, v: Viewer) -> bool:
         """Google may answer this student's assistant first, once they say yes: its key, ASSIST_LEAD unset or google

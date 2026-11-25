@@ -972,7 +972,7 @@ def _due(con) -> list:
         {push.LIVE.format("b.user_id")} AND (u.notify_via = 'app' OR u.can_dm = 0) AS pushable
         FROM bot_outbox b INDEXED BY outbox_todo JOIN users u ON u.id = b.user_id
         WHERE b.sent_at IS NULL AND b.error IS NULL AND b.send_after <= ? ORDER BY b.send_after, b.id LIMIT 50""",
-                t - push.STALE, t)
+                *push.bounds(t), t)
 
 
 def _pushes(cfg: Config, m, start) -> bool:
