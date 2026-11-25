@@ -1559,6 +1559,60 @@ def tick_pending(con, v: Viewer, eid: int, key: object, adult: object = None, ca
         return guests.tick(con, eid, key, core.now(), adult if e["age_check"] else None, came is not False)
 
 
+class _Preview(Exception):
+    """Carries a dry run's answer out of its transaction, which then rolls back."""
+
+
+LISTS_A_DAY = 30  # saved guest lists per event per day (each one rewrites the door's list)
+
+
+def guest_list(con, v: Viewer, eid: int, table: object, save: object) -> dict:
+    """The organizers' own guest list from Studio (guests.load), for whoever has the door (the door list's right).
+    Without `save` the same work runs and is rolled back: the preview's numbers are exactly what saving does."""
+    try:
+        with tx(con):
+            e = _door_ok(con, v, _staff_event(con, v, eid, "door", cohost=True, helper=("door",)))
+            if e["status"] == "cancelled" or e["hidden_at"] or e["memo_only"] or end_of(e) <= core.now():
+                raise ApiError("closed")
+            if save is True and one(con, """SELECT COUNT(*) FROM audit_log WHERE action = 'guest_list' AND target = ?
+                    AND at > ?""", f"event:{eid}", core.now() - 86400)[0] >= LISTS_A_DAY:
+                raise ApiError("rate_limited", "guest_lists")
+            out = guests.load(con, eid, table)
+            if save is not True:
+                raise _Preview(out)
+            log_action(con, v.id, "guest_list", f"event:{eid}", json.dumps({"rows": out["rows"], "removed": out["removed"]}))
+            return out
+    except _Preview as p:
+        return p.args[0]
+
+
+def add_walk_in(con, v: Viewer, eid: int, name: object, team: object = None, adult: object = None) -> dict:
+    """The door's «+ Add a guest»: someone not on the list, let in now (their 18+ if the event checks age)."""
+    if adult is not None and not isinstance(adult, bool):
+        raise ApiError("bad_input")
+    with tx(con):
+        e = _door_ok(con, v, _staff_event(con, v, eid, "door", cohost=True, helper=("door",)))
+        if not e["guest_list"]:
+            raise ApiError("not_found")
+        t = core.now()
+        if e["status"] != "published" or e["hidden_at"] or door_shut(e, t):
+            raise ApiError("closed")
+        return guests.walk_in(con, eid, name, team, int(adult) if adult is not None and e["age_check"] else None, t)
+
+
+def guest_list_export(con, v: Viewer, eid: int) -> tuple[sqlite3.Row, list[dict]]:
+    """The list after the event, for the same people (the door's right): the organizers' rows and the app's tickets,
+    named as the door list names them (§3: a Member sees short names only). Into the audit log, as every export."""
+    e = _door_ok(con, v, _staff_event(con, v, eid, "door", cohost=True, helper=("door",)))
+    if not e["guest_list"]:
+        raise ApiError("not_found")
+    out = [{**g, "app": False} for g in guests.export(con, eid)]
+    out += [{"name": d["person"]["realName"] or d["person"]["name"], "team": d.get("team"), "at": d["checkedInAt"], "walkIn": d["walkIn"], "app": True}
+            for d in door(con, v, eid)]
+    log_action(con, v.id, "guest_list_export", f"event:{eid}", json.dumps({"rows": len(out)}))
+    return e, sorted(out, key=lambda x: (x["team"] or "", x["name"]))
+
+
 def mark_age(con, v: Viewer, eid: int, uid: object, adult: object) -> dict:
     if type(uid) is not int or not 0 < uid < 2**63 or not isinstance(adult, bool):
         raise ApiError("bad_input")

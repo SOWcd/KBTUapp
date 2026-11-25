@@ -2480,4 +2480,6 @@ MIGRATIONS: list[tuple[int, str]] = [
       added_at INTEGER NOT NULL,
       greeted_at INTEGER,
       CHECK (tg_id IS NOT NULL OR tg_username IS NOT NULL)) STRICT;"""),
+    # a guest added at the door, not on the organizers' list (guests.walk_in): a corrected list never removes it
+    (239, "ALTER TABLE event_guests ADD COLUMN walk_in INTEGER NOT NULL DEFAULT 0 CHECK (walk_in IN (0, 1));"),
 ]

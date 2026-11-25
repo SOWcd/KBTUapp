@@ -59,6 +59,7 @@ async def _picture(fn, *args):
         raise ApiError("bad_input", "not_an_image") from None
 
 THREADS = 16               # see lifespan
+GUEST_LIST_BYTES = 2_000_000  # a guest list's JSON body (logic.guests.LIST_ROWS rows); bigger is refused before it is read
 SEEN_EVERY = 600            # refresh users.seen_at and Telegram names at most every 10 min
 ANDROID_PACKAGE = "kz.sow.kbtu"  # the Play app (android/twa-manifest.json): fixed for good once published
 NAME, STUDENT_ID = logic.NAME, logic.STUDENT_ID  # typed in by the student (no KBTU-password sign-in)
@@ -1841,6 +1842,29 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.post("/api/events/{eid}/door-pending/tick")
     def door_tick(eid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.organizing.tick_pending(con, v, eid, body.get("key"), body.get("adult"), body.get("came", True))
+
+    @app.post("/api/events/{eid}/door-pending/walk-in")
+    def door_walk_in(eid: int, con: Con, v: Me, body: dict = Body(...)):
+        return logic.organizing.add_walk_in(con, v, eid, body.get("name"), body.get("team"), body.get("adult"))
+
+    # the organizers' own guest list from Studio: {rows: [[name, student ID, 18+, username, team]], save}; a preview without save
+    @app.post("/api/events/{eid}/guest-list")
+    async def guest_list(eid: int, con: Con, v: Me, request: Request):
+        raw = await read_upload(request, GUEST_LIST_BYTES)
+        try:
+            body = json.loads(raw)
+        except ValueError:
+            raise ApiError("bad_input") from None
+        if not isinstance(body, dict):
+            raise ApiError("bad_input")
+        return await run_in_threadpool(logic.organizing.guest_list, con, v, eid, body.get("rows"), body.get("save"))
+
+    @app.post("/api/events/{eid}/guest-list/export", status_code=204)
+    async def export_guest_list(eid: int, con: Con, v: Me):
+        """Like the attendees' CSV: the bot sends it to the asker's own chat."""
+        e, people = await run_in_threadpool(logic.organizing.guest_list_export, con, v, eid)
+        u = logic.one(con, "SELECT tg_id, lang FROM users WHERE id = ?", v.id)
+        await send_file(u["tg_id"], *texts.guest_list_csv(u["lang"], e["title"], people))
 
     @app.get("/api/events/{eid}/door-extra")
     def door_extra(eid: int, con: Con, v: Me):
