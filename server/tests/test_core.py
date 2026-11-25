@@ -5519,6 +5519,48 @@ def test_userbot_reads_telethon_messages(env):
     assert con.execute("SELECT COUNT(*) FROM tg_post_msgs").fetchone()[0] == 4
 
 
+def test_mirrored_album_caption_removal(env, monkeypatch):
+    from types import SimpleNamespace as NS
+    from kbtu import mirror, userbot
+
+    _, cfg = env
+    con = db.connect(cfg.db_path)
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (1, 'mic', 'club', 'Open Mic', 'OM', 'laptop_3d', 1, 0)")
+    con.execute("INSERT INTO chats (title, kind, url, created_at, status, org_id, main) VALUES ('Open Mic News', 'channel', 'https://t.me/mic_news', 0, 'org', 1, 1)")
+    mirror.joined(con, 500, "mic_news")
+    messages = {}
+
+    class Client:
+        async def get_messages(self, _peer, *, ids):
+            return [messages[i] for i in ids]
+
+    work = userbot.Mirror(cfg, Client(), con)
+
+    async def read(_channel, m):
+        return m.post
+
+    monkeypatch.setattr(work, "read", read)
+
+    def sync(mid, text, edited=False, entities=None):
+        m = NS(id=mid, peer_id=NS(channel_id=500), action=None, edit_date=logic.now() if edited else None,
+               message=text, post=mirror.Msg(id=mid, date=logic.now(), text=text, grouped=7, entities=entities or []))
+        messages[mid] = m
+        asyncio.run(work.post(m))
+        return con.execute("SELECT title, body FROM posts").fetchone()
+
+    sync(10, "")
+    sync(11, "Meet tonight\nRoom 123", entities=[("bold", 0, 4, None)])
+    sync(11, "Meet tonight\nRoom 123", edited=True)  # stripping entities keeps the caption owner
+    assert tuple(sync(10, "", edited=True)) == ("Meet tonight", "Room 123")
+    assert tuple(sync(11, "", edited=True)) == ("Open Mic News", "")
+
+    sync(11, "Meet tomorrow")
+    con.execute("UPDATE posts SET tg_fmt = NULL")  # an unformatted album already in production
+    assert tuple(sync(10, "", edited=True)) == ("Meet tomorrow", "")
+    con.execute("UPDATE posts SET tg_fmt = NULL")
+    assert tuple(sync(11, "", edited=True)) == ("Open Mic News", "")
+
+
 def test_mirror_languages(env):
     """A school's channel in three languages: the same announcement posted in kk, ru and en within half an
     hour is one post with the other two as its translations (an album whose caption comes after its photos too); two
