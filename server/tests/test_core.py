@@ -40,6 +40,7 @@ def env(tmp_path, monkeypatch, _schema_db):
     (dist / "assets").mkdir(parents=True)
     (dist / "index.html").write_text("<!doctype html><html><head><title>app</title></head></html>")
     (dist / "assets" / "a.js").write_text("1")
+    (dist / "sw.js").write_text("1")
     (dist / "map" / "u1").mkdir(parents=True)
     (dist / "emoji").mkdir()
     shutil.copy(Path(__file__).parents[2] / "web/public/emoji/party_popper_3d.webp", dist / "emoji")

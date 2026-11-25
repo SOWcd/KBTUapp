@@ -5,6 +5,7 @@ import { brotliCompressSync, constants, gzipSync } from 'node:zlib';
 /// <reference types="vitest/config" />
 import { defineConfig, type Plugin } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
+import { shellOf } from './src/lib/shell';
 
 // What the first screen needs is asked for with the HTML, not after the bundle runs: Inter's latin and cyrillic files
 // (the CSS names them only once it is parsed) and a Kazakh or English student's language chunk (main.ts waits for it
@@ -75,6 +76,31 @@ function precompress(): Plugin {
   };
 }
 
+// The service worker (src/sw.ts) as dist/sw.js, unhashed (its URL is what the browser checks for a new build), with
+// this build's shell written in: lib/shell.ts picks it from the finished page and the chunk graph.
+function serviceWorker(): Plugin {
+  const src = fileURLToPath(new URL('./src/sw.ts', import.meta.url));
+  return {
+    name: 'kb-sw',
+    apply: 'build',
+    enforce: 'post',
+    buildStart() {
+      this.emitFile({ type: 'chunk', id: src, fileName: 'sw.js' });
+    },
+    generateBundle(_o, bundle) {
+      const page = bundle['index.html'], sw = bundle['sw.js'];
+      if (page?.type !== 'asset' || sw?.type !== 'chunk') throw new Error('kb-sw: index.html or sw.js is missing');
+      if (sw.imports.length) throw new Error('kb-sw: sw.js must not share chunks with the app (a worker script has no imports)');
+      const chunks = Object.values(bundle).flatMap((c) => c.type !== 'chunk' || c === sw ? [] : [{ fileName: c.fileName, name: c.name,
+        imports: c.imports, css: [...(c.viteMetadata?.importedCss ?? [])] }]);
+      const shell = shellOf(String(page.source), chunks, Object.keys(bundle));
+      const at = /(["'`])__KB_SHELL__\1/; // (the minifier writes strings in backticks)
+      if (!at.test(sw.code)) throw new Error('kb-sw: the shell placeholder is missing from sw.js');
+      sw.code = sw.code.replace(at, () => JSON.stringify(shell));
+    },
+  };
+}
+
 // every lucide icon renders through our ui/LucideIcon.svelte: the same SVG, a third of a tab's build time less
 function lucideIcon(): Plugin {
   const to = fileURLToPath(new URL('./src/ui/LucideIcon.svelte', import.meta.url));
@@ -90,7 +116,7 @@ function lucideIcon(): Plugin {
 export default defineConfig({
   // relative URLs: the same build works at kbtu.sow.kz/ and under a sub-path like /next/
   base: './',
-  plugins: [lucideIcon(), svelte(), preloads(), compileHints(/^(EventSheet|PersonSheet|ClubSheet|CampusMap)$/), precompress()],
+  plugins: [lucideIcon(), svelte(), preloads(), compileHints(/^(EventSheet|PersonSheet|ClubSheet|CampusMap)$/), precompress(), serviceWorker()],
   server: { host: true, port: 5180 },
   // not prebundled in dev, so the dev server's icons go through ui/LucideIcon.svelte too (plugins don't run in a prebundle)
   optimizeDeps: { exclude: ['@lucide/svelte'] },
