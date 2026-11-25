@@ -577,7 +577,10 @@
     margin: calc(-1 * var(--s-4)) calc(-1 * var(--gutter)) -44px; padding: var(--s-4) 0 44px var(--gutter); }
   .heroes::-webkit-scrollbar { display: none; }
   .heroes::after { content: ''; flex: 0 0 calc(var(--gutter) - var(--s-3)); } /* the end's gutter (a scroller's end padding is lost in older WebKit) */
-  .heroes > .hero { flex: 0 0 100%; scroll-snap-align: center; scroll-snap-stop: always; }
+  /* 100% here is the scroller's box minus its left padding: the page's width plus one gutter, so a card takes one gutter
+     less and snaps to its start inside the gutter (centre snapping pushed it past both edges) */
+  .heroes { scroll-padding-inline: var(--gutter); }
+  .heroes > .hero { flex: 0 0 calc(100% - var(--gutter)); scroll-snap-align: start; scroll-snap-stop: always; }
   .dots { display: flex; justify-content: center; gap: 6px; margin-top: var(--s-3); }
   .dots i { width: 6px; height: 6px; border-radius: var(--r-full); background: var(--text-3); opacity: 0.45; transition: opacity var(--t-fast) var(--ease); }
   .dots i.on { opacity: 1; }
