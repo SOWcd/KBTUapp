@@ -37,6 +37,7 @@ SCREEN_SEEN = 60    # a paired screen counts as connected this long after its la
 SCREEN_IDLE = 86400 # a paired screen silent this long has lost its pairing
 NO_EVENT_LIVE = 86400  # a running session without an event leaves the capsule this long after its Start
 STALE = 12 * 3600   # a session left running this long after its Start (its event over too) finishes by itself (sweep)
+MEET_SCANS = 20     # a person's scans a meetup keeps: repeats are evidence, a script replaying one fresh QR is not
 
 
 def _sig(key: bytes, msg: str) -> str:
@@ -340,8 +341,8 @@ def _unassigned(con, s, uid: int) -> bool:
 
 def _meet_scan(con, s, uid: int, t: int, out: bool) -> None:
     """Each valid scan stays, even a repeat or a departure without an arrival. Attendance remains one row."""
-    if not s["meetup"]:
-        return
+    if not s["meetup"] or one(con, "SELECT COUNT(*) FROM qr_meet_scans WHERE session_id = ? AND user_id = ?", s["id"], uid)[0] >= MEET_SCANS:
+        return  # a fresh QR is replayable for SCAN_OK: without a cap one account could fill the table and bury the Head's list
     flag = None
     if s["department_name"] is not None:
         member = one(con, "SELECT role FROM org_members WHERE org_id = ? AND user_id = ?", s["org_id"], uid)
