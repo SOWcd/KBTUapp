@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 
-from kbtu import admin, bot, logic
+from kbtu import admin, logic, outbox
 from test_core import env, set_clock, tma  # noqa: F401  (env is a fixture)
 from test_event_teams import TEAMS, _event, _go, _list, _people, _sheet, club  # noqa: F401  (club is a fixture)
 from test_team_guests import PAID, _uid
@@ -77,7 +77,7 @@ def test_withdraw_is_remembered(club):
     assert logic.evteams.consent_ask(con) == 0 and _asks(con, a) == []
     con.execute("INSERT INTO bot_outbox (user_id, kind, ref, send_after) VALUES (?, 'team_consent', ?, 0)", (_uid(con, a), f"tc:{eid}"))
     m = con.execute("SELECT *, 'en' AS lang FROM bot_outbox WHERE kind = 'team_consent' AND user_id = ?", (_uid(con, a),)).fetchone()
-    assert bot._render(con, m) is None  # queued before the no: quiet
+    assert outbox._render(con, m) is None  # queued before the no: quiet
     r = c.post(f"/api/events/{other}/registration", headers=tma(a), json={"teamConsent": V})
     assert r.json()["teamsConsent"] is True and _consent(c, a)  # a new yes
 
@@ -104,13 +104,13 @@ def test_admin_command_asks_once(club, monkeypatch):
     assert _asks(con) == sorted([(a, f"tc:{e2}"), (b, f"tc:{e1}")])  # a: the sooner one
     assert logic.evteams.consent_ask(con) == 0  # idempotent
     m = con.execute("SELECT *, 'en' AS lang FROM bot_outbox WHERE kind = 'team_consent' AND user_id = ?", (_uid(con, a),)).fetchone()
-    text, button, start = bot._render(con, m)
+    text, button, start = outbox._render(con, m)
     assert start == f"tc_{e2}" and "Case Cup" in text and button
     c.post("/api/teams/consent", headers=tma(a), json={"consent": V})
-    assert bot._render(con, m) is None  # agreed meanwhile: quiet
+    assert outbox._render(con, m) is None  # agreed meanwhile: quiet
     m = con.execute("SELECT *, 'en' AS lang FROM bot_outbox WHERE kind = 'team_consent' AND user_id = ?", (_uid(con, b),)).fetchone()
     c.delete(f"/api/events/{e1}/registration", headers=tma(b))
-    assert bot._render(con, m) is None  # left: quiet
+    assert outbox._render(con, m) is None  # left: quiet
 
 
 def test_admin_cli(club, env, capsys, monkeypatch):
@@ -143,7 +143,7 @@ def test_organizer_reminder(club, monkeypatch):
     assert c.post(url(a, other), headers=tma(20)).json()["queued"] is False  # per person, not per event
     assert len(_asks(con, a)) == 1
     m = con.execute("SELECT *, 'en' AS lang FROM bot_outbox WHERE kind = 'team_consent'").fetchone()
-    assert bot._render(con, m)[2] == f"tc_{eid}"
+    assert outbox._render(con, m)[2] == f"tc_{eid}"
     now = int(time.time())
     set_clock(monkeypatch, lambda: now + 86400 + 60)
     assert c.post(url(a), headers=tma(20)).json()["queued"] is True and len(_asks(con, a)) == 2  # a day later

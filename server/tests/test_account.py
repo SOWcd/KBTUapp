@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from kbtu import auth, bot, config, db, logic, app as server
+from kbtu import auth, bot, config, db, logic, outbox, app as server
 from test_core import BOT, delete_now, env, login, set_clock, tma  # noqa: F401  (env: the fixture)
 
 
@@ -484,7 +484,7 @@ def test_app_team(env):
 
     async def go():
         async with httpx.AsyncClient(transport=httpx.MockTransport(lambda q: sent.append(q) or httpx.Response(200, json={"ok": True, "result": {}}))) as http:
-            await bot.send_due(cfg, http)
+            await outbox.send_due(cfg, http)
     asyncio.run(go())
     # The bot skips the banned user's chat.
     assert not [q for q in sent if json.loads(q.content).get("chat_id") == 32]
@@ -611,7 +611,7 @@ def test_dm_on(env):
     c.post("/api/me/dm", headers=A, json={"event": 2})   # not going there: no message
     c.post("/api/me/dm", headers=A, json={"event": 1})   # twice: one message
     sent = con.execute("SELECT b.*, u.lang FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE b.kind = 'going_ok'").fetchall()
-    assert [s["ref"] for s in sent] == ["event:1"] and bot._render(con, sent[0])[2] == "tk_1"
+    assert [s["ref"] for s in sent] == ["event:1"] and outbox._render(con, sent[0])[2] == "tk_1"
     assert c.post("/api/me/dm", headers=tma(30, "Guest"), json={}).status_code == 200   # a guest too: the bot may write
 
 

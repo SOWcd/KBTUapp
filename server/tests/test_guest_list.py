@@ -3,7 +3,7 @@ import time
 
 import pytest
 
-from kbtu import admin, bot, db, logic
+from kbtu import admin, bot, db, logic, outbox
 from kbtu.logic import guests
 from test_core import _club_runs, env, login, set_clock, tma  # noqa: F401
 
@@ -243,6 +243,7 @@ def test_guest_door_age_notify_and_retention(door_event, monkeypatch):
     now = int(time.time())
     set_clock(monkeypatch, lambda: now)
     monkeypatch.setattr(bot, "now", lambda: now)
+    monkeypatch.setattr(outbox, "now", lambda: now)
     assert c.post(f"{base}/age", headers=tma(1), json={"user_id": minor, "adult": False}).status_code == 403
     assert c.post(f"{base}/age/notify", headers=tma(1)).status_code == 403
     assert c.post(f"{base}/age", headers=door, json={"user_id": 9999, "adult": True}).status_code == 404
@@ -261,13 +262,13 @@ def test_guest_door_age_notify_and_retention(door_event, monkeypatch):
     assert "adult" not in c.get(base, headers=tma(1)).json()["my"]
     assert c.post(f"{base}/age/notify", headers=door).json() == {"count": 1}
     msg = dict(con.execute("SELECT * FROM bot_outbox WHERE kind = 'u18_leave'").fetchone(), lang="en")
-    assert msg["user_id"] == minor and bot._render(con, msg)[1:] == ("Open the event", "ev_1")
+    assert msg["user_id"] == minor and outbox._render(con, msg)[1:] == ("Open the event", "ev_1")
     con.execute("UPDATE events SET starts_at = starts_at + 86400, ends_at = ends_at + 86400 WHERE id = 1")
-    assert bot._render(con, msg) is None
+    assert outbox._render(con, msg) is None
     assert c.post(f"{base}/age/notify", headers=door).json()["error"] == "closed"
     con.execute("UPDATE events SET starts_at = starts_at - 86400, ends_at = ends_at - 86400 WHERE id = 1")
     c.post(f"{base}/age", headers=door, json={"user_id": minor, "adult": True})
-    assert bot._render(con, msg) is None
+    assert outbox._render(con, msg) is None
     c.post(f"{base}/age", headers=door, json={"user_id": minor, "adult": False})
     now += 599
     assert c.post(f"{base}/age/notify", headers=door).status_code == 429

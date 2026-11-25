@@ -11,7 +11,7 @@ import json
 import httpx
 from fastapi.testclient import TestClient
 
-from kbtu import app as server, bot, db, logic, tgc
+from kbtu import app as server, bot, db, logic, outbox as kbtu_outbox, tgc  # outbox(): this file's own query helper
 from test_core import delete_now, env, login, set_clock, tma  # noqa: F401  (env: the fixture)
 
 G = -100777           # the discussion group
@@ -209,7 +209,7 @@ def test_reports_ai_gate_and_moderators(env, monkeypatch):
     assert tg.of("deleteMessage") == [{"chat_id": G, "message_id": 50}]
     assert con.execute("SELECT status FROM tgc_comments").fetchone()[0] == "deleted"
     assert outbox(con, "tgc_removed") == [(author, f"tr:{cid}")]
-    m = bot._render(con, {"kind": "tgc_removed", "ref": f"tr:{cid}", "lang": "en", "user_id": author})
+    m = kbtu_outbox._render(con, {"kind": "tgc_removed", "ref": f"tr:{cid}", "lang": "en", "user_id": author})
     assert "bad words" not in m[0]                                               # his words: in the app, not the bot's DM
 
     hear(cfg, tg, report(65, 21, fine), report(66, 22, fine), report(67, 23, fine))  # the AI: clean; three reports
@@ -403,7 +403,7 @@ def test_switched_off_changes_nothing(env):
 def postman(cfg, handler) -> None:
     async def go():
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
-            await bot.send_due(cfg, http)
+            await kbtu_outbox.send_due(cfg, http)
     asyncio.run(go())
 
 

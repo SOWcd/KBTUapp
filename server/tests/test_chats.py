@@ -9,7 +9,7 @@ import types
 
 from fastapi.testclient import TestClient
 
-from kbtu import bot, db, logic, media, app as server, texts
+from kbtu import bot, db, logic, media, outbox, app as server, texts
 from test_core import delete_now, env, login, tma  # noqa: F401  (env: the fixture)
 
 
@@ -265,14 +265,14 @@ def test_suggest_chat(env, monkeypatch):
     waiting = c.get("/api/chats", headers=tma(31)).json()["pending"]
     assert [x["kind"] for x in waiting][-3:] == ["group", "group", "channel"] and len(waiting) == 10  # newest first
     ping = con.execute("SELECT * FROM bot_outbox WHERE kind = 'chat_suggested'").fetchall()
-    assert len(ping) == 1 and bot._render(con, {**dict(ping[0]), "lang": "ru"})[2] == "achats"   # one a day
+    assert len(ping) == 1 and outbox._render(con, {**dict(ping[0]), "lang": "ru"})[2] == "achats"   # one a day
     news = waiting[-1]["id"]
     assert c.post(f"/api/chats/{news}/opened", headers=tma(30)).status_code == 404
     assert c.post(f"/api/admin/chats/{news}/approve", headers=tma(30)).status_code == 403
     assert c.post(f"/api/admin/chats/{news}/approve", headers=tma(31)).json()["title"] == "KBTU News"
     assert [x["title"] for x in c.get("/api/chats", headers=tma(30)).json()["all"]] == ["KBTU News"]
     told = con.execute("SELECT * FROM bot_outbox WHERE kind = 'chat_approved' AND user_id = ?", (ali["id"],)).fetchone()
-    assert bot._render(con, {**dict(told), "lang": "ru"})[2] == "chats"
+    assert outbox._render(con, {**dict(told), "lang": "ru"})[2] == "chats"
     assert c.delete(f"/api/admin/chats/{waiting[0]['id']}", headers=tma(31)).status_code == 204   # declined
     assert len(c.get("/api/chats", headers=tma(31)).json()["pending"]) == 8
     assert say(30, text="@kbtu_news") == texts.chat_reply("ru", [("exists", "KBTU News", "channel")])   # live now

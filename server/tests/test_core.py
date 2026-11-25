@@ -270,7 +270,7 @@ def test_postman(env, monkeypatch):
     import asyncio
     import json
     import httpx
-    from kbtu import bot
+    from kbtu import bot, outbox
     c, cfg = env
     login(c, 10, "ali")
     con = db.connect(cfg.db_path)
@@ -289,8 +289,8 @@ def test_postman(env, monkeypatch):
 
     async def go():
         async with httpx.AsyncClient(transport=httpx.MockTransport(telegram)) as http:
-            await bot.send_due(cfg, http)
-            await bot.send_due(cfg, http)  # nothing left to send twice
+            await outbox.send_due(cfg, http)
+            await outbox.send_due(cfg, http)  # nothing left to send twice
     asyncio.run(go())
     first = sent[0]
     from kbtu import texts
@@ -310,10 +310,10 @@ def test_postman(env, monkeypatch):
     async def postman():
         ok = lambda r: (sent.append(r), httpx.Response(200, json={"ok": True, "result": {}}))[1]
         async with httpx.AsyncClient(transport=httpx.MockTransport(ok)) as http:
-            await bot.send_due(cfg, http)
+            await outbox.send_due(cfg, http)
     asyncio.run(postman())                               # the new container's postman sends it
-    real_rows = bot.rows
-    monkeypatch.setattr(bot, "rows", lambda con, q, *a: stale if "FROM bot_outbox" in q else real_rows(con, q, *a))  # the old one read the queue a moment earlier
+    real_rows = outbox.rows
+    monkeypatch.setattr(outbox, "rows", lambda con, q, *a: stale if "FROM bot_outbox" in q else real_rows(con, q, *a))  # the old one read the queue a moment earlier
     asyncio.run(postman())
     assert len(sent) == 1
 

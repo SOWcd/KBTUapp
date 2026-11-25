@@ -13,7 +13,7 @@ import httpx
 import pytest
 
 from kbtu import app as server
-from kbtu import bot, db, receipt, texts, tgc
+from kbtu import bot, db, outbox, receipt, texts, tgc
 from fastapi.testclient import TestClient
 from test_core import env, tma  # noqa: F401  (env: the fixture)
 from test_review_seats import _paid, _shot, _status
@@ -373,7 +373,7 @@ def test_run_drains_then_lets_go(env, monkeypatch):
     monkeypatch.setattr(bot, "load_pack", nothing)
     monkeypatch.setattr(bot, "_commands", nothing)
     monkeypatch.setattr(bot.receipt, "ready", lambda: True)
-    monkeypatch.setattr(bot, "send_due", nothing)
+    monkeypatch.setattr(outbox, "send_due", nothing)
     monkeypatch.setattr(bot, "_ears", ears)
     for name in ("_videos", "_translator", "_userbot"):
         monkeypatch.setattr(bot, name, forever(name))

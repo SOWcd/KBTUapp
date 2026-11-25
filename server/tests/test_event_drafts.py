@@ -7,7 +7,7 @@ import io
 
 from PIL import Image
 
-from kbtu import bot, db, logic, texts
+from kbtu import db, logic, outbox, texts
 from test_core import env, login, tma  # noqa: F401  (env is a fixture)
 
 PRES, VICE, HEAD, MEMBER, OUTSIDER, OTHER_VICE = 20, 21, 22, 23, 30, 31
@@ -98,7 +98,7 @@ def test_a_member_drafts_the_club_approves(env):
     assert r.status_code == 200 and r.json()["review"]["askedAt"]
     told = con.execute("SELECT * FROM bot_outbox WHERE kind = 'event_review' ORDER BY user_id").fetchall()
     assert sorted(m["user_id"] for m in told) == sorted([uid(PRES), uid(VICE)])
-    text, button, start = bot._render(con, {**dict(told[0]), "lang": "en"})
+    text, button, start = outbox._render(con, {**dict(told[0]), "lang": "en"})
     assert (text, button) == texts.bot_message("en", "event_review", org="Crystal") and start == f"st_{org}" and "Quiz" not in text
     # Studio shows it to them with where it stands; the author still edits it
     row = next(x for x in c.get(f"/api/orgs/{org}/events", headers=tma(VICE)).json() if x["id"] == eid)
@@ -112,9 +112,9 @@ def test_a_member_drafts_the_club_approves(env):
     assert c.post(f"/api/events/{eid}/review", headers=tma(VICE), json={"ok": False, "reason": "because"}).status_code == 400
     back = c.post(f"/api/events/{eid}/review", headers=tma(VICE), json={"ok": False, "reason": "when"}).json()
     assert back["status"] == "draft" and back["review"]["askedAt"] is None and back["review"]["reason"] == "when"
-    assert bot._render(con, {**dict(told[0]), "lang": "en"}) is None        # the ask is answered: its message is quiet
+    assert outbox._render(con, {**dict(told[0]), "lang": "en"}) is None        # the ask is answered: its message is quiet
     m = con.execute("SELECT * FROM bot_outbox WHERE kind = 'event_returned'").fetchone()
-    assert m["user_id"] == uid(MEMBER) and bot._render(con, {**dict(m), "lang": "en"})[2] == f"st_{org}"
+    assert m["user_id"] == uid(MEMBER) and outbox._render(con, {**dict(m), "lang": "en"})[2] == f"st_{org}"
     assert c.get(f"/api/events/{eid}", headers=tma(MEMBER)).json()["review"]["reason"] == "when"
     assert c.post(f"/api/events/{eid}/review", headers=tma(PRES), json={"ok": True}).status_code == 409   # not waiting any more
     again = c.post(f"/api/events/{eid}/submit", headers=tma(MEMBER)).json()["review"]
@@ -123,7 +123,7 @@ def test_a_member_drafts_the_club_approves(env):
     out = c.post(f"/api/events/{eid}/review", headers=tma(VICE), json={"ok": True})
     assert out.status_code == 200 and out.json()["status"] == "published" and "review" not in out.json()
     m = con.execute("SELECT * FROM bot_outbox WHERE kind = 'event_approved'").fetchone()
-    assert m["user_id"] == uid(MEMBER) and bot._render(con, {**dict(m), "lang": "ru"})[2] == f"ev_{eid}"
+    assert m["user_id"] == uid(MEMBER) and outbox._render(con, {**dict(m), "lang": "ru"})[2] == f"ev_{eid}"
     assert con.execute("SELECT COUNT(*) FROM event_reviews").fetchone()[0] == 0
     assert edit(MEMBER, "Mine again").status_code == 403
     assert c.delete(f"/api/events/{eid}", headers=tma(MEMBER)).status_code == 403

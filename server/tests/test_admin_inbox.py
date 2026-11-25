@@ -273,14 +273,14 @@ def test_undo_rules_chat_snapshot_tgreport_and_old_lines(env):
 
 def test_refusal_message_follows_status_and_inbox_get_writes_nothing(env):
     """11, 13: an undone refusal's message renders nothing; GET inbox leaves the reports as they were; the indexes exist."""
-    from kbtu import bot
+    from kbtu import outbox
     c, con, ids = _setup(env)
     app = c.post("/api/club-applications", headers=tma(63), json=GOOD).json()
     c.post(f"/api/admin/club-applications/{app['id']}", headers=tma(60), json={"approve": False, "reason": "Not now"})
     m = dict(con.execute("SELECT * FROM bot_outbox WHERE kind = 'club_application_decided'").fetchone())
-    assert bot._render(con, {**m, "lang": "en"}) is not None
+    assert outbox._render(con, {**m, "lang": "en"}) is not None
     con.execute("UPDATE club_applications SET status = 'pending' WHERE id = ?", (app["id"],))
-    assert bot._render(con, {**m, "lang": "en"}) is None
+    assert outbox._render(con, {**m, "lang": "en"}) is None
     cid = _report(c, con)
     con.execute("UPDATE comments SET deleted_at = 1 WHERE id = ?", (cid,))
     c.get("/api/admin/inbox", headers=tma(60))

@@ -7,7 +7,7 @@ import json
 import logging
 import time
 
-from kbtu import bot, config, db, logic, media, app as server, tgc, video
+from kbtu import bot, config, db, logic, media, outbox, app as server, tgc, video
 from test_core import env, login, set_clock, tma  # noqa: F401  (env: the fixture)
 
 
@@ -545,7 +545,7 @@ def test_userbot_heartbeat_alert(env, monkeypatch):
     bot.userbot_round(con)                                              # still down: no second alert
     assert rows_of("userbot_off") == [(9001, f"uo:{10**9}")]
     m = con.execute("SELECT b.*, 'en' AS lang FROM bot_outbox b WHERE kind = 'userbot_off'").fetchone()
-    text, button, start = bot._render(con, m)
+    text, button, start = outbox._render(con, m)
     assert "userbot" in text and button is None and start == ""
     mirror.alive(con)                                                   # back
     bot.userbot_round(con)
@@ -620,14 +620,14 @@ def test_channel_ask(env, monkeypatch, capsys):
     assert asks() == ["ca:2", "ca:3"]
     assert "asked before 2" in capsys.readouterr().out
     m = con.execute("SELECT b.*, 'en' AS lang FROM bot_outbox b WHERE ref = 'ca:2'").fetchone()
-    text, button, start = bot._render(con, m)
+    text, button, start = outbox._render(con, m)
     assert "Alpha" in text and button and start == "ce_2"
     tiles = {x["org"]["id"]: x for x in c.get("/api/me", headers=tma(80)).json()["memberships"]}
     assert tiles[1]["channel"] == {"title": "Has", "mirror": True} and tiles[2]["channel"] is None
     assert "channel" not in c.get("/api/me", headers=tma(82)).json()["memberships"][0]   # a Head doesn't link chats
     assert c.get("/api/me", headers=tma(81)).json()["memberships"][0]["channel"] == {"title": "Secret", "mirror": False}
     con.execute("INSERT INTO chats (title, kind, url, created_at, status, org_id, main) VALUES ('Alpha', 'channel', 'https://t.me/alpha_ch', 0, 'org', 2, 1)")
-    assert bot._render(con, m) is None                                  # linked meanwhile: not sent
+    assert outbox._render(con, m) is None                                  # linked meanwhile: not sent
 
 
 def test_deleted_posts_are_wiped(env, monkeypatch, tmp_path):

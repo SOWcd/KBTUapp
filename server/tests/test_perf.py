@@ -5,7 +5,7 @@ import sqlite3
 import threading
 import time
 
-from kbtu import bot, db, logic
+from kbtu import bot, db, logic, outbox
 from test_core import env, login, tma  # noqa: F401  (env: the fixture)
 
 
@@ -15,7 +15,7 @@ def test_outbox_due_uses_its_index(env):
     con = db.connect(cfg.db_path)
     q = []
     con.set_trace_callback(q.append)
-    bot._due(con)  # the postman's own query (INDEXED BY fails loudly if it ever stops fitting the index)
+    outbox._due(con)  # the postman's own query (INDEXED BY fails loudly if it ever stops fitting the index)
     con.set_trace_callback(None)
     plan = " ".join(r[3] for r in con.execute("EXPLAIN QUERY PLAN " + q[-1]))
     assert "outbox_todo" in plan and "TEMP B-TREE" not in plan, plan

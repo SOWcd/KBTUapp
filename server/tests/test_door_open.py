@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import time
 
-from kbtu import bot, db, logic
+from kbtu import db, logic, outbox
 from test_admin_events import _as, _setup
 from test_core import env, login, tma  # noqa: F401  (env is a fixture)
 from test_team_guests import _club, _event, _go, _uid
@@ -85,15 +85,15 @@ def test_opens_by_itself_at_t30(env):
     logic.door_round(con)
     assert _sent(con, eid) == [_uid(con, 10)]
     m = con.execute("SELECT b.*, u.lang FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE b.kind = 'door_open'").fetchone()
-    text, _, start = bot._render(con, m)
+    text, _, start = outbox._render(con, m)
     assert "Case" in text and start == f"tk_{eid}"         # a template with a button to the ticket
     assert c.patch("/api/me", headers=tma(10), json={"nRemind": False}).status_code == 200
-    assert bot._render(con, m) is not None                 # optional reminders are a separate switch
+    assert outbox._render(con, m) is not None                 # optional reminders are a separate switch
     assert c.patch("/api/me", headers=tma(10), json={"nDoor": False}).status_code == 200
-    assert bot._render(con, m) is None
+    assert outbox._render(con, m) is None
     assert c.patch("/api/me", headers=tma(10), json={"nDoor": True}).status_code == 200
     assert _scan(c, eid, con, 10) == "ok"
-    assert bot._render(con, m) is None                     # in already by the time it goes
+    assert outbox._render(con, m) is None                     # in already by the time it goes
     # moved: event_changed tells, not a second door message
     _start(con, eid, 20 * 60)
     logic.door_round(con)

@@ -7,7 +7,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from kbtu import ai, auth, bot, db, logic, app as server, texts
+from kbtu import ai, auth, bot, db, logic, outbox, app as server, texts
 from test_core import env, login, set_clock, tma  # noqa: F401  (env: the fixture)
 
 
@@ -81,14 +81,14 @@ def test_memo(env, monkeypatch):
     sent = con.execute("SELECT kind, ref FROM bot_outbox WHERE kind = 'memo_ready'").fetchall()
     assert [tuple(r) for r in sent] == [("memo_ready", f"memo:1:{monday}")]
     row = con.execute("SELECT b.*, u.lang FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE kind = 'memo_ready'").fetchone()
-    text, button, start = bot._render(con, row)
+    text, button, start = outbox._render(con, row)
     assert "IT Club" in text and start == "memo_1"
 
     # the place still to be confirmed: the organizer hears it 3 days before (Friday 10:00 for the Monday after)
     set_clock(monkeypatch, lambda: b["startsAt"] - 3 * 86400 - 3 * 3600)
     logic.tba_day(con)
     row = con.execute("SELECT b.*, u.lang FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE kind = 'place_tba'").fetchone()
-    assert row and "Quiz" in bot._render(con, row)[0]
+    assert row and "Quiz" in outbox._render(con, row)[0]
     # DMP gave a room: typed in, nobody is told now
     c.post(f"/api/events/{b['id']}/registration", headers=tma(10), json={})
     before = con.execute("SELECT COUNT(*) FROM bot_outbox WHERE kind = 'event_changed'").fetchone()[0]

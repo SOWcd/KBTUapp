@@ -6,7 +6,7 @@ import json
 
 import httpx
 
-from kbtu import bot, db, logic, texts
+from kbtu import bot, db, logic, outbox, texts
 from kbtu.logic import notifications
 from test_core import env, login, tma  # noqa: F401  (env: the fixture)
 
@@ -23,7 +23,7 @@ def test_feedback_from_delivery_to_admin(env, monkeypatch):
     con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, emoji, color, created_at, updated_at)
         VALUES (5, 1, 'published', 'Demo', '305', ?, 'laptop_3d', '#3B6BFF', 0, 0)""", (sent_at + 86400,))
     con.execute("INSERT INTO registrations (event_id, user_id, status, ticket_code, created_at, updated_at) VALUES (5, ?, 'going', 'T-DEMO', 0, 0)", (uid,))
-    monkeypatch.setattr(bot, "_chores", lambda *_: None)
+    monkeypatch.setattr(outbox, "_chores", lambda *_: None)
 
     messages, edits = [], []
     def telegram(request):
@@ -39,7 +39,7 @@ def test_feedback_from_delivery_to_admin(env, monkeypatch):
 
     async def send():
         async with httpx.AsyncClient(transport=httpx.MockTransport(telegram)) as http:
-            await bot.send_due(cfg, http)
+            await outbox.send_due(cfg, http)
 
     def tap(message, data, who=10):
         async def go():

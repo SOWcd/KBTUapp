@@ -11,7 +11,7 @@ import time
 import pytest
 from fastapi.testclient import TestClient
 
-from kbtu import app as server, bot, db, llm, logic, mirror, texts
+from kbtu import app as server, db, llm, logic, mirror, outbox, texts
 from kbtu.logic import autoev
 from test_core import env, login, tma  # noqa: F401  (env: the fixture)
 
@@ -100,7 +100,7 @@ def test_one_call_to_a_draft(env, monkeypatch):
     m = con.execute("SELECT * FROM bot_outbox WHERE kind = 'auto_event'").fetchall()
     assert [(r["user_id"], r["ref"]) for r in m] == [(ids["pres"], f"ae:{eid}")]
     row = {**dict(m[0]), "lang": "en"}
-    assert bot._render(con, row) == (*texts.bot_message("en", "auto_event", org="Open Mic"), "st_1")
+    assert outbox._render(con, row) == (*texts.bot_message("en", "auto_event", org="Open Mic"), "st_1")
     # Studio: its leaders see where it came from; a plain member doesn't, an outsider sees no Studio at all
     studio = c.get("/api/orgs/1/events", headers=tma(20)).json()
     assert [(x["id"], x.get("fromPost")) for x in studio] == [(eid, "https://t.me/mic_news/1")]
@@ -109,7 +109,7 @@ def test_one_call_to_a_draft(env, monkeypatch):
     assert c.get(f"/api/events/{eid}", headers=tma(40)).status_code == 404  # a draft: never in Afisha
     # published by the club: out of Admin's queue, the bot's message quiet
     assert c.post(f"/api/events/{eid}/publish", headers=tma(20)).json()["status"] == "published"
-    assert bot._render(con, row) is None
+    assert outbox._render(con, row) is None
     assert not [x for x in c.get("/api/admin/inbox", headers=tma(60)).json()["items"] if x["kind"] == "autoev"]
 
 
@@ -155,7 +155,7 @@ def test_admin_queue_and_dismiss(env, monkeypatch):
     assert c.delete(f"/api/admin/events/{eid}", headers=tma(60)).status_code == 204
     assert not [x for x in c.get("/api/admin/inbox", headers=tma(60)).json()["items"] if x["kind"] == "autoev"]
     m = con.execute("SELECT * FROM bot_outbox WHERE kind = 'auto_event'").fetchone()
-    assert bot._render(con, {**dict(m), "lang": "ru"}) is None
+    assert outbox._render(con, {**dict(m), "lang": "ru"}) is None
     logic.undo_delete_event(con, logic.Viewer(ids["boss"], "admin", None), eid)
     assert [x for x in c.get("/api/admin/inbox", headers=tma(60)).json()["items"] if x["kind"] == "autoev"]
     assert c.delete(f"/api/admin/events/{eid}", headers=tma(60)).status_code == 204

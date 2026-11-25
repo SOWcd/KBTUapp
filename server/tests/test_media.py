@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from kbtu import auth, bot, config, db, logic, media, app as server, texts, video
+from kbtu import auth, bot, config, db, logic, media, outbox, app as server, texts, video
 from test_core import BOT, delete_now, env, login, tma  # noqa: F401  (env: the fixture)
 
 
@@ -202,7 +202,7 @@ def test_album(env, monkeypatch):
         e = c.post("/api/events/1/photos", headers=A, content=jpeg(n)).json()
     assert len(e["photos"]) == 10 and e["canAddPhotos"] is False                            # ten each
     report = con.execute("SELECT b.*, 'ru' AS lang FROM bot_outbox b WHERE kind = 'photo_report'").fetchall()
-    assert [r["user_id"] for r in report] == [dana["id"]] and bot._render(con, report[0])[2] == "ph_1"  # once, to who else came
+    assert [r["user_id"] for r in report] == [dana["id"]] and outbox._render(con, report[0])[2] == "ph_1"  # once, to who else came
     assert c.post("/api/events/1/photos", headers=A, content=jpeg(11)).status_code == 403
     assert c.get("/api/events/1", headers=P).json()["canAddPhotos"] is True                 # the team brings its own
     assert c.delete(f"/api/events/1/photos/{first}", headers=Z).status_code == 403
@@ -216,9 +216,9 @@ def test_album(env, monkeypatch):
     admin.main(["photo-call", "1", "--send"])
     admin.main(["photo-call", "1", "--send"])
     call = con.execute("SELECT b.*, 'ru' AS lang FROM bot_outbox b WHERE kind = 'photo_call'").fetchall()
-    assert sorted(r["user_id"] for r in call) == sorted([ali["id"], dana["id"]]) and bot._render(con, call[0])[2] == "ph_1"
+    assert sorted(r["user_id"] for r in call) == sorted([ali["id"], dana["id"]]) and outbox._render(con, call[0])[2] == "ph_1"
     con.execute("UPDATE events SET ends_at = ? WHERE id = 1", (int(time.time()) - 8 * 86400,))
-    assert bot._render(con, call[0]) is None                                                 # a week on: no adding, quiet
+    assert outbox._render(con, call[0]) is None                                                 # a week on: no adding, quiet
     assert c.get("/api/events/1", headers=A).json()["canAddPhotos"] is False               # a week after the end: closed
     assert delete_now(c, cfg, A) is None
     left = c.get("/api/events/1", headers=P).json()["photos"]

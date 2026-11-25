@@ -5,7 +5,7 @@ import json
 import httpx
 import pytest
 
-from kbtu import admin, bot, db, texts
+from kbtu import admin, bot, db, outbox, texts
 from test_core import env  # noqa: F401  (env: the fixture)
 
 NAME = "app_home"
@@ -33,8 +33,8 @@ def test_broadcast_dry_preview_and_delivery(audience, capsys, monkeypatch):
     con, cfg = audience
     cmd = ["broadcast", NAME, URL]
     messages = []
-    monkeypatch.setattr(bot, "_chores", lambda *_: None)
-    monkeypatch.setattr(bot, "GAP", 0)
+    monkeypatch.setattr(outbox, "_chores", lambda *_: None)
+    monkeypatch.setattr(outbox, "GAP", 0)
 
     def telegram(request):
         assert request.url.path.endswith("/sendMessage")
@@ -43,7 +43,7 @@ def test_broadcast_dry_preview_and_delivery(audience, capsys, monkeypatch):
 
     async def send():
         async with httpx.AsyncClient(transport=httpx.MockTransport(telegram)) as http:
-            await bot.send_due(cfg, http)
+            await outbox.send_due(cfg, http)
 
     admin.main([*cmd, "--dry"])
     assert capsys.readouterr().out.strip() == "would queue 3"

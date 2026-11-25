@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 
-from kbtu import bot, db
+from kbtu import db, outbox
 from test_core import env, login, tma  # noqa: F401  (env: the fixture)
 from test_tgcomments import COPY, Telegram, banned, hear, msg, report, setup, student, tick
 
@@ -70,7 +70,7 @@ def test_hidden_club_publish_messages_subscribers(env):
     assert c.post("/api/events/1/publish", headers=tma(90)).status_code == 200
     m = con.execute("""SELECT b.*, u.lang FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE b.kind = 'new_event'""").fetchone()
     assert m and m["user_id"] == ali["id"]
-    assert bot._render(con, m) is None  # no card for an event nobody can open
+    assert outbox._render(con, m) is None  # no card for an event nobody can open
     assert c.get("/api/events/1", headers=tma(93)).status_code == 404  # while the event itself is gone for him
 
 def test_hidden_event_still_messages(env):
@@ -87,10 +87,10 @@ def test_hidden_event_still_messages(env):
     assert c.post("/api/events/1/updates", headers=tma(90), json={"body": "come anyway"}).status_code == 200
     m = con.execute("SELECT b.*, u.lang FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE b.kind = 'event_update' AND b.user_id = ?",
                     (ali["id"],)).fetchone()
-    assert m and bot._render(con, m) is None  # a taken-down event messages nobody
+    assert m and outbox._render(con, m) is None  # a taken-down event messages nobody
     r = con.execute("SELECT b.*, u.lang FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE b.kind = 'remind_2h' AND b.user_id = ?",
                     (ali["id"],)).fetchone()
-    assert r is None or bot._render(con, r) is None
+    assert r is None or outbox._render(con, r) is None
 
 def test_plain_admin_unbans_admin_the_owner_banned(env):
     """The ban sets role='user', so the 'another admin is the owner's' guard is gone: a plain admin lifts the owner's ban
