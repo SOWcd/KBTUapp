@@ -322,7 +322,7 @@ def test_seen_stranger_is_called_and_forgotten_on_leaving(env, monkeypatch):
     assert {500, 501} <= set(_tagged(sent)) and 21 not in _tagged(sent)
     _run(cfg, con, _Http(), _msg(500, text="", left_chat_member={"id": 501}))  # 501 left
     assert _seen(con) == [20, 21, 500]                                        # 21 wrote too (its /all)
-    sent = _run(cfg, con, _Http(gone={500}), _msg(21))                        # Telegram says 500 isn't there: not called, forgotten
+    sent = _run(cfg, con, _Http(gone={500}, admins={21}), _msg(21))                      # Telegram says 500 isn't there: not called, forgotten
     assert 500 not in _tagged(sent) and _seen(con) == [20, 21]
     # banned in the app: never called
     con.execute("UPDATE users SET banned_at = 1 WHERE tg_id = 20")
