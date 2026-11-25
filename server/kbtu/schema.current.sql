@@ -1926,10 +1926,9 @@ CREATE TRIGGER fchan_comment_gone AFTER UPDATE OF status ON tgc_comments
       UPDATE fchan_comments SET gone = (NEW.status IN ('deleting', 'deleted', 'restored')) WHERE msg_id = NEW.msg_id;
     END;
 CREATE TRIGGER sponsor_moved AFTER UPDATE OF tg_id ON users
-      WHEN old.tg_id != new.tg_id BEGIN
-        INSERT INTO sponsor_consents (user_id, version, show, at)
-          SELECT user_id, version, 0, unixepoch() FROM sponsor_consents
-          WHERE user_id = old.id ORDER BY id DESC LIMIT 1;
+      WHEN old.tg_id != new.tg_id AND new.tg_id > 0 AND (EXISTS (SELECT 1 FROM donations WHERE user_id = old.id)
+                                                         OR EXISTS (SELECT 1 FROM sponsor_consents WHERE user_id = old.id)) BEGIN
+        INSERT INTO sponsor_consents (user_id, version, show, at) VALUES (old.id, 'sp1', 0, unixepoch());
     END;
 CREATE TRIGGER web_sessions_revoke AFTER UPDATE OF banned_at, tg_id ON users
       WHEN new.banned_at IS NOT NULL OR old.tg_id != new.tg_id BEGIN

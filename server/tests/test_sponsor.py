@@ -589,3 +589,17 @@ def test_admin_donation_add_by_hand_grants_the_medal_shown_by_default(support, m
     assert not con.execute("SELECT 1 FROM achievement_levels WHERE user_id = ? AND code = 'sponsor'", (ids[7],)).fetchone()
     with pytest.raises(SystemExit):
         admin.main(["donation", "remove", str(did)])
+
+
+def test_an_account_move_hides_a_donor_who_never_answered(support, monkeypatch, capsys):
+    """Shown by default: a move puts another name and face on the account, so it always writes a hide row (migration 247),
+    answer or not."""
+    c, cfg, con, ids, clock = support
+    monkeypatch.setattr(admin.config, "load", lambda: cfg)
+    admin.main(["donation", "add", "7", "6000"])
+    assert not con.execute("SELECT 1 FROM sponsor_consents WHERE user_id = ?", (ids[7],)).fetchone()
+    assert board(support) == [(2, 6000)]
+    c.get("/api/me", headers=tma(9, "Fresh"))
+    admin.main(["move", "7", "9"])
+    assert board(support) == []
+    assert [tuple(r) for r in con.execute("SELECT show, amount FROM sponsor_consents WHERE user_id = ?", (ids[7],))] == [(0, None)]
