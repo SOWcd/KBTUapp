@@ -160,7 +160,11 @@
   .tile:active, .tile:disabled { opacity: 1; }
   .chip { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; flex: none; border-radius: var(--r-full);
     background: var(--text); transition: background-color 200ms var(--ease) 140ms, transform 200ms var(--ease-bounce); }
-  .open .chip { background: var(--fill-2); transition-delay: calc(var(--i) * 30ms), 0s; }
+  /* a small lens of the panel's own glass (owner: flat grey discs read as old iOS): clear fill, a sheen from the top, the
+     lens rim light above and low below */
+  .open .chip { background: radial-gradient(120% 90% at 50% 0%, var(--glass-sheen), transparent 60%), var(--glass-clear);
+    box-shadow: inset 0 1px 0 var(--lens-rim), inset 0 -1px 0 var(--lens-rim-low), inset 0 0 0 1px var(--lg-rim-base);
+    transition-delay: calc(var(--i) * 30ms), 0s; }
   .open .tile:active:not(:disabled) .chip { transform: scale(.9); background: var(--fill); }
   .open .tile:focus-visible { outline: none; }
   .open .tile:focus-visible .chip { box-shadow: 0 0 0 2px var(--accent); }

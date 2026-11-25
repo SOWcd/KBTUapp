@@ -1866,6 +1866,8 @@ async def _group_video(cfg: Config, http: httpx.AsyncClient, msg: dict, url: str
 
 async def _tiktok(cfg: Config, http: httpx.AsyncClient, msg: dict, url: str, started: float | None = None) -> None:
     started = time.monotonic() if started is None else started
+    # whose link it is: the Instagram session's own caps per chat and per person (tiktok._session_take)
+    asker = tiktok.asker.set((msg["chat"]["id"], int((msg.get("from") or {}).get("id") or 0)))
     chat = {"chat_id": msg["chat"]["id"]}
     if msg.get("is_topic_message") and msg.get("message_thread_id"):
         chat["message_thread_id"] = msg["message_thread_id"]
@@ -1885,7 +1887,10 @@ async def _tiktok(cfg: Config, http: httpx.AsyncClient, msg: dict, url: str, sta
             route = type(exc).__name__
         _video_log.info("group video %s %.3fs", route, time.monotonic() - started)
 
-    await asyncio.gather(action(), reply())
+    try:
+        await asyncio.gather(action(), reply())  # its tasks copy the context: they see the asker
+    finally:
+        tiktok.asker.reset(asker)
 
 
 async def _video_reply(http: httpx.AsyncClient, api: str, chat: dict, mid: int, url: str) -> str:

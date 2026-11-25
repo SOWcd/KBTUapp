@@ -14,6 +14,8 @@ def test_unlinked_chat_remembers_and_admin_calls(env):  # noqa: F811
     chatlist.unseen(con, -500, 102)
     assert chatlist.tag_all(con, -500, 101) == [103]
     assert chatlist.tag_all(con, -500, 101, [104, 103, 101]) == [103, 104]  # Telegram's list after, each once
+    con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('userbot_id', '104')")
+    assert chatlist.tag_all(con, -500, 101, [104, 103, 101]) == [103]  # never our own userbot
 
 
 def test_premium_wraps_once():

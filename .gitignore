@@ -6,6 +6,9 @@ __pycache__/
 *.session.*.tmp
 tmp-serve/
 
+# an Instagram session's cookies (README, Instagram stories) never go in the repo
+*cookies*.txt
+
 # server virtualenv
 server/.venv
 server/media/

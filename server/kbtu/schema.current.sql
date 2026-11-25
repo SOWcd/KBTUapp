@@ -294,6 +294,10 @@ CREATE TABLE credit_consents (
       show INTEGER NOT NULL CHECK (show IN (0, 1)),  -- 0: a no, a withdrawal, or a grant ended by an account move
       version TEXT NOT NULL,  -- the consent text it answered
       at INTEGER NOT NULL) STRICT;
+CREATE TABLE credit_team (
+      user_id INTEGER PRIMARY KEY NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      added_at INTEGER NOT NULL
+    ) STRICT;
 CREATE TABLE credits (  -- IF NOT EXISTS: tests rewind user_version
       id INTEGER PRIMARY KEY,
       tg_id INTEGER,

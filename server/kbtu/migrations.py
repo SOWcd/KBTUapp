@@ -2289,8 +2289,14 @@ MIGRATIONS: list[tuple[int, str]] = [
       at INTEGER NOT NULL,
       PRIMARY KEY (name, user_id)
     ) STRICT;"""),
+    # People of the app's Team: the core developers the creator picked (`kbtu.admin team add|del`, credits.py), shown
+    # only after their own yes. Not users.mark: that goes out with every person_ref, consent or not
+    (227, """CREATE TABLE IF NOT EXISTS credit_team (
+      user_id INTEGER PRIMARY KEY NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      added_at INTEGER NOT NULL
+    ) STRICT;"""),
     # Stable door keys: neither a university number nor a reusable roster row ID leaves the door API.
-    (227, """ALTER TABLE event_guests ADD COLUMN door_key TEXT;
+    (228, """ALTER TABLE event_guests ADD COLUMN door_key TEXT;
     UPDATE event_guests SET door_key = lower(hex(randomblob(16)));
     CREATE UNIQUE INDEX event_guests_door_key ON event_guests(door_key);
     CREATE TRIGGER event_guests_key AFTER INSERT ON event_guests WHEN new.door_key IS NULL BEGIN
