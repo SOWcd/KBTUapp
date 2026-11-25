@@ -567,6 +567,8 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         return None
     if not logic.seats.sees_school(con, m["user_id"], e):  # a school's own event: only to whom it shows (its signed-up keep theirs)
         return None
+    if kind == "remind_2h" and not one(con, "SELECT 1 FROM registrations WHERE event_id = ? AND user_id = ? AND status = 'going'", e["id"], m["user_id"]):
+        return None
     if e["visibility"] != "public" and kind in ("remind_2h", "seat_free", "going_ok", "door_open"):  # a club's own event has no ticket
         kind += "_team"
     if kind.startswith("door_open") and (not one(con, "SELECT n_door FROM users WHERE id = ?", m["user_id"])[0] or not one(
