@@ -25,7 +25,15 @@ def test_search_more(env, monkeypatch):
     assert people(A, "Bob") == [] and people(A, "Cat") == []
     # an exact @username finds a student who may be added as a friend, and nobody once they turned that off
     assert people(A, "@cat_tg") == [cat]
-    con.execute("UPDATE users SET can_friend = 0 WHERE id = ?", (cat,))
+    # ... never across a block (either way) or once banned, and not counted as a profile opened then
+    for blocker, blocked in ((cat, ann), (ann, cat)):
+        con.execute("INSERT INTO blocks (user_id, blocked_id, created_at) VALUES (?, ?, 0)", (blocker, blocked))
+        con.execute("DELETE FROM profile_views")
+        assert people(A, "@cat_tg") == [] and not con.execute("SELECT 1 FROM profile_views").fetchone()
+        con.execute("DELETE FROM blocks")
+    con.execute("UPDATE users SET banned_at = 1 WHERE id = ?", (cat,))
+    assert people(A, "@cat_tg") == []
+    con.execute("UPDATE users SET banned_at = NULL, can_friend = 0 WHERE id = ?", (cat,))
     assert people(A, "@cat_tg") == []
     # the forum open to me (a moderator with FORUM=1): those open to projects by name, never the others, never me
     assert people(M, "Bob") == [bob] and people(M, "Cat") == [] and people(M, "Mod") == []
@@ -42,6 +50,10 @@ def test_search_more(env, monkeypatch):
     assert TestClient(server.create(cfg)).get("/api/search/more", headers=A, params={"q": "calculus"}).json()["posts"] == []
     assert c.get("/api/search/more", headers=A, params={"q": "c"}).json() == {"people": [], "posts": []}
 
-    # the cap an hour
+    # the cap an hour: one counter per person, the past hours' gone
+    con.execute("INSERT INTO meta (key, value) VALUES (?, '5')", (f"gsearch:{ann}:1",))
+    c.get("/api/search/more", headers=A, params={"q": "calculus"})
+    assert not con.execute("SELECT 1 FROM meta WHERE key = ?", (f"gsearch:{ann}:1",)).fetchone()
+    assert con.execute("SELECT COUNT(*) FROM meta WHERE key LIKE ?", (f"gsearch:{ann}:%",)).fetchone()[0] == 1
     monkeypatch.setattr(logic.search, "MORE_AN_HOUR", 0)
     assert c.get("/api/search/more", headers=A, params={"q": "calculus"}).status_code == 429

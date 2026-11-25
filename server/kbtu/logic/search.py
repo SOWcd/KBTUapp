@@ -268,12 +268,17 @@ def more(con, v: Viewer, q: object, *, forum: bool, channel: bool, n: int = 8) -
         if k >= MORE_AN_HOUR:
             raise ApiError("rate_limited", "search")
         con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (key, str(k + 1)))
+        # one counter per person: the past hours' go, so meta never grows with every hour anyone searched
+        con.execute("DELETE FROM meta WHERE key >= ? AND key < ? AND key != ?", (f"gsearch:{v.id}:", f"gsearch:{v.id};", key))
     return {"people": _findable(con, v, q, forum, n) if v.student else [], "posts": _posts(con, v, q, n) if channel else []}
 
 
 def _findable(con, v: Viewer, q: str, forum: bool, n: int) -> list[dict]:
     out = []
-    if re.fullmatch(r"@[A-Za-z0-9_]{4,32}", q.strip()):
+    # a block either way, or a banned account: not found, and not counted as a profile opened (find_student checks neither)
+    hidden = re.fullmatch(r"@[A-Za-z0-9_]{4,32}", q.strip()) and con.execute(f"""SELECT 1 FROM users u WHERE lower(u.tg_username) = lower(:name)
+        AND (u.banned_at IS NOT NULL OR NOT {forum_mod._UNBLOCKED.format(u='u.id')})""", {"name": q.strip()[1:], "me": v.id}).fetchone()
+    if re.fullmatch(r"@[A-Za-z0-9_]{4,32}", q.strip()) and not hidden:
         try:
             s = profiles.find_student(con, v, q.strip())
         except ApiError:
