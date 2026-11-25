@@ -15,10 +15,13 @@
   import Star from '@lucide/svelte/icons/star';
   import X from '@lucide/svelte/icons/x';
   import { onMount, tick, untrack } from 'svelte';
+  import { cubicOut } from 'svelte/easing';
+  import type { TransitionConfig } from 'svelte/transition';
+  import { calm } from '../../ui/fold';
   import type { ChannelFeedPost, ClassItem, EventCard, Media, Post } from '../../lib/api';
   import { channel } from '../../lib/state/channel.svelte';
   import { count } from '../../lib/stats';
-  import { load as loadHero, rank as rankHero, save as saveHero, shown as heroShown, tapped as heroTapped, type Pick as HeroPick } from '../../lib/hero';
+  import { lead as leadHero, load as loadHero, rank as rankHero, save as saveHero, shown as heroShown, stale as heroStale, tapped as heroTapped, type Pick as HeroPick } from '../../lib/hero';
   import { data, skipped, classKey, skipClass, prefetchEvent, canAskRating, dismissEventRating, loadMyPast, ratingBusy, rateFromPrompt, toggleGoing, goingBusy } from '../../lib/state/data.svelte';
   import { touchAhead } from '../../lib/touch';
   import { session, kriCorner } from '../../lib/state/session.svelte';
@@ -52,8 +55,7 @@
   import ActionCard from '../../ui/ActionCard.svelte';
   import StoryRow from './StoryRow.svelte';
   import PullSearch from '../../ui/PullSearch.svelte';
-  import { hit as orgHit } from '../../lib/clubs';
-  import { hit, namesOf } from '../../lib/search';
+  import Everything from './Everything.svelte';
   import GalleryCard from './GalleryCard.svelte';
   import Chip from '../../ui/Chip.svelte';
   import { afishaFilter, filterEvents, choices, active, pick, clearFilter } from '../../lib/state/afisha.svelte';
@@ -167,11 +169,15 @@
     if (nx) ev('next', nx);
     return out;
   });
+  // the first card is the moment's (lib/hero.ts lead): my ticket starting soon, else today's biggest, else the week's most
+  // popular. It follows the 30 s clock and the store, so it changes through the day on its own (crossfaded in the markup)
+  const top = $derived.by((): Card | null => { const x = leadHero(shown, now, heroStale(was, today)); return x && { key: 'e' + x.e.id, kind: x.kind, e: x.e }; });
   // the cards seen this visit keep their places: the forum's feed landing later never swaps one under the finger
   let held = $state({ d: 0, keys: [] as string[] });
   const cards = $derived.by(() => {
-    const keep = held.d === today ? held.keys.map((k) => cands.find((x) => x.key === k)).filter((x): x is Card => !!x) : [];
-    return [...keep, ...rankHero(cands.filter((x) => !keep.some((y) => y.key === x.key)), was, today)].slice(0, 3);
+    const lead = top ? [top] : [], taken = (x: Card) => lead.some((y) => y.key === x.key);
+    const keep = held.d === today ? held.keys.map((k) => cands.find((x) => x.key === k)).filter((x): x is Card => !!x && !taken(x)) : [];
+    return [...lead, ...keep, ...rankHero(cands.filter((x) => !taken(x) && !keep.some((y) => y.key === x.key)), was, today)].slice(0, 3);
   });
   let at = $state(0); // the card in view
   const atCard = $derived(Math.min(at, cards.length - 1));
@@ -179,7 +185,9 @@
     const i = atCard, c = cards[i];
     if (!c || !data.eventsReady || searching || ui.tab !== 'afisha') return;
     untrack(() => {
-      if (held.d !== today || held.keys.length <= i) held = { d: today, keys: cards.slice(0, i + 1).map((x) => x.key) };
+      // the lead isn't held (the clock moves it): a new one never shifts the swiped-to cards under the finger
+      const from = top ? 1 : 0;
+      if (held.d !== today || held.keys.length < i + 1 - from) held = { d: today, keys: cards.slice(from, i + 1).map((x) => x.key) };
       if (heroShown(mem, c, today, i === 0)) { count(`hero.show.${c.kind}`); saveHero(mem); }
     });
   });
@@ -187,6 +195,9 @@
     if (heroTapped(mem, c, today)) count(`hero.tap.${c.kind}`);
     saveHero(mem);
   }
+  // a new lead fades in on top; the old one stays whole under it as long, then goes (a plain crossfade dipped to the ground)
+  const into = (_: Element): TransitionConfig => ({ duration: calm() ? 0 : 420, easing: cubicOut, css: (k) => `opacity: ${k}; z-index: 1` });
+  const under = (_: Element): TransitionConfig => ({ duration: calm() ? 0 : 420, css: () => 'z-index: 0' });
   function slid(ev: Event) {
     const el = ev.currentTarget as HTMLElement, a = el.children[0] as HTMLElement, b = el.children[1] as HTMLElement | undefined;
     at = b ? Math.round(el.scrollLeft / (b.offsetLeft - a.offsetLeft)) : 0; // one card's step
@@ -243,7 +254,7 @@
     return [...events.values()].filter((e) => canAskRating(e, now)).sort((a, b) => endOf(b) - endOf(a))[0];
   });
 
-  // the pull-down search: the events held, upcoming and the last month's that ended, by title, place or club
+  // the pull-down search: the app's global one (events, clubs, people, news, the forum, places, subjects)
   let q = $state('');
   const searching = $derived(!!q.trim());
   // KRI's "My tickets": the search goes, my next event's ticket (the hero) comes into view
@@ -251,7 +262,8 @@
     toTickets.fn = () => { q = ''; void tick().then(() => (document.querySelector('.tab.on .tix') ?? document.querySelector('.tab.on .heroes'))?.scrollIntoView({ block: 'center', behavior: 'smooth' })); };
     return () => { toTickets.fn = null; };
   });
-  const found = $derived(searching ? [...shown, ...past.filter((p) => !shown.some((e) => e.id === p.id))].filter((e) => hit(q, namesOf(e, 'title', 'place')) || orgHit(e.org, q)) : []);
+  // the global search's events: the upcoming ones held, then the last month's that ended (screens/afisha/Everything)
+  const searchable = $derived(searching ? [...shown, ...past.filter((p) => !shown.some((e) => e.id === p.id))] : []);
 
   function head(d: number): [string, string] {
     const w = weekday(dayTs(d) + 12 * 3600);
@@ -309,6 +321,55 @@
   {/if}
 {/snippet}
 
+<!-- one hero card, any kind: the lead's slot (i 0) and the swiped-to ones -->
+{#snippet heroCard(c: Card, i: number)}
+  {#if 'e' in c}
+    {@const e = c.e}
+    {@const mine = e.my?.status === 'going'}
+    <!-- an event: my ticket and the way there, else what it is and one tap to go -->
+    <section class="hero" class:tix={mine && i === 0} class:nopic={!(e.cover || e.video?.poster)} style:--c={e.cover?.color ?? e.video?.poster?.color ?? e.color ?? e.tint} onclickcapture={() => tap(c)}>
+      <button class="hit" onpointerdown={(ev) => touchAhead(ev, () => prefetchEvent(e.id))} onclick={(ev) => sheets.event(e.id, ev.currentTarget.parentElement?.querySelector('.poster'))} aria-label={e.title}></button>
+      <span class="art"><Poster item={e} big radius={0} /></span>
+      <div class="shade"></div>
+      <div class="slab glass glass-sheet">
+        <span class="hero-tx">
+          <b class="clamp-2">{e.title}</b>
+          <span class="where"><span class="ellipsis"><b class="num">{multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : time(e.startsAt)}</b> · {soon(e.startsAt, now)} · {placeOf(e.place, e.online)}</span><span class="by ellipsis">&nbsp;· {shortOf(e.org)}{#if e.coHost} × {shortOf(e.coHost)}{/if}</span></span>
+          {#if !mine}<span class="hsub">{@render status(e)}</span>{/if}
+        </span>
+        <!-- under the thumb, at the slab's end: my ticket and the way there, two round icons; not mine yet: one tap signs up (a paid one opens its payment) -->
+        {#if mine}
+          <span class="acts">
+            <IconButton kind="tinted" size="s" icon={QrCode} label={t('event.ticket')} onclick={() => sheets.ticket(e.id)} />
+            {#if floorOf(e.place) != null}<IconButton kind="secondary" size="s" icon={MapPin} label={t('route.open')} onclick={() => sheets.map(e.place)} />{/if}
+          </span>
+        {:else if e.my?.status === 'hold'}
+          <span class="acts"><Button kind="tinted" size="s" onclick={() => sheets.pay(e.id)}>{t('event.pay', { price: money(e.price ?? 0) })}</Button></span>
+        {:else if canGo(e)}
+          <span class="acts"><Button kind="tinted" size="s" loading={goingBusy.has(e.id)} onclick={() => toggleGoing(e.id, () => sheets.pay(e.id))}>{e.price ? e.freeLeft && session.me?.student?.freeFirst ? t('event.goFree') : t('event.goPrice', { price: money(e.price) }) : t('event.go')}</Button></span>
+        {/if}
+      </div>
+      <span class="rim" aria-hidden="true"></span>
+    </section>
+  {:else}
+    {@const v = look(c)}
+    <!-- news, a forum post, my next class: the same card, its picture or a 3D mark, the title and one line -->
+    <section class="hero" class:nopic={!v.item.cover} style:--c={v.color} onclickcapture={() => tap(c)}>
+      <button class="hit" onclick={v.open} aria-label={v.title}></button>
+      <span class="art"><Poster item={v.item} big radius={0} /></span>
+      <div class="shade"></div>
+      <div class="slab">
+        <span class="hero-tx">
+          <b class="clamp-2">{v.title}</b>
+          <span class="where"><span class="ellipsis">{#if v.lead}<b class="num">{v.lead}</b> · {/if}{v.line}</span>{#if v.by}<span class="by ellipsis">&nbsp;· {v.by}</span>{/if}</span>
+        </span>
+        {#if v.room}{@const room = v.room}<span class="acts"><IconButton kind="secondary" size="s" icon={MapPin} label={t('route.open')} onclick={() => sheets.map(room)} /></span>{/if}
+      </div>
+      <span class="rim" aria-hidden="true"></span>
+    </section>
+  {/if}
+{/snippet}
+
 <div class="page scroll stagger">
   <PullSearch bind:value={q} placeholder={t('list.search')} />
   <header class="hd">
@@ -324,10 +385,7 @@
   <p class="date" use:fitTitle={20}>{weekday(dayTs(today) + 12 * 3600)}, {dayMonth(dayTs(today) + 12 * 3600)}</p>
   {#if data.eventsReady && weekCount}<p class="kick">{tn('list.week', weekCount)}</p>{/if}
   {#if searching}
-    <div class="past">
-      {#each found as e (e.id)}<EventRow {e} showDate dateLine={dayMonth(e.startsAt)} wasThere />
-      {:else}<EmptyState inline text={t('clubs.nothing')} />{/each}
-    </div>
+    <Everything {q} events={searchable} />
   {:else}
   {#if ratePrompt && !ratingBusy.has(ratePrompt.id)}
     {@const e = ratePrompt}
@@ -351,52 +409,12 @@
   {#if cards.length}
     <!-- the hero, personal: the first card, a swipe brings #2 and #3 (snapped); one markup for every kind -->
     <div class="heroes" role="group" aria-label={t('list.heroPicks')} onscroll={slid}>
-    {#each cards as c, i (c.key)}
-    {#if 'e' in c}
-    {@const e = c.e}
-    {@const mine = e.my?.status === 'going'}
-    <!-- an event: my ticket and the way there, else what it is and one tap to go -->
-    <section class="hero" class:tix={mine && i === 0} class:nopic={!(e.cover || e.video?.poster)} style:--c={e.cover?.color ?? e.video?.poster?.color ?? e.color ?? e.tint} onclickcapture={() => tap(c)}>
-      <button class="hit" onpointerdown={(ev) => touchAhead(ev, () => prefetchEvent(e.id))} onclick={(ev) => sheets.event(e.id, ev.currentTarget.parentElement?.querySelector('.poster'))} aria-label={e.title}></button>
-      <span class="art"><Poster item={e} big radius={0} /></span>
-      <div class="shade"></div>
-      <div class="slab">
-        <span class="hero-tx">
-          <b class="clamp-2">{e.title}</b>
-          <span class="where"><span class="ellipsis"><b class="num">{multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : time(e.startsAt)}</b> · {soon(e.startsAt, now)} · {placeOf(e.place, e.online)}</span><span class="by ellipsis">&nbsp;· {shortOf(e.org)}{#if e.coHost} × {shortOf(e.coHost)}{/if}</span></span>
-          {#if !mine}<span class="hsub">{@render status(e)}</span>{/if}
-        </span>
-        <!-- under the thumb, at the slab's end: my ticket and the way there, two round icons; not mine yet: one tap signs up (a paid one opens its payment) -->
-        {#if mine}
-          <span class="acts">
-            <IconButton kind="tinted" size="s" icon={QrCode} label={t('event.ticket')} onclick={() => sheets.ticket(e.id)} />
-            {#if floorOf(e.place) != null}<IconButton kind="secondary" size="s" icon={MapPin} label={t('route.open')} onclick={() => sheets.map(e.place)} />{/if}
-          </span>
-        {:else if e.my?.status === 'hold'}
-          <span class="acts"><Button kind="tinted" size="s" onclick={() => sheets.pay(e.id)}>{t('event.pay', { price: money(e.price ?? 0) })}</Button></span>
-        {:else if canGo(e)}
-          <span class="acts"><Button kind="tinted" size="s" loading={goingBusy.has(e.id)} onclick={() => toggleGoing(e.id, () => sheets.pay(e.id))}>{e.price ? e.freeLeft && session.me?.student?.freeFirst ? t('event.goFree') : t('event.goPrice', { price: money(e.price) }) : t('event.go')}</Button></span>
-        {/if}
-      </div>
-      <span class="rim" aria-hidden="true"></span>
-    </section>
-    {:else}
-    {@const v = look(c)}
-    <!-- news, a forum post, my next class: the same card, its picture or a 3D mark, the title and one line -->
-    <section class="hero" class:nopic={!v.item.cover} style:--c={v.color} onclickcapture={() => tap(c)}>
-      <button class="hit" onclick={v.open} aria-label={v.title}></button>
-      <span class="art"><Poster item={v.item} big radius={0} /></span>
-      <div class="shade"></div>
-      <div class="slab">
-        <span class="hero-tx">
-          <b class="clamp-2">{v.title}</b>
-          <span class="where"><span class="ellipsis">{#if v.lead}<b class="num">{v.lead}</b> · {/if}{v.line}</span>{#if v.by}<span class="by ellipsis">&nbsp;· {v.by}</span>{/if}</span>
-        </span>
-        {#if v.room}{@const room = v.room}<span class="acts"><IconButton kind="secondary" size="s" icon={MapPin} label={t('route.open')} onclick={() => sheets.map(room)} /></span>{/if}
-      </div>
-      <span class="rim" aria-hidden="true"></span>
-    </section>
-    {/if}
+    {#each cards as c, i (i ? c.key : '')}
+      {#if i}{@render heroCard(c, i)}
+      {:else}
+        <!-- the lead's slot stays put; a new lead fades in over the old in the same cell (no jump, no dip to the ground) -->
+        <div class="lead">{#key c.key}<div class="face" in:into out:under>{@render heroCard(c, 0)}</div>{/key}</div>
+      {/if}
     {/each}
     </div>
     {#if cards.length > 1}<div class="dots" aria-hidden="true">{#each cards as c, i (c.key)}<i class={{ on: i === atCard }}></i>{/each}</div>{/if}
@@ -564,11 +582,11 @@
 
   /* the hero: the one rich visual, kept calm (owner, Nov 22: the blurred cover and the circling light read as
      childish). The cover sharp edge to edge, a little dimmed, and most of the card (owner, Nov 24); the words on
-     a low slab of the app's own glass along the bottom (--glass-bg, the fringes: the capsule's and the tab bar's family; it
+     a low slab of the app's own sheet glass along the bottom (base.css .glass-sheet: the sheets' and menus' family; it
      follows the theme and stays legible whatever the cover is): the title, one line of when and where, and my ticket and the way
-     there as two round icons at its end */
-  .hero { --glow: 0.62; position: relative; isolation: isolate; display: flex; flex-direction: column; justify-content: flex-end; min-height: 196px; padding: 72px 6px 6px; /* the picture always keeps its strip, a two-line title under it too */
-    border-radius: var(--r-xl); background: var(--media); box-shadow: 0 12px 26px -16px rgba(0, 0, 0, 0.5); transition: transform var(--t-fast) var(--ease); }
+     there as two round icons at its end. No drop shadow of its own: the halo is the card's light */
+  .hero { --halo: 0.62; position: relative; isolation: isolate; display: flex; flex-direction: column; justify-content: flex-end; min-height: 196px; padding: 72px 6px 6px; /* the picture always keeps its strip, a two-line title under it too */
+    border-radius: var(--r-xl); background: var(--media); transition: transform var(--t-fast) var(--ease); }
   .hero:has(> .hit:active) { transform: scale(0.985); }
   /* the hero's cards side by side, one in view, snapped; edge to edge so the next one waits just past the gutter. A
      scroller clips, so it leaves room around the cards for their light (the glow reaches 44px under a card) and takes it
@@ -580,25 +598,30 @@
   /* 100% here is the scroller's box minus its left padding: the page's width plus one gutter, so a card takes one gutter
      less and snaps to its start inside the gutter (centre snapping pushed it past both edges) */
   .heroes { scroll-padding-inline: var(--gutter); }
-  .heroes > .hero { flex: 0 0 calc(100% - var(--gutter)); min-width: 0; scroll-snap-align: start; scroll-snap-stop: always; } /* min-width: a flex item never shrinks below its content (the one-line meta) unless told: the card grew past the edge */
+  .heroes > .hero, .lead { flex: 0 0 calc(100% - var(--gutter)); min-width: 0; scroll-snap-align: start; scroll-snap-stop: always; } /* min-width: a flex item never shrinks below its content (the one-line meta) unless told: the card grew past the edge */
+  /* the lead's slot: one grid cell the old and the new card share while they crossfade, so the row never moves; minmax(0):
+     the cell, like the card, never grows to the meta's width */
+  .lead { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .face { grid-area: 1 / 1; display: flex; min-width: 0; }
+  .face > .hero { flex: 1; min-width: 0; }
   .dots { display: flex; justify-content: center; gap: 6px; margin-top: var(--s-3); }
   .dots i { width: 6px; height: 6px; border-radius: var(--r-full); background: var(--text-3); opacity: 0.45; transition: opacity var(--t-fast) var(--ease); }
   .dots i.on { opacity: 1; }
   /* Opal's neon under the card, in the cover's own colour (--c): a close halo and a wide pool below. It blooms once as
      the page opens and rests; the shadow is painted once and only its opacity moves. The card no longer clips (the
      cover does), so the light can leave it */
-  .hero::before { content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none; opacity: var(--glow);
+  .hero::before { content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none; opacity: var(--halo);
     box-shadow: 0 0 14px 0 var(--c, transparent), 0 16px 38px -10px var(--c, transparent); animation: bloom 2.2s var(--ease) 0.2s backwards; }
   /* the halo always shows against the theme (owner: a pale cover's light vanished on the light ground): the cover's hue,
      but at least this much colour, lifted on black and deepened on light. Where relative colour isn't known (older
      iOS) none of it applies and the cover's own colour stays */
-  :global(:root[data-theme='light']) .hero { --glow: 0.5; }
+  :global(:root[data-theme='light']) .hero { --halo: 0.5; }
   @supports (color: oklch(from red l c h)) {
     .hero::before { box-shadow: 0 0 14px 0 var(--cg), 0 16px 38px -10px var(--cg); }
     .hero { --cg: oklch(from var(--c, transparent) max(l, 0.66) max(c, 0.14) h); }
-    :global(:root[data-theme='light']) .hero { --glow: 0.62; --cg: oklch(from var(--c, transparent) min(l, 0.58) max(c, 0.16) h); }
+    :global(:root[data-theme='light']) .hero { --halo: 0.62; --cg: oklch(from var(--c, transparent) min(l, 0.58) max(c, 0.16) h); }
   }
-  @keyframes bloom { from { opacity: 0; } 40% { opacity: calc(var(--glow) * 1.5); } }
+  @keyframes bloom { from { opacity: 0; } 40% { opacity: calc(var(--halo) * 1.5); } }
   .art, .shade, .rim { position: absolute; inset: 0; }
   .art, .shade, .rim { border-radius: inherit; pointer-events: none; }
   .art { overflow: hidden; }
@@ -620,13 +643,10 @@
     animation: arrive 1.8s var(--ease-spring) 0.25s backwards; }
   @keyframes arrive { from { transform: rotate(-200deg); } }
   @media (prefers-reduced-motion: reduce) { .hero::before, .rim::before { animation: none; } }
-  /* the slab: a static blur over a still picture (never animated); 6px in, so its corners follow the card's. In the
-     dark it also dims what is under it: white words hold 4.5:1 over a white cover */
-  .slab { --dim: 0.7; --edge: rgba(255, 255, 255, 0.16); position: relative; z-index: 2; /* over the card's own tap: its blur makes it a stacking context, so the buttons' own z-index never left it */ display: flex; align-items: center; gap: 10px; padding: 9px 10px 10px 14px;
-    border-radius: var(--r-l); color: var(--text); background: var(--glass-bg); pointer-events: none;
-    box-shadow: inset 0 1px 0 var(--edge), inset 0 0 0 0.5px var(--edge), inset 1.5px 0 1px -0.5px rgba(255, 120, 200, 0.22), inset -1.5px 0 1px -0.5px rgba(90, 190, 255, 0.26);
-    -webkit-backdrop-filter: blur(28px) saturate(150%) brightness(var(--dim)); backdrop-filter: blur(28px) saturate(150%) brightness(var(--dim)); }
-  :global(:root[data-theme='light']) .slab { --dim: 1; --edge: rgba(255, 255, 255, 0.8); }
+  /* the slab: the shared sheet glass (body, blur, rim and fringes all from base.css, by theme), a static blur over a
+     still picture; 6px in, so its corners follow the card's */
+  .slab { position: relative; z-index: 2; /* over the card's own tap: its blur makes it a stacking context, so the buttons' own z-index never left it */ display: flex; align-items: center; gap: 10px; padding: 9px 10px 10px 14px;
+    border-radius: var(--r-l); color: var(--text); pointer-events: none; }
   .acts { position: relative; z-index: 2; flex: none; display: flex; gap: 8px; max-width: 55%; pointer-events: auto; }
   .acts :global(.btn) { min-width: 0; }
   .acts :global(.btn.round)::before { inset: -4px; } /* 36 seen, 44 to the finger on every side; 8px apart, so two meet and never overlap */
@@ -643,20 +663,28 @@
   .hsub { display: flex; align-items: center; gap: 8px; min-width: 0; margin-top: 5px; }
   .hsub:not(:has(*)) { display: none; } /* nothing to say: no line (:empty misses it, the snippet leaves white space) */
   /* the week: seven even columns on the bare ground (no card: the hero above and the days below are the cards); today
-     the one solid disc, a day with events on a soft one (it reads as a button), a quiet day dimmed and not a button; the
-     accent dot: I'm going */
+     on the one selected pill (the tab bar's lens), a day with events bold with a dot under it, a quiet day dimmed and
+     not a button; the accent dot: I'm going */
   .week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); margin: var(--s-4) 0 0; }
   .wd { display: flex; flex-direction: column; align-items: center; gap: var(--s-1); min-height: var(--tap); padding: 2px 0; color: var(--text); }
   .wd span { font: 600 var(--fs-micro)/1.2 var(--font-text); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); }
-  .wd b { display: grid; place-items: center; width: var(--ctl-s); height: var(--ctl-s); border-radius: var(--r-full); font: 600 var(--fs-row)/1 var(--font-display); letter-spacing: -0.02em;
+  .wd b { position: relative; display: grid; place-items: center; width: var(--ctl-s); height: var(--ctl-s); border-radius: var(--r-full); font: 600 var(--fs-row)/1 var(--font-display); letter-spacing: -0.02em;
     transition: transform 450ms var(--ease-bounce), background-color var(--t-base) var(--ease); }
   .wd:active b { transform: scale(0.88); transition-duration: 80ms; background: var(--fill); }
-  .wd.has b { background: var(--fill); font-weight: 700; }
-  .wd.today b { background: var(--text); color: var(--bg); }
+  .wd.has b { font-weight: 700; }
+  .wd.today b { background: linear-gradient(var(--lens-top), transparent 70%), var(--lens); box-shadow: var(--lens-shadow); }
+  .wd.today b::after { content: ''; position: absolute; inset: 0; padding: 1px; border-radius: inherit; pointer-events: none;
+    background:
+      radial-gradient(ellipse 60% 150% at 24% 0%, var(--lens-rim), transparent 72%),
+      radial-gradient(ellipse 50% 140% at 76% 100%, var(--lens-rim-low), transparent 72%);
+    -webkit-mask: linear-gradient(black 0 0) content-box, linear-gradient(black 0 0);
+    mask: linear-gradient(black 0 0) content-box, linear-gradient(black 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude; }
   .wd:disabled:not(.today) { opacity: 0.6; }
-  .wd:disabled b { color: var(--text-3); font-weight: 450; }
-  .wd.today:disabled b { background: none; box-shadow: inset 0 0 0 1.5px var(--text-3); color: var(--text); } /* nothing on today: a ring, not a button */
+  .wd:disabled:not(.today) b { color: var(--text-3); font-weight: 450; }
   .wd i { width: 5px; height: 5px; border-radius: var(--r-full); }
+  .wd.has i { background: var(--text-3); }
   .wd i.on { background: var(--accent); }
 
   /* the featured post: its own card, the body folded to two lines */

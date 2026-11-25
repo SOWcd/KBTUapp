@@ -178,5 +178,37 @@ Ideas and fixes are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Security is
 - `REPORTS=1`: clubs' event reports in Studio and the member's own log in their profile (`logic/evreports.py`). Off by default. Separate consent covers attendance marks and comments under section 3 of the privacy policy.
 - `ROOMS_FILE`: the map's "Free now", the timetable's busy rooms (`server/tools/rooms.py`, default `rooms.json` next to the database); no file: off.
 - `SUBJECTS_FILE`: the subjects' cards, "find people to study it with" (`server/tools/subjects.py` from the portal's course list scrape, default `subjects.json` next to the database; `logic/subjects.py`: a listing is a find-people request on a subject); no file: off.
+- `PLAY_DEMO=<32+ random characters>`: Google Play's reviewer signs in at the link `admin play-demo` prints, as one
+  made-up, read-only account that is never a student or staff (`android/README.md`). Unset: the link is a 404 and every
+  demo session ends. Only while a review is due.
+- `ANDROID_CERT_SHA256=<AA:BB:...>[,...]`: the Android app's signing certificates for `/.well-known/assetlinks.json`
+  (the upload key's and Play's app signing key's); unset: no file, the app shows a browser bar.
 - No switch changes the policy or the consent version.
 - `WEB_CONCURRENCY`: uvicorn workers (the app is multi-worker safe).
+
+## Sponsor donations
+
+Settings → Support accepts Telegram Stars and private receipt images/PDFs. `DONATE_PHONE` is the destination's
+phone; `DONATE_RECIPIENT` must be its owner's name and initial as printed by Kaspi. Keep both in the deployment's
+environment, never in source. Without a full recipient name, every receipt needs the creator's review in
+Admin → Donations. Clean Kaspi receipts reuse the event checks, including file/number reuse across both features
+and the same one-in-five random audit. Only a recognized Kaspi issuer heading permits automation; other banks,
+missing branding and partial readings always wait for the creator. Each upload has its own private image path,
+while its original file hash detects reuse across donations and event payments.
+
+The proposed recognition rate is **1 Star = 10 KZT**; medal levels are **any confirmed amount / 5,000 / 20,000 KZT**
+(`logic/donations.py`). Receipts must be at most seven days old for automatic confirmation. Images are erased
+30 days after the first decision; unresolved uploads expire at 90 days. Corrections recalculate the medal.
+Undo restores the earlier decision and retention deadline. The daily limit counts all five submitted receipts,
+including ones already decided. Exact totals stay private. Publication of name and tier is separately opt-in and
+withdrawable; this also controls whether the medal appears to other people on the profile.
+
+New Stars invoices disclose the linked total, use version `ds1` and can only be paid by the requesting account.
+Old invoice links cannot start a new payment.
+Already completed legacy payments retain the earlier anonymous handling and Fuel award. They are not backfilled.
+
+Before rollout, the owner confirms the rate, thresholds and recipient configuration, approves the Russian-binding
+privacy clause with its Kazakh/English translations in `server/kbtu/i18n/legal/privacy.*.html`, and previews
+`BOT.donation_confirmed`, `BOT.donation_rejected` and `STARS_INVOICE` in `server/kbtu/texts.py` in all three languages.
+CI must run the server tests, Svelte check, frontend tests and build; phone review remains at 320/375 px in both themes,
+including a redacted Kaspi receipt to check issuer recognition. No tests or builds were run locally for this change.

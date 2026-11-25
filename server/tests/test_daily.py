@@ -300,6 +300,7 @@ def test_admin_day_and_ai(env):
     adm = c.get("/api/me", headers=tma(1)).json()
     ali = login(c, 30, "ali")
     con = db.connect(cfg.db_path)
+    con.execute("UPDATE users SET is_founder = 1 WHERE id = ?", (adm["id"],))
     today = logic.day_of(logic.now())
     assert c.get(f"/api/admin/stats/{today}", headers=tma(30)).status_code == 403
     day = c.get(f"/api/admin/stats/{today}", headers=tma(1)).json()

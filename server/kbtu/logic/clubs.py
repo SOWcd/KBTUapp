@@ -178,12 +178,14 @@ def orgs(con, v: Viewer) -> list[dict]:
     return sorted(found, key=lambda o: (not o.get("gov"), not o["subscribed"], -o["subscribers"]))
 
 
-def org(con, v: Viewer, oid: int) -> dict:
+def org(con, v: Viewer, oid: int, *, demo: bool = False) -> dict:
     o = one(con, "SELECT * FROM orgs WHERE id = ? AND (status = 'active' OR status = 'hidden' AND ?)", oid, v.role == "admin")
     if not o:
         raise ApiError("not_found")
     from ..casting import group_link  # imports logic: here, not at the top
-    return {**org_shape(con, v, o), "leaders": _people(con, oid, "AND m.role IN ('president', 'vice')"), "chats": org_chats(con, oid),
+    # Google Play's reviewer (app.is_demo) sees the club, never its people
+    leaders = [] if demo else _people(con, oid, "AND m.role IN ('president', 'vice')")
+    return {**org_shape(con, v, o), "leaders": leaders, "chats": org_chats(con, oid),
             "contact": _contact(con, oid) if v.student else None, "groupLink": group_link(con, v, oid)}
 
 
