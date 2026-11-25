@@ -39,7 +39,9 @@ export const data = $state({
   orgs: [] as Org[],
   small: [] as Org[], // under the registry's size bar: search alone finds them
   schedule: [] as ClassItem[],
+  scheduleReady: false,
   posts: [] as Post[],
+  postsReady: false,
   castings: [] as Post[], // the Clubs tab's "recruiting" strip, read once with the Afisha (currentCastings)
   friends: null as Friends | null, // Profile → Friends: loaded as soon as I'm known to be a student, so the page opens full
   myCard: null as PersonCard | null, // my own card (numbers, awards, showcase): Profile's hero and the Awards page, the same way
@@ -95,22 +97,43 @@ export async function loadFriends(): Promise<void> {
 /** The Gallery in the background; its card's photos fetched ahead. all: the pages after the first too (as it opens, so the
  *  viewer swipes across all of it). galleryState says where the first page stands, so the screen can tell "empty" from
  *  "not yet" and "failed". ponytail: up to 600 rows at once, thumbnails lazy; page on scroll if it ever outgrows that. */
+let galleryRead = 0, galleryEdits = 0, galleryPaging = false;
 export async function loadGallery(all = false): Promise<void> {
+  const read = ++galleryRead, uid = session.me?.id;
+  all ||= galleryPaging; // a first-page refresh during pagination still needs to finish the gallery
+  galleryPaging = all && !!session.me?.student;
   if (!session.me?.student) { data.gallery = []; data.galleryAlbums = []; data.galleryPost = null; return; }
   if (data.galleryState === 'failed') data.galleryState = 'new';
+  let before: Id | undefined, loaded = 0;
+  const current = () => read === galleryRead && !!session.me?.student && session.me.id === uid;
   try {
-    let page = await api.gallery();
-    data.galleryPost = page.post ? { placeConsent: page.post.placeConsent } : null;
-    data.galleryAlbums = page.albums ?? [];
-    const got = [...page.photos];
-    while (all && page.more && got.length < 600) { page = await api.gallery(got[got.length - 1].id); got.push(...page.photos); }
-    data.gallery = [...data.gallery.filter((p) => p.pending || p.failed), ...got]; // mine still uploading stay on top
-    data.galleryState = 'ready';
-    warm(got.slice(0, 4).map((p) => p.thumb));
-  } catch { if (data.galleryState === 'new') data.galleryState = 'failed'; /* else the last copy stays */ }
+    for (;;) {
+      const edits = galleryEdits, cursor = before;
+      const page = await (cursor === undefined ? api.gallery() : api.gallery(cursor));
+      if (!current()) return;
+      if (edits !== galleryEdits) continue; // a photo changed while this page was on its way
+      const photos = cursor === undefined ? page.photos : page.photos.filter((p) => p.id < cursor);
+      const last = photos[photos.length - 1]?.id;
+      loaded += photos.length;
+      const keepTail = page.more && last !== undefined && loaded < 600;
+      if (cursor === undefined) {
+        data.galleryPost = page.post ? { placeConsent: page.post.placeConsent } : null;
+        data.galleryAlbums = page.albums ?? [];
+        warm(photos.slice(0, 4).map((p) => p.thumb));
+      }
+      // Refresh only the IDs covered by this page. Keep drafts, earlier pages and the loaded tail until the end.
+      const head = data.gallery.filter((p) => p.pending || p.failed || (cursor !== undefined && p.id >= cursor));
+      const tail = keepTail && last !== undefined ? data.gallery.filter((p) => !p.pending && !p.failed && p.id < last) : [];
+      data.gallery = [...head, ...photos, ...tail];
+      data.galleryState = 'ready';
+      if (!all || !keepTail) break;
+      before = last;
+    }
+  } catch { if (current() && data.galleryState === 'new') data.galleryState = 'failed'; }
+  finally { if (read === galleryRead) galleryPaging = false; }
 }
 /** Reported from the Gallery: gone for me at once. */
-export const galleryGone = (p: AlbumPhoto): void => { data.gallery = data.gallery.filter((x) => x.id !== p.id); };
+export const galleryGone = (p: AlbumPhoto): void => { galleryEdits++; data.gallery = data.gallery.filter((x) => x.id !== p.id); };
 
 /** My photos into the Gallery: each in the grid as it is picked, from the phone's own copy, under the place its EXIF
  *  names (lib/place.ts: the word alone goes up, the upload itself is redrawn without EXIF), marked while it uploads
@@ -167,6 +190,7 @@ async function send(p: AlbumPhoto): Promise<'ok' | 'failed' | 'stop' | 'gone'> {
     const body = await galleryJpeg(w.file, p.url).catch(() => { throw new ApiErr('bad_input', 'image'); });
     const got = await api.postGalleryPhoto(body, w.place, w.consent);
     await size(got.thumb); // fetched before it takes the tile over: the phone's copy never gives way to a blank
+    galleryEdits++;
     data.gallery = data.gallery.filter((x) => x.id !== got.id).map((x) => (x.id === p.id ? { ...got, key: p.id } : x));
     waiting.delete(p.id);
     URL.revokeObjectURL(p.url);
@@ -219,13 +243,22 @@ export function loadMyCard(join = false): Promise<void> {
 let newsLoad: Promise<void> | null = null;
 export function loadNews(join = false): Promise<void> {
   if (join && newsLoad) return newsLoad;
-  const p = (async () => {
-    if (!session.me?.student) { data.news = null; return; }
-    try { // a follower in no club: no broadcasts (they reach club members), the posts of the clubs followed
-      const [casts, posts] = await Promise.all([session.me.memberships.length ? api.posts('clubs') : [], api.posts('subs')]);
-      data.news = { casts, posts };
-      warm([...casts, ...posts].slice(0, 6).map((p) => p.photo?.url));
-    } catch { /* the last copy stays */ }
+  const me = session.me;
+  const p: Promise<void> = (async () => {
+    if (!me?.student) { data.news = null; return; }
+    let remaining = 6;
+    // Each side keeps its last copy on failure without discarding the other's successful response.
+    const put = (key: 'casts' | 'posts', posts: Post[]) => {
+      if (newsLoad !== p || !session.me?.student || session.me.id !== me.id) return;
+      data.news = { casts: [], posts: [], ...data.news, [key]: posts };
+      const first = posts.slice(0, remaining);
+      remaining -= first.length;
+      if (first.length) warm(first.map((p) => p.photo?.url));
+    };
+    await Promise.allSettled([
+      (me.memberships.length ? api.posts('clubs') : Promise.resolve([])).then((posts) => put('casts', posts)),
+      api.posts('subs').then((posts) => put('posts', posts)),
+    ]);
   })();
   newsLoad = p;
   void p.finally(() => { if (newsLoad === p) newsLoad = null; });
@@ -306,19 +339,35 @@ export async function loadMyPast(): Promise<void> {
 export async function loadAfisha(): Promise<void> {
   loadChats();
   void loadMyPast();
+  const at = taps, ratedAt = ratingTaps;
+  await Promise.allSettled([
+    api.events().then((events) => { if (at === taps) data.events = events; data.error = false; }, () => { data.error = true; })
+      .finally(() => { data.eventsReady = true; }),
+    api.orgs().then((orgs) => {
+      if (at === taps) { data.orgs = orgs.filter((o) => !o.small); data.small = orgs.filter((o) => o.small); }
+    }),
+    loadSchedule(), loadPublicPosts(), loadCastings(),
+    api.pastEvents().then((past) => { if (ratedAt === ratingTaps) data.past = past; }),
+  ]);
+}
+
+let scheduleLoad: Promise<void> | null = null, scheduleDeleting = false;
+export function loadSchedule(join = false): Promise<void> {
+  if (scheduleDeleting) return Promise.resolve();
+  if (join && scheduleLoad) return scheduleLoad;
+  const read = api.schedule().then((items) => {
+    if (scheduleLoad === read) { data.schedule = joinClasses(items); data.scheduleReady = true; }
+  }).catch(() => {}).finally(() => { if (scheduleLoad === read) scheduleLoad = null; });
+  return (scheduleLoad = read);
+}
+
+export async function loadPublicPosts(): Promise<void> {
   try {
-    // each list on its own: one failing keeps the others' fresh copies (the last copy of it stays)
-    const at = taps, ratedAt = ratingTaps;
-    const [events, orgs, schedule, posts, past, castings] = await Promise.allSettled([api.events(), api.orgs(), api.schedule(), api.posts('all'), api.pastEvents(), api.castings()]);
-    if (castings.status === 'fulfilled') data.castings = castings.value;
-    if (past.status === 'fulfilled' && ratedAt === ratingTaps) data.past = past.value;
-    if (events.status === 'fulfilled' && at === taps) data.events = events.value;
-    if (orgs.status === 'fulfilled' && at === taps) { data.orgs = orgs.value.filter((o) => !o.small); data.small = orgs.value.filter((o) => o.small); }
-    if (schedule.status === 'fulfilled') data.schedule = joinClasses(schedule.value);
-    if (posts.status === 'fulfilled') { data.posts = posts.value; warm(posts.value.slice(0, 4).map((p) => p.photo?.url)); } // News opens with its first photos
-    data.error = events.status === 'rejected';
-  } catch { data.error = true; }
-  data.eventsReady = true;
+    const posts = await api.posts('all');
+    data.posts = posts;
+    warm(posts.slice(0, 4).map((p) => p.photo?.url));
+  } catch { /* the last copy stays */ }
+  finally { data.postsReady = true; }
 }
 
 /** Castings not over yet, soonest first (the server's order; the phone's clock drops what ended since). */
@@ -337,7 +386,7 @@ export async function cancelCasting(p: Post): Promise<void> {
   try {
     Object.assign(p, await api.cancelCasting(p.id)); // now it can also be deleted
     say(t('casting.cancelSay'), 'waving_hand_3d_default');
-    void loadNews(); api.posts('all').then((l) => (data.posts = l)).catch(() => {}); // the other lists hold their own copies
+    void loadNews(); void loadPublicPosts(); // the other lists hold their own copies
   } catch { c.cancelled = false; data.castings = strip; haptic.error(); say(t('common.error'), 'warning_3d'); }
 }
 
@@ -529,7 +578,8 @@ export function keepRef(id: Id, code: string): void {
 
 /** Events whose Going waits for the server (paid, full, a form): their buttons show a spinner. */
 export const goingBusy = new SvelteSet<Id>();
-const flying = new Set<Id>();
+// Includes optimistic free sign-ups: a ticket opened now waits for its code in place.
+export const goingPending = new SvelteSet<Id>();
 
 /** Going / cancel. Free → going (or waitlist when full); paid → 30-min hold and the payment sheet. */
 /** team: a team event's way in (create, join by its link, 'solo'); left out, the app asks (sheets.teamPick) */
@@ -566,14 +616,15 @@ export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void, team?: Team
     if (pick === null) return;
     if (pick && !agrees && !(await teamConsentOk())) return; // the teams' own consent, asked once: a no leaves me not signed up
     const joins = pick && pick !== 'solo' ? pick : undefined;
-    if (flying.has(id)) return; // a second tap while the first is on its way
-    flying.add(id);
+    if (goingPending.has(id)) return; // a second tap while the first is on its way
+    goingPending.add(id);
     // a free event with nothing to ask and a seat left: going at once (the speed rule), the server's card settles it;
     // anything else (paid, full, a form) shows the button pressed until the answer
     const sure = !leaving && !before.price && !answers && !phone && !wish && !joins && (before.seats == null || before.taken < before.seats);
     const was = { my: before.my, taken: before.taken };
     if (sure) {
-      before.my = { ...(before.my ?? { cancelReason: null, ticketCode: null, holdUntil: null, checkedInAt: null, receipt: 'none' }), status: 'going' };
+      // Rejoining gets a new code; a cancelled registration's old QR must not reappear.
+      before.my = { ...(before.my ?? { cancelReason: null, holdUntil: null, checkedInAt: null, receipt: 'none' }), status: 'going', ticketCode: null };
       before.taken++;
       haptic.tap();
     } else goingBusy.add(id);
@@ -594,7 +645,7 @@ export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void, team?: Team
       if (sure) { before.my = was.my; before.taken = was.taken; }
       haptic.error();
       say(errorText(e), 'pleading_face_3d');
-    } finally { goingBusy.delete(id); flying.delete(id); taps++; }
+    } finally { goingBusy.delete(id); goingPending.delete(id); taps++; }
   }, 'go_' + id);
 }
 
@@ -612,8 +663,11 @@ export async function askDm(eid?: Id, again = false): Promise<void> {
 /** A leaders meeting (§4.10): "Can't make it" — the answer DMP sees; "I'll be there" is toggleGoing. */
 export function declineInvite(id: Id, note?: string): void {
   asStudent(async () => {
+    if (goingPending.has(id)) return;
+    goingPending.add(id);
     try { put(await api.decline(id, note)); haptic.soft(); say(t('lead.declined'), 'waving_hand_3d_default'); }
     catch (e) { haptic.error(); say(errorText(e), 'pleading_face_3d'); }
+    finally { goingPending.delete(id); }
   });
 }
 
@@ -696,6 +750,9 @@ export async function skipClass(key: string, c: ClassItem): Promise<void> {
 /** My week deleted (the Week sheet): gone from every screen at once, back if the server says no; the classes I skip
  *  go too once it's done (unseen without the week) */
 export async function dropSchedule(): Promise<void> {
+  if (scheduleDeleting) return;
+  scheduleDeleting = true;
+  scheduleLoad = null;
   const before = data.schedule;
   data.schedule = [];
   try {
@@ -708,5 +765,5 @@ export async function dropSchedule(): Promise<void> {
     // the server's own word, not the week from before: it may have deleted it, or a newer upload may have come
     data.schedule = await api.schedule().then(joinClasses).catch(() => before);
     haptic.error(); say(t('common.error'), 'warning_3d');
-  }
+  } finally { scheduleDeleting = false; }
 }

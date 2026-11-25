@@ -211,6 +211,32 @@ def clean_questions(raw: object) -> str | None:
     return json.dumps(out, ensure_ascii=False)
 
 
+# Main-building sides and the floors on each. Keep the aliases in sync with web/src/lib/campusPlace.ts.
+_CAMPUS_SIDES = (
+    (r"\u0442\u0431|tb|t[oö]le(?: bi)?|\u0442[\u043e\u04e9]\u043b\u0435(?: \u0431\u0438)?", "\u0422\u0411", 0, 5),
+    (r"\u0430\u0431|ab|ab[yi]la[yi](?: khan)?|\u0430\u0431\u044b\u043b\u0430\u0439(?: \u0445\u0430\u043d\u0430?)?", "\u0410\u0411", 0, 4),
+    (r"\u043f\u0444|pf|panfilov(?:a)?|\u043f\u0430\u043d\u0444\u0438\u043b\u043e\u0432\u0430?", "\u041f\u0424", 0, 4),
+    (r"\u043a\u0431|kb|[kq]azybek(?: bi)?|[\u043a\u049b]\u0430\u0437\u044b\u0431\u0435\u043a(?: \u0431\u0438)?", "\u041a\u0411", 1, 4),
+)
+_CAMPUS_PLACE = re.compile(
+    r"([^0-9·,]+?)\s*(?:[·,]\s*)?(?:floor\s+)?([0-9])(?:st|nd|rd|th)?"
+    r"(?:\s*-?\s*(?:floor|\u044d\u0442\u0430\u0436|\u049b\u0430\u0431\u0430\u0442))?(?:\s*·\s*(.+))?", re.I,
+)
+
+
+def campus_place(place: str) -> str | None:
+    """Canonical main-building side and floor, optionally followed by a room."""
+    m = _CAMPUS_PLACE.fullmatch(" ".join(place.split()))
+    if not m:
+        return None
+    floor, room = int(m[2]), m[3]
+    for aliases, code, low, high in _CAMPUS_SIDES:
+        if low <= floor <= high and re.fullmatch(aliases, m[1], re.I):
+            label = f"{code} · {floor} \u044d\u0442\u0430\u0436"
+            return f"{label} · {room}" if room else label
+    return None
+
+
 def clean_event(i: dict, oversee: bool = False) -> dict:
     """The editor's input, checked. A leaders meeting (§4.10) only from an oversight org
     (DMP), with the lowest role invited."""
@@ -238,6 +264,9 @@ def clean_event(i: dict, oversee: bool = False) -> dict:
         late = i.get("lateSignup") is True  # sign-up stays open until the end; no deadline then (_partner_ok checks the rest)
     except (KeyError, TypeError, ValueError):
         raise ApiError("bad_input")
+    campus = campus_place(place) if len(place) <= 80 else None
+    if campus:
+        place, url = campus, None
     ok = (0 < len(title) <= 80 and len(place) <= 80 and len(description) <= 2000  # no place: to be confirmed (a room asked of DMP)
           and (ends is None or starts < ends <= starts + 31 * 86400)  # Cap the span in days because the door stays open for the whole event.
           and (seats is None or 0 < seats <= 5000) and (url is None or TWO_GIS.match(url)) and (reg_until is None or reg_until <= starts)
@@ -574,11 +603,12 @@ def _changed(con, v: Viewer, e: sqlite3.Row, after: sqlite3.Row) -> None:
         return
     soon = core.now() >= after["starts_at"] - 2 * 3600
     quiet = not moved and not e["place_url"] and not after["place_url"] and after["place"]  # a room on campus: TBA -> room, room -> room
-    for r in rows(con, """SELECT r.user_id, r.checked_in_at, u.n_remind FROM registrations r JOIN users u ON u.id = r.user_id
+    for r in rows(con, """SELECT r.user_id, r.status, r.checked_in_at, u.n_remind FROM registrations r JOIN users u ON u.id = r.user_id
             WHERE r.event_id = ? AND r.status IN ('going','hold','waitlist')""", eid):
         if moved:
             con.execute("DELETE FROM bot_outbox WHERE user_id = ? AND kind = 'remind_2h' AND ref LIKE ? AND sent_at IS NULL", (r[0], f"event:{eid}:%"))
-            _remind(con, r[0], after)
+            if r["status"] == "going":  # holds and the waitlist get a reminder once paid or seated
+                _remind(con, r[0], after)
         if soon and r["checked_in_at"] or quiet and not soon and r["n_remind"]:
             continue
         if not one(con, "SELECT 1 FROM bot_outbox WHERE user_id = ? AND kind = 'event_changed' AND ref LIKE ? AND sent_at IS NULL", r[0], f"event:{eid}:%"):
@@ -590,6 +620,8 @@ def _changed(con, v: Viewer, e: sqlite3.Row, after: sqlite3.Row) -> None:
 def change_place(con, v: Viewer, eid: int, place: object) -> dict:
     """Studio's "Change room" during an event (rooms change on the spot): a KBTU room in one tap, the rules above."""
     text = " ".join(str(place or "").split())
+    if len(text) <= 80:
+        text = campus_place(text) or text
     if not 0 < len(text) <= 80:
         raise ApiError("bad_input")
     with tx(con):
@@ -996,14 +1028,19 @@ def _walk_in(con, e: sqlite3.Row, uid: int, code: str, t: int, walk: bool = True
         return "paid"
     if r and r["cancel_reason"] == "removed" and r["status"] == "cancelled":
         return "cancelled"  # the organizers took them off: back only by signing up again
-    if r:  # waitlisted or cancelled earlier, at the door now
-        renew_cancelled_ticket(con, e["id"], r)
+    return _walk_in_seat(con, e["id"], uid, r, t)
+
+
+def _walk_in_seat(con, eid: int, uid: int, r: sqlite3.Row | None, t: int) -> sqlite3.Row:
+    """A walk-in's seat: renew an old row, or create one."""
+    if r:
+        renew_cancelled_ticket(con, eid, r)
         con.execute("UPDATE registrations SET status = 'going', cancel_reason = NULL, hold_until = NULL, waitlisted_at = NULL, walk_in = 1, updated_at = ? WHERE id = ?",
                     (t, r["id"]))
     else:
         con.execute("INSERT INTO registrations (event_id, user_id, status, ticket_code, walk_in, created_at, updated_at) VALUES (?, ?, 'going', ?, 1, ?, ?)",
-                    (e["id"], uid, _ticket_code(con, e["id"]), t, t))
-    return one(con, "SELECT * FROM registrations WHERE event_id = ? AND user_id = ?", e["id"], uid)
+                    (eid, uid, _ticket_code(con, eid), t, t))
+    return one(con, "SELECT * FROM registrations WHERE event_id = ? AND user_id = ?", eid, uid)
 
 
 def _admission_shut(con, e: sqlite3.Row, t: int) -> str | None:
@@ -1033,14 +1070,7 @@ def screen_came(con, eid: int, uid: int, t: int) -> dict:
             return {"done": False}  # the organizers took them off: back only by signing up again
         if e["price"] or e["visibility"] == "leaders" and not dmp:
             return {"done": False}
-        if r:
-            renew_cancelled_ticket(con, eid, r)
-            con.execute("UPDATE registrations SET status = 'going', cancel_reason = NULL, hold_until = NULL, waitlisted_at = NULL, walk_in = 1, updated_at = ? WHERE id = ?",
-                        (t, r["id"]))
-        else:
-            con.execute("INSERT INTO registrations (event_id, user_id, status, ticket_code, walk_in, created_at, updated_at) VALUES (?, ?, 'going', ?, 1, ?, ?)",
-                        (eid, uid, _ticket_code(con, eid), t, t))
-        r = one(con, "SELECT * FROM registrations WHERE event_id = ? AND user_id = ?", eid, uid)
+        r = _walk_in_seat(con, eid, uid, r, t)
     if r["checked_in_at"] is not None:
         return {"done": False, "already": r["checked_in_at"]}
     if not e["guest_list"] and e["price"] and flagged(con, r["id"]):
@@ -1083,12 +1113,17 @@ def checkin(con, v: Viewer, eid: int, raw: str, admit: bool = False) -> dict:
                 con.execute("DELETE FROM door_misses WHERE event_id = ? AND user_id = ?", (eid, v.id))
             _came(con, e, r["user_id"], lambda: con.execute("UPDATE registrations SET checked_in_at = ?, checked_in_by = ?, updated_at = ? WHERE id = ?",
                                                            (t, v.id, t, r["id"])))
-        at = r["checked_in_at"] or t
-        came = one(con, "SELECT COUNT(*) FROM registrations WHERE event_id = ? AND checked_in_at IS NOT NULL", eid)[0]
-        return {"result": "already" if r["checked_in_at"] else "ok", "person": _door_ref(one(con, PERSON + " WHERE u.id = ?", r["user_id"])),
-                "at": at, "came": came, "going": taken(con, eid), "walkIn": bool(r["walk_in"]), "late": max(0, at - e["starts_at"]) // 60,
-                "flagged": not e["guest_list"] and (can(con, v, e["org_id"], "door") or co_runs(con, v, eid)) and flagged(con, r["id"]),
-                **_checkin_age(con, e, r["id"])}
+        return _door_answer(con, v, e, r, t)
+
+
+def _door_answer(con, v: Viewer, e: sqlite3.Row, r: sqlite3.Row, t: int) -> dict:
+    """The scanner and by-name reply; r is the registration read before recording this check-in."""
+    at = r["checked_in_at"] or t
+    came = one(con, "SELECT COUNT(*) FROM registrations WHERE event_id = ? AND checked_in_at IS NOT NULL", e["id"])[0]
+    return {"result": "already" if r["checked_in_at"] else "ok", "person": _door_ref(one(con, PERSON + " WHERE u.id = ?", r["user_id"])),
+            "at": at, "came": came, "going": taken(con, e["id"]), "walkIn": bool(r["walk_in"]), "late": max(0, at - e["starts_at"]) // 60,
+            "flagged": not e["guest_list"] and (can(con, v, e["org_id"], "door") or co_runs(con, v, e["id"])) and flagged(con, r["id"]),
+            **_checkin_age(con, e, r["id"])}
 
 
 def _checkin_age(con, e: sqlite3.Row, rid: int) -> dict:
@@ -1486,12 +1521,7 @@ def checkin_by_name(con, v: Viewer, eid: int, uid: int, admit: bool = False) -> 
         if not r["checked_in_at"]:
             _came(con, e, uid, lambda: con.execute("UPDATE registrations SET checked_in_at = ?, checked_in_by = ?, checkin_manual = 1, updated_at = ? WHERE id = ?",
                                                   (t, v.id, t, r["id"])))
-        at = r["checked_in_at"] or t
-        came = one(con, "SELECT COUNT(*) FROM registrations WHERE event_id = ? AND checked_in_at IS NOT NULL", eid)[0]
-        return {"result": "already" if r["checked_in_at"] else "ok", "person": _door_ref(one(con, PERSON + " WHERE u.id = ?", uid)),
-                "at": at, "came": came, "going": taken(con, eid), "walkIn": bool(r["walk_in"]), "late": max(0, at - e["starts_at"]) // 60,
-                "flagged": not e["guest_list"] and (can(con, v, e["org_id"], "door") or co_runs(con, v, eid)) and flagged(con, r["id"]),
-                **_checkin_age(con, e, r["id"])}
+        return _door_answer(con, v, e, r, t)
 
 
 def undo_checkin(con, v: Viewer, eid: int, uid: int) -> None:

@@ -13,8 +13,9 @@
   import Ellipsis from '@lucide/svelte/icons/ellipsis';
   import Flag from '@lucide/svelte/icons/flag';
   import Trash from '@lucide/svelte/icons/trash-2';
-  import { onMount, untrack } from 'svelte';
+  import { onMount, tick, untrack } from 'svelte';
   import { menu } from '../../ui/menu';
+  import { singleAction } from '../../ui/guard';
   import { dayMonth, nowTs, parts } from '../../lib/time';
   import type { AlbumPhoto } from '../../lib/api';
   import { close, removeOverlay, hideChrome, type Overlay } from '../../lib/state/ui.svelte';
@@ -201,15 +202,18 @@
   const acts = $derived(!!list[at] && (!!list[at].by || !!list[at].event || !list[at].mine || (!!onremove && list[at].canDelete)));
   const shown = $derived(chrome && !dy && z === 1);
 
-  async function remove() {
+  const remove = singleAction(async () => {
     const p = list[at];
     if (!p || !onremove || !(await sheets.ask({ title: t(data.galleryPost ? 'gallery.deleteAsk' : 'album.removeAsk'), ok: t(data.galleryPost ? 'gallery.delete' : 'album.remove'), cancel: t('common.cancel'), danger: true }))) return;
     const left = await onremove(p);
-    if (!left) return;
+    if (!left || overlay.closing) return;
     haptic.soft();
     if (!left.length) { close(overlay.id); return; }
-    list = left; at = Math.min(at, left.length - 1);
-  }
+    const selected = left.findIndex((photo) => photo.id === list[at]?.id);
+    list = left; at = selected < 0 ? Math.min(at, left.length - 1) : selected;
+    await tick();
+    if (!overlay.closing) strip.scrollLeft = at * strip.clientWidth;
+  });
   // ⋯: report another's photo, delete mine (or any, for the club's Head+ in its album); a single one is its own button
   const moreActs = $derived(list[at] ? [
     ...(!list[at].mine ? [{ label: t('cm.report'), icon: Flag, onselect: report }] : []),

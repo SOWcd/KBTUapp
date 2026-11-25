@@ -52,7 +52,7 @@
     box-shadow: 0 30px 50px -26px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.28); }
   .club { background: radial-gradient(90% 90% at 100% 0%, rgba(255, 255, 255, 0.16), transparent 60%), linear-gradient(155deg, var(--c1), var(--c2) 55%, var(--c3)); color: var(--ink); }
   .faces { background: radial-gradient(90% 120% at 0% 0%, rgb(38, 38, 43), rgb(0, 0, 0) 62%); }
-  .sower { background: rgb(30, 30, 30); }
+  .sower { background: rgb(10, 10, 11); }
   .studex { background: linear-gradient(135deg, rgb(15, 35, 80), rgb(29, 59, 122) 55%, rgb(11, 28, 68)); }
   .cheer { background: linear-gradient(180deg, rgb(34, 38, 70), rgb(24, 26, 52)); }
   .knights { background: radial-gradient(90% 90% at 100% 0%, rgba(232, 196, 120, 0.22), transparent 60%), linear-gradient(150deg, rgb(24, 58, 126), rgb(7, 20, 54)); }
@@ -63,7 +63,7 @@
   .moments { --role: rgb(244, 217, 190); }
   .faces { --role: rgb(255, 155, 214); }
   .studex { --role: rgba(255, 255, 255, 0.92); }
-  .sower { --role: rgb(192, 193, 190); }
+  .sower { --role: rgb(245, 245, 247); }
   /* no art behind any text (owner, Nov 25: the name sat on Case Club's laptop, the role on Business's king): the scene
      shows only round the medallion in the top-right corner and a breath along the top, and is gone before the name's
      column (68 px in from the card's edge, 30 px down at the highest) and the role (76 px down at the highest); the
@@ -88,8 +88,8 @@
   .bside > * { flex: none; max-width: 100%; }
   .bmed { position: absolute; z-index: 3; top: 14px; right: 14px; width: 52px; height: 52px; transition: transform var(--t-fast) var(--ease); }
   button.bmed:active { transform: scale(0.92); }
-  .sower .bmed { right: 20px; } /* between the hand's two fingers, as on the face */
-  .sower .bnm { --pr: 70px; }
+  .sower .bmed { top: 16px; right: 16px; width: 44px; height: 44px; } /* as on the face */
+  .sower .bnm { --pr: 58px; } /* 16 + 44 in from the edge, less the side's 14, and a 12 px gap */
   .qrhint { position: absolute; right: -5px; bottom: -5px; display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%;
     background: white; color: rgb(14, 20, 48); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35); }
   /* a long word (Aleksandra, Nursultanbek) never splits mid-word: the size comes down so the longest word fits beside the
@@ -103,9 +103,10 @@
   .meta { display: -webkit-box; margin-top: 1px; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; font: 550 var(--fs-sub)/1.3 var(--font-text); color: rgba(255, 255, 255, 0.72); }
   .moments .meta { color: rgba(255, 255, 255, 0.84); }
   .studex .meta { color: rgba(255, 255, 255, 0.8); }
-  .sower .meta { color: rgba(232, 232, 231, 0.7); }
+  .sower .meta { color: rgb(134, 134, 139); }
   .club .meta { color: var(--ink2); }
   .bno { margin-top: 4px; font: 800 var(--fs-micro)/1 var(--font-text); letter-spacing: 0.16em; font-variant-numeric: tabular-nums; opacity: 0.75; }
-  /* a narrow phone: a smaller plate and medallion, so the name keeps 64 px beside it */
+  /* a narrow phone: a smaller plate and medallion, so the name keeps 64 px beside it (the per-club halos main had for art
+     behind the name went: the mask above leaves no art there) */
   @media (max-width: 359px) { .plate { width: 112px; height: 112px; } .bmed { top: 12px; right: 12px; width: 44px; height: 44px; } .bnm { --pr: 54px; } }
 </style>
