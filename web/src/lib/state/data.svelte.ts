@@ -1,7 +1,7 @@
 // Shared data the screens read, kept in one place per entity so a change shows everywhere at once
 // (one home per thing). Actions update optimistically and roll back if the server says no.
-import { api, ApiErr, type AlbumPhoto, type GalleryAlbum, type GalleryPage, type AdminStats, type Inbox, type ClassItem, type Membership, type EventCard, type Chats, type Credits, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type ChatTree, type StaffMute, type TeamMember, type VolLedger, type Appeal, type SgQueue, type Solved, type TeamPick } from '../api';
-import type { MyRegistration, SantaChats } from '../api';
+import { api, ApiErr, type Support, type Sponsor, type AlbumPhoto, type GalleryAlbum, type GalleryPage, type AdminStats, type Inbox, type ClassItem, type Membership, type EventCard, type Chats, type Credits, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type ChatTree, type StaffMute, type TeamMember, type VolLedger, type Appeal, type SgQueue, type Solved, type TeamPick } from '../api';
+import type { DonationReview, MyRegistration, SantaChats } from '../api';
 import { joinClasses } from '../classes';
 import { teamError } from '../teams';
 import { teamConsentOk, TEAM_CONSENT } from '../teamConsent';
@@ -23,6 +23,9 @@ import { castingOn } from '../posts';
 import { unreachable } from '../offlineTickets';
 
 export const data = $state({
+  support: null as Support | null,
+  sponsors: null as Sponsor[] | null,
+  donations: null as DonationReview[] | null,
   events: [] as EventCard[],
   // events opened outside the afisha (a club's page, a link: an initiative's are only there, server seats.on_afisha),
   // kept for the session so their buttons work; never saved on the phone
@@ -73,16 +76,40 @@ export const data = $state({
 /** Secret Santa's chat of one game: read again whenever its page or a thread opens or the app comes back (the bot's
  *  push leads there); no polling. One read at a time per game. false: there is no chat for me any more (over, retired,
  *  out of the game): what the phone held of it is dropped at once. A network failure keeps what is shown. */
-const santaReads = new Map<Id, Promise<boolean>>();
+const santaReads = new Map<Id, { result: Promise<boolean>; invalidate: () => void }>();
+const santaWrites = new Map<Id, Promise<unknown>>();
+export function changeSantaChat(id: Id, change: () => Promise<void>): Promise<void> {
+  santaReads.get(id)?.invalidate();
+  const written = change();
+  const pending = Promise.allSettled([santaWrites.get(id), written]);
+  santaWrites.set(id, pending);
+  void pending.then(() => { if (santaWrites.get(id) === pending) santaWrites.delete(id); });
+  return written;
+}
+
 export function loadSantaChat(id: Id): Promise<boolean> {
-  let read = santaReads.get(id);
-  if (!read) {
-    read = api.santaChat(id).then((c) => { data.santaChat[id] = c; return true; })
-      .catch((e) => { if (!(e instanceof ApiErr) || (e.code !== 'not_found' && e.code !== 'forbidden')) return true; delete data.santaChat[id]; return false; })
-      .finally(() => santaReads.delete(id));
-    santaReads.set(id, read);
-  }
-  return read;
+  const read = santaReads.get(id);
+  if (read) return read.result;
+  let stale = false;
+  const result = (async () => {
+    do {
+      // Keep the optimistic message or local closure until a read started after the writes settled.
+      while (santaWrites.has(id)) await santaWrites.get(id);
+      stale = false;
+      try {
+        const chat = await api.santaChat(id);
+        if (!stale) data.santaChat[id] = chat;
+      } catch (e) {
+        if (e instanceof ApiErr && (e.code === 'not_found' || e.code === 'forbidden')) {
+          delete data.santaChat[id];
+          return false;
+        }
+      }
+    } while (stale);
+    return true;
+  })().finally(() => santaReads.delete(id));
+  santaReads.set(id, { result, invalidate: () => { stale = true; } });
+  return result;
 }
 
 /** A friendship changed (a request answered, a QR used): the Friends page and the Profile tab's dot catch up. */
@@ -398,6 +425,7 @@ export async function cancelCasting(p: Post): Promise<void> {
 /** Admin → Inbox and Done, the staff's (one request); the shield's number catches up with it. withStats: the admin's
  *  numbers too (the app's start and Admin opening; not after each decision) */
 export async function loadInbox(withStats = false): Promise<void> {
+  void loadDonations();
   if (session.me?.role !== 'admin' && session.me?.role !== 'moderator') { data.inbox = null; return; }
   const admin = staffStill('admin'), staff = staffStill('staff'); // an answer after the role went is not kept
   if (withStats && session.me.role === 'admin') api.adminStats().then((s) => { if (admin()) data.adminStats = s; }).catch(() => {});
@@ -417,7 +445,7 @@ export const decisions = (i: Inbox | null): number => i?.items.filter((x) => x.k
 /** Admin → My notifications, staff only; a failure keeps what it had (the page offers a retry when it has nothing).
  *  An answer asked before a tap (mutedTap) is older than the switch: dropped. */
 onStaffLoss((has) => {
-  if (!has('admin')) data.adminStats = null;
+  if (!has('admin')) { data.adminStats = null; data.donations = null; }
   if (!has('staff')) { data.inbox = null; data.staffMutes = null; }
   else if (!has('admin')) { data.inbox = null; void loadInbox(); } // a moderator's queue, without the admin's cards
 });
@@ -428,6 +456,33 @@ export function loadStaffMutes(): void {
   const at = muteTaps, staff = staffStill('staff');
   data.staffMutesFailed = false;
   api.staffMutes().then((l) => { if (muteTaps === at && staff()) data.staffMutes = l; }).catch(() => (data.staffMutesFailed = !data.staffMutes));
+}
+
+let donationSeq = 0;
+export async function loadDonations(): Promise<boolean> {
+  const uid = session.me?.id, n = ++donationSeq, staff = staffStill('admin');
+  if (!staff() || !session.me?.founder) { data.donations = null; return false; }
+  try {
+    const got = await api.donationQueue();
+    if (n === donationSeq && staff() && session.me?.founder && session.me.id === uid) data.donations = got;
+    return true;
+  } catch { return false; }
+}
+
+/** Private totals live only in memory. A write invalidates older reads and refreshes the medal too. */
+let supportSeq = 0, supportWrites = 0;
+export async function loadSupport(): Promise<void> {
+  const uid = session.me?.id, n = ++supportSeq;
+  if (!uid || session.banned || session.revoked) return;
+  const current = () => n === supportSeq && !supportWrites && session.me?.id === uid && !session.banned && !session.revoked;
+  await Promise.allSettled([
+    api.support().then((got) => { if (current()) data.support = got; }),
+    api.sponsors().then((got) => { if (current()) data.sponsors = got; }),
+  ]);
+}
+export function supportWrite(sending: boolean): void {
+  supportSeq++; supportWrites += sending ? 1 : -1;
+  if (!sending && !supportWrites) { void loadSupport(); void loadMyCard(); void loadMe(); }
 }
 
 /** The people of the app. One read in flight for everyone who asks (the app's start, the bot's link, the screen); who is
@@ -468,20 +523,31 @@ function keepOpened(d: EventFull): EventFull { if (!eventById(d.id)) data.opened
 /** The app's card, or the server's for one it doesn't hold yet (kept: opened) */
 export const cardFor = async (id: Id): Promise<EventCard | undefined> => eventById(id) ?? eventDetails(id).then(() => eventById(id), () => undefined);
 
+let teamChunk: Promise<typeof import('../../screens/sheets/EventTeam.svelte')> | undefined;
+export function eventTeamChunk() {
+  return teamChunk ??= import('../../screens/sheets/EventTeam.svelte').catch((e) => { teamChunk = undefined; throw e; });
+}
+
+function readEvent(id: Id): Promise<EventFull> {
+  const detail = api.event(id);
+  if (!teamChunk && eventById(id)?.teamMax) void eventTeamChunk().catch(() => {});
+  return detail;
+}
+
 // An event's details (the text, album, updates), asked for as a finger touches its card (lib/touch.ts: not for a flick
 // that only starts on it): the sheet opens a beat later with them on the way or already there. Taken once, so a sheet opened again later asks afresh.
 const ahead = new Map<Id, { at: number; p: Promise<EventFull> }>();
 export function prefetchEvent(id: Id): void {
   const a = ahead.get(id);
   if (a && Date.now() - a.at < 10_000) return;
-  const p = api.event(id);
+  const p = readEvent(id);
   p.catch(() => ahead.delete(id));
   ahead.set(id, { at: Date.now(), p });
 }
 export function eventDetails(id: Id): Promise<EventFull> {
   const a = ahead.get(id);
   ahead.delete(id);
-  return (a && Date.now() - a.at < 10_000 ? a.p : api.event(id)).then(keepOpened);
+  return (a && Date.now() - a.at < 10_000 ? a.p : readEvent(id)).then(keepOpened);
 }
 
 // a person's card, fetched from the touch (B4: the card opened as a plain one, then jumped into its skin) and kept for

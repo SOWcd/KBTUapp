@@ -665,7 +665,7 @@ export interface EventInput {
 /** One registration as the organizer sees it (§3: full name for organizers). */
 /** An event's own question at sign-up (server clean_questions): text, or a choice of 2-8 options. */
 export interface Question { label: string; kind: 'text' | 'choice'; options?: string[]; required: boolean }
-export interface Attendee { answers?: { q: string; a: string }[] | null; person: PersonRef; by?: PersonRef | null /* who brought them (a member): their link or "Bring a friend" */; byCame?: boolean /* came, checked in by someone else than who brought them */; fullName: string; status: RegStatus; checkedInAt: Ts | null; walkIn: boolean; manual: boolean; at: Ts; free?: boolean; receipt?: AttendeeReceipt | null }
+export interface Attendee { answers?: { q: string; a: string }[] | null; person: PersonRef; by?: PersonRef | null /* who brought them (a member): their link or "Bring a friend" */; byCame?: boolean /* came, checked in by someone else than who brought them */; fullName: string; status: RegStatus; checkedInAt: Ts | null; walkIn: boolean; manual: boolean; at: Ts; free?: boolean; receipt?: AttendeeReceipt | null; previousReceipts?: AttendeeReceipt[] }
 /** A paid event's receipt (§4.3) as the organizer sees it: what OCR read off it (null: not read), `flags` from the
  *  server's checks ('duplicate' the same file or receipt number came before, 'amount_short', 'recipient_mismatch',
  *  'too_early' older than the event, 'unreadable'); `reviewed` by the app (`auto`) or an organizer. Flagged ones first. */
@@ -846,6 +846,9 @@ export interface Friends { friends: FriendRow[]; incoming: FriendRow[]; outgoing
 export type Friendship = PersonCard['friendship'];
 /** A student found by @username, and where the two of us stand. */
 export interface FoundStudent { person: PersonRef; course: number | null; school: string | null; friendship: Friendship; me: boolean; closed?: boolean }
+/** The global search's server half (GET /api/search/more, server logic/search.more): people who made themselves
+ *  findable (an exact @username; "open to projects" where the find-people forum is open to me), the channel's live posts. */
+export interface SearchMore { people: { person: PersonRef; course: number | null }[]; posts: ChannelFeedPost[] }
 /** Opening someone's one-time friend link: friends at once, or why not. */
 /** someone's invite link r_<code> opened: whose it is, and where we stand ('self': my own) */
 export interface LinkCard { person: PersonRef; friendship: Friendship | 'self'; registered: boolean }
@@ -916,7 +919,7 @@ export interface VolLedger { edit: boolean; people: VolRow[]; meets: VolMeet[]; 
 export interface Subject { id: string; names: Record<'ru' | 'kk' | 'en', string>; alt: string[] /* other spellings, searched */; codes: string[]; credits: number | null; school: string | null }
 export interface Subjects { subjects: Subject[]; counts: Record<string, number> /* others looking, by card */; mine: string[] }
 export interface SubjectPerson { ask: Id; person: PersonRef; name: string; course: number | null; school: string | null; note: string | null;
-  offered: 'pending' | 'accepted' | 'declined' | null /* my offer to them */; telegram?: string /* accepted: where to write */ }
+  offered: 'pending' | 'accepted' | 'declined' | null /* my offer to them */; offerId: Id | null; telegram?: string /* accepted: where to write */ }
 export interface SubjectCard extends Subject { people: SubjectPerson[]; mine: { note: string; status: 'live' | 'held' | 'hidden' | 'closed'; why: string | null; until: Ts } | null;
   restricted: Ts | null /* a moderator's take-down stands until then: listing again is refused */ }
 
@@ -927,3 +930,16 @@ export interface SantaThread { closed: boolean; msgs: SantaMsg[] } // closed: on
 export interface SantaReport { id: Id; at: Ts; title: string; giver: PersonRef | null; to: PersonRef | null; byGiver: boolean; msgs: { id: Id; fromGiver: boolean; text: string; at: Ts }[] }
 /** to: where I write as my person's Santa; from: with my own Santa (null: no such pair) */
 export interface SantaChats { to: SantaThread | null; from: SantaThread | null }
+
+/** Private support data; never embedded in another person's card. */
+export interface Support {
+  total: number; tier: number; thresholds: number[]; starRate: number;
+  version: string; receiptConsent: string; show: boolean; rev: number | null;
+  receipts: { id: Id; status: 'pending' | 'confirmed' | 'rejected'; amount: number | null; at: Ts }[];
+}
+export interface Sponsor { name: string; tier: number }
+export interface DonationReview {
+  id: Id; name: string; status: 'pending' | 'confirmed' | 'rejected'; amount: number | null;
+  readAmount: number | null; recipient: string | null; sender: string | null; no: string | null; paidAt: Ts | null;
+  flags: string[]; auto: boolean; image: boolean; at: Ts; revision: number; undo: boolean;
+}

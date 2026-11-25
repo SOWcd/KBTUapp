@@ -3,7 +3,8 @@
   // switches, requests (mine first), and people by a skill. Contact is always an offer the other side accepts in the
   // bot; their Telegram shows only then. The app's staff only, behind the server's flag, while it's tried out. Its
   // moderation (held requests, the skills catalog) lives in Admin → Forum posts: this sheet is the same for everyone.
-    import Flag from '@lucide/svelte/icons/flag';
+  import { onMount } from 'svelte';
+  import Flag from '@lucide/svelte/icons/flag';
   import Ban from '@lucide/svelte/icons/ban';
   import { api, ApiErr, type Ask, type Contact, type ForumCard, type ForumMe, type Id } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
@@ -30,12 +31,23 @@
   let { overlay, ask: focus }: { overlay: Overlay; ask?: Id } = $props();
   let me = $state<ForumMe | null>(null), list = $state<Ask[]>([]), offers = $state<Contact[]>([]);
   let skill = $state<Id | null>(null), q = $state(''), found = $state<ForumCard[] | null>(null), closing = $state<Id | null>(null);
+  let offersRequest = 0;
+  const loadOffers = () => {
+    const request = ++offersRequest;
+    api.contacts().then((l) => { if (request === offersRequest) offers = l; }).catch(() => {});
+  };
   const load = () => {
     api.forumMe().then((m) => (me = m)).catch(() => {});
     api.asks(skill).then((l) => (list = l)).catch(() => {});
-    api.contacts().then((l) => (offers = l)).catch(() => {});
+    loadOffers();
   };
   $effect(() => { void skill; load(); });
+  onMount(() => {
+    const pull = () => { if (!document.hidden && offers.some((c) => c.incoming && c.status === 'pending')) loadOffers(); };
+    const timer = setInterval(pull, 30_000);
+    document.addEventListener('visibilitychange', pull);
+    return () => { clearInterval(timer); document.removeEventListener('visibilitychange', pull); };
+  });
   let timer: ReturnType<typeof setTimeout> | undefined;
   $effect(() => {
     const s = q.trim();
@@ -58,7 +70,18 @@
     try { await api.offer({ ask: a.id }); haptic.ok(); a.offered = 'pending'; say(t('fo.offerSay'), 'raising_hands_3d_default'); } catch (e) { fail(e); }
   }
   async function answer(c: Contact, yes: boolean) {
-    try { offers = await api.answerOffer(c.id, yes, c.token); haptic.ok(); } catch (e) { fail(e); }
+    try {
+      const updated = await api.answerOffer(c.id, yes, c.token);
+      offersRequest++;
+      offers = updated;
+      haptic.ok();
+    } catch (e) {
+      if (e instanceof ApiErr && e.code === 'not_found') {
+        offers = offers.filter((o) => o.id !== c.id);
+        loadOffers();
+      }
+      fail(e);
+    }
   }
   async function shut(a: Ask, foundIt: boolean | null) {
     try { await api.closeAsk(a.id, foundIt); haptic.ok(); closing = null; load(); } catch (e) { fail(e); }

@@ -20,6 +20,26 @@ _AGE_LIMIT = f"""CASE WHEN u.role IN ('moderator', 'admin') OR u.is_founder OR {
                  THEN {STAFF_MAX_AGE} ELSE {MAX_AGE} END"""
 
 
+# Google Play's reviewer (android/README.md): one made-up account signed in by PLAY_DEMO's link (admin play-demo).
+# Never a student or staff, the bot never writes to it, and it reads the catalogue alone (DEMO_READS, app.viewer):
+# no route that shows a person or writes. Telegram ids have at most 52 significant bits, so no real one is this
+DEMO_TG_ID = 2**52
+DEMO_READS = frozenset({"/api/me", "/api/me/schedule", "/api/friends", "/api/events", "/api/events/past", "/api/events/{eid}",
+                        "/api/events/{eid}/ics", "/api/orgs", "/api/orgs/{oid}", "/api/posts", "/api/castings",
+                        "/api/posts/{pid}/video", "/api/map/graph", "/api/map/rooms"})
+
+
+def demo_user(con, t: int) -> int:
+    """The demo account's id, made on first use: a made-up name, English, every notification off."""
+    con.execute("""INSERT OR IGNORE INTO users (tg_id, tg_first_name, tg_last_name, lang, role, can_dm, n_remind, n_new_events,
+        n_friends, show_going, created_at, seen_at) VALUES (?, 'Demo', 'Reviewer', 'en', 'user', 0, 0, 0, 0, 0, ?, ?)""", (DEMO_TG_ID, t, t))
+    u = one(con, "SELECT id, role, is_founder, banned_at FROM users WHERE tg_id = ?", DEMO_TG_ID)
+    # someone made it more than nobody (a role, a ban, a student row): no sign-in until that's undone by hand
+    if u["role"] != "user" or u["is_founder"] or u["banned_at"] or one(con, "SELECT 1 FROM students WHERE user_id = ?", u["id"]):
+        raise ApiError("forbidden", "demo")
+    return u["id"]
+
+
 def _digest(token: str) -> bytes | None:
     if re.fullmatch(r"[0-9a-f]{64}", token):
         return hashlib.sha256(bytes.fromhex(token)).digest()
@@ -49,6 +69,11 @@ def revoke(con, token: str) -> None:
 
 def revoke_all(con, uid: int) -> None:
     con.execute("DELETE FROM web_sessions WHERE user_id = ?", (uid,))
+
+
+def revoke_demo(con) -> None:
+    """Every demo session, whatever its row says now (a role, a ban, a student row): demo_user's checks are for signing in"""
+    con.execute("DELETE FROM web_sessions WHERE user_id IN (SELECT id FROM users WHERE tg_id = ?)", (DEMO_TG_ID,))
 
 
 def forget(con, t: int) -> None:

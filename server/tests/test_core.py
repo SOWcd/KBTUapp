@@ -312,7 +312,8 @@ def test_postman(env, monkeypatch):
         async with httpx.AsyncClient(transport=httpx.MockTransport(ok)) as http:
             await bot.send_due(cfg, http)
     asyncio.run(postman())                               # the new container's postman sends it
-    monkeypatch.setattr(bot, "rows", lambda *a: stale)   # the old one read the queue a moment earlier
+    real_rows = bot.rows
+    monkeypatch.setattr(bot, "rows", lambda con, q, *a: stale if "FROM bot_outbox" in q else real_rows(con, q, *a))  # the old one read the queue a moment earlier
     asyncio.run(postman())
     assert len(sent) == 1
 

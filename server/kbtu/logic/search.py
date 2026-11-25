@@ -250,5 +250,62 @@ def clubs(con, v: Viewer, q: object, n: int = 20) -> list[dict]:
     return [org_ref(con, o, logos) for o in found]
 
 
+MORE_AN_HOUR = 240   # the app asks after a pause in typing (web/src/lib/find.ts), a few times a query
+POSTS_SCANNED = 2000  # ponytail: the newest live posts are read and matched in Python; past a few thousand, an FTS table
+
+
+def more(con, v: Viewer, q: object, *, forum: bool, channel: bool, n: int = 8) -> dict:
+    """The app's global search, the part it doesn't hold in memory: people who made themselves findable, and the forum
+    channel's live posts. People are only (a) an exact @username of a student who lets anyone add them as a friend (the
+    Friends page's own rule, counted as a profile opened) and (b) with the find-people forum open to me (`forum`), those
+    "open to projects" there, by name; never anyone else by name. Posts: what the feed shows (`channel`: it is on)."""
+    q = str(q or "")[:80]
+    if len(fold(q)) < 2:
+        return {"people": [], "posts": []}
+    key = f"gsearch:{v.id}:{now() // 3600}"
+    with tx(con):
+        k = int((one(con, "SELECT value FROM meta WHERE key = ?", key) or [0])[0])
+        if k >= MORE_AN_HOUR:
+            raise ApiError("rate_limited", "search")
+        con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (key, str(k + 1)))
+        # one counter per person: the past hours' go, so meta never grows with every hour anyone searched
+        con.execute("DELETE FROM meta WHERE key >= ? AND key < ? AND key != ?", (f"gsearch:{v.id}:", f"gsearch:{v.id};", key))
+    return {"people": _findable(con, v, q, forum, n) if v.student else [], "posts": _posts(con, v, q, n) if channel else []}
+
+
+def _findable(con, v: Viewer, q: str, forum: bool, n: int) -> list[dict]:
+    out = []
+    # a block either way, or a banned account: not found, and not counted as a profile opened (find_student checks neither)
+    hidden = re.fullmatch(r"@[A-Za-z0-9_]{4,32}", q.strip()) and con.execute(f"""SELECT 1 FROM users u WHERE lower(u.tg_username) = lower(:name)
+        AND (u.banned_at IS NOT NULL OR NOT {forum_mod._UNBLOCKED.format(u='u.id')})""", {"name": q.strip()[1:], "me": v.id}).fetchone()
+    if re.fullmatch(r"@[A-Za-z0-9_]{4,32}", q.strip()) and not hidden:
+        try:
+            s = profiles.find_student(con, v, q.strip())
+        except ApiError:
+            s = None
+        if s and not s["me"] and not s.get("closed"):
+            out.append({"person": s["person"], "course": s["course"]})
+    if forum:
+        matcher = _Search(q)
+        found = con.execute(f"""SELECT {PERSON_COLS}, s.student_id FROM users u JOIN students s ON s.user_id = u.id
+            WHERE {forum_mod._FINDABLE} AND u.id != :me AND {forum_mod._UNBLOCKED.format(u='u.id')}""", {"me": v.id}).fetchall()
+        scored = sorted(((matcher.person_score(p), p) for p in found), key=lambda x: -x[0])
+        seen = {x["person"]["id"] for x in out}
+        out += [{"person": person_ref(p), "course": course_of(p["student_id"])} for k, p in scored if k and p["id"] not in seen]
+    return out[:n]
+
+
+def _posts(con, v: Viewer, q: str, n: int) -> list[dict]:
+    """Live channel posts whose words match (a typo alone isn't enough in a long text), the newest first."""
+    matcher = _Search(q)
+    with tx(con, write=False):
+        ids = [p["id"] for p in rows(con, "SELECT id, body FROM fchan_posts WHERE status = 'live' AND tg_msg > 0 ORDER BY tg_msg DESC LIMIT ?",
+                                     POSTS_SCANNED) if matcher.score([p["body"]]) >= 2][:n]
+        return fchannel._feed_cards(con, v, fchannel._feed_rows(con, v, ids))
+
+
+from . import fchannel, forum as forum_mod, profiles  # noqa: E402
+from ..db import tx  # noqa: E402
 from .clubs import listed  # noqa: E402
+from .core import PERSON_COLS, ApiError, course_of, one, person_ref  # noqa: E402
 from .seats import _hidden_orgs, _visible, school_ok  # noqa: E402

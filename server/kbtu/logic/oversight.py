@@ -116,7 +116,7 @@ def registry_search(con, v: Viewer, q: str) -> list[dict]:
     matcher = search._Search(q)
     found = [p for p in rows(con, f"""SELECT DISTINCT {DMP_COLS} FROM org_members m JOIN users u ON u.id = m.user_id JOIN students s ON s.user_id = u.id""")
              if search.fold(p["student_id"]).startswith(k) or matcher.person_score(p)][:30]
-    log_action(con, v.id, "registry_search", "registry", json.dumps({"q": q, "found": len(found)}))  # a look at personal data (§9)
+    log_action(con, v.id, "registry_search", "registry", json.dumps({"found": len(found)}))  # a look at personal data (§9)
     ids = [p["id"] for p in found]
     of: dict[int, list] = {}
     for c in rows(con, f"""SELECT o.*, m.role, m.user_id AS member FROM org_members m JOIN orgs o ON o.id = m.org_id

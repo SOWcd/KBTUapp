@@ -15,6 +15,7 @@
   import Sheet from '../../ui/Sheet.svelte';
   import TelegramMark from '../../ui/TelegramMark.svelte';
   import Button from '../../ui/Button.svelte';
+  import Segmented from '../../ui/Segmented.svelte';
   import { schoolShort, shortOf } from '../../lib/short';
 
   let { overlay }: { overlay: Overlay } = $props();
@@ -95,7 +96,7 @@
     <form class="new" onsubmit={addChat}>
       <label class="field"><span class="t-cap">{t('adm.chatUrl')}</span><input bind:value={nch.url} placeholder="https://t.me/…" autocapitalize="none" spellcheck="false" /></label>
       <label class="field"><span class="t-cap">{t('adm.chatTitle')}</span><input bind:value={nch.title} maxlength="80" /></label>
-      <div class="seg wide">{#each ['group', 'forum', 'channel'] as const as k (k)}<button type="button" class:on={nch.kind === k} onclick={() => (nch.kind = k)}>{t(`chats.${k}`)}</button>{/each}</div>
+      <div class="kind"><Segmented items={(['group', 'forum', 'channel'] as const).map((k) => ({ value: k, label: t(`chats.${k}`) }))} bind:value={nch.kind} /></div>
       <div class="two">
         <label class="field"><span class="t-cap">{t('adm.chatSchool')}</span><input bind:value={nch.school} maxlength="40" /></label>
         <label class="field"><span class="t-cap">{t('adm.chatCourse')}</span><select bind:value={nch.course}><option value={0}>{t('chats.everyone')}</option>{#each [1, 2, 3, 4, 5, 6] as n (n)}<option value={n}>{t('chats.course', { n })}</option>{/each}</select></label>
@@ -116,8 +117,7 @@
   .new { display: flex; flex-direction: column; gap: 10px; }
   .two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .acts { display: flex; gap: 8px; }
-  .seg.wide { display: flex; margin: 8px 0; }
-  .seg.wide button { flex: 1; }
+  .kind { margin: var(--s-2) 0; }
   select { width: 100%; height: 100%; background: none; color: var(--text); font: 500 16px/1 var(--font-text); }
   .chl { display: flex; flex-direction: column; margin-bottom: 12px; }
   .chr { display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 10px; }

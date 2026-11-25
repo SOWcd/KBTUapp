@@ -22,6 +22,7 @@ DAYS = (1, 3, 7, 30)
 OPEN_ASKS = 3            # live or waiting requests per person
 CONTACTS_A_DAY = 10
 SEARCHES_AN_HOUR = 30
+SCREENS_AN_HOUR = 30     # paid looks, including rejected skill names and requests closed again
 PING_TOP, PING_DAY, PING_WEEK = 5, 1, 2   # a project request pings its best five matches; nobody gets more than 1 a day, 2 a week
 KEEP = 30 * 86400        # a request this long after it ran out, and a ping's record, then gone (the privacy policy)
 DECIDE_IN = 86400  # a held or reported request waits a moderator's word this long (shown as a deadline)
@@ -76,12 +77,33 @@ def skill_lookup(con, v: Viewer, raw: object, force: bool = False) -> dict:
 def add_skill(con, v: Viewer, name: str) -> dict:
     """A new skill in the catalog (lookup said it's new, the AI didn't object): mine at once, everyone's at PUBLIC_AT."""
     with tx(con):
+        core.need_current_student(con, v)
         if s := one(con, "SELECT * FROM skills WHERE name = ?", name):  # two people at once
             return _skill(con, s)
         if one(con, "SELECT COUNT(*) FROM skills WHERE created_by = ? AND created_at > ?", v.id, _now() - 86400)[0] >= NEW_SKILLS_A_DAY:
             raise ApiError("rate_limited")
         sid = con.execute("INSERT INTO skills (name, created_by, created_at, used_at) VALUES (?, ?, ?, ?)", (name, v.id, _now(), _now())).lastrowid
     return _skill(con, one(con, "SELECT * FROM skills WHERE id = ?", sid))
+
+
+def _screen_room(con, v: Viewer) -> None:
+    """Reserve a paid look inside the caller's transaction, including when screening rejects the words."""
+    core.need_current_student(con, v)
+    key = f"flook:{v.id}:{_now() // 3600}"
+    n = int((one(con, "SELECT value FROM meta WHERE key = ?", key) or [0])[0])
+    if n >= SCREENS_AN_HOUR:
+        raise ApiError("rate_limited", "forum")
+    con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (key, str(n + 1)))
+
+
+def reserve_skill(con, v: Viewer, raw: object, force: bool) -> dict:
+    found = skill_lookup(con, v, raw, force)
+    if "name" in found:
+        with tx(con):
+            if one(con, "SELECT COUNT(*) FROM skills WHERE created_by = ? AND created_at > ?", v.id, _now() - 86400)[0] >= NEW_SKILLS_A_DAY:
+                raise ApiError("rate_limited")
+            _screen_room(con, v)
+    return found
 
 
 def _skills_by(con, table: str, col: str, ids: list[int]) -> dict[int, list[dict]]:
@@ -241,7 +263,7 @@ def _ask_shapes(con, v: Viewer, found) -> list[dict]:
     for c in incoming:
         offers.setdefault(c["ask_id"], []).append({"id": c["id"], "status": c["status"], **cards[c["from_id"]]})
     others = [a["id"] for a in found if a["user_id"] != v.id]
-    offered = dict(rows(con, f"SELECT ask_id, status FROM contacts WHERE from_id = ? AND ask_id IN ({_qs(others)})",
+    offered = dict(rows(con, f"SELECT ask_id, status FROM contacts WHERE from_id = ? AND ask_id IN ({_qs(others)}) AND withdrawn_at IS NULL",
                         v.id, *others)) if others else {}
 
     out = []
@@ -269,21 +291,23 @@ def asks(con, v: Viewer, skill: object = None) -> list[dict]:
     return _ask_shapes(con, v, found)
 
 
-def create_ask(con, v: Viewer, body: dict, verdict: bool | None) -> dict:
+def create_ask(con, v: Viewer, body: dict, verdict: bool | None, *, screening: bool = False) -> dict:
     """A request: project (1-3 skills) or help (skills optional), for 1, 3, 7 or 30 days. verdict: the AI's look at the
     words (True fine, False flagged, None no answer): anything but fine waits for a moderator."""
     need_student(v)
     kind, title, text = body.get("kind"), str(body.get("title") or "").strip(), str(body.get("body") or "").strip()
     ids, days = body.get("skills") or [], body.get("days", 7 if body.get("kind") == "project" else 1)
     if kind not in ("project", "help") or not 3 <= len(title) <= TITLE_MAX or len(text) > BODY_MAX or days not in DAYS \
-            or not isinstance(ids, list) or len(set(ids)) != len(ids) or len(ids) > ASK_SKILLS or (kind == "project" and not ids) \
-            or not all(isinstance(i, int) and not isinstance(i, bool) for i in ids):
+            or not isinstance(ids, list) or not all(isinstance(i, int) and not isinstance(i, bool) for i in ids) \
+            or len(set(ids)) != len(ids) or len(ids) > ASK_SKILLS or (kind == "project" and not ids):
         raise ApiError("bad_input")
     with tx(con):
         if ids and len(rows(con, f"SELECT id FROM skills WHERE id IN ({','.join('?' * len(ids))})", *ids)) != len(ids):
             raise ApiError("bad_input")
         if one(con, "SELECT COUNT(*) FROM asks WHERE user_id = ? AND status IN ('live', 'held') AND expires_at > ? AND subject IS NULL", v.id, _now())[0] >= OPEN_ASKS:
             raise ApiError("rate_limited", "asks")
+        if screening:
+            _screen_room(con, v)
         status, why = ("live", None) if verdict else ("held", "ai" if verdict is False else "check")
         aid = con.execute("INSERT INTO asks (id, user_id, kind, title, body, status, why, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                           (core.next_id(con, "asks"), v.id, kind, title, text, status, why, _now(), _now() + days * 86400)).lastrowid
@@ -291,7 +315,20 @@ def create_ask(con, v: Viewer, body: dict, verdict: bool | None) -> dict:
         con.executemany("UPDATE skills SET used_at = ? WHERE id = ?", [(_now(), i) for i in ids])
         if status == "live":
             _ping(con, aid)
-    return _ask_shape(con, v, one(con, "SELECT * FROM asks WHERE id = ?", aid))
+        return _ask_shape(con, v, one(con, "SELECT * FROM asks WHERE id = ?", aid))
+
+
+def settle_ask(con, v: Viewer, aid: int, verdict: bool | None) -> dict:
+    with tx(con):
+        status, why = ("live", None) if verdict else ("held", "ai" if verdict is False else "check")
+        changed = con.execute("UPDATE asks SET status = ?, why = ? WHERE id = ? AND user_id = ? AND status = 'held' AND why = 'check'",
+                              (status, why, aid, v.id)).rowcount
+        a = one(con, "SELECT * FROM asks WHERE id = ? AND user_id = ?", aid, v.id)
+        if not a:
+            raise ApiError("not_found")
+        if changed and status == "live":
+            _ping(con, aid)
+        return _ask_shape(con, v, a)
 
 
 def _ping(con, aid: int) -> None:
@@ -413,7 +450,8 @@ def contact(con, v: Viewer, to: object = None, aid: object = None) -> dict:
         if cur.rowcount:
             notify(con, to, "contact_ask", f"ct:{cur.lastrowid}:{token}")
         # Give tokenless offers a fresh card so its buttons can identify the exact offer.
-        elif old := one(con, "SELECT id FROM contacts WHERE from_id = ? AND to_id = ? AND COALESCE(ask_id, 0) = COALESCE(?, 0) AND token IS NULL",
+        elif old := one(con, """SELECT id FROM contacts WHERE from_id = ? AND to_id = ? AND COALESCE(ask_id, 0) = COALESCE(?, 0)
+                        AND token IS NULL AND withdrawn_at IS NULL""",
                         v.id, to, aid):
             con.execute("UPDATE contacts SET token = ? WHERE id = ?", (token, old["id"]))
             notify(con, to, "contact_ask", f"ct:{old['id']}:{token}")
@@ -430,7 +468,7 @@ def decide_contact(con, uid: int, cid: int, yes: bool, token: str | None = None)
         c = one(con, "SELECT * FROM contacts WHERE id = ? AND to_id = ? AND status = 'pending' AND token = ?", cid, uid, token)
         if not c:
             return None
-        con.execute("UPDATE contacts SET status = ?, decided_at = ? WHERE id = ?", ("accepted" if yes else "declined", _now(), cid))
+        con.execute("UPDATE contacts SET status = ?, decided_at = ?, offer_message = NULL WHERE id = ?", ("accepted" if yes else "declined", _now(), cid))
         if yes:
             notify(con, c["from_id"], "contact_ok", f"co:{cid}:to:{token}")    # to the one who offered: the other's contact
             notify(con, c["to_id"], "contact_ok", f"co:{cid}:from:{token}")
@@ -471,7 +509,7 @@ def block(con, v: Viewer, uid: object, on: object = True) -> None:
     if on:
         con.execute("INSERT OR IGNORE INTO blocks (user_id, blocked_id, created_at) VALUES (?, ?, ?)", (v.id, uid, _now()))
         pymk.forget(con, v.id, uid)  # never suggested to each other, an unblock later included
-        con.execute("UPDATE contacts SET status = 'declined', decided_at = ? WHERE status = 'pending' AND ((from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?))",
+        con.execute("UPDATE contacts SET status = 'declined', decided_at = ?, offer_message = NULL WHERE status = 'pending' AND ((from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?))",
                     (_now(), v.id, uid, uid, v.id))
     else:
         con.execute("DELETE FROM blocks WHERE user_id = ? AND blocked_id = ?", (v.id, uid))

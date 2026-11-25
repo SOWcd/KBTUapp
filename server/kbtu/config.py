@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import os
+import re
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -54,9 +55,11 @@ class Config:
     gemini_key: str = field(default="", repr=False)  # GEMINI_API_KEY: Google (llm.GOOGLE)
     assist_lead: str = ""       # ASSIST_LEAD: unset or google, Google answers first for who said yes (assistant.GOOGLE_YES); off: never
     ai_chain: str = ""          # "provider:model,..." over llm.CHAIN
-    # DONATE_PHONE: the creator's Kaspi number for the voluntary "Support the app" page (Settings); empty: no row.
+    # DONATE_PHONE: the creator's Kaspi number for "Support the app" (Settings); empty: Stars only.
     # Never in the repo, the bundle or the logs (repr=False)
     donate_phone: str = field(default="", repr=False)
+    # The name + initial printed by Kaspi for that phone's owner. Empty: every donation needs the creator's review.
+    donate_recipient: str = field(default="", repr=False)
     # VOLUNTEERS=<club slug>: that club's volunteers ledger (logic/vol.py); empty: off
     volunteers: str = ""
     # APPEALS=1: appeals to the Student Government for everyone (logic/appeals.py); staff: admins, moderators and SG's people
@@ -82,6 +85,12 @@ class Config:
     # SUBJECTS_FILE: the subjects' cards (tools/subjects.py: names, codes, credits, school only), next to the database by default; no file: off
     subjects_file: str = ""
     seed: bool = True         # KBTU's schools at start (logic.seed_schools); tests seed only where they look at them
+    # PLAY_DEMO: Google Play's reviewer signs in at /play-demo?k=<this> (logic/web_auth.py, android/README.md); empty: off,
+    # and every demo session with it. 32+ random characters, or off
+    play_demo: str = field(default="", repr=False)
+    # ANDROID_CERT_SHA256: the Android app's signing certificates (AA:BB:..., comma-separated) for
+    # /.well-known/assetlinks.json; empty: no file, the app shows a browser bar
+    android_certs: tuple[str, ...] = ()
 
 
 def _dotenv() -> dict[str, str]:
@@ -111,6 +120,22 @@ def _kz_phone(s: str) -> str:
         print("DONATE_PHONE is not a Kazakh number (+7 700 000 00 00): the Support page is off", flush=True)
         return ""
     return "+" + d if s else ""
+
+
+def _play_demo(s: str) -> str:
+    """PLAY_DEMO: the reviewer's link is the only key to the demo account; a short one could be guessed"""
+    if s and len(s) < 32:
+        print("PLAY_DEMO is shorter than 32 characters: the Play review demo is off", flush=True)
+        return ""
+    return s
+
+
+def _certs(s: str) -> tuple[str, ...]:
+    """ANDROID_CERT_SHA256: SHA-256 fingerprints as AA:BB:... (Play Console's app signing page, keytool -list)"""
+    certs = tuple(x.strip().upper() for x in s.split(",") if x.strip())
+    if bad := [x for x in certs if not re.fullmatch(r"(?:[0-9A-F]{2}:){31}[0-9A-F]{2}", x)]:
+        print(f"ANDROID_CERT_SHA256: {len(bad)} entries aren't SHA-256 fingerprints (AA:BB:...): left out", flush=True)
+    return tuple(x for x in certs if x not in bad)
 
 
 def load() -> Config:
@@ -156,6 +181,7 @@ def load() -> Config:
         assist_lead=env.get("ASSIST_LEAD", "").strip().lower(),
         ai_chain=env.get("AI_CHAIN", "").strip(),
         donate_phone=_kz_phone(env.get("DONATE_PHONE", "").strip()),
+        donate_recipient=env.get("DONATE_RECIPIENT", "").strip()[:120],
         volunteers=env.get("VOLUNTEERS", "").strip().lower(),
         appeals={"1": "all", "staff": "staff"}.get(env.get("APPEALS", "").strip(), ""),
         ask={"1": "all", "staff": "staff"}.get(env.get("ASK", "").strip(), ""),
@@ -167,4 +193,6 @@ def load() -> Config:
         tiktok=env.get("TIKTOK", "").strip() == "1",
         rooms_file=env.get("ROOMS_FILE") or str(Path(db_path).parent / "rooms.json"),
         subjects_file=env.get("SUBJECTS_FILE") or str(Path(db_path).parent / "subjects.json"),
+        play_demo=_play_demo(env.get("PLAY_DEMO", "").strip()),
+        android_certs=_certs(env.get("ANDROID_CERT_SHA256", "")),
     )
