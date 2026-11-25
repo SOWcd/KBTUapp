@@ -81,8 +81,8 @@ class Config:
     rooms_file: str = ""
     # SUBJECTS_FILE: the subjects' cards (tools/subjects.py: names, codes, credits, school only), next to the database by default; no file: off
     subjects_file: str = ""
-    # IOS_BUNDLE_ID: the iPhone app's bundle ID (ios/README.md), the audience its Apple identity tokens must name; empty:
-    # Sign in with Apple and iPhone push are off. APNS_KEY_ID, APNS_TEAM_ID, APNS_KEY (the .p8's text, \n allowed): push
+    # IOS_BUNDLE_ID: the iPhone app's bundle ID (kz.sow.kbtu, ios/README.md), the audience its Apple identity tokens
+    # must name; empty: Sign in with Apple and iPhone push are off. APNS_KEY_ID, APNS_TEAM_ID, APNS_KEY (the .p8's text, \n allowed): push
     # through Apple (apns.py); any empty: no push, the bot alone
     ios_bundle: str = ""
     apns_key_id: str = ""

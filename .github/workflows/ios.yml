@@ -2,7 +2,7 @@
 # it signed by Apple's cloud signing with the App Store Connect API key, and the build goes to TestFlight. Never built on a
 # laptop. A PR that touches ios/ compiles it unsigned and uploads nothing.
 # Secrets (repo → Settings → Secrets → Actions): APPLE_TEAM_ID, ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8 (the .p8's text).
-# Variable (→ Variables): IOS_BUNDLE_ID, default kz.kbtuapp; the server's IOS_BUNDLE_ID must be the same.
+# Variable (→ Variables): IOS_BUNDLE_ID, default kz.sow.kbtu; the server's IOS_BUNDLE_ID must be the same.
 name: iOS
 on:
   workflow_dispatch:
@@ -23,7 +23,7 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 40
     env:
-      BUNDLE_ID: ${{ vars.IOS_BUNDLE_ID || 'kz.kbtuapp' }}
+      BUNDLE_ID: ${{ vars.IOS_BUNDLE_ID || 'kz.sow.kbtu' }}
       TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
     steps:
       - uses: actions/checkout@v5

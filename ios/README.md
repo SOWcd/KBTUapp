@@ -30,7 +30,8 @@ You need the Apple Developer Program (99 USD a year; an organisation account sho
 an individual one shows the person's name).
 
 1. **The bundle ID.** developer.apple.com → Certificates, Identifiers & Profiles → Identifiers → **+** → App IDs → App.
-   Bundle ID (explicit): `kz.kbtuapp` (or another; it can't change after the first upload). Tick **Push Notifications**
+   Bundle ID (explicit): `kz.sow.kbtu` (reverse-domain from kbtu.sow.kz, the same as the Android package; it can't
+   change after the first upload). Tick **Push Notifications**
    and **Sign In with Apple** (Enable as a primary App ID). If you pick another ID, set it as the repository variable
    `IOS_BUNDLE_ID` (repo → Settings → Secrets and variables → Actions → Variables) and on the server.
 2. **The app record.** appstoreconnect.apple.com → Apps → **+** → New App: iOS, name `KBTU App` (if taken, something
@@ -45,7 +46,7 @@ an individual one shows the person's name).
    - `APPLE_TEAM_ID`: developer.apple.com → Account → Membership details → Team ID.
 4. **The push key** (the server sends notifications with it). Certificates, Identifiers & Profiles → Keys → **+** →
    tick Apple Push Notifications service (APNs) → download the `.p8`. On the server (Coolify) set:
-   - `IOS_BUNDLE_ID=kz.kbtuapp` (turns on Sign in with Apple and push tokens; it must match the app's bundle ID);
+   - `IOS_BUNDLE_ID=kz.sow.kbtu` (turns on Sign in with Apple and push tokens; it must match the app's bundle ID);
    - `APNS_KEY_ID` (the key's ID), `APNS_TEAM_ID` (the Team ID), `APNS_KEY` (the `.p8`'s text; newlines as `\n` are fine).
    Without the `APNS_*` three, Sign in with Apple works and the bot alone sends notifications.
 5. **A build.** GitHub → Actions → **iOS** → Run workflow: build `1`, version `1.0`. About 15 minutes; then App Store

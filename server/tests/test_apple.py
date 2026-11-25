@@ -18,7 +18,7 @@ from kbtu.logic import apple, web_auth
 from test_core import delete_now, env, set_clock, tma  # noqa: F401
 from test_web_auth import ORIGIN, WEB, WRITE, widget
 
-BUNDLE = "kz.kbtuapp.ios"
+BUNDLE = "kz.sow.kbtu"
 KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 OTHER = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 DEVICE = "ab" * 32

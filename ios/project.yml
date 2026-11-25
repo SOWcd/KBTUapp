@@ -1,6 +1,6 @@
 # The iPhone app: a thin native shell over https://kbtu.sow.kz (ios/README.md). XcodeGen makes the Xcode project from
-# this file on the CI runner (.github/workflows/ios.yml); the .xcodeproj is never committed. BUNDLE_ID and TEAM_ID
-# come from the environment there.
+# this file on the CI runner (.github/workflows/ios.yml); the .xcodeproj is never committed. BUNDLE_ID (kz.sow.kbtu
+# unless the IOS_BUNDLE_ID variable says otherwise) and TEAM_ID come from the environment there.
 name: KBTUApp
 options:
   deploymentTarget:
