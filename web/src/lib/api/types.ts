@@ -21,7 +21,7 @@ export interface ClubApplication {
 export type PathStep = 'profile' | 'round' | 'channel' | 'collab' | 'top';
 export interface OfficialRequest { id: Id; status: 'pending' | 'approved' | 'rejected'; reason: string | null; createdAt: Ts; decidedAt: Ts | null; againAt: Ts | null }
 export interface OfficialPath { steps: Record<PathStep, boolean>; members: number; events: number; guests: number /* the most different outside guests two of those events drew */; request: OfficialRequest | null }
-export interface ClubApplicationInput { name: string; short: string; description: string; emoji: string; cover: number; link?: string | null; why?: string; links?: string[] }
+export interface ClubApplicationInput { name: string; short: string; description: string; emoji: string; cover: number; why?: string; links?: string[] }
 
 /** A curated Telegram chat (§4.11): for everyone, or aimed at a school and/or a course; a tick once I've opened it. */
 export interface Chat { id: Id; title: string; kind: 'channel' | 'group' | 'forum'; url: string; members: number | null; photo: string | null /* from its t.me page */; school: string | null; course: number | null; opened: boolean;
@@ -164,12 +164,11 @@ export interface MeetingAnswer { person: PersonRef; fullName: string; role: OrgR
 export interface FriendInvite { person: PersonRef; state: 'none' | 'invited' | 'going' }
 
 /** A photo in an event's album: the one who added it or the club's Head+ may take it out. */
-export interface AlbumPhoto extends Media { id: Id; canDelete: boolean; by: string | null; mine: boolean; event?: GalleryEvent; topic?: GalleryTopic; at?: Ts; uid?: Id; pending?: boolean; failed?: boolean; key?: Id } // topic: a Gallery post of no event; by: who added it (nick or "First L."); event: in the Gallery; uid: a Gallery post's author (their profile); at: when it was posted or uploaded (the feed's days; the Gallery on for me); pending: mine, still uploading; failed: mine, the upload didn't get through (Retry, Remove); key: the tile my upload had while it went up, kept so the server's takes over the same element
-export type GalleryTopic = 'campus' | 'study' | 'life' | 'other'; // what a photo of no event is about (the server's gallery.TOPICS)
+export interface AlbumPhoto extends Media { id: Id; canDelete: boolean; by: string | null; mine: boolean; event?: GalleryEvent; place?: 'main' | 'b2' | 'dorm' | 'away'; at?: Ts; uid?: Id; pending?: boolean; failed?: boolean; key?: Id } // place: where it was taken, as the poster's phone named it (lib/place.ts; the server's gallery.PLACES); by: who added it (nick or "First L."); event: in the Gallery; uid: a Gallery post's author (their profile); at: when it was posted or uploaded (the feed's days; the Gallery on for me); pending: mine, still uploading; failed: mine, the upload didn't get through (Retry, Remove); key: the tile my upload had while it went up, kept so the server's takes over the same element
 export interface GalleryEvent { id: Id; title: string; i18n?: Partial<Record<'ru' | 'kk' | 'en', { title?: string }>> }
 /** An event's album on the Gallery's shelf: its cover (the event's own, else its newest photo), its day and how many photos I see in it. */
 export interface GalleryAlbum { id: Id; title: string; n: number; at: Ts /* the event's start */; cover: Media; i18n?: GalleryEvent['i18n'] }
-export interface GalleryPage { photos: AlbumPhoto[]; more: boolean; albums?: GalleryAlbum[] /* the first page of everything: newest first */; post?: { events: { id: Id; title: string }[] } } // post: I may post (GALLERY), to these events too (the newest I went to)
+export interface GalleryPage { photos: AlbumPhoto[]; more: boolean; albums?: GalleryAlbum[] /* the first page of everything: newest first */; post?: { placeConsent?: boolean | null } } // post: I may post (GALLERY); null consent: ask on first upload
 
 /** An event's video (server video.py): our own compressed copy, its poster a photo; `error`: too_long | not_a_video. */
 export interface Video { id: Id; status: 'uploading' | 'queued' | 'working' | 'ready' | 'failed'; url: string | null; duration: number | null;
@@ -528,8 +527,8 @@ export interface EventFull extends EventCard {
    *  remind: how many "Remind those not in yet" would reach now; remindAt: when the button works again (null: now) */
   santaTeam?: { in: PersonRef[]; out: PersonRef[]; remind: number; remindAt: Ts | null };
   santaTold?: number;           // santa.start's answer: how many of the team the invite went to (0: they had it within a day, not repeated)
-  /** Secret Santa, mine while I'm going: my wishlist; after the draw `to`, my person and their wishlist (null: they left) */
-  mySanta?: { wish: string; to?: { person: PersonRef; wish: string } | null };
+  /** Secret Santa, mine while I'm going: my wishlist; after the draw `to`, my person and their wishlist (null: they left), and `chat` */
+  mySanta?: { wish: string; to?: { person: PersonRef; wish: string } | null; chat?: boolean }; // chat: the pair's chat is on (false: a ring under four, or someone left it)
   chat?: string | null;         // the event's Telegram group (join by request): for those going, volunteers, the team
   chatLinked?: boolean | null;  // the organizers: a group is linked
   meetingTag?: Id | null;       // "for whom" on a team-only event: one of the club's tags; null = the whole team
@@ -731,12 +730,17 @@ export type CheckinResult =
 export interface ClassItem { weekday: number; begins: string; ends: string; subject: string; kind: string | null; room: string | null; teacher: string | null;
   names?: Partial<Record<'ru' | 'kk' | 'en', string>> | null /* the subject in each language the student's portal pages were in */ }
 
+export type TextEntity = [kind: 'bold' | 'italic' | 'underline' | 'strike' | 'spoiler' | 'code' | 'pre' | 'blockquote' | 'text_link' | 'url',
+  offset: number, length: number, url?: string | null];
+
 export interface Post {
   id: Id;
   org: OrgRef;
   audience: 'public' | 'clubs';
   title: string;
   body: string;
+  titleFmt?: TextEntity[] | null;
+  fmt?: TextEntity[] | null;
   tag: string | null;
   photo: Media | null;
   pinned: boolean;
@@ -754,7 +758,8 @@ export interface Post {
    *  there; `media`: a video plays in Telegram's post widget (News), a file is only linked to; a tap opens the post in Telegram */
   tg?: { url: string; views: number | null; reactions: [string, number][]; media: 'video' | 'file' | null } | null;
   /** a channel's post in the other languages: the channel's own (folded posts, its comments) or our AI's; applied by api/client.ts */
-  i18n?: Partial<Record<'ru' | 'kk' | 'en', { title?: string; body?: string }>>; orig?: Record<string, string>;
+  i18n?: Partial<Record<'ru' | 'kk' | 'en', Partial<Pick<Post, 'title' | 'body' | 'titleFmt' | 'fmt'>>>>;
+  orig?: Record<string, string | TextEntity[] | null>;
   /** an offline casting: people just come (no sign-up); its state is computed (lib/posts castingState). A club's page may
    *  hold one its club deleted before the end: no title then, cancelled */
   casting?: Casting | null;
@@ -813,7 +818,7 @@ export interface AutoEvent { id: Id; org: OrgRef; title: string; startsAt: Ts; p
   cover: EventCard['cover']; emoji: string; color: string; tint?: string } // cover: the post's picture (server autoev.cover)
 /** A decision of the last 30 days: who (by), on what (kind: the audit target's, text), whether Undo still takes it back. */
 export interface DoneRow { id: Id; action: string; target: string /* the audit's, 'comment:5' */; kind: string; text: string; by: string | null; mine: boolean; at: Ts; undone: boolean; undo: boolean }
-export interface Inbox { items: InboxItem[]; done: DoneRow[]; flaws?: number }
+export interface Inbox { items: InboxItem[]; done: DoneRow[]; flaws?: number; santa?: number; voices?: number } // santa: open Secret Santa chat reports (their own row); voices: unread lines and offers to the creator
 
 export interface PersonCard extends PersonRef {
   forum?: Pick<ForumMe, 'skills' | 'open'>;              // their skills and "open to projects", for those who see the forum
@@ -923,3 +928,11 @@ export interface SubjectPerson { ask: Id; person: PersonRef; name: string; cours
   offered: 'pending' | 'accepted' | 'declined' | null /* my offer to them */; telegram?: string /* accepted: where to write */ }
 export interface SubjectCard extends Subject { people: SubjectPerson[]; mine: { note: string; status: 'live' | 'held' | 'hidden' | 'closed'; why: string | null; until: Ts } | null;
   restricted: Ts | null /* a moderator's take-down stands until then: listing again is refused */ }
+
+/** Secret Santa's chat (server santa.chat): a message says only whether it is mine, never who wrote it */
+export interface SantaMsg { id: Id; mine: boolean; text: string; at: Ts }
+export interface SantaThread { closed: boolean; msgs: SantaMsg[] } // closed: one of the two reported it (its words are then the staff's to read)
+/** a reported thread, for the app's staff alone (Admin): whole, with both its people; byGiver: the Santa reported it */
+export interface SantaReport { id: Id; at: Ts; title: string; giver: PersonRef | null; to: PersonRef | null; byGiver: boolean; msgs: { id: Id; fromGiver: boolean; text: string; at: Ts }[] }
+/** to: where I write as my person's Santa; from: with my own Santa (null: no such pair) */
+export interface SantaChats { to: SantaThread | null; from: SantaThread | null }

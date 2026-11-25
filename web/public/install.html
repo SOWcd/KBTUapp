@@ -284,12 +284,17 @@ li.on::before { background: var(--accent); color: #fff; }
   // "Safari/"; other iOS browsers name themselves. Safari 26 still says "OS 18_x": its own Version/ tells.
   var ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
   var safari = ios && /Safari\//.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS|OPT\/|YaBrowser|DuckDuckGo|GSA\//.test(ua);
+  // Telegram's own in-app browser says "Safari/" like Safari itself but brings its bridge: it can't add to the Home Screen
+  if (window.TelegramWebviewProxy || window.TelegramWebview) safari = false;
   var android = /Android/.test(ua);
   var v = matchMedia('(display-mode: standalone)').matches || navigator.standalone ? 'done'
     : ios ? (safari ? 'ios' : 'inapp') : android ? (/; wv\)/.test(ua) ? 'webview' : 'android') : 'desk';
   var sub = v;
   // opened as the installed app (a home-screen icon saved from this page): straight into the app, not "installed"
   if (v === 'done') location.replace('/');
+  // the channel's link (/install?safari): Telegram opens links in its own browser, where Safari's in-app view looks just
+  // like Safari and has no "Add to Home Screen"; hand the page to Safari itself at once (iOS 17+), the plain page after
+  else if (ios && /[?&]safari\b/.test(location.search)) location.replace('x-safari-https://kbtu.sow.kz/install');
 
   function paint() {
     var tags = [v, sub];
@@ -334,7 +339,7 @@ li.on::before { background: var(--accent); color: #fff; }
   if (v === 'ios') '440x956@3 430x932@3 428x926@3 420x912@3 414x896@3 414x896@2 402x874@3 393x852@3 390x844@3 375x812@3 375x667@2'.split(' ').forEach(function (s) {
     var m = /(\d+)x(\d+)@(\d)/.exec(s);
     ['dark', 'light'].forEach(function (th) {
-      var l = document.createElement('link'); l.rel = 'apple-touch-startup-image'; l.href = '/splash/' + m[1] + 'x' + m[2] + '-' + m[3] + 'x-' + th + '.png?v=2'; // (tools/splash.mjs's names)
+      var l = document.createElement('link'); l.rel = 'apple-touch-startup-image'; l.href = '/splash/' + m[1] + 'x' + m[2] + '-' + m[3] + 'x-' + th + '.png?v=3'; // (tools/splash.mjs's names)
       l.media = '(prefers-color-scheme: ' + th + ') and (device-width: ' + m[1] + 'px) and (device-height: ' + m[2] + 'px) and (-webkit-device-pixel-ratio: ' + m[3] + ') and (orientation: portrait)';
       document.head.appendChild(l);
     });

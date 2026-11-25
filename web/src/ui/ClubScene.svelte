@@ -32,6 +32,7 @@
   import cybPan from '../assets/lanyards/cyber-pan.webp'; // round 19: their panther in full colour, cut off its badge
   import ddDragon from '../assets/lanyards/dd-dragon.webp'; // round 20: Dice and Destiny's dragon and dice, cut off their logo's white
   import bhWord from '../assets/lanyards/bh-dexter.webp'; // The Bay Harbor Society's DEXTER, their logo as they sent it
+  import qoFrog from '../assets/lanyards/qoloner-mark.webp'; // Qoloner's frog, redrawn from their logo (.claude/reports/lanyard-qoloner)
 
   let { look, wide = false, qr = false }: { look: Look; wide?: boolean; qr?: boolean } = $props();
   const SC = import.meta.glob('../assets/lanyards/scenes/*-band.svg', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
@@ -126,6 +127,12 @@
     <!-- the anime club (new3): their own ink-wash art with its red spider lilies at the edges, a lighter mist behind the
          name; red embers drifting up -->
     <img class="l z far anb" src={animeBack} alt="" /><i class="mist"></i><i class="ash"></i>
+  {:else if look === 'qoloner'}
+    <!-- Qoloner (Nov 25, their logo): cream paper, their badge's dashed ring round the medallion, a few of their sparkles
+         and dots; the frog only on the badge's band, in the ring between their logo's side diamonds (on the card the
+         medallion already shows it: a second one read as a duplicate, owner) -->
+    <i class="paper"></i><i class="qring"></i><i class="qsp"></i><i class="qtw"></i>
+    {#if !wide}<img class="word bw qoloner" src={qoFrog} alt="" />{/if}
   {:else if look === 'kbtumag'}
     <!-- kbtu.mag (new3 r2, the same grammar): cream paper lit from the top right, a halftone screen far fading toward the
          name, the desk in layers under the strip; two issues leaning on each other (the cover a halftone portrait under
@@ -357,6 +364,22 @@
   .mgw { top: 24px; height: 62px; }
   .kbtumag .gloss { background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.35), transparent 65%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 0 0 1px rgba(62, 10, 18, 0.12); }
 
+  /* ---- Qoloner (their logo; the face is .claude/reports/lanyard-qoloner/gen.py's redraw): their cream and purple ink, the dashed ring of their
+     badge round the medallion (its centre 40, 40 from the top right) and a fainter one outside it; their sparkles (a gold
+     shadow under the purple, as drawn in the logo) below it, clear of the text; one twinkling now and then ---- */
+  .sc.qoloner { background: radial-gradient(70% 90% at 100% 0%, rgba(255, 253, 248, 0.85), transparent 65%), linear-gradient(160deg, rgb(251, 246, 238), rgb(248, 241, 231) 55%, rgb(239, 228, 211)); }
+  .sc.qoloner:not(.wide) { background: radial-gradient(60% 80% at 50% 0%, rgba(255, 253, 248, 0.85), transparent 70%), linear-gradient(180deg, rgb(251, 246, 238), rgb(248, 241, 231)); }
+  .qoloner .paper { opacity: 0.09; }
+  .qring { right: -6px; top: -6px; width: 92px; height: 92px; border-radius: 50%; border: 1px dashed rgba(90, 75, 194, 0.34); box-shadow: 0 0 0 9px transparent, 0 0 0 10px rgba(90, 75, 194, 0.1); }
+  .sc:not(.wide) .qring { right: auto; left: 50%; top: 8px; width: 108px; height: 108px; margin-left: -54px; }
+  .qsp { right: 0; top: 0; width: 180px; height: 160px; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='160'%3E%3Cpath d='M98.99 103.49C99.98 108 99.98 108 104.49 108.99C99.98 109.98 99.98 109.98 98.99 114.49C98 109.98 98 109.98 93.49 108.99C98 108 98 108 98.99 103.49Z' fill='rgb(233,180,76)'/%3E%3Cpath d='M98 102.5C98.99 107.01 98.99 107.01 103.5 108C98.99 108.99 98.99 108.99 98 113.5C97.01 108.99 97.01 108.99 92.5 108C97.01 107.01 97.01 107.01 98 102.5Z' fill='rgb(90,75,194)'/%3E%3Cpath d='M82 114.6C82.432 116.568 82.432 116.568 84.4 117C82.432 117.432 82.432 117.432 82 119.4C81.568 117.432 81.568 117.432 79.6 117C81.568 116.568 81.568 116.568 82 114.6Z' fill='rgb(233,180,76)'/%3E%3Ccircle cx='112' cy='118' r='1.2' fill='rgb(90,75,194)'/%3E%3Cpath d='M172.61 97.21C173.222 99.998 173.222 99.998 176.01 100.61C173.222 101.222 173.222 101.222 172.61 104.01C171.998 101.222 171.998 101.222 169.21 100.61C171.998 99.998 171.998 99.998 172.61 97.21Z' fill='rgb(233,180,76)'/%3E%3Cpath d='M172 96.6C172.612 99.388 172.612 99.388 175.4 100C172.612 100.612 172.612 100.612 172 103.4C171.388 100.612 171.388 100.612 168.6 100C171.388 99.388 171.388 99.388 172 96.6Z' fill='rgb(90,75,194)'/%3E%3Ccircle cx='166' cy='114' r='1.2' fill='rgb(90,75,194)'/%3E%3C/svg%3E"); }
+  .sc:not(.wide) .qsp { left: 50%; width: 330px; height: 124px; margin-left: -165px; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='330' height='124'%3E%3Cpath d='M52 51C53.98 60.02 53.98 60.02 63 62C53.98 63.98 53.98 63.98 52 73C50.02 63.98 50.02 63.98 41 62C50.02 60.02 50.02 60.02 52 51Z' fill='rgb(90,75,194)'/%3E%3Cpath d='M278 51C279.98 60.02 279.98 60.02 289 62C279.98 63.98 279.98 63.98 278 73C276.02 63.98 276.02 63.98 267 62C276.02 60.02 276.02 60.02 278 51Z' fill='rgb(90,75,194)'/%3E%3Ccircle cx='64' cy='88' r='2.2' fill='rgb(90,75,194)'/%3E%3Ccircle cx='76' cy='100' r='2.2' fill='rgb(90,75,194)'/%3E%3Ccircle cx='90' cy='108' r='2.2' fill='rgb(90,75,194)'/%3E%3Ccircle cx='266' cy='88' r='2.2' fill='rgb(90,75,194)'/%3E%3Ccircle cx='254' cy='100' r='2.2' fill='rgb(90,75,194)'/%3E%3Ccircle cx='240' cy='108' r='2.2' fill='rgb(90,75,194)'/%3E%3Cpath d='M119.08 21.08C120.16 26 120.16 26 125.08 27.08C120.16 28.16 120.16 28.16 119.08 33.08C118 28.16 118 28.16 113.08 27.08C118 26 118 26 119.08 21.08Z' fill='rgb(233,180,76)'/%3E%3Cpath d='M118 20C119.08 24.92 119.08 24.92 124 26C119.08 27.08 119.08 27.08 118 32C116.92 27.08 116.92 27.08 112 26C116.92 24.92 116.92 24.92 118 20Z' fill='rgb(90,75,194)'/%3E%3Cpath d='M104.54 37.54C105.08 40 105.08 40 107.54 40.54C105.08 41.08 105.08 41.08 104.54 43.54C104 41.08 104 41.08 101.54 40.54C104 40 104 40 104.54 37.54Z' fill='rgb(233,180,76)'/%3E%3Cpath d='M104 37C104.54 39.46 104.54 39.46 107 40C104.54 40.54 104.54 40.54 104 43C103.46 40.54 103.46 40.54 101 40C103.46 39.46 103.46 39.46 104 37Z' fill='rgb(90,75,194)'/%3E%3Cpath d='M214.9 23.9C215.8 28 215.8 28 219.9 28.9C215.8 29.8 215.8 29.8 214.9 33.9C214 29.8 214 29.8 209.9 28.9C214 28 214 28 214.9 23.9Z' fill='rgb(233,180,76)'/%3E%3Cpath d='M214 23C214.9 27.1 214.9 27.1 219 28C214.9 28.9 214.9 28.9 214 33C213.1 28.9 213.1 28.9 209 28C213.1 27.1 213.1 27.1 214 23Z' fill='rgb(90,75,194)'/%3E%3Ccircle cx='224' cy='42' r='1.6' fill='rgb(233,180,76)'/%3E%3Ccircle cx='206' cy='46' r='1.2' fill='rgb(233,180,76)'/%3E%3Cpath d='M126 88.6C126.612 91.388 126.612 91.388 129.4 92C126.612 92.612 126.612 92.612 126 95.4C125.388 92.612 125.388 92.612 122.6 92C125.388 91.388 125.388 91.388 126 88.6Z' fill='rgb(185,174,240)'/%3E%3C/svg%3E"); }
+  .qtw { right: 2px; top: 70px; width: 12px; height: 12px; opacity: 0; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Cpath d='M10 3C11.26 8.74 11.26 8.74 17 10C11.26 11.26 11.26 11.26 10 17C8.74 11.26 8.74 11.26 3 10C8.74 8.74 8.74 8.74 10 3Z' fill='rgb(233,180,76)'/%3E%3C/svg%3E") 0 0 / 100% 100%; animation: qotw 6s 1.5s ease-in-out infinite; }
+  .sc:not(.wide) .qtw { right: auto; left: calc(50% + 40px); top: 12px; }
+  @keyframes qotw { 0%, 70% { opacity: 0; transform: scale(0.4) rotate(0deg); } 82% { opacity: 1; transform: scale(1) rotate(45deg); } 94%, 100% { opacity: 0; transform: scale(0.5) rotate(90deg); } }
+  .bw.qoloner { top: 16px; height: 92px; filter: drop-shadow(0 3px 8px rgba(90, 75, 194, 0.18)); }
+  .qoloner .gloss { background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.4), transparent 65%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 0 0 1px rgba(90, 75, 194, 0.14); }
+
   /* ---- round 11: the seven's grounds under their scenes; their marks on the band. Round 16: the grounds scoped to .sc:
      the mark's img carries the look's class too and wore the ground as a box on the badge's band ---- */
   .sc.enactuskbtu { background: radial-gradient(70% 90% at 100% 0%, rgba(80, 100, 230, 0.35), transparent 65%), linear-gradient(160deg, rgb(18, 26, 110), rgb(10, 15, 85) 55%, rgb(4, 7, 46)); }
@@ -409,8 +432,8 @@
   .literatureclub .gloss, .zhylyzhurekkbtu .gloss { background: radial-gradient(130% 70% at 30% -18%, rgba(255, 255, 255, 0.35), transparent 65%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 0 0 1px rgba(107, 31, 31, 0.12); }
 
   /* still: no loop under reduced motion or power saving; each scene's resting frame is a whole picture */
-  @media (prefers-reduced-motion: reduce) { .snow, .prism, .sun, .bub i, .spw, .motes, .petals, .fall, .ash, .flick, .bhglow { animation: none; } .spark { display: none; } }
+  @media (prefers-reduced-motion: reduce) { .snow, .prism, .sun, .bub i, .spw, .motes, .petals, .fall, .ash, .flick, .bhglow, .qtw { animation: none; } .spark { display: none; } }
   :global(html.lowfx) .snow, :global(html.lowfx) .prism, :global(html.lowfx) .sun, :global(html.lowfx) .bub i, 
-  :global(html.lowfx) .spw, :global(html.lowfx) .motes, :global(html.lowfx) .petals, :global(html.lowfx) .fall, :global(html.lowfx) .ash, :global(html.lowfx) .flick, :global(html.lowfx) .bhglow { animation: none; }
+  :global(html.lowfx) .spw, :global(html.lowfx) .motes, :global(html.lowfx) .petals, :global(html.lowfx) .fall, :global(html.lowfx) .ash, :global(html.lowfx) .flick, :global(html.lowfx) .bhglow, :global(html.lowfx) .qtw { animation: none; }
   :global(html.lowfx) .spark { display: none; }
 </style>

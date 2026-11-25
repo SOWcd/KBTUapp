@@ -26,6 +26,8 @@
   import EmptyState from '../../ui/EmptyState.svelte';
   import Tag from '../../ui/Tag.svelte';
   import { checkinMessages } from './checkinMessages';
+  import SortChip from '../../ui/SortChip.svelte';
+  import { sorted, byName, usual, type Order } from '../../lib/sort.svelte';
 
   let { overlay, id, onchange, guestsOnly = false }: { overlay: Overlay; id: Id; onchange?: () => void; guestsOnly?: boolean } = $props();
 
@@ -50,6 +52,9 @@
       at: d.checkedInAt, manual: d.manual, app: true, adult: d.adult })) : []), // adult: an age_check event's door mark
   ]);
   let tab = $state<'not' | 'came' | 'other'>('not');
+  // inside each group; the groups stay where they are. By the time they came: in «Came» only, so a row ticked in
+  // «Not came» stays under the thumb
+  const ORDERS: Order<Item>[] = [usual(), byName((x) => x.name), { id: 'came', label: 'sort.came', by: (x) => (tab === 'came' ? x.at : null), desc: true }];
   // rows marked or unmarked in this tab stay in it until the next switch
   let stay = $state<string[]>([]);
   let q = $state('');
@@ -63,6 +68,7 @@
       if (x.at) g.came++;
       if (((tab === 'came') === !!x.at || stay.includes(x.key)) && want(x)) g.rows.push(x);
     }
+    for (const g of by.values()) g.rows = sorted('door', ORDERS, g.rows);
     return [...by].filter(([, g]) => g.rows.length);
   });
   const others = $derived((aud !== 'guests' ? team?.other ?? [] : []).filter(want));
@@ -144,6 +150,7 @@
         <Group>{#each others as o, i (i)}<Row dense title={o.name} value={time(o.at)} />{/each}</Group>
       {:else}<EmptyState inline text={t('mk.none')} />{/if}
     {:else if groups.length}
+      {#if items.length > 1}<SortChip list="door" orders={ORDERS} />{/if}
       {#each groups as [name, g] (name)}
         <Group caption={name} note={t('mk.ofN', { n: g.came, m: g.all })}>
           {@const rest = g.rows.filter((x) => !x.at && (x.pend || x.uid != null))}

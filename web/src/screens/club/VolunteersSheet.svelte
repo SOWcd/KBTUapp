@@ -18,10 +18,15 @@
   import Row from '../../ui/Row.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
   import { schoolShort } from '../../lib/short';
+  import SortChip from '../../ui/SortChip.svelte';
+  import { sorted, byName, newest, usual, type Order } from '../../lib/sort.svelte';
 
   let { overlay, id, need }: { overlay: Overlay; id: Id; need: number } = $props();
   let list = $state<VolunteerApp[] | null>(null);
   $effect(() => { api.volunteers(id).then((l) => (list = l)).catch(() => (list = [])); });
+  // the server's: those waiting for an answer first
+  const ORDERS: Order<VolunteerApp>[] = [usual(), newest((x) => x.at), byName((x) => x.fullName), { id: 'course', label: 'sort.course', by: (x) => x.course }];
+  const rows = $derived(sorted('volunteers', ORDERS, list ?? []));
   const yes = $derived((list ?? []).filter((x) => x.status === 'yes').length);
 
   async function decide(x: VolunteerApp, ok: boolean) {
@@ -41,7 +46,8 @@
   <p class="t-foot sub">{t('vol.taken', { n: yes, of: need })}</p>
   {#if list}
     <div class="list">
-      {#each list as x (x.person.id)}
+      {#if rows.length > 1}<SortChip list="volunteers" orders={ORDERS} />{/if}
+      {#each rows as x (x.person.id)}
         {#snippet write()}<Button kind="secondary" size="s" onclick={() => openLink('https://t.me/' + x.username)}>{#snippet icon()}<TelegramMark size={15} />{/snippet}{t('jr.write')}</Button>{/snippet}
         <!-- engine: Row needs content under it (the "why", the answer's buttons): one Group per person until then -->
         <div class:off={x.status === 'no'}>

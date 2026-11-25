@@ -30,6 +30,8 @@
   import EmptyState from '../../ui/EmptyState.svelte';
   import KbtuMark from '../../ui/KbtuMark.svelte';
   import { schoolShort } from '../../lib/short';
+  import SortChip from '../../ui/SortChip.svelte';
+  import { sorted, byName, newest, usual, type Order } from '../../lib/sort.svelte';
 
   let { overlay }: { overlay: Overlay } = $props();
   const me = $derived(session.me);
@@ -40,6 +42,9 @@
   /** The next event this friend goes to, if any (the cards are sorted by start). */
   const nextOf = (r: FriendRow): EventCard | undefined => f?.going.find((e) => e.friends.some((p) => p.id === r.person.id));
   const today = $derived(dayNo(nowTs()));
+  // the server's order is the closest first (events and clubs we share)
+  const ORDERS: Order<FriendRow>[] = [usual('sort.close'), newest((r) => r.at), byName((r) => r.fullName), { id: 'course', label: 'sort.course', by: (r) => r.course }];
+  const list = $derived(sorted('friends', ORDERS, f?.friends ?? []));
 
   // the row moves first (the speed rule); an error puts the list back, the server's copy lands in the background
   async function answer(r: FriendRow, yes: boolean) {
@@ -97,8 +102,8 @@
 
     {#if f.friends.length}
       {#snippet all()}
-        <Group caption={tn('fr.count', f!.friends.length)}>
-          {#each f!.friends as r (r.person.id)}
+        <Group caption={tn('fr.count', list.length)} aside={list.length > 1 ? sort : undefined}>
+          {#each list as r (r.person.id)}
             {@const next = nextOf(r)}
             <Row dense title={withNick(r.fullName, r.person)} subtitle={next ? `${t('fr.goesTo', { title: next.title })} · ${relDay(next.startsAt).toLowerCase()}` : line(r)}
               accessory="chevron" onclick={() => sheets.person(r.person.id)}>
@@ -108,7 +113,8 @@
           <Row tone="add" title={t('fr.add')} onclick={() => sheets.addFriend()} />
         </Group>
       {/snippet}
-      {@render people(f.friends, all)}
+      {#snippet sort()}<SortChip list="friends" orders={ORDERS} />{/snippet}
+      {@render people(list, all)}
     {:else if !f.incoming.length}
       <div class="empty">
         <EmptyState icon={UsersRound} title={t('fr.emptyTitle')} text={t('fr.emptyText')} action={{ label: t('fr.invite'), onclick: () => sheets.addFriend('share') }} />

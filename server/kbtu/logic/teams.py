@@ -240,7 +240,7 @@ def _ordered(rights) -> list[str]:
 def save_role(con, v: Viewer, oid: int, body: dict, rid: int | None = None) -> dict:
     """Whoever runs the team ("team") makes the club's own roles: a name, a colour and toggles of rights (SPEC §2), only
     rights they have themselves and below their own level (the rights' highest level is the role's); a changed level
-    moves everyone holding the role (they are all below the editor). A `level` alone (an older app) means its rights.
+    moves everyone holding the role (they are all below the editor).
     The official Vice and Head (`fixed`) keep their name and level. The name is typed once in any language; the AI
     fills the other two (queues.ai_next), except what `tr` ({lang: title}, every correction the person keeps) sets by
     hand. No `tr`: the corrections stay. The same text keeps the AI's translations."""
@@ -253,7 +253,7 @@ def save_role(con, v: Viewer, oid: int, body: dict, rid: int | None = None) -> d
     if tr is not None and not isinstance(tr, dict):
         raise ApiError("bad_input")
     given = {k: x for k in SLOT if k != src and (x := _also(tr, k))} if tr is not None else None
-    rights = body["rights"] if "rights" in body else list(LEVEL_RIGHTS[body["level"]]) if body.get("level") in ("member", "head", "vice") else None
+    rights = body.get("rights")
     if not isinstance(rights, list) or any(r not in RIGHTS for r in rights):
         raise ApiError("bad_input")
     rights = _ordered(rights)

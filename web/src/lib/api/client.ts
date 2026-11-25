@@ -1,9 +1,9 @@
 import type { ChatFill } from '../eventFill';
 // The real server (SPEC §6). Calls use signed initData or the browser session; errors come back as
 // { error, message } and become ApiErr.
-import type { ApiError, Credits, ClubApplication, Id, OfficialPath, PersonCard, Video, AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, MemberPatch, Friends, Friendship, FoundStudent, LinkCard, PersonRef, Media, GalleryPage, GalleryTopic, AlbumPhoto, Attendee, DoorPerson, EventUpdate, PostInput, CheckinResult, ClassItem, JoinRequest, CohostInvite, CrewKind, CrewMember, EventReport, ReportPatch, EventCard, EventFull, EventInput, Me, Org, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, ChatSection, Chats, ClubApplicationInput, OfficialRequest, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, LentStudio, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp, TeamAsk, TeamPick, TeamInvite, TeamsBoard, ShortLink, StudioChat, ChatTree, WaitingChat, SwearRow, ChatRoles, RosterRequest, Skill, ForumMe, ForumCard, Ask, AskInput, Contact, ForumMod, AssistReply, Fixable, TgComment, TgcRule, VolLedger, VolPerson, VolDoor, Appeal, AppealHelp, AppealTopic, AppealStatus, SgQueue, Solved, Subjects, SubjectCard, RejectWhy } from './types';
+import type { ApiError, Credits, ClubApplication, Id, OfficialPath, PersonCard, Video, AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, MemberPatch, Friends, Friendship, FoundStudent, LinkCard, PersonRef, Media, GalleryPage, AlbumPhoto, Attendee, DoorPerson, EventUpdate, PostInput, CheckinResult, ClassItem, JoinRequest, CohostInvite, CrewKind, CrewMember, EventReport, ReportPatch, EventCard, EventFull, EventInput, Me, Org, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, ChatSection, Chats, ClubApplicationInput, OfficialRequest, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, LentStudio, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp, TeamAsk, TeamPick, TeamInvite, TeamsBoard, ShortLink, StudioChat, ChatTree, WaitingChat, SwearRow, ChatRoles, RosterRequest, Skill, ForumMe, ForumCard, Ask, AskInput, Contact, ForumMod, AssistReply, Fixable, TgComment, TgcRule, VolLedger, VolPerson, VolDoor, Appeal, AppealHelp, AppealTopic, AppealStatus, SgQueue, Solved, Subjects, SubjectCard, RejectWhy } from './types';
 import type { BracketMatch, BracketSeed, EventBracket, EventGroups, EventMatch, MatchScore } from './types';
-import type { ReportLogEntry, ReportMarkPatch, ReviewReason } from './types';
+import type { ReportLogEntry, ReportMarkPatch, ReviewReason, SantaChats, SantaMsg, SantaReport } from './types';
 import type { Graph } from '../route';
 import { splitVariants } from '../awards';
 import { ApiErr } from './errors';
@@ -48,7 +48,7 @@ const staffOf = (method: string, path: string, event?: Id): Record<string, strin
   if (o && method === 'POST' && (path === '/photos' || path === '/videos' || path === `/orgs/${o}/events` || path === `/orgs/${o}/events/fill`)) return orgHead();
   const id = event === undefined ? /^\/events\/(\d+)(?:[/?]|$)/.exec(path)?.[1] : String(event);
   // A personal action always uses the student's own authority, even while Admin has the event open.
-  if (/^\/events\/\d+\/(?:registration|receipt|comments|saved|team|team-ask|volunteer|decline|rating|invites|santa\/wish)(?:[/?]|$)/.test(path)) return {};
+  if (/^\/events\/\d+\/(?:registration|receipt|comments|saved|team|team-ask|volunteer|decline|rating|invites|santa\/wish|santa\/chat)(?:[/?]|$)/.test(path)) return {};
   if (id && staffEvents.has(+id)) return { 'X-Staff-Event': id };
   if (o && staffOrg.full && (/^\/orgs\/(\d+)(?:[/?]|$)/.exec(path)?.[1] === String(o) || id && staffOrg.events.has(+id)
     && path !== `/events/${id}/seats`)) return orgHead();
@@ -104,17 +104,22 @@ async function call<T>(method: string, path: string, body?: unknown, staffEvent?
 // club's description and an event's title and description (ai.py). The text as typed stays in `orig`, so a second pass
 // (another language, a copy from the cache) starts from it and the editors save it, never a translation.
 const SHOWN = ['name', 'realName', 'title', 'description', 'body'] as const; // body: a channel's post (PLAN 86); realName: a person's Latin short name
+const POST_FORMAT = [['title', 'titleFmt'], ['body', 'fmt']] as const;
 export function localize(x: unknown): unknown {
   if (Array.isArray(x)) x.forEach(localize);
   else if (x && typeof x === 'object') {
     const o = x as Record<string, unknown>;
     if (o.i18n && typeof o.i18n === 'object') {
-      const orig = (o.orig ??= Object.fromEntries(SHOWN.filter((k) => typeof o[k] === 'string').map((k) => [k, o[k]]))) as Record<string, string>;
-      const tr = (o.i18n as Record<string, Record<string, string> | undefined>)[i18n.lang] ?? {};
+      const orig = (o.orig ??= Object.fromEntries(SHOWN.filter((k) => typeof o[k] === 'string').map((k) => [k, o[k]]))) as Record<string, unknown>;
+      const tr = (o.i18n as Record<string, Record<string, unknown> | undefined>)[i18n.lang] ?? {};
       for (const k of SHOWN) if (k in orig) o[k] = tr[k] || orig[k];
+      if (o.tg) for (const [field, fmt] of POST_FORMAT) {
+        if (!(fmt in orig)) orig[fmt] = o[fmt] ?? null;
+        o[fmt] = tr[field] ? tr[fmt] : orig[fmt] ?? undefined;
+      }
       if (tr.abbr) o.abbr = tr.abbr;
     }
-    for (const [k, v] of Object.entries(o)) if (k !== 'orig' && k !== 'i18n' && v && typeof v === 'object') localize(v);
+    for (const [k, v] of Object.entries(o)) if (k !== 'orig' && k !== 'i18n' && k !== 'fmt' && k !== 'titleFmt' && v && typeof v === 'object') localize(v);
   }
   return x;
 }
@@ -173,8 +178,8 @@ export const server = {
   dmOn: (event?: Id): Promise<Me> => call('POST', '/me/dm', { event }),
 
   events: (q: { from?: Ts; to?: Ts; org?: Id } = {}): Promise<EventCard[]> => call('GET', '/events' + query({ from: q.from, to: q.to, org: q.org })),
-  gallery: (before?: Id, topic?: GalleryTopic | 'events'): Promise<GalleryPage> => call('GET', '/gallery' + query({ before, topic })), // every photo I may see, newest first (students; before: the last id I have); topic: only photos of no event about it; 'events': only the albums
-  postGalleryPhoto: (file: Blob, event?: Id, topic?: GalleryTopic): Promise<AlbumPhoto> => call('POST', '/gallery' + query({ event, topic }), file), // into the Gallery under my name (GalleryPage.post); event: its album too; topic: of no event (one of the two, never both)
+  gallery: (before?: Id): Promise<GalleryPage> => call('GET', '/gallery' + query({ before })), // every photo I may see, newest first (students; before: the last id I have)
+  postGalleryPhoto: (file: Blob, place?: AlbumPhoto['place'], consent?: string): Promise<AlbumPhoto> => call('POST', '/gallery' + query({ place, consent }), file),
   deleteGalleryPhoto: (id: Id): Promise<void> => call('DELETE', `/gallery/${id}`), // mine: from the Gallery and the albums I put it in
   pastEvents: (org?: Id, mine?: boolean): Promise<EventCard[]> => call('GET', '/events/past' + query({ org, mine: mine ? 1 : undefined })), // org: a club's latest few; mine: the ones I was signed up for or came to
   attendedEvents: (): Promise<EventCard[]> => call('GET', '/events/past?attended=1'), // my check-ins in the last month
@@ -196,6 +201,11 @@ export const server = {
   santaStart: (org: Id, title: string, startsAt: Ts, budget: number, regUntil: Ts): Promise<EventFull> => call('POST', `/orgs/${org}/santa`, { title, startsAt, budget, regUntil }), // Studio's one button: the club's game made and published, or the running one (errors bad_input budget (none or out of bounds) / until)
   santaSettings: (id: Id, s: { budget?: number; regUntil?: Ts }): Promise<EventFull> => call('PUT', `/events/${id}/santa`, s), // the game's budget and deadline, until the draw
   santaWish: (id: Id, wish: string): Promise<{ wish: string }> => call('PUT', `/events/${id}/santa/wish`, { wish }), // my own wishlist changed while I'm in (errors bad_input wish, closed after the gifts day began)
+  santaChat: (id: Id): Promise<SantaChats> => call('GET', `/events/${id}/santa/chat`), // my two threads of a drawn game (error not_found: none)
+  santaWrite: (id: Id, side: 'to' | 'from', text: string): Promise<SantaMsg> => call('POST', `/events/${id}/santa/chat`, { side, text }), // errors rate_limited, closed (reported)
+  santaReport: (id: Id, side: 'to' | 'from'): Promise<void> => call('POST', `/events/${id}/santa/chat/report`, { side }), // the thread is closed for both and goes to the app's staff
+  santaReports: (): Promise<SantaReport[]> => call('GET', '/admin/santa-reports'), // the staff: reported threads, whole
+  santaReportDone: (id: Id): Promise<void> => call('POST', `/admin/santa-reports/${id}/done`),
   santaRemind: (id: Id): Promise<{ n: number; nudgeAt: Ts | null }> => call('POST', `/events/${id}/santa/remind`), // "Remind those not in yet", once a day (error conflict soon)
   santaDraw: (id: Id): Promise<EventFull> => call('POST', `/events/${id}/santa/draw`), // Secret Santa: the one draw (errors conflict few / drawn)
   openDoor: (id: Id): Promise<EventFull> => call('POST', `/events/${id}/door-open`), // the President or a Vice opens check-in early (from 4 h before the start)
@@ -504,6 +514,11 @@ export const server = {
   mapFlaws: (): Promise<{ id: Id; ver: string; floor: number; u: number; v: number; px: number | null; py: number | null; body: string; at: Ts; done: Ts | null }[]> => call('GET', '/map/flaws'), // the admin
   mapFlawsMine: (): Promise<{ id: Id; ver: string; floor: number; u: number; v: number; px: number | null; py: number | null; body: string }[]> => call('GET', '/map/flaws/mine'), // my own open ones, pins on the map
   mapFlawDone: (id: Id, done: boolean): Promise<void> => call('POST', `/map/flaws/${id}/done`, { done }),
+  // to the creator (server logic/helpus.py): an anonymous line, a signed offer to help; the admin's list of both
+  helpAnon: (body: string): Promise<void> => call('POST', '/helpus/anon', { body }),
+  helpOffer: (kinds: string[], note: string, consent: string): Promise<void> => call('POST', '/helpus/offer', { kinds, note, consent }),
+  helpList: (): Promise<{ anon: { body: string; day: number; new: boolean }[]; offers: { id: Id; person: PersonRef; username: string | null; kinds: ('code' | 'design' | 'ideas' | 'partner' | 'lang' | 'test')[]; note: string | null; at: Ts; new: boolean }[] }> => call('GET', '/helpus'),
+  helpSeen: (day: number, offer: Id): Promise<void> => call('POST', '/helpus/seen', { day, offer }), // read up to what the list showed
   assistant: (q: string, history: { role: 'user' | 'assistant'; text: string }[], context?: { kind: 'event' | 'club'; id: Id }): Promise<AssistReply> => call('POST', '/assistant', { q, history, context }), // the students' assistant; context: the card it was asked from (the server reads its facts)
   kriGoogle: (on: boolean): Promise<{ yes: boolean }> => (on ? call('POST', '/assistant/google', { consent: 'kri-g1' }) : call('DELETE', '/assistant/google')), // the assistant's own yes to Google (server assistant.GOOGLE_YES: the card's version), given or taken back
   assistantVote: (mark: string, vote: 'up' | 'down'): Promise<void> => call('POST', '/assistant/vote', { mark, vote }), // 👍/👎 on an answer's signed topic

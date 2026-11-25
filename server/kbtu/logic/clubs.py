@@ -452,8 +452,7 @@ def apply_club(con, v: Viewer, body: dict) -> dict:
     need_student(v)
     name, short = str(body.get("name") or "").strip(), str(body.get("short") or "").strip().upper()
     about, why = str(body.get("description") or "").strip(), str(body.get("why") or "").strip() or None
-    # up to 6 social links, the club's own rule; an older app's form sends one "link"
-    links = body["links"] if "links" in body else [x] if (x := str(body.get("link") or "").strip()) else []
+    links = body.get("links", [])
     emoji, cover = str(body.get("emoji") or ""), body.get("cover")
     if not (2 <= len(name) <= 60 and 1 <= len(short) <= 2 and 10 <= len(about) <= 600 and (why is None or len(why) <= 500)
             and re.fullmatch(r"[a-z0-9_]{1,40}", emoji) and isinstance(cover, int) and not isinstance(cover, bool) and 0 <= cover < COVERS

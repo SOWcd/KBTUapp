@@ -16,6 +16,7 @@
   import { data, loadAfisha, loadCredits, loadGallery, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadVol, loadAppeals, loadSg, loadAsks, loadHelpq, loadStudio, loadTeam, phrase, studioChanged, eventById, eventDetails, toggleGoing, keepRef, skipped, classKey } from './lib/state/data.svelte';
   import { burst } from './ui/burst';
   import { hiNow, nextUp, once, opened, returning, seen } from './lib/greet';
+  import { visit } from './lib/helpus';
   import { nameOf } from './lib/short';
   import { sheets, type SheetKey } from './lib/state/sheets';
   import { setTeamConsent } from './lib/teamConsent';
@@ -39,11 +40,11 @@
   import ListPage from './screens/afisha/List.svelte';
   import LoginSheet from './screens/sheets/LoginSheet.svelte';
   import Ask from './ui/Ask.svelte';
-  import StandaloneBar from './ui/StandaloneBar.svelte';
   import type { CiKind } from './screens/sheets/CheckinResult.svelte';
   import { warmMap } from './lib/map';
   import { count, launchedFrom, painted, type Screen } from './lib/stats';
 
+  let { standaloneBar: StandaloneBar }: { standaloneBar?: Component<{ back: boolean }> } = $props();
   setLucideProps({ size: 22, strokeWidth: 2 }); // stroke 2 everywhere (the design system, Oct 30; was 1.9)
 
   // sheets reachable from anywhere
@@ -84,8 +85,7 @@
   const albumGrid = () => import('./screens/sheets/AlbumGrid.svelte');
   sheets.album = (list, onremove, ongone, add, adding) => lazy(albumGrid, { list, onremove, ongone, add, adding });
   const galleryPage = () => import('./screens/afisha/Gallery.svelte');
-  sheets.gallery = (albums) => lazy(galleryPage, { albums });
-  sheets.galleryAdd = (files, topic) => lazy(() => import('./screens/afisha/GalleryAdd.svelte'), { files, topic });
+  sheets.gallery = () => lazy(galleryPage, {});
   // one sign-in sheet at a time, and none once Microsoft has confirmed me: a second one (Microsoft's return opening its
   // own over the waiting one) stayed under the first and asked a new student to sign in with Microsoft again (Nov 14)
   sheets.login = (after, lock) => {
@@ -109,8 +109,9 @@
   const channelPage = () => import('./screens/forum/Channel.svelte'); // the forum: posts to the public channel, its own tab (Nov 1)
   // tabs in chunks of their own, out of the start's bundle (the Afisha opens first): Profile, with the lanyards' art (Hero,
   // LanyardBand, ClubScene), was a fifth of the start's code and 41 kB of its CSS; Clubs, the catalogue, ~13 kB gzip more.
-  // their chunks are warmed once the first data is in
+  // their chunks are warmed once the first tab is drawn
   const tabPages: Partial<Record<Tab, () => Promise<{ default: Component }>>> = {
+    forum: channelPage,
     club: () => import('./screens/afisha/Clubs.svelte'),
     profile: () => import('./screens/profile/Me.svelte'),
   };
@@ -138,7 +139,7 @@
   const warm = (load: () => Promise<{ default: Component<any> }>) => void load().then((m) => loaded.set(load, m)).catch(() => {});
   const warmPages = () => { [feedPage, newsPage, clubListPage, friendsPage, settingsList, peoplePage, photoViewer, albumGrid, galleryPage].forEach(warm); if (session.me?.bigScreen) warm(screenSheet); if (!session.me?.memberships.length) return; warm(studioPage); warm(teamPage); };
   // the forum's chunk and its feed with the app, so the tab opens full (the speed rule)
-  const warmChannel = () => { if (!session.channel) return; void channelPage(); warmChannelFeeds(); };
+  const warmChannel = () => { if (!session.channel) return; void loadPage('forum').catch(() => {}); warmChannelFeeds(); };
   // the subjects' list with the app (the Forum tab's row, my timetable's classes open their card in the tap's frame)
   const warmSubjects = () => { if (subjReady()) idle(() => { void loadSubjects(); void import('./screens/subjects/Subjects.svelte'); void import('./screens/subjects/Subject.svelte'); }); };
   sheets.editor = (org, id, staff) => lazy(() => import('./screens/club/EventEditor.svelte'), { org, id, staff }, 'sheet.editor', id == null ? null : `${org}:${id}:${!!staff}`);
@@ -160,6 +161,8 @@
   sheets.crew = (id, onchange) => lazy(() => import('./screens/club/CrewSheet.svelte'), { id, onchange });
   sheets.eventReport = (id, org) => lazy(() => import('./screens/club/EventReport.svelte'), { id, org }, undefined, org == null ? id : `${id}:${org}`);
   sheets.mapFlaws = () => lazy(() => import('./screens/admin/MapFlaws.svelte'), {});
+  sheets.santaChat = (event, side, name) => lazy(() => import('./screens/sheets/SantaChat.svelte'), { event, side, name }, undefined, `santa-${event}-${side}`);
+  sheets.santaReports = () => lazy(() => import('./screens/admin/SantaReports.svelte'), {});
   // a new conversation opens with the keyboard up, as every AI app does. iOS raises it only for a focus inside the tap,
   // and the chunk may come later: a stand-in field takes the focus now, the assistant's own field takes it over as it
   // mounts (iOS keeps the keyboard across the move) with any words typed meanwhile; a reopened conversation keeps the
@@ -246,6 +249,11 @@
   const peoplePage = () => import('./screens/profile/People.svelte');
   sheets.credits = () => lazy(peoplePage, {});
   sheets.creditAsk = () => lazy(() => import('./screens/profile/CreditAsk.svelte'), {});
+  const helpPage = () => import('./screens/profile/HelpSheet.svelte'), feedbackPage = () => import('./screens/profile/FeedbackSheet.svelte');
+  const voicesPage = () => import('./screens/admin/AdminVoices.svelte'); // stable loaders: lazy()'s cache is keyed by them
+  sheets.helpUs = () => asStudent(() => lazy(helpPage, {}));
+  sheets.feedback = () => asStudent(() => lazy(feedbackPage, {}));
+  sheets.adminVoices = () => lazy(voicesPage, {});
   sheets.santaHi = (org) => lazy(() => import('./screens/club/SantaHi.svelte'), { org });
   sheets.receipt = (receipt, name, ondone) => lazy(() => import('./screens/club/ReceiptSheet.svelte'), { receipt, name, ondone });
   sheets.pay = (id) => lazy(() => import('./screens/sheets/PaySheet.svelte'), { id });
@@ -437,30 +445,6 @@
     untrack(() => { want++; overlays.splice(0); backTo.fn = null; });
   });
 
-  const tabLink: Record<Tab, string> = { afisha: 'afisha', forum: 'fp', club: 'clubs', profile: 'me' };
-  const screenLink = $derived.by(() => {
-    // Links only describe destinations. Never forward launch tokens or private overlay props.
-    for (const o of [...overlays].reverse()) {
-      if (o.closing) continue;
-      const id = o.props.id;
-      switch (o.stat) {
-        case 'sheet.event': if (typeof id === 'number' && !o.props.preview) return `${o.props.album ? 'ph' : 'ev'}_${id}`; break;
-        case 'sheet.club': if (typeof id === 'number') return `cl_${id}`; break;
-        case 'sheet.person': if (typeof id === 'number') return `u_${id}`; break;
-        case 'sheet.ticket': if (typeof id === 'number') return `ev_${id}`; break;
-        case 'sheet.comments': if (typeof id === 'number') return `${o.props.kind === 'event' ? 'cm' : 'cp'}_${id}`; break;
-        case 'sheet.studio': if (typeof o.props.org === 'number') return `cl_${o.props.org}`; break;
-        case 'sheet.friends': return 'friends';
-        case 'sheet.map': return o.props.exit ? 'exit' : 'map';
-        case 'sheet.week': return 'sched';
-        case 'sheet.awards': return 'awards';
-        case 'sheet.news': return 'news';
-        case 'sheet.feed': return 'feed';
-      }
-    }
-    return tabLink[ui.tab];
-  });
-
   // ---- the clubs' rosters (PLAN 95): joined from DMP's list (a toast each, once), the welcome before the KBTU sign-in,
   // a row under another name; each sheet once per launch, after the start's own moments ----
   const rosterShown = new Set<string>();
@@ -483,6 +467,7 @@
 
   // ---- greeting ----
   opened(nowTs()); // every launch counts for "welcome back", a deep link's too
+  idle(() => visit(dayNo(nowTs()))); // and for the one-time help ask (lib/helpus: this phone's days, kept on it), after the first paint
   // an office's own people (DMP) are greeted as the team, once per phone, full screen (owner, Nov 17: the toast was missed):
   // at the link that let them in (at once, then the link's own sheet), or as the launch's first moment after
   const officeWelcome = () => import('./screens/sheets/OfficeWelcome.svelte');
@@ -567,6 +552,7 @@
     if (p === 'anthem') { sheets.anthem(); return; } // the volunteers' chat link: the anthem over the tab as it is, guests too
     if (p === 'capps') { sheets.admin(); return; }                              // the bot: a club to check
     if (p === 'achats') { sheets.adminChats(); return; }                        // the bot: suggested chats to check
+    if (p === 'voices') { sheets.adminVoices(); return; }                       // the bot, to the creator: a line or an offer to help came
     if (p === 'newclub') { asStudent(() => sheets.createClub()); return; }      // the bot: my application's answer
     // the bot's "photos are in the album" / "add yours": the event, its album open over it. The sheet opens the album
     // itself once its details are in (it used to be a second fetch and a second lazy() here, which any other sheet
@@ -779,8 +765,14 @@
     return () => { document.removeEventListener('visibilitychange', away); document.removeEventListener('visibilitychange', seen); offs.forEach((f) => f()); };
   });
 
-  // another language: what is already loaded (and the cached copy) shows its translations too (PLAN 9, api/client.ts)
-  $effect(() => { void i18n.lang; untrack(() => { localize(data); localize(session.me); }); });
+  // The API and cache already translate the first load. Walk the reactive stores only when the language changes.
+  let localizedLang = untrack(() => i18n.lang);
+  $effect(() => {
+    const lang = i18n.lang;
+    if (lang === localizedLang) return;
+    localizedLang = lang;
+    untrack(() => { localize(data); localize(session.me); });
+  });
 
   // ---- a new achievement level the app hasn't celebrated yet (§4.11): one moment at a time, once the app has settled ----
   // (and after signing in later: a returning student may bring one)
@@ -806,6 +798,13 @@
     if (session.me?.appeals?.sg) void loadSg();
     if (session.me?.ask) void loadAsks();
     if (session.me?.ask?.staff) void loadHelpq();
+  }
+
+  function warmNavigation() {
+    if (session.banned || session.revoked) return;
+    warm(personSheet); warm(clubSheet);
+    if (inTelegram && session.me && !session.me.canDm) warm(dmSheet);
+    for (const tab of tabs) void loadPage(tab).catch(() => {});
   }
   // my own comment the bot deleted in the forum channel's Telegram group (the server knows me by the signed initData,
   // not by the bot's button, startapp=cm): the first launch moment, the others wait behind it (owner, Nov 1)
@@ -898,6 +897,7 @@
     // the last copy first (the instant re-open), the server's answer replaces it
     const snap = readCache(inTelegram ? tg.user?.id : session.me?.tg.id);
     if (snap) {
+      localize(snap); // translate the plain cache before assigning it to reactive state
       if (inTelegram) {
         session.me = snap.me; session.ready = true; session.board = !!snap.me?.board; session.channel = !!snap.me?.forumChannel; // the last launch's word until the server's
       }
@@ -905,17 +905,16 @@
       data.gallery = snap.gallery ?? [];
       data.galleryAlbums = snap.galleryAlbums ?? [];
       data.galleryPost = snap.galleryPost ?? null; // the Gallery's Add from the start (its grid takes it as it opens)
-      localize(data); if (inTelegram) localize(session.me); // cached in another language, maybe
       setTimeout(() => moment(installHint)); // the last launch's word is enough to decide: at once, not after the server
     }
     Promise.all([inTelegram ? loadMe(false, true) : undefined, loadAfisha()]).then(() => {
       // People of the app: Profile's row and its screen, ahead of any tap. Something of mine there and never answered:
       // the "show your name?" sheet once on this phone (owner, Nov 20: few open that screen, so ask at the door)
       const credits = loadCredits();
-      // the sheets a first tap opens, warmed once the first data is in: at mount their ~35 chunks shared a slow line with it
-      for (const load of [eventSheet, personSheet, clubSheet, ...(inTelegram && session.me && !session.me.canDm ? [dmSheet] : [])]) load().then((m) => loaded.set(load, m)).catch(() => {});
-      for (const k of TABS) loadPage(k).catch(() => {});
       if (session.banned || session.revoked) return;
+      // An event is the first tap on Afisha. Let that chunk and the first paint get ahead of the other screens.
+      warm(eventSheet);
+      requestAnimationFrame(() => setTimeout(warmNavigation));
       // A Microsoft return without a start parameter can still carry a verified pending claim.
       const microsoftReturn = !!session.me?.msPending;
       if (inTelegram && !tg.startParam && session.me && !session.me.student?.ms && !microsoftReturn) {
@@ -963,11 +962,10 @@
       <section class="tab" class:on={ui.tab === tab} class:drawing={drawing === tab && ui.tab !== tab} aria-hidden={ui.tab !== tab} inert={gated}>
         {#if tab === 'afisha'}
           {#if built.afisha}<ListPage />{/if}
-        {:else if tab === 'forum'}
-          {#if built.forum}{#await channelPage() then m}<m.default />{/await}{/if}
-        {:else if tab === 'club'}
-          {#if built.club && pages.club}<pages.club />{/if}
-        {:else if built.profile && pages.profile}<pages.profile />{/if}
+        {:else}
+          {@const Page = pages[tab]}
+          {#if built[tab] && Page}<Page />{/if}
+        {/if}
       </section>
     {/each}
 
@@ -977,7 +975,7 @@
     <div class="tgfade" aria-hidden="true"></div>
     <div class="cap-theme {capOf?.theme ? `theme-${capOf.theme}` : ''}"><Capsule {live} title={capTitle} icon={capIcon} spin={!!ui.busy} mark={!ui.busy && !!capOf?.mark} tint={capOf?.tint} /></div>
     <Nav {tabs} labels={tabs.map((k) => TAB_LABEL[k]())} dot={tabs.map((k) => TAB_DOT[k]())} />
-    {#if !inTelegram && !gated}<StandaloneBar back={showBack} start={screenLink} onsettings={() => sheets.settings('app')} />{/if}
+    {#if StandaloneBar && !gated}<StandaloneBar back={showBack} />{/if}
 
     {#if gated}
       {#await consentGate() then m}<m.default oncancel={() => (asked = false)} />{/await}

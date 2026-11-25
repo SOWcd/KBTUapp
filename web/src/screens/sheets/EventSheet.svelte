@@ -76,7 +76,6 @@
   import Notice from '../../ui/Notice.svelte';
   import Field from '../../ui/Field.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
-  import EventTeam from './EventTeam.svelte';
 
   // from: the poster that was tapped, which grows into the header as the sheet opens
   // album: the bot's ph_ link, the guests' album opens over the sheet once its details are in
@@ -527,7 +526,11 @@
 
     <!-- below the first screen: built a frame after the sheet appears, so its rise starts at once -->
     {#if later}
-    {#if detail?.teams && !preview && !cancelled}<EventTeam {detail} {going} onchange={(d) => (detail = d)} />{/if}
+    {#if detail?.teams && !preview && !cancelled}
+      {#await import('./EventTeam.svelte') then { default: EventTeam }}
+        <EventTeam {detail} {going} onchange={(d) => (detail = d)} />
+      {/await}
+    {/if}
     {#if e.teamMax && !preview}<TournamentRows {id} manage={head} standalone />{/if}
 
     <!-- the event's own people: everything they do with it in one group of plain rows, under its own heading -->

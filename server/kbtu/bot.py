@@ -156,7 +156,8 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
     if kind == "app_broadcast":  # the creator's CLI announcement, with a Telegram URL button
         msg = texts.broadcast_message(lang, m["ref"])
         url = json.loads(m["payload"]).get("url")
-        return (msg[0], None, [[{"text": msg[1], "url": url}]]) if msg and url else None
+        votes = [{"text": texts.bot_message(lang, f"vote_{v}")[0], "callback_data": f"bv:{v}:{m['ref']}"} for v in (1, 0)]
+        return (msg[0], None, [[{"text": msg[1], "url": url}], votes]) if msg and url else None
     ev = lambda e: {"title": logic.title_in(e, lang), "when": texts.when(e["starts_at"], lang), "place": texts.place_or_tba(e["place"], lang, "online" in e.keys() and e["online"] is not None)}  # noqa: E731
     reminders = lambda: one(con, "SELECT n_remind FROM users WHERE id = ?", m["user_id"])[0]  # noqa: E731  (the switch for cards about events)
 
@@ -348,12 +349,18 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
     if kind == "event_reported":  # er:<event>:<its oldest open report>, to moderators: 3 people reported it; quiet once decided or taken down
         r = one(con, "SELECT 1 FROM reports r JOIN events e ON e.id = r.target_id AND e.hidden_at IS NULL WHERE r.id = ? AND r.status = 'open'", int(ref[2]))
         return (*texts.bot_message(lang, kind), "capps") if r else None
+    if kind == "santa_reported":  # srp:<report>, to moderators: a Santa chat was reported; quiet once handled
+        r = one(con, "SELECT 1 FROM santa_msgs WHERE id = ? AND text IS NULL AND done_at IS NULL", int(ref[1]))
+        return (*texts.bot_message(lang, kind), "capps") if r else None
     if kind == "chat_suggested":  # cs:<day>, to admins and moderators: once a day at most, while some still wait
         n = one(con, "SELECT COUNT(*) FROM chats WHERE status = 'pending'")[0]
         return (*texts.bot_message(lang, kind, n=n), "achats") if n else None
     if kind == "chat_approved":  # ca:<chat>, to each who suggested it, while it is still in the catalog: the Chats screen
         c = one(con, "SELECT title, kind, forum FROM chats WHERE id = ? AND status = 'live'", int(ref[1]))
         return (*texts.chat_approved(lang, "forum" if c["forum"] else c["kind"], c["title"]), "chats") if c else None
+    if kind in ("anon_feedback", "helper_offer"):  # afb:<day> | ho:<id>, to the creator: the template only, the words are read in Admin
+        boss = one(con, "SELECT 1 FROM users WHERE id = ? AND is_founder = 1 AND role = 'admin'", m["user_id"])  # still the creator
+        return (*texts.bot_message(lang, kind), "voices") if boss else None
     if kind == "club_application":  # capp:<id>, to moderators and the admin while it waits
         a = one(con, "SELECT name, status FROM club_applications WHERE id = ?", int(ref[1]))
         return (*texts.bot_message(lang, kind, name=a["name"]), "capps") if a and a["status"] == "pending" else None
@@ -592,7 +599,7 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
 
 
 SANTA_KINDS = frozenset({"santa_open", "santa_soon", "santa_nudge", "santa_drawn", "santa_changed", "santa_wish", "santa_two", "santa_alone", "santa_eve",
-                         "santa_few", "santa_wait", "santa_late"})
+                         "santa_few", "santa_wait", "santa_late", "santa_msg", "santa_reply"})
 
 
 def _santa(con, m, lang: str) -> tuple[str, str | None, str] | None:
@@ -604,7 +611,8 @@ def _santa(con, m, lang: str) -> tuple[str, str | None, str] | None:
     e = one(con, """SELECT e.*, o.name AS org, s.drawn_at, g.budget FROM events e JOIN orgs o ON o.id = e.org_id AND o.status = 'active'
         JOIN santa_events s ON s.event_id = e.id LEFT JOIN santa_games g ON g.event_id = e.id
         WHERE e.id = ? AND e.status = 'published' AND e.hidden_at IS NULL""", eid)
-    if not e or (e["starts_at"] <= t) != (kind == "santa_late"):  # only "the gifts day came undrawn" speaks of a day begun
+    chat = kind in ("santa_msg", "santa_reply")  # the chat outlives the gifts day
+    if not e or not chat and (e["starts_at"] <= t) != (kind == "santa_late"):  # only "the gifts day came undrawn" speaks of a day begun
         return None
     playing = one(con, logic.santa._GOING + " AND p.user_id = ?", e["id"], uid)
     title, go = logic.title_in(e, lang), f"ev_{e['id']}"
@@ -627,6 +635,8 @@ def _santa(con, m, lang: str) -> tuple[str, str | None, str] | None:
         return None  # everyone else left: no person to give to (santa_alone says so)
     if kind == "santa_eve" and len(ref) > 2 and int(ref[2]) != e["starts_at"]:
         return None  # the gifts day moved since: the new eve has its own message
+    if chat and not logic.santa.pushable(con, e["id"], uid, kind):
+        return None  # no chat for them any more (retired, over, out of the club) or the thread shut; never its words, only that there are some
     where = f"\n📍 {e['place']}" if e["place"] else ""  # a Santa game: never online
     return (*texts.bot_message(lang, kind, title=title, when=texts.when(e["starts_at"], lang), where=where), go)
 
@@ -1448,6 +1458,15 @@ async def _tapped(cfg: Config, http: httpx.AsyncClient, con, cq: dict, again: bo
     if data.startswith("nf:"):
         await _feedback_tap(cfg, http, con, cq, msg, data)
         return
+    if v := re.fullmatch(r"bv:([01]):([a-z0-9_]{1,40})", data):  # a broadcast's Interesting / Not interesting: the tapper's own vote, changeable
+        u = one(con, "SELECT id FROM users WHERE tg_id = ?", (cq.get("from") or {}).get("id"))
+        if u:
+            con.execute("INSERT OR REPLACE INTO broadcast_votes (name, user_id, vote, at) VALUES (?, ?, ?, ?)", (v[2], u["id"], int(v[1]), int(time.time())))
+            con.execute("UPDATE users SET n_broadcasts = ? WHERE id = ?", (int(v[1]), u["id"]))  # "don't send these" turns broadcasts off (Settings turns them back on)
+        if msg.get("message_id") and (kb := (msg.get("reply_markup") or {}).get("inline_keyboard")):  # the vote row says thanks, the link stays
+            await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/editMessageReplyMarkup", json={
+                "chat_id": (msg.get("chat") or {}).get("id"), "message_id": msg["message_id"], "reply_markup": {"inline_keyboard": kb[:1]}})
+        return
     # the forum's cards: Accept/Decline an offer, stop the pings; an: more messages like the elective's? (the tapper's own row)
     if f := re.fullmatch(r"(ct|ps):(\d+)(?::([0-9a-f]{8}))?(?::([yn]))?|an:([yn])", data):
         u = one(con, "SELECT id, lang FROM users WHERE tg_id = ?", (cq.get("from") or {}).get("id"))
@@ -2096,7 +2115,9 @@ def guard_key(cfg: Config) -> bytes:
 
 
 async def _join(cfg: Config, http: httpx.AsyncClient, con, req: dict) -> None:
-    """A join request to an event's group: those signed up (and volunteers, the team) in, the rest declined. In a chat
+    """A join request to an event's group: those signed up (and volunteers, the team) in, the rest declined. A club's
+    chat linked in the app (the bot an admin that may add members): a confirmed student in, a banned person out, anyone
+    else left to the chat's admins. In a chat
     whose guard bot we are (a query_id, answered within 10 s): a student in at once, a stranger gets the app to sign up
     (POST /api/guard lets them in after), a banned person out."""
     if qid := req.get("query_id"):
@@ -2109,8 +2130,11 @@ async def _join(cfg: Config, http: httpx.AsyncClient, con, req: dict) -> None:
             log.warning("guard: %s", str(r.json().get("description"))[:200])
         return
     ok = logic.chat_join(con, req["chat"]["id"], req["from"]["id"])
-    if ok is None:
-        return
+    if ok is None:  # not an event's chat: a chat linked in the app lets a confirmed student in (owner, Nov 24)
+        d = logic.guard_join(con, req["chat"]["id"], req["from"]["id"])
+        if d not in ("approve", "decline"):  # someone we don't know, or a chat we don't know: its admins decide
+            return
+        ok = d == "approve"
     await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/{'approve' if ok else 'decline'}ChatJoinRequest",
                     json={"chat_id": req["chat"]["id"], "user_id": req["from"]["id"]})
 

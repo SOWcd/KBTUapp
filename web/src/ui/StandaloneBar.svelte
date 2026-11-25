@@ -1,50 +1,44 @@
 <script lang="ts">
   import ChevronLeft from '@lucide/svelte/icons/chevron-left';
-  import Ellipsis from '@lucide/svelte/icons/ellipsis';
   import Search from '@lucide/svelte/icons/search';
   import X from '@lucide/svelte/icons/x';
-  import Share from '@lucide/svelte/icons/share';
-  import ExternalLink from '@lucide/svelte/icons/external-link';
-  import RotateCw from '@lucide/svelte/icons/rotate-cw';
-  import Settings from '@lucide/svelte/icons/settings';
-  import LogOut from '@lucide/svelte/icons/log-out';
-  import { api } from '../lib/api';
+  import MapIcon from '@lucide/svelte/icons/map';
+  import Play from '@lucide/svelte/icons/play';
+  import Images from '@lucide/svelte/icons/images';
+  import Newspaper from '@lucide/svelte/icons/newspaper';
   import { t } from '../lib/i18n/index.svelte';
   import { flushSync, tick } from 'svelte';
-  import { close, goTab, overlays, say, ui } from '../lib/state/ui.svelte';
-  import { backButton, openTelegramLink, telegramAppLink } from '../lib/tg';
-  import { copyText } from './copy';
+  import { data } from '../lib/state/data.svelte';
+  import { irisFrom, openMapFrom, sheets } from '../lib/state/sheets';
+  import { goTab, ui } from '../lib/state/ui.svelte';
+  import { backButton } from '../lib/tg';
   import { glass } from './glass';
-  import { menu } from './menu';
   import { tabSearches, type TabSearch } from './PullSearch.svelte';
 
-  let { back, start, onsettings }: { back: boolean; start: string; onsettings: () => void } = $props();
-  let menuId = $state(0), signingOut = $state(false);
-  const expanded = $derived(overlays.some((o) => o.id === menuId && !o.closing));
+  let { back }: { back: boolean } = $props();
 
-  async function share(url: string) {
-    try {
-      if (navigator.share) await navigator.share({ url });
-      else if (!(await copyText(url, t('sl.copied')))) say(t('common.error'), 'warning_3d');
-    } catch (e) {
-      if (!(e instanceof DOMException && e.name === 'AbortError')) say(t('common.error'), 'warning_3d');
-    }
-  }
-
-  async function signOut() {
-    if (signingOut) return;
-    signingOut = true;
-    try {
-      await api.webLogout();
-      location.reload();
-    } catch {
-      signingOut = false;
-      say(t('common.error'), 'warning_3d');
-    }
+  // Quick launch (owner, Nov 24): the right pill holds the four things students open from anywhere (the Afisha's own
+  // shortcuts), two taps from any tab. Closed it shows four dots; they are the tiles themselves, small. A tap drops
+  // them out of the pill into a shelf that grows under it (never over the capsule), each dot becoming its tile, and
+  // the pill's face turns into an x that closes it (transforms only, nothing mounts on the tap).
+  let launching = $state(false), grid = $state<HTMLDivElement>();
+  const iris = (go: () => void) => (e: MouseEvent) => { irisFrom(e); go(); };
+  const tiles = $derived([
+    { icon: MapIcon, label: t('map.open'), go: openMapFrom },
+    { icon: Play, label: t('page.feed'), go: iris(() => sheets.feed()), off: !data.events.some((e) => e.status !== 'cancelled') },
+    { icon: Images, label: t('gallery.title'), go: iris(() => sheets.gallery()) },
+    { icon: Newspaper, label: t('page.news'), go: iris(() => sheets.news()) },
+  ]);
+  // the map's chunk on the press (the other three are warmed with the app, App.svelte warmPages)
+  const warm = () => void import('../screens/map/CampusMap.svelte').catch(() => {});
+  const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') launching = false; };
+  function unfold() {
+    flushSync(() => { launching = true; });
+    grid?.querySelector<HTMLElement>('button:not(:disabled)')?.focus({ preventScroll: true });
   }
 
   // The one search of the web app. No Back: the left pill is Search, and a tap stretches it into a field across the whole
-  // bar (the capsule and the menu step aside); it types into the tab's own search (each tab's PullSearch lends its
+  // bar (the capsule and quick launch step aside); it types into the tab's own search (each tab's PullSearch lends its
   // value). Profile has none: the Afisha's. An overlay over the results brings the Back face; the field is back after it.
   let field = $state(false), active = $state.raw<TabSearch | null>(null), tabAt = $state(ui.tab);
   let input = $state<HTMLInputElement>();
@@ -83,18 +77,6 @@
     document.documentElement.toggleAttribute('data-search', shown); // the capsule steps aside (ui/Capsule.svelte)
     return () => document.documentElement.removeAttribute('data-search');
   });
-
-  function options(e: MouseEvent) {
-    if (expanded) { close(menuId); return; }
-    const url = telegramAppLink(start);
-    menuId = menu(e.currentTarget as HTMLElement, [
-      { label: t('web.share'), icon: Share, onselect: () => void share(url) },
-      { label: t('tgo.open'), icon: ExternalLink, onselect: () => openTelegramLink(url) },
-      { label: t('web.reload'), icon: RotateCw, onselect: () => location.reload() },
-      { label: t('me.settings'), icon: Settings, onselect: onsettings },
-      { label: t('web.signOut'), icon: LogOut, destructive: true, disabled: signingOut, onselect: () => void signOut() },
-    ], 'end');
-  }
 </script>
 
 <header class="bar">
@@ -114,9 +96,21 @@
       <button class="x" type="button" aria-label={t('common.close')} onclick={shut}><X size={15} strokeWidth={2.4} /></button>
     </label>
   </div>
-  <button class="glass glass-pill side more" class:away={shown} type="button" inert={shown} aria-label={t('web.menu')} aria-haspopup="menu" aria-expanded={expanded} onclick={options} use:glass={{ bloom: true }}>
-    <span class="tone-base" aria-hidden="true"></span><Ellipsis size={18} strokeWidth={2.4} />
+  {#if launching}<div class="catch" role="presentation" onclick={() => (launching = false)}></div>{/if}
+  <div class="glass glass-pill shelf" class:open={launching} aria-hidden="true"><span class="tone-base"></span></div>
+  <button class="glass glass-pill side more" class:open={launching} class:away={shown} type="button" inert={shown} aria-label={t('web.menu')} aria-haspopup="menu" aria-expanded={launching}
+    onpointerdown={warm} onclick={() => (launching ? (launching = false) : unfold())} onkeydown={esc} use:glass={{ bloom: true }}>
+    <span class="tone-base" aria-hidden="true"></span><X size={17} strokeWidth={2.4} />
   </button>
+  <div class="grid" class:open={launching} class:away={shown} role="menu" tabindex="-1" inert={!launching} bind:this={grid} onkeydown={esc}>
+    {#each tiles as x, i (i)}
+      {@const Icon = x.icon}
+      <button class="tile" type="button" role="menuitem" disabled={x.off} style:--i={i} onclick={(e) => { launching = false; x.go(e); }}>
+        <span class="chip"><Icon size={20} strokeWidth={2} /></span>
+        <span class="lb">{x.label}</span>
+      </button>
+    {/each}
+  </div>
 </header>
 
 <style>
@@ -132,7 +126,53 @@
   .side:active { transform: scale(.94); }
   .side :global(svg) { flex: none; }
   .more { position: absolute; right: 12px; top: 2px; display: flex; align-items: center; justify-content: center; }
-  .more.away { opacity: 0; transform: translateX(12px) scale(.9); }
+  .more.away, .grid.away { opacity: 0; transform: translateX(12px) scale(.9); }
+
+  /* quick launch. The shelf waits unseen in the pill's own box and comes down from under it on a spring (a 2% breath
+     past its size), 8 px under the bar: the capsule stays whole. Closing is the same gesture back, on one
+     curve for the glass and the tiles so they travel as one thing: the glass thins away as it draws up into the pill
+     (gone before it is small: no dark box around the dots), the tiles ride home in it, their icons going as they
+     shrink, and land as the dots, the x turning out under them. */
+  .bar { --spring: var(--ease-spring); }
+  @supports (transition-timing-function: linear(0, 1)) {
+    .bar { --spring: linear(0, 0.083 4%, 0.26 8%, 0.503 13%, 0.707 18%, 0.875 24%, 0.967 30%, 1.011 37%, 1.02 45%, 1.011 55%, 1.003 67%, 1 80%, 1); }
+  }
+  .catch { position: fixed; inset: 0; pointer-events: auto; }
+  .shelf { position: absolute; right: 12px; top: 2px; width: var(--pill); height: 34px; border-radius: var(--r-xl); opacity: 0; pointer-events: none;
+    transition: transform 420ms var(--ease-spring), width 420ms var(--ease-spring), height 420ms var(--ease-spring), opacity 180ms linear; }
+  .shelf > .tone-base { background: var(--menu-bg); }
+  .shelf.open { width: 192px; height: 172px; transform: translateY(42px); opacity: 1; pointer-events: auto;
+    transition: transform 520ms var(--spring), width 520ms var(--spring), height 520ms var(--spring), opacity 120ms var(--ease); }
+  /* the pill's face: the dots leave it (they are the tiles, below), an x turns in where they were */
+  .more > :global(svg) { opacity: 0; transform: rotate(-90deg) scale(.5); transition: opacity 180ms var(--ease) 80ms, transform 320ms var(--ease) 40ms; }
+  .more.open > :global(svg) { opacity: 1; transform: none; transition: opacity 200ms var(--ease) 90ms, transform 460ms var(--spring) 60ms; }
+  /* the tiles lie where they stand open, in the shelf's box; closed, each is drawn at an eighth with its chip's middle
+     on its dot of the 2 x 2 on the pill (5 px dots, 9 px apart, about the pill's middle) */
+  .grid { position: absolute; top: 44px; right: 12px; width: 192px; height: 172px; outline: none; pointer-events: none;
+    transition: transform 200ms var(--ease), opacity 180ms var(--ease); }
+  .grid.open { pointer-events: auto; }
+  .tile { position: absolute; left: 8px; top: 8px; width: 86px; height: 76px; padding-top: 8px; display: flex; flex-direction: column; align-items: center; gap: 6px;
+    color: var(--text); transform-origin: 50% 28px; transform: translate(var(--x), var(--y)) scale(.125);
+    --x: calc(136.5px - var(--pill) / 2); --y: -65.5px; transition: transform 420ms var(--ease-spring) calc((3 - var(--i)) * 12ms); }
+  .tile:nth-child(even) { left: 98px; --x: calc(55.5px - var(--pill) / 2); }
+  .tile:nth-child(n + 3) { top: 88px; --y: -136.5px; }
+  .open .tile { transform: none; transition: transform 560ms var(--spring) calc(var(--i) * 30ms); }
+  .tile:active, .tile:disabled { opacity: 1; }
+  .chip { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; flex: none; border-radius: var(--r-full);
+    background: var(--text); transition: background-color 200ms var(--ease) 140ms, transform 200ms var(--ease-bounce); }
+  /* a small lens of the panel's own glass (owner: flat grey discs read as old iOS): clear fill, a sheen from the top, the
+     lens rim light above and low below */
+  .open .chip { background: radial-gradient(120% 90% at 50% 0%, var(--glass-sheen), transparent 60%), var(--glass-clear);
+    box-shadow: inset 0 1px 0 var(--lens-rim), inset 0 -1px 0 var(--lens-rim-low), inset 0 0 0 1px var(--lg-rim-base);
+    transition-delay: calc(var(--i) * 30ms), 0s; }
+  .open .tile:active:not(:disabled) .chip { transform: scale(.9); background: var(--fill); }
+  .open .tile:focus-visible { outline: none; }
+  .open .tile:focus-visible .chip { box-shadow: 0 0 0 2px var(--accent); }
+  .chip :global(svg), .lb { opacity: 0; transition: opacity 80ms var(--ease); }
+  .chip :global(svg) { transition-duration: 200ms; }
+  .open .chip :global(svg), .open .lb { opacity: 1; transition: opacity 240ms var(--ease) calc(90ms + var(--i) * 30ms); }
+  .open .tile:disabled :global(svg), .open .tile:disabled .lb { opacity: .35; }
+  .lb { max-width: 100%; font: 500 var(--fs-cap)/1.2 var(--font-text); letter-spacing: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
   .face { display: flex; align-items: center; justify-content: center; gap: 3px; width: var(--pill); height: 100%; padding-inline: 6px;
     color: inherit; font: inherit; letter-spacing: inherit; transition: opacity 160ms var(--ease); }
@@ -165,7 +205,7 @@
   .x { position: relative; display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; flex: none; border-radius: var(--r-full); color: var(--text-2); }
   .x::after { content: ''; position: absolute; inset: -7px; } /* a 44 px target */
   @media (prefers-reduced-motion: reduce) {
-    .side, .ico > i, .txt > i, .fld { transition: opacity 120ms linear !important; }
-    .ico > i, .txt > i, .more.away { transform: none !important; }
+    .side, .ico > i, .txt > i, .fld, .shelf, .grid, .tile, .chip, .more > :global(svg), .chip :global(svg), .lb { transition: opacity 120ms linear !important; }
+    .ico > i, .txt > i, .more.away, .grid.away, .more > :global(svg) { transform: none !important; }
   }
 </style>

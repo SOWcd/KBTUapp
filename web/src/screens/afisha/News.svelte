@@ -16,6 +16,7 @@
   import TelegramMark from '../../ui/TelegramMark.svelte';
   import SocialIcon from '../../ui/SocialIcon.svelte';
   import Linked from '../../ui/Linked.svelte';
+  import RichText from '../../ui/RichText.svelte';
   import { videoLinks } from '../../lib/social';
   import { api, type Post } from '../../lib/api';
   import { session, loadMe } from '../../lib/state/session.svelte';
@@ -131,6 +132,7 @@
 </script>
 
 {#snippet card(p: Post, cast: boolean)}
+  {@const rich = p.titleFmt || p.fmt}
   <article class="post" class:cast class:unread={cast && !p.read}>
     <header class="ph">
       <OrgLogo org={p.org} size={36} />
@@ -143,12 +145,12 @@
     <!-- the card crops it: a tap shows it whole -->
     {#if p.photo}{@const ph = p.photo}<button class="pic" aria-label={p.title} onclick={() => sheets.photos([{ ...ph, id: ph.id ?? -p.id, by: null, mine: true, canDelete: false }], 0)}>
       <img src={ph.url} alt="" loading="lazy" decoding="async" style:object-position={focusPos(ph)} /></button>{/if}
-    <h3 class="tt">{p.title}</h3>
+    <h3 class="tt">{#if rich}<RichText text={p.title} entities={p.titleFmt} />{:else}{p.title}{/if}</h3>
     {#if p.body}
-      <p class="bd" class:fold={long(p) && !open.has(p.id)}><Linked text={p.body} /></p>
+      <p class="bd" class:fold={long(p) && !open.has(p.id)}>{#if rich}<RichText text={p.body} entities={p.fmt} />{:else}<Linked text={p.body} />{/if}</p>
       {#if long(p) && !open.has(p.id)}<span class="unfold"><Button kind="plain" size="s" onclick={() => (open = new Set([...open, p.id]))}>{t('news.more')}</Button></span>{/if}
     {/if}
-    <div class="vl">{#each videoLinks(p.body) as l (l.url)}<Button kind="tinted" size="s" onclick={() => openLink(l.url)}>{#snippet icon()}<SocialIcon kind={l.kind} size={16} />{/snippet}{l.label}</Button>{/each}</div>
+    {#if !rich}<div class="vl">{#each videoLinks(p.body) as l (l.url)}<Button kind="tinted" size="s" onclick={() => openLink(l.url)}>{#snippet icon()}<SocialIcon kind={l.kind} size={16} />{/snippet}{l.label}</Button>{/each}</div>{/if}
     {#if p.tg}
       <!-- the club's Telegram channel post: its counts and comments live there, its video plays in Telegram's widget (PLAN 86) -->
       {@const tg = p.tg}

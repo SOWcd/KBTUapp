@@ -3,8 +3,8 @@ knowing their school, course, timetable, the campus and what's on). One question
 the server hands the model a short brief of facts and takes back JSON: the words and up to three buttons (a room on
 the map, an event, a club, my classes, a Settings page, the Gallery, the news, a tab and the app's other screens, my
 club's Studio), each checked against the brief so nothing made up opens; a button only opens a screen. Sent to the
-model: the school, the course, this and the next day's classes (subject, time, room), the coming public events and the
-campus places (the clubs I run never: Studio's button gets my club here, after the model); never
+model: the school, the course, this and the next day's classes (subject, time, room), the coming public events, active
+clubs' public descriptions and campus places (which clubs I run never: Studio's button gets my club here, after the model); never
 the name, student ID, mail or phone. Only the EU host the privacy policy names. Kept: a count per day (30), not the
 questions. The campus facts are a table the admin and moderators keep current (below the assistant)."""
 from __future__ import annotations
@@ -48,6 +48,9 @@ school's office, as the facts place them); never invent a room, a time, a person
 rudeness to you: answer briefly and kindly, without "I don't know". A room's floor or place only as the facts give it
 (the map's rooms the question names, a campus place, a class), never from its number's digits, never a wing or a hall
 the facts don't put it in; a room the facts call unknown: say you don't know where it is and offer the map.
+For the next class, give its subject, time and room with a map button; an unknown room stays unknown.
+For what a club does, use its About and offer its club button. What to bring or prepare for an event: only what its
+description says; if the excerpt doesn't say, say it isn't specified and offer the event button.
 How an answer looks (students read it on a phone and skip a wall of text): the answer itself first, in one short
 line. Then at most three more short lines, only what this question needs, one fact a line, each on its own line (\n in
 the JSON string); such a line may start with one fitting emoji and a space. At most 3 emoji in an answer, never two in
@@ -113,7 +116,31 @@ def where(r) -> str:
     return ", ".join(x for x in (r["room"] and f"room {r['room']}", r["location"]) if x)
 
 
-def brief(con, v: Viewer, lang: str = "en") -> tuple[str, set[str], set[int], set[int]]:
+def _mentioned(q: str, *names: str | None) -> bool:
+    words = lambda s: " " + " ".join(re.findall(r"\w+", s.casefold())) + " "  # noqa: E731
+    return any(name and words(name).strip() and words(name) in words(q) for name in names)
+
+
+# Keep preparation instructions even at the end of an announcement. These only choose an excerpt, never infer rules.
+_BRING = re.compile(r"\b(bring|wear|prepare|dress[ -]?code|with you)\b|"
+                    r"\u0441 \u0441\u043e\u0431\u043e\u0439|\u043f\u0440\u0438\u043d\u0435\u0441|\u043f\u0440\u0438\u043d\u043e\u0441|\u0432\u043e\u0437\u044c\u043c|\u0432\u0437\u044f\u0442\u044c|\u0434\u0440\u0435\u0441\u0441|\u043f\u043e\u0434\u0433\u043e\u0442\u043e\u0432|"
+                    r"\u0430\u043b\u044b\u043f \u043a\u0435\u043b|\u0430\u043b\u0430 \u043a\u0435\u043b|\u04e9\u0437\u0456\u04a3\u043c\u0435\u043d|\u043a\u0438\u0456\u043c|\u0434\u0430\u0439\u044b\u043d\u0434\u0430", re.I)
+
+
+def _event_about(text: str, limit: int = 320) -> str:
+    if len(flat := _one_line(text)) <= limit:
+        return flat
+    # A wrapped instruction ("Do not\nbring food") must keep its negation.
+    parts = re.split(r"(?<=[.!?])\s+", flat)
+    start = next((i for i, part in enumerate(parts) if _BRING.search(part)), 0)
+    if not start:
+        return flat[:limit]
+    excerpt = _one_line(" ".join(parts[start:]))[:min(limit, 320)]
+    intro = flat[:max(0, limit - len(excerpt) - 5)]
+    return f"{intro} ... {excerpt}" if intro else excerpt
+
+
+def brief(con, v: Viewer, lang: str = "en", q: str = "") -> tuple[str, set[str], set[int], set[int]]:
     """The facts for this student (and the rooms, events and clubs a button may open)."""
     s = one(con, "SELECT school, course FROM students WHERE user_id = ?", v.id)
     t = now()
@@ -126,11 +153,18 @@ def brief(con, v: Viewer, lang: str = "en") -> tuple[str, set[str], set[int], se
              f"{f' (so most likely intake {intake(s)})' if intake(s) else ''}, programme unknown."]
     rooms: set[str] = set()
     from .account import class_ends  # a class is 50 minutes of its hour
+    lesson = lambda c: (f"{c['begins']}-{class_ends(c['ends'])} {c['subject']}{' (' + c['kind'] + ')' if c['kind'] else ''}, "
+                        f"room {c['room'] or 'unknown'}")  # noqa: E731
+    next_class = None
     for label, wd in (("today", local.tm_wday + 1), ("tomorrow", (local.tm_wday + 1) % 7 + 1)):
         cls = rows(con, "SELECT begins, ends, subject, kind, room FROM schedule_classes WHERE user_id = ? AND weekday = ? ORDER BY begins", v.id, wd)
-        lines.append(f"Their classes {label}: " + ("; ".join(f"{c['begins']}-{class_ends(c['ends'])} {c['subject']}{' (' + c['kind'] + ')' if c['kind'] else ''}"
-                                                              f"{', room ' + c['room'] if c['room'] else ''}" for c in cls) or "none (or the timetable isn't loaded)"))
+        lines.append(f"Their classes {label}: " + ("; ".join(lesson(c) for c in cls) or "none (or the timetable isn't loaded)"))
+        if next_class is None:
+            upcoming = next((c for c in cls if label == "tomorrow" or c["begins"] + ':00' >= time.strftime('%H:%M:%S', local)), None)
+            if upcoming:
+                next_class = f"{label}, {lesson(upcoming)}"
         rooms |= {c["room"].lower() for c in cls if c["room"]}  # "260A" as the portal writes it; the answer's is lowered
+    lines.insert(2, "Next class (not yet started): " + (next_class or "none today or tomorrow (or the timetable isn't loaded)"))
     # what students call a place helps match the question; a room opens on the map only in the pattern a button takes
     said = lambda r: _name(r, lang) + (f" (also: {r['aliases']})" if r["aliases"] else "")  # noqa: E731
     for kind, label in (("place", "Campus places"), ("office", "University offices")):
@@ -139,13 +173,30 @@ def brief(con, v: Viewer, lang: str = "en") -> tuple[str, set[str], set[int], se
     lines.append(f"Schools' dean's offices: {known}. Other schools' dean's offices: unknown." if known else "Schools' dean's offices: unknown.")
     rooms |= {r["room"] for r in facts if r["room"] and ROOM.match(r["room"])}
     # the afisha's own (seats.on_afisha: an initiative's event only with an official co-host, or if it's mine)
-    evs = rows(con, f"""SELECT e.id, e.title, e.starts_at, e.place, e.online, o.name AS org, o.id AS oid, o.status AS ost FROM events e JOIN orgs o ON o.id = e.org_id
+    evs = rows(con, f"""SELECT e.id, e.title, e.description, e.starts_at, e.place, e.online, o.name AS org, o.id AS oid, o.status AS ost FROM events e JOIN orgs o ON o.id = e.org_id
         WHERE e.status = 'published' AND e.visibility = 'public' AND e.hidden_at IS NULL AND o.status != 'hidden' AND e.school IS NULL
           AND e.starts_at BETWEEN ? AND ? AND {on_afisha()} ORDER BY e.starts_at LIMIT 15""", t - 3 * 3600, t + 7 * 86400, *on_afisha_args(v))
-    lines.append("Coming events (id, title, when, where, by): " + ("; ".join(
-        f"[{e['id']}] {e['title']}, {time.strftime('%a %d %b %H:%M', time.gmtime(e['starts_at'] + 5 * 3600))}, {e['place'] or ('online' if e['online'] is not None else 'place to be announced')}, {e['org']}"
-        + (f" (club {e['oid']})" if e["ost"] == "active" else "") for e in evs) or "none this week"))
-    return "\n".join(lines), rooms, {e["id"] for e in evs}, {e["oid"] for e in evs if e["ost"] == "active"}
+    if not evs:
+        lines.append("Coming events: none this week")
+    orgs = rows(con, "SELECT id, name, slug, abbr, description FROM orgs WHERE kind = 'club' AND status = 'active' ORDER BY id")
+    named = {o["id"] for o in orgs if _mentioned(q, o["name"], o["slug"], o["abbr"])}
+    public = [(e["oid"] in named or _mentioned(q, e["title"]),
+                f"Event [{e['id']}] {e['title']}, {_when(e['starts_at'])}, {e['place'] or ('online' if e['online'] is not None else 'place to be announced')}, {e['org']}"
+                + (f" (club {e['oid']})" if e["ost"] == "active" else "")
+                + f". About (excerpt): {_event_about(e['description']) or 'not specified'}", e["id"], e["oid"] if e["ost"] == "active" else None) for e in evs]
+    public += [(2 if o["id"] in named else 0, f"[club {o['id']}] {o['name']}. About: {_one_line(o['description'])[:180] or 'not specified'}", None, o["id"]) for o in orgs]
+    # Named records first, whole records only: a long directory must not cut off the club the question asks about,
+    # nor allow a button for an event/club the model never received. No extra model call or topic classifier.
+    text, events, clubs = "\n".join(lines)[:FACTS_MAX], set(), set()
+    for _, line, eid, oid in sorted(public, key=lambda p: -p[0]):
+        if len(text) + len(line) + 1 > FACTS_MAX:
+            continue
+        text += "\n" + line
+        if eid is not None:
+            events.add(eid)
+        if oid is not None:
+            clubs.add(oid)
+    return text, rooms, events, clubs
 
 
 def studio(con, v: Viewer) -> dict[str, int | None]:
@@ -187,7 +238,7 @@ def card(con, ctx: object) -> tuple[str, int | None, set[int]] | None:
                 e["external_url"] and "registration on an outside site (its page has the link)",
                 e["reg_until"] and f"registration until {_when(e['reg_until'])}",
                 e["first_year"] and "for first-year students", e["status"] == "cancelled" and "CANCELLED"]
-        about, eid, clubs = e["description"], e["id"], {e["oid"]} | ({e["cid"]} if e["co"] else set())
+        about, eid, clubs = _event_about(e["description"], 1200), e["id"], {e["oid"]} | ({e["cid"]} if e["co"] else set())
         head = "an event's page"
     else:
         o = one(con, """SELECT o.id, o.name, o.kind, o.description, o.official, o.recruiting, o.links,
@@ -261,7 +312,7 @@ def prompt(con, v: Viewer, body: dict, lang: str, ask: str = "", forum: bool = F
         raise ApiError("bad_input")
     on = card(con, body.get("context"))  # before the allowance: a bad context costs nothing
     _spend(con, v)
-    facts, rooms, events, clubs = brief(con, v, lang)
+    facts, rooms, events, clubs = brief(con, v, lang, docs_query(body))
     named, found = rooms_asked(docs_query(body))  # a short follow-up ("and 405?") with the turn before it
     facts = f"{facts[:FACTS_MAX]}\nThe forum: {'on' if forum else 'off'}. The subjects: {'on' if subjects else 'off'}."
     facts, rooms = f"{facts}\n{named}" if named else facts, rooms | found
