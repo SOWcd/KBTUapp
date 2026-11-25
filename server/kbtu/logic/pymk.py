@@ -24,6 +24,7 @@ from .core import PERSON_COLS, ApiError, Viewer, need_student, one, person_ref, 
 
 CONSENT = "pymk1"  # the switch's text (web: pymk.ask*); a reworded one is a new version, and old yeses ask again
 TOP, SHOWN, BIG = 10, 5, 300
+DISMISS_A_DAY = 100  # far past a person's x taps; only a script walking ids meets it
 
 # who may be suggested and see suggestions, over `users u`: a signed-in student (not a typed-in row) who takes friend
 # requests, opted in to this text, not banned, not leaving
@@ -32,9 +33,10 @@ _OK = "s.manual = 0 AND u.can_friend = 1 AND u.banned_at IS NULL AND u.delete_at
 # (table, one side, the other, which rows): each a pair that is never suggested, read once for every pair
 _BARS = (("friendships", "a", "b", ""), ("friend_requests", "from_id", "to_id", ""), ("blocks", "user_id", "blocked_id", ""),
          ("pymk_dismissed", "user_id", "other_id", ""), ("reports", "reporter_id", "target_id", "target = 'user' AND status = 'open'"))
-_CLUBS = f"""SELECT m.org_id, m.user_id FROM org_members m JOIN orgs o ON o.id = m.org_id
-    WHERE o.kind = 'club' AND o.status = 'active' AND o.members_hidden = 0 AND m.probation = 0
+# a club that counts, over `orgs o` and a membership `m` in it (the night's pairs, and the count a card shows now)
+_OPEN = f"""o.kind = 'club' AND o.status = 'active' AND o.members_hidden = 0 AND m.probation = 0
     AND (SELECT COUNT(*) FROM org_members x WHERE x.org_id = m.org_id) <= {BIG}"""
+_CLUBS = f"SELECT m.org_id, m.user_id FROM org_members m JOIN orgs o ON o.id = m.org_id WHERE {_OPEN}"
 
 
 def _barred(con, uid: int | None = None) -> set[tuple[int, int]]:
@@ -84,17 +86,27 @@ def night(con) -> None:
     with tx(con):
         con.execute("DELETE FROM pymk")
         _store(con, ranked)
+        # whoever switched off or dismissed while it was being worked out: gone now, not tomorrow
+        con.execute(f"""DELETE FROM pymk WHERE user_id NOT IN (SELECT user_id FROM pymk_consents WHERE version = '{CONSENT}')
+            OR other_id NOT IN (SELECT user_id FROM pymk_consents WHERE version = '{CONSENT}')
+            OR EXISTS (SELECT 1 FROM pymk_dismissed d WHERE (d.user_id = pymk.user_id AND d.other_id = pymk.other_id)
+                                                       OR (d.user_id = pymk.other_id AND d.other_id = pymk.user_id))""")
 
 
 def switch(con, uid: int, on: bool) -> None:
     """Settings' "Suggest me" (account._update_me, inside its transaction). On: the yes to this text, and my own
-    suggestions at once (the others' lists catch up tonight). Off: gone both ways now."""
-    con.execute("DELETE FROM pymk WHERE user_id = ? OR other_id = ?", (uid, uid))
+    suggestions at once (the others' lists catch up tonight), once a day: off and on again deals no fresh TOP past the
+    day's (the dismissed barred), nor holds the write lock for a script's loop. Off: gone both ways now."""
     if not on:
+        con.execute("DELETE FROM pymk WHERE user_id = ? OR other_id = ?", (uid, uid))
         con.execute("DELETE FROM pymk_consents WHERE user_id = ?", (uid,))
         return
+    if is_on(con, uid):
+        return
     con.execute("INSERT OR REPLACE INTO pymk_consents (user_id, version, at) VALUES (?, ?, ?)", (uid, CONSENT, core.now()))
-    _store(con, _rank(con, uid))
+    if core._once(con, f"pymk_live:{uid}", str((core.now() + 5 * 3600) // 86400)):
+        con.execute("DELETE FROM pymk WHERE user_id = ?", (uid,))
+        _store(con, _rank(con, uid))
 
 
 def is_on(con, uid: int) -> bool:
@@ -110,11 +122,16 @@ def shown(con, v: Viewer) -> list[dict] | None:
     if not one(con, f"SELECT 1 FROM users u {_JOIN} WHERE u.id = ? AND {_OK}", v.id):
         return []  # switched on, yet not suggestable now (requests closed, say): nothing to see either
     barred = _barred(con, v.id)
+    # the clubs counted as they stand now, for all of them in one read: a roster hidden since the night, a probation,
+    # a leave say nothing (the stored count only ranked them)
+    shared = dict(con.execute(f"""SELECT b.user_id, COUNT(*) FROM org_members m JOIN orgs o ON o.id = m.org_id
+        JOIN org_members b ON b.org_id = m.org_id AND b.probation = 0 AND b.user_id IN (SELECT other_id FROM pymk WHERE user_id = :me)
+        WHERE m.user_id = :me AND {_OPEN} GROUP BY b.user_id""", {"me": v.id}).fetchall())
     out = []
-    for p in rows(con, f"""SELECT {PERSON_COLS}, s.course, s.school, p.clubs FROM pymk p JOIN users u ON u.id = p.other_id {_JOIN}
+    for p in rows(con, f"""SELECT {PERSON_COLS}, s.course, s.school FROM pymk p JOIN users u ON u.id = p.other_id {_JOIN}
             WHERE p.user_id = ? AND {_OK} ORDER BY p.score DESC, p.other_id""", v.id):
-        if (min(v.id, p["id"]), max(v.id, p["id"])) not in barred:
-            out.append({"person": person_ref(p), "course": p["course"], "school": p["school"], "clubs": p["clubs"]})
+        if (min(v.id, p["id"]), max(v.id, p["id"])) not in barred and shared.get(p["id"]):
+            out.append({"person": person_ref(p), "course": p["course"], "school": p["school"], "clubs": shared[p["id"]]})
             if len(out) == SHOWN:
                 break
     return out
@@ -123,13 +140,16 @@ def shown(con, v: Viewer) -> list[dict] | None:
 def dismiss(con, v: Viewer, uid: object) -> None:
     """The card's x: never suggested to each other again, quietly (until one of us deletes the account)."""
     need_student(v)
-    if not isinstance(uid, int) or isinstance(uid, bool) or uid == v.id:
+    if not isinstance(uid, int) or isinstance(uid, bool) or not 0 < uid < 2 ** 53 or uid == v.id:
         raise ApiError("bad_input")
     with tx(con):
+        if one(con, "SELECT COUNT(*) FROM pymk_dismissed WHERE user_id = ? AND at > ?", v.id, core.now() - 86400)[0] >= DISMISS_A_DAY:
+            raise ApiError("rate_limited", "pymk dismissals a day")
         forget(con, v.id, uid)
 
 
 def forget(con, me: int, uid: int) -> None:
-    """A pair never suggested again: dismissed, or unfriended (profiles.unfriend: an ex doesn't come back as a suggestion)."""
+    """A pair never suggested again, for good: dismissed, unfriended, a request taken back, a block or a report on a
+    person (an ex, or someone I reported, doesn't come back once it's undone or resolved)."""
     con.execute("INSERT OR IGNORE INTO pymk_dismissed (user_id, other_id, at) SELECT ?, id, ? FROM users WHERE id = ?", (me, core.now(), uid))
     con.execute("DELETE FROM pymk WHERE (user_id = ? AND other_id = ?) OR (user_id = ? AND other_id = ?)", (me, uid, uid, me))

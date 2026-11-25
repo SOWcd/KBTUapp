@@ -955,6 +955,7 @@ def take_back_request(con, v: Viewer, uid: int) -> None:
     need_student(v)
     con.execute("DELETE FROM friend_requests WHERE from_id = ? AND to_id = ? AND status = 'pending'", (v.id, uid))
     con.execute("UPDATE friend_requests SET hidden = 1 WHERE from_id = ? AND to_id = ? AND status = 'declined'", (v.id, uid))
+    pymk.forget(con, v.id, uid)  # a request taken back isn't offered again as a suggestion
 
 
 def unfriend(con, v: Viewer, uid: int) -> None:

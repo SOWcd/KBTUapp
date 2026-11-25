@@ -56,6 +56,49 @@ def test_opt_in_and_reciprocal(env):
     assert not con.execute("SELECT 1 FROM pymk WHERE user_id = ? OR other_id = ?", (ben["id"], ben["id"])).fetchone()
     assert not con.execute("SELECT 1 FROM pymk_consents WHERE user_id = ?", (ben["id"],)).fetchone()
     assert c.patch("/api/me", headers=tma(30, "Gus"), json={"suggestMe": True}).status_code == 401  # a guest can't
+    for bad in ("true", 1, {}):                                 # a consent: an explicit yes only
+        assert c.patch("/api/me", headers=tma(12), json={"suggestMe": bad}).status_code == 400
+    assert c.get("/api/me", headers=tma(12)).json()["settings"]["suggestMe"] is False
+
+
+def test_switching_again_deals_nothing_new(env):
+    """Off and on again the same day: no fresh list past the dismissed ones (the day's TOP holds)."""
+    c, cfg = env
+    people = [login(c, 10 + i, f"q{i:02d}") for i in range(8)]
+    con = _con(cfg)
+    _club(con, 1, *(p["id"] for p in people))
+    for i in range(1, 8):
+        _on(c, 10 + i)
+    _on(c, 10)
+    for x in list(_sug(c, 10)):
+        c.post("/api/pymk/dismiss", headers=tma(10), json={"id": x})
+    left = _sug(c, 10)
+    _on(c, 10)                                                  # already on: nothing happens
+    _on(c, 10, False)
+    _on(c, 10)
+    assert _sug(c, 10) == [] and len(left) == 2                 # 7 clubmates: 5 dismissed, the 2 left, then nothing till tonight
+    _night(con)
+    assert _sug(c, 10) == left
+
+
+def test_card_counts_clubs_as_they_stand_now(env):
+    """A club hiding its roster, a probation or a leave since the night: the card no longer counts it."""
+    c, cfg = env
+    ann, ben, cat = login(c, 10, "ann"), login(c, 11, "ben"), login(c, 12, "cat")
+    for tg in (10, 11, 12):
+        _on(c, tg)
+    con = _con(cfg)
+    _club(con, 1, ann["id"], ben["id"], cat["id"])
+    _club(con, 2, ann["id"], ben["id"])
+    _night(con)
+    clubs = lambda: {x["person"]["id"]: x["clubs"] for x in c.get("/api/friends", headers=tma(10)).json()["suggest"]}  # noqa: E731
+    assert clubs() == {ben["id"]: 2, cat["id"]: 1}
+    con.execute("UPDATE orgs SET members_hidden = 1 WHERE id = 2")
+    assert clubs() == {ben["id"]: 1, cat["id"]: 1}
+    con.execute("UPDATE org_members SET probation = 1 WHERE org_id = 1 AND user_id = ?", (cat["id"],))
+    assert clubs() == {ben["id"]: 1}
+    con.execute("DELETE FROM org_members WHERE org_id = 1 AND user_id = ?", (ben["id"],))
+    assert clubs() == {}
 
 
 def test_who_never_appears(env):

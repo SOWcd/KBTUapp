@@ -853,7 +853,9 @@ def _update_me(con, v: Viewer, patch: dict) -> None:
         need_student(v)
     if "suggestMe" in patch:  # People you may know: my yes to its text, or gone both ways (logic/pymk.py)
         need_student(v)
-        pymk.switch(con, v.id, bool(patch["suggestMe"]))
+        if not isinstance(patch["suggestMe"], bool):  # a consent: an explicit yes only
+            raise ApiError("bad_input")
+        pymk.switch(con, v.id, patch["suggestMe"])
     if "nick" in patch:
         sets["nick"] = clean_nick(patch["nick"])
     if "skin" in patch:  # my pick: a club with a lanyard (`_skin_ok`), "sower" for the creator, null = the KBTU one (`_skin`)
@@ -1452,6 +1454,7 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         con.execute("""DELETE FROM meta WHERE key >= 'ms_claim:' AND key < 'ms_claim;'
             AND json_extract(value, '$.uid') = ?""", (v.id,))
         con.execute("DELETE FROM meta WHERE key LIKE ?", (f"fsearch:{v.id}:%",))  # this hour's count of my searches for people
+        con.execute("DELETE FROM meta WHERE key = ?", (f"pymk_live:{v.id}",))  # today's own People you may know (pymk.switch)
         con.execute("DELETE FROM meta WHERE key LIKE ?", (f"subj:{v.id}:%",))  # this hour's count of my subject listings (logic/subjects)
         con.execute("DELETE FROM meta WHERE key LIKE ?", (f"upload:{v.id}:%",))
         con.execute("DELETE FROM meta WHERE key LIKE ?", (f"fchup:{v.id}:%",))  # this hour's count of my forum photo uploads
