@@ -101,7 +101,7 @@
      Where a flat strip sits above the page instead (iOS's own status bar in light, an app installed before the
      translucent style, Telegram's header: safe-top is 0), the cut glow was a hard edge under it (owner, Nov 25): the
      first 64 px ease from the plain ground into the glow, so the strip and the page join; with any safe-top --seam is 0.
-     --g is --bg as a triple: rgba() stops, since color-mix() drops the whole declaration on iOS before 16.2 */
+     --g is --bg as a triple: rgba() stops, since a colour mix drops the whole declaration on iOS before 16.2 */
   .glow, .glow .edge { --tint-b: rgba(124, 77, 255, 0.09); --g: 0, 0, 0; --seam: max(0px, calc(64px - var(--safe-top) * 100));
     background: linear-gradient(rgba(var(--g), 1), rgba(var(--g), 0.7) calc(var(--seam) * 0.2), rgba(var(--g), 0.38) calc(var(--seam) * 0.45),
                   rgba(var(--g), 0.12) calc(var(--seam) * 0.72), rgba(var(--g), 0) var(--seam)),
