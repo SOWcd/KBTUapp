@@ -41,7 +41,7 @@ jobs:
           [[ "$NAME" =~ ^[0-9A-Za-z.+-]{1,40}$ ]] || { echo "::error::version_name: letters, digits and . + - only"; exit 1; }
           jq --argjson c "$CODE" --arg n "$NAME" '.appVersionCode = $c | .appVersionName = $n' twa-manifest.json > m.json && mv m.json twa-manifest.json
           npm install -g --no-audit --no-fund @bubblewrap/cli@latest  # ponytail: unpinned until the first green run names a version to pin
-          bubblewrap --version || true
+          npm ls -g --depth=0 @bubblewrap/cli
           mkdir -p ~/.bubblewrap
           echo "{\"jdkPath\": \"$JAVA_HOME\", \"androidSdkPath\": \"$ANDROID_HOME\"}" > ~/.bubblewrap/config.json
           bubblewrap update --skipVersionUpgrade --manifest=./twa-manifest.json
