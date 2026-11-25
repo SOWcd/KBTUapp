@@ -2960,8 +2960,9 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                       "reply_markup": {"inline_keyboard": [[{"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp=fp_{ref}"}]]}}
         else:
             raise ApiError("bad_input")
-        if body.get("link") is True:  # outside Telegram (the web app): no card, just the button's link for Telegram's share picker
-            return {"link": result["reply_markup"]["inline_keyboard"][0][0]["url"]}
+        if body.get("link") is True:  # no card here (a browser, the phone apps, an old Telegram): its words, the button's link under them
+            words = result["caption"] if result["type"] == "photo" else result["input_message_content"]["message_text"]
+            return {"link": result["reply_markup"]["inline_keyboard"][0][0]["url"], "text": texts.plain(words)}
         try:
             async with httpx.AsyncClient(timeout=10) as http:
                 r = (await bot._tg(cfg, http, "savePreparedInlineMessage", {

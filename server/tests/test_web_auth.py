@@ -1,6 +1,7 @@
 """The Telegram Login Widget entrance through the real API."""
 import hashlib
 import hmac
+import json
 from dataclasses import replace
 
 import pytest
@@ -216,3 +217,30 @@ def test_cookie_csrf_and_credential_precedence(browser):
     assert c.patch("/api/me", headers=tma(715), json={"lang": "en"}).status_code == 200
     assert c.post("/api/ms/start", headers=WRITE).json()["message"] == "telegram"
     assert c.post("/api/ms/start", headers=tma(715)).status_code == 200
+
+
+def test_award_shared_from_a_browser_is_the_cards_words(browser, monkeypatch):
+    """Outside Telegram there is no card: the share sheet gets the card's own words, plain, and its button's link (the
+    award's minted gl_ link, never the bare bot link). Only with the app's header, as every browser write."""
+    import httpx
+    from kbtu import app as server, texts
+    sent = []
+    real = httpx.AsyncClient
+
+    def telegram(r):
+        sent.append(json.loads(r.content)["result"])
+        return httpx.Response(200, json={"ok": True, "result": {"id": "prep1"}})
+    monkeypatch.setattr(server.httpx, "AsyncClient", lambda **kw: real(transport=httpx.MockTransport(telegram)))
+    c, cfg = browser
+    assert sign_in(c).status_code == 204
+    with db.connect(cfg.db_path) as con:
+        con.execute("UPDATE users SET role = 'admin' WHERE tg_id = 715")
+    card = {"kind": "gl", "code": "init26", "uses": 1, "days": 7}
+    assert c.post("/api/share", headers={"Origin": ORIGIN}, json={**card, "link": True}).status_code == 403
+    web = c.post("/api/share", headers=WRITE, json={**card, "link": True}).json()
+    assert web["link"].startswith(f"https://t.me/{cfg.bot_username}?startapp=gl_") and "id" not in web
+    # the Mini App's card, word for word: the same lines without the bold, the button's link below them
+    assert c.post("/api/share", headers=tma(715), json=card).json() == {"id": "prep1"}
+    html = sent[0]["input_message_content"]["message_text"]
+    assert "<b>" in html and web["text"] == html.replace("<b>", "").replace("</b>", "") and web["text"].startswith("\U0001f3c5 ")
+    assert texts.plain("<b>A &amp; B</b> &lt;3") == "A & B <3"

@@ -167,6 +167,11 @@ def share_post(lang: str, body: str) -> tuple[str, str, str, str]:
 SHARE_POST_WORDS = 160
 
 
+def plain(text: str) -> str:
+    """A card's HTML as plain words (only <b>-like tags and escapes): the same card, shared outside Telegram."""
+    return html.unescape(re.sub(r"<[^>]*>", "", text))
+
+
 def when(ts: int, lang: str) -> str:
     """'4 октября, 18:00' in Almaty time (UTC+5, as lib/time.ts)."""
     t = time.gmtime(ts + 5 * 3600)
