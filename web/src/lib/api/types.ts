@@ -852,6 +852,7 @@ export interface PersonCard extends PersonRef {
   friendship: 'none' | 'requested' | 'incoming' | 'friends';
   friendsSince: Ts | null;
   going: EventCard[];           // only when friends and they allow it
+  invited?: Id[];               // upcoming events I already invited them to ("Bring a friend"), only when friends
   skin?: Id | 'sower' | null;   // the badge they show (Me.skin)
   frame?: string | null;        // the frame over their photo (Me.frame)
   username?: string | null;     // their Telegram @username, only to their own club's team: "Message on Telegram"
