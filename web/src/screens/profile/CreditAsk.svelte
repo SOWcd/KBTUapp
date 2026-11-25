@@ -1,5 +1,5 @@
 <script lang="ts">
-  // "Name me in People of the app?": the feature's own consent (server credits.CONSENT), from the bot's one message and
+  // "Name me in Made together?": the feature's own consent (server credits.CONSENT), from the bot's one message and
   // from Settings' switch. It shows exactly what everyone would see (my face, my name, the lines) and takes a yes or a no.
   import UsersRound from '@lucide/svelte/icons/users-round';
   import { close, type Overlay } from '../../lib/state/ui.svelte';

@@ -264,7 +264,7 @@
   sheets.roundSetup = (org, round, onsaved) => lazy(() => import('./screens/club/RoundSetup.svelte'), { org, round, onsaved });
   sheets.roundBoard = (org) => lazy(() => import('./screens/club/RoundBoard.svelte'), { org });
   const peoplePage = () => import('./screens/profile/People.svelte');
-  sheets.credits = () => lazy(peoplePage, {});
+  sheets.credits = (at) => lazy(peoplePage, { at });
   sheets.creditAsk = () => lazy(() => import('./screens/profile/CreditAsk.svelte'), {});
   const helpPage = () => import('./screens/profile/HelpSheet.svelte'), feedbackPage = () => import('./screens/profile/FeedbackSheet.svelte');
   const voicesPage = () => import('./screens/admin/AdminVoices.svelte'); // stable loaders: lazy()'s cache is keyed by them
@@ -524,9 +524,10 @@
 
   // ---- deep links: ev_<id> (event), tk_<id> (my ticket), cl_<id> (club), jr_<id> (a club's applications), mg_<id> (an event's organizer screen),
   // u_<id>_<code> (a profile: the QR on someone's badge; the code is for the door scanner),
-  // friends (Profile with the Friends sheet: the bot's request message), donate, sponsors (the honour board) ----
+  // friends (Profile with the Friends sheet: the bot's request message), donate, sponsors (Made together at its Support section) ----
   function deepLink(p = tg.startParam, afterSignIn = false) {
-    if (p === 'donate' || p === 'sponsors') { ui.tab = 'profile'; sheets.settings(p); return; }
+    if (p === 'donate') { ui.tab = 'profile'; sheets.settings(p); return; }
+    if (p === 'sponsors') { ui.tab = 'profile'; sheets.credits('support'); return; }
     const j = p.match(/^join_(\d+)_([0-9a-f]{24})$/); // a club's invite link (§4.5)
     if (j) { joinByLink(Number(j[1]), j[2]); return; }
     const pr = p.match(/^pres_(\d+)_([0-9a-f]{24})$/); // a new club's one-time President link (the admin's, §2)
@@ -659,7 +660,7 @@
     if (rc) { asStudent(() => sheets.roundApply(Number(rc[1]), 'link')); return; }
     const iv = p.match(/^iv_(\d+)$/); // the bot's "pick an interview time" and its reminders
     if (iv) { asStudent(() => sheets.roundApply(Number(iv[1]), 'bot')); return; }
-    if (p === 'people') { // the bot's "shall we name you?": People of the app, and my answer's sheet over it while something there is mine
+    if (p === 'people') { // the bot's "shall we name you?": Made together, and my answer's sheet over it while something there is mine
       ui.tab = 'profile';
       void Promise.all([loadCredits(), lazy(peoplePage, {})]).then(() => { if (data.credits?.mine) sheets.creditAsk(); });
       return;
@@ -978,7 +979,7 @@
     // Warm the first event while the lists are on their way.
     warm(eventSheet);
     void account.then(() => {
-      // People of the app: Profile's row and its screen, ahead of any tap. Something of mine there and never answered:
+      // Made together: Profile's row and its screen, ahead of any tap. Something of mine there and never answered:
       // the "show your name?" sheet once on this phone (owner, Nov 20: few open that screen, so ask at the door)
       const credits = loadCredits();
       if (session.banned || session.revoked) return;

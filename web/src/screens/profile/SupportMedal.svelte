@@ -105,7 +105,7 @@
       {#if mine.show}<Row title={t('sp.amount')} accessory="switch" checked={mine.showAmount} disabled={busy || choosing || (!mine.showAmount && mine.amountVersion !== AMOUNT_CONSENT)} onchange={(on) => publish(on, true)} />{/if}
     </Group>{/key}
   {/if}
-  <Group><Row icon={Award} title={t('sp.sponsors')} value={data.sponsors?.length ? String(data.sponsors.length) : undefined} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('sponsors'); }} /></Group>
+  <Group><Row icon={Award} title={t('cr.title')} value={data.sponsors?.length ? String(data.sponsors.length) : undefined} accessory="chevron" onclick={() => { haptic.tap(); sheets.credits('support'); }} /></Group>
 </div>
 
 <style>
