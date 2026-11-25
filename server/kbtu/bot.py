@@ -1,10 +1,11 @@
-"""The postman (SPEC §7), inside the web app's event loop (app.py lifespan).
+"""The bot (SPEC §7), inside the web app's event loop (app.py lifespan): the Telegram call (_tg, _call), the
+polling, the ears and the postman's loop. The areas live beside it and import this module's plumbing:
 
-- Postman: sends what logic.notify() queued in bot_outbox, as server templates (texts.py) in the user's
-  language with a button into the app; only to users who let the bot write (can_dm). A user who blocked
-  the bot loses can_dm until Telegram says otherwise.
-- Ears: whatever someone writes to the bot (/start first of all) is answered with what the app is and a button
-  into it; a receipt (Kaspi's PDF or a picture) goes to the sender's seat on hold.
+- outbox.py, the postman: sends what logic.notify() queued in bot_outbox (_postman runs its send_due).
+- bot_dm.py, private chats: whatever someone writes to the bot (/start first of all) is answered with what the
+  app is and a button into it; a receipt (Kaspi's PDF or a picture) goes to the sender's seat on hold.
+- bot_groups.py, group chats: the cards, the swear filter, /all, the video replies.
+- chores.py, the postman's chores: the backup, the retention sweep, the chats' cards, the userpics.
 No KBTU session outlives a request (SPEC §4.1), so the bot keeps none to refresh schedules with."""
 from __future__ import annotations
 

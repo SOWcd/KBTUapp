@@ -763,7 +763,7 @@ class _Taken(ApiError):
 
 
 def sid_tries(con, uid: int) -> int:
-    """Student IDs tried on this account in a day, from Settings or a schedule page (bot._page_sid): one count of 5, or
+    """Student IDs tried on this account in a day, from Settings or a schedule page (bot_dm._page_sid): one count of 5, or
     "taken" would tell anyone which IDs are registered. Read it and add to it under one write lock."""
     return one(con, """SELECT COUNT(*) FROM audit_log WHERE target = ? AND at > ? AND (action IN ('sid_try', 'sid_page_taken', 'sid_page_year', 'sid_page_fixed')
         OR action = 'identity_fix' AND json_extract(data, '$.field') = 'student_id')""", f"user:{uid}", core.now() - 86400)[0]

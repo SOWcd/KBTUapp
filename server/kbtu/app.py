@@ -698,7 +698,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/me/delete")
     def ask_delete(con: Con, v: Me, body: dict | None = Body(None)):
-        """§4.8: in a week, with the way back meanwhile (logic.ask_delete); the bot's round runs it (bot.send_due)."""
+        """§4.8: in a week, with the way back meanwhile (logic.ask_delete); the bot's round runs it (outbox.send_due)."""
         return logic.ask_delete(con, v, (body or {}).get("photos") is True)
 
     @app.post("/api/me/consent")

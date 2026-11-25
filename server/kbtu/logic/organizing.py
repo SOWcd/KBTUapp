@@ -849,7 +849,7 @@ def _delete_event(con, eid: int) -> tuple[list[str], list[str]]:
         if not con.execute("DELETE FROM events WHERE id = ?", (eid,)).rowcount:
             raise ApiError("not_found")
         # its channel post goes too (it stayed), with the copy in the discussion group: the bot's next
-        # round deletes them (bot.post_channel), the event's row is gone by then
+        # round deletes them (chores.post_channel), the event's row is gone by then
         thread = one(con, "DELETE FROM meta WHERE key = ? RETURNING value", f"thread:{eid}")
         if post and post[0]:
             con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (f"channel_gone:{post[0]}", thread[0] if thread else ""))
@@ -1819,7 +1819,7 @@ def open_door(con, v: Viewer, eid: int) -> dict:
 
 
 def door_round(con) -> None:
-    """The postman's round (bot._chores): once the open door has let its first person in (a scan, by name, the big
+    """The postman's round (chores._chores): once the open door has let its first person in (a scan, by name, the big
     screen, a walk-in: the organizers are at the door), each guest going and not yet in hears it once,
     until the start (a moved event: event_changed tells). Only events starting within DOOR_EARLY are read."""
     t = core.now()

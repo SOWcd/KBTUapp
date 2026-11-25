@@ -428,7 +428,7 @@ def sent(con, m, answer: dict) -> None:
 
 
 def render(con, m, lang: str) -> tuple[str, str | None, str] | None:
-    """The postman's text for this feature's messages (bot._render)."""
+    """The postman's text for this feature's messages (outbox._render)."""
     kind, ref = m["kind"], m["ref"].split(":")
     if kind == "tgc_delete_failed":
         return (*texts.bot_message(lang, kind), "capps") if one(con, "SELECT 1 FROM tgc_comments WHERE id = ? AND status = 'queued'", int(ref[1])) else None

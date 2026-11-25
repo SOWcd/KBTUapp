@@ -108,7 +108,7 @@ def put(con, v: Viewer, eid: int, uid: object, what: object) -> list[dict]:
                     (eid, uid, oid, what, v.id, core.now()))
         log_action(con, v.id, "crew_put", f"user:{uid}", json.dumps({"event": eid, "org": oid, "kind": what}))
         if not was:
-            notify(con, uid, "crew_added", f"cw:{eid}")  # a template; quiet once the right is gone (bot._render)
+            notify(con, uid, "crew_added", f"cw:{eid}")  # a template; quiet once the right is gone (outbox._render)
         return view(con, v, e) or []
 
 

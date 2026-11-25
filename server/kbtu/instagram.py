@@ -1,6 +1,6 @@
 """A club's Instagram posts in its news, by themselves (owner, Nov 25): no club signs in anywhere. The app's own
 Instagram professional account (IG_USER_ID, IG_TOKEN) asks Meta's Graph API for each club's public business or
-creator account by its handle (Business Discovery), every half hour (bot.send_due); each new post becomes one of the
+creator account by its handle (Business Discovery), every half hour (outbox.send_due); each new post becomes one of the
 club's posts, as the Telegram mirror (mirror.py) does with a channel's: the caption as the club's own public text (its
 first line the title), the picture copied (a video's cover), the post's link last (News draws it as an Instagram
 button). Nobody is notified; the club's rules for stories hold (clubs.stories_open). A handle taken off the club takes
@@ -238,7 +238,7 @@ def calm(con) -> None:
 
 
 async def sweep(cfg, http: httpx.AsyncClient, con) -> int:
-    """One round (bot.send_due, every half hour): handles taken off forgotten, then the due accounts asked in batches,
+    """One round (outbox.send_due, every half hour): handles taken off forgotten, then the due accounts asked in batches,
     their new posts brought in. Off without IG_USER_ID and IG_TOKEN. The posts made."""
     if not (cfg.ig_user_id and cfg.ig_token):
         return 0

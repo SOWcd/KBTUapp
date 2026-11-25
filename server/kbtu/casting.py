@@ -498,7 +498,7 @@ def set_place(con, v: Viewer, sid: int, body: dict) -> dict:
                 limited = True
             else:
                 n = one(con, "SELECT COUNT(*) FROM bot_outbox WHERE kind = 'round_place' AND ref LIKE ?", mine)[0]
-                # the place before it: edited back to that before it goes, the row says nothing (bot._render)
+                # the place before it: edited back to that before it goes, the row says nothing (outbox._render)
                 notify(con, a["user_id"], "round_place", f"ivp:{a['id']}:{sid}:{n}", json.dumps({"was": s["place"]}, ensure_ascii=False), after=now() + 120)
                 told = True
         log_action(con, v.id, "round_place", f"round:{rid}", json.dumps({"slot": sid, "old": s["place"], "new": place, "told": int(told)}, ensure_ascii=False))

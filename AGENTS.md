@@ -23,7 +23,7 @@ screen per PR, never slower than before, checked on a phone in both themes.
   Studio, news, friends, awards, the class timetable, the campus map, QR check-in on a big screen (`/show`), the
   student forum. Unofficial; Russian, Kazakh and English.
 - `web/`: Svelte 5 (runes) + Vite + TypeScript, a static build served by the server.
-- `server/`: Python 3, FastAPI, SQLite (WAL). The API, the Telegram bot (`bot.py`) and the nightly jobs run in one
+- `server/`: Python 3, FastAPI, SQLite (WAL). The API, the Telegram bot (`bot.py` and its areas) and the nightly jobs run in one
   process. Rules live in `server/kbtu/logic/` (one module per area) and a few big modules beside it (`casting.py`, `checkin.py`, `roster.py`, `admin.py`); `app.py` only routes.
 - One Docker image (`Dockerfile`). **A push to `main` deploys production**: never push without the owner's yes.
 
@@ -32,8 +32,9 @@ screen per PR, never slower than before, checked on a phone in both themes.
 | What | Where |
 | --- | --- |
 | API routes | `server/kbtu/app.py` |
-| Rules by area | `server/kbtu/logic/*.py` (`core` shared helpers; `seats` sign-up and tickets; `organizing` Studio, the door; `fchannel` the forum channel's posts; `tgcomments` its comments; `forum` find-people; `account` me, settings, deleting an account; `moderation` reports; `daily` the weekly DMP memo and `stats_day` (the nightly retention sweep: a new cleanup goes there; the scheduler is `bot.py::_chores`); `clubs` clubs and join requests (`join_requests`; not `club_applications` = a new club, nor `casting` = recruitment rounds); `stats` anonymous usage counters; `credits` the people of the app, its own consent; `helpus` to the creator from the app: an anonymous line (no author kept, by design) and a signed offer to help) |
+| Rules by area | `server/kbtu/logic/*.py` (`core` shared helpers; `seats` sign-up and tickets; `organizing` Studio, the door; `fchannel` the forum channel's posts; `tgcomments` its comments; `forum` find-people; `account` me, settings, deleting an account; `moderation` reports; `daily` the weekly DMP memo and `stats_day` (the nightly retention sweep: a new cleanup goes there; the scheduler is `chores.py::_chores`); `clubs` clubs and join requests (`join_requests`; not `club_applications` = a new club, nor `casting` = recruitment rounds); `stats` anonymous usage counters; `credits` the people of the app, its own consent; `helpus` to the creator from the app: an anonymous line (no author kept, by design) and a signed offer to help) |
 | Schema | read `server/kbtu/schema.current.sql` (generated: today's tables); change it only by appending to `MIGRATIONS` in `server/kbtu/migrations.py` (read that file with `tail`), then run `server/tools/schema_dump.py` |
+| Telegram bot | `server/kbtu/bot.py` (polling, the ears, the Telegram call `_tg`), `outbox.py` (the postman: `bot_outbox` rows into messages), `bot_dm.py` (private chats), `bot_groups.py` (group chats, `/all`, video links), `chores.py` (the postman's chores: backup, retention sweep, chat cards, userpics) |
 | Bot texts | `server/kbtu/texts.py` (ru, kk, en, the same placeholders in each) |
 | Privacy policy, terms | `server/kbtu/i18n/legal/*.html` (Russian binding) |
 | QR check-in, `/show` | `server/kbtu/checkin.py`, `web/src/screens/Screen.svelte` |
@@ -86,7 +87,7 @@ tab freezes animations and `requestAnimationFrame`: look with it visible.
   once for all rows, never card by card.
 - **The bot** sends templates with a button into the app, never a user's words. The few exceptions (forum channel posts and
   replies, `/all`, restored comments, share cards, group video replies) are listed in `server/kbtu/BOT_WORDS.md`: read
-  it before touching bot.py, fchannel.py, tgcomments.py or tiktok.py.
+  it before touching bot.py, bot_dm.py, bot_groups.py, outbox.py, fchannel.py, tgcomments.py or tiktok.py.
 - **Bot texts the owner sees first**: every bot message opens with an emoji (a test checks), is short (a few
   lines, emoji over words), and a new or changed one, above all a broadcast, goes to the owner as a preview
   (`admin broadcast ... @who`, or a screenshot) for his yes before anyone else gets it.

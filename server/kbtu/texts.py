@@ -181,7 +181,7 @@ def when_span(ts: int, end: int, lang: str) -> str:
     return f"{when(ts, lang)}–{e.tm_hour:02d}:{e.tm_min:02d}"
 
 
-# Secret Santa's terms under an invite (bot._santa): the budget a number, the date the server's; each only when set
+# Secret Santa's terms under an invite (outbox._santa): the budget a number, the date the server's; each only when set
 SANTA_TERMS = {"ru": ("подарок до {budget}\u00a0₸", "вишлисты до {until}"), "kk": ("сыйлық {budget}\u00a0₸ дейін", "тілек тізімдері {until} дейін"),
                "en": ("gift up to {budget}\u00a0₸", "wishlists until {until}")}
 
@@ -426,7 +426,7 @@ BOT = {
         "fch_reply_removed": ("🚫 Модератор снял этот ответ.", None),
         "fch_reply_deleted": ("🗑 Автор удалил этот ответ.", None),
         "fch_reply_queue": ("🛡 Анонимные ответы авторов в комментариях ждут модератора (жалобы или проверка): {n}.", "Открыть"),
-        # by Russian plural (bot._appeal_kind): exactly one; 21, 31…; 2–4; the rest
+        # by Russian plural (outbox._appeal_kind): exactly one; 21, 31…; 2–4; the rest
         "fch_appeal": ("🛡 {n} пост ждёт твоего решения: автор не согласен с ИИ. Открой и реши: выпустить его или нет.", "Открыть"),
         "fch_appeal_one": ("🛡 {n} пост ждёт твоего решения: авторы не согласны с ИИ. Открой и реши по каждому: выпустить или нет.", "Открыть"),
         "fch_appeal_few": ("🛡 {n} поста ждут твоего решения: авторы не согласны с ИИ. Открой и реши по каждому: выпустить или нет.", "Открыть"),
@@ -961,7 +961,7 @@ def broadcast_message(lang: str, name: str) -> tuple[str, str] | None:
     return (text, button) if button else None
 
 
-# a club's group moderated for swearing (bot._swear, logic/chatmod.py): warn and mute name nobody and count nothing in
+# a club's group moderated for swearing (bot_groups._swear, logic/chatmod.py): warn and mute name nobody and count nothing in
 # public (a "2 of 3" under a name shames); on, off: the President's or Vice's language, the rest: the sender's
 SWEAR = {
     "ru": {"on": "🧹 Фильтр мата включён. Сообщения с матом удаляются, за каждое — предупреждение. Три за неделю — час без сообщений.",
@@ -1005,7 +1005,7 @@ def chat_approved(lang: str, kind: str, title: str) -> tuple[str, str | None]:
 
 
 def chat_reply(lang: str, got: list[tuple[str, str, str]]) -> str:
-    """The bot's one answer to the chats a message linked (bot.suggest's (outcome, title, kind) each): what each is and
+    """The bot's one answer to the chats a message linked (bot_dm.suggest's (outcome, title, kind) each): what each is and
     its title from Telegram or the directory, never the sender's words; several: grouped by outcome, the rest counted."""
     said = pick(BOT, lang)
     item = lambda kind, title: chat_item(lang, kind, title)  # noqa: E731
@@ -1287,7 +1287,7 @@ def nick(a: int, n: int) -> str:
     """A post's nick in Russian, the channel's language: "Тихая Лиса"."""
     word, g = NICK_NOUN[n]
     return f"{NICK_ADJ[a][g]} {word}"
-# an event's Telegram group (bot.py _group): what the bot says there, in Russian (a group has no one language)
+# an event's Telegram group (bot_groups.py _group): what the bot says there, in Russian (a group has no one language)
 CHAT_LINKED = "✅ Чат привязан к событию «{title}». Записавшиеся найдут ссылку в приложении, бот пускает только их."
 CHAT_BAD = "Эта ссылка устарела или не твоя. Нажми «Создать чат» в приложении ещё раз."
 CHAT_NO_RIGHTS = "Мне нужны права админа «Пригласительные ссылки». Дай их и нажми «Создать чат» в приложении ещё раз."

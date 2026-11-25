@@ -555,7 +555,7 @@ def _post(match: re.Match, cookies: list[http.cookiejar.Cookie] | None = None) -
         return Album(k, items) if items else None
 
 
-# (chat, person) whose link is being answered (bot._tiktok sets it): the session's caps per chat and per person
+# (chat, person) whose link is being answered (bot_groups._tiktok sets it): the session's caps per chat and per person
 asker: ContextVar[tuple[int, int] | None] = ContextVar("tiktok_asker", default=None)
 _NO_SESSION = object()  # _signed's answer: no usable cookies, nothing was asked
 # ponytail: per worker (the bot polls in one), as _sent; keys idle an hour pruned, at most SENT_KEYS of them
