@@ -67,8 +67,10 @@ Google's reviewers have no Telegram. While a review is due:
 
 What the demo account is: one made-up user (no student row, no role, the bot never writes to it) that can only read
 the catalogue routes listed in `web_auth.DEMO_READS`: no people, no writes. After the review: remove `PLAY_DEMO` (the
-link answers 404 and every demo session ends). To change the link instead: a new `PLAY_DEMO`, then
-`admin play-demo revoke`.
+link answers 404, and the redeploy deletes every demo session, so turning it on again later revives none). To
+change the link instead: a new `PLAY_DEMO`, then `admin play-demo revoke` (it never refuses, whatever the demo row
+says). A browser already signed in as a real person keeps that session: the link opens the demo only in a fresh
+profile (or after signing out).
 
 ## Play Console: the first release
 

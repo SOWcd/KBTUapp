@@ -448,9 +448,10 @@ def main(args: list[str]) -> None:
         if not args[1:] and not cfg.play_demo:
             sys.exit("PLAY_DEMO is off: set it to 32+ random characters (python -c 'import secrets;print(secrets.token_urlsafe(32))')")
         with db.tx(con):
-            uid = web_auth.demo_user(con, now())
             if args[1:]:
-                web_auth.revoke_all(con, uid)
+                web_auth.revoke_demo(con)  # never refused: an odd demo row is when it's needed most
+            else:
+                web_auth.demo_user(con, now())
         print("demo sessions signed out" if args[1:] else f"https://{cfg.domain}/play-demo?k={cfg.play_demo}")
     elif cmd == "event-new" and len(args) == 2:
         _event_new(con, cfg, args[1], gz)

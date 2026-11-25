@@ -71,6 +71,11 @@ def revoke_all(con, uid: int) -> None:
     con.execute("DELETE FROM web_sessions WHERE user_id = ?", (uid,))
 
 
+def revoke_demo(con) -> None:
+    """Every demo session, whatever its row says now (a role, a ban, a student row): demo_user's checks are for signing in"""
+    con.execute("DELETE FROM web_sessions WHERE user_id IN (SELECT id FROM users WHERE tg_id = ?)", (DEMO_TG_ID,))
+
+
 def forget(con, t: int) -> None:
     con.execute("DELETE FROM web_sessions WHERE last_used_at <= ?", (t - IDLE,))
     con.execute(f"""DELETE FROM web_sessions WHERE digest IN (

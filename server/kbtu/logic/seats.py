@@ -440,8 +440,10 @@ def sweep_holds(con) -> None:
             promote(con, one(con, "SELECT * FROM events WHERE id = ?", r[0]))
 
 
-def events(con, v: Viewer, frm: int | None = None, to: int | None = None, org: int | None = None) -> list[dict]:
-    sweep_holds(con)
+def events(con, v: Viewer, frm: int | None = None, to: int | None = None, org: int | None = None, *,
+           sweep: bool = True) -> list[dict]:
+    if sweep:  # off for the read-only demo (app.is_demo): the worker sweeps anyway
+        sweep_holds(con)
     hide_first = v.student and one(con, "SELECT hide_first_year FROM users WHERE id = ?", v.id)[0]
     # Bound starts_at to use an index range. The lookback covers even stored events longer than the
     # 31-day cap in organizing.clean_event, so they stay visible while they run.
@@ -522,8 +524,9 @@ def _event(con, v: Viewer, eid: int) -> sqlite3.Row:
     return e
 
 
-def event(con, v: Viewer, eid: int) -> dict:
-    sweep_holds(con)
+def event(con, v: Viewer, eid: int, *, sweep: bool = True) -> dict:
+    if sweep:
+        sweep_holds(con)
     return full(con, v, _event(con, v, eid))
 
 
