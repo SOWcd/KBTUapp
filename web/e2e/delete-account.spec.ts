@@ -12,7 +12,7 @@ const tr = (k: Key) => (ru[k] as string).replace(/­/g, ''); // soft hyphens are
 const SERVER = resolve(import.meta.dirname, '../../server');
 const PYTHON = process.env.QA_PYTHON || (existsSync(join(SERVER, '.venv/bin/python')) ? join(SERVER, '.venv/bin/python') : 'python3');
 
-/** a week on: the bot's round runs the deletions that are due (bot.py send_due -> logic.delete_due) */
+/** a week on: the bot's round runs the deletions that are due (outbox.py send_due -> logic.delete_due) */
 function weekLater(qa: Qa) {
   execFileSync(PYTHON, ['-c', `import sys
 from kbtu import db, logic

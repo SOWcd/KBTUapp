@@ -35,6 +35,10 @@ function first(path: string): Promise<Response> | undefined {
   return f.auth === tg.initData && Date.now() - f.at < 20_000 ? p : undefined;
 }
 
+// the waits between tries of /me while the server restarts (call), and the answers that mean it is restarting
+const RESTART = [500, 1000, 2000, 4000];
+const RESTARTING = new Set([502, 503, 504]);
+
 /** Events the admin opened from Admin: their own routes go as their organizers' (server app.viewer, X-Staff-Event),
  *  each write in the owner's log. Only Admin adds to it. */
 export const staffEvents = new Set<Id>();
@@ -69,15 +73,25 @@ async function call<T>(method: string, path: string, body?: unknown, staffEvent?
     account.addEventListener('abort', cancel, { once: true });
     timeout.addEventListener('abort', cancel, { once: true });
   }
+  const send = () => fetch('/api' + path, {
+    method,
+    headers: { ...authHeaders(path.startsWith('/web/')), ...staffOf(method, path, staffEvent), ...(body === undefined ? {} : { 'Content-Type': raw ? body.type || 'application/octet-stream' : 'application/json' }) },
+    body: body === undefined ? undefined : raw ? body : JSON.stringify(body),
+    // a lost answer (a deploy's restart, iOS backgrounding the app) would spin forever: Cloudflare gives up at 100 s
+    // anyway; files are spared (a slow upload takes longer). No AbortSignal.timeout before iOS 16: no limit there
+    signal: timeout ? (fallback?.signal ?? AbortSignal.any([account, timeout])) : account,
+  });
   try {
-    r = await ((method === 'GET' && body === undefined && first(path)) || fetch('/api' + path, {
-      method,
-      headers: { ...authHeaders(path.startsWith('/web/')), ...staffOf(method, path, staffEvent), ...(body === undefined ? {} : { 'Content-Type': raw ? body.type || 'application/octet-stream' : 'application/json' }) },
-      body: body === undefined ? undefined : raw ? body : JSON.stringify(body),
-      // a lost answer (a deploy's restart, iOS backgrounding the app) would spin forever: Cloudflare gives up at 100 s
-      // anyway; files are spared (a slow upload takes longer). No AbortSignal.timeout before iOS 16: no limit there
-      signal: timeout ? (fallback?.signal ?? AbortSignal.any([account, timeout])) : account,
-    }));
+    let p = (method === 'GET' && body === undefined && first(path)) || send();
+    // /me decides whether the app opens at all: a deploy's restart (the proxy's 502-504, or a dropped line for a few
+    // seconds) is waited out, ~8 s in all, instead of the failure screen. Reads only, so a repeat is harmless
+    if (method === 'GET' && /^\/me(?:\?|$)/.test(path)) for (const ms of RESTART) {
+      const x = await p.catch(() => null);
+      if (x && !RESTARTING.has(x.status) || account.aborted) break;
+      await new Promise((ok) => setTimeout(ok, ms));
+      p = send();
+    }
+    r = await p;
     if (r.status !== 204) data = await r.json().catch(() => null);
   } catch {
     throw new ApiErr('unavailable', 'network');
@@ -174,11 +188,13 @@ export const server = {
   support: (): Promise<Support> => call('GET', '/donate'),
   sponsors: (): Promise<Sponsor[]> => call('GET', '/sponsors'),
   sponsorConsent: (show: boolean, consent: string, rev: number | null): Promise<Support> => call('PUT', '/donate/consent', { show, consent, rev }),
+  sponsorAmount: (show: boolean, consent: string, rev: number | null): Promise<Support> => call('PUT', '/donate/amount', { show, consent, rev }),
   donationReceipt: (file: Blob, consent: string): Promise<Support> => call('POST', `/donate/receipt?consent=${encodeURIComponent(consent)}`, file),
   donationQueue: (): Promise<DonationReview[]> => call('GET', '/admin/donations'),
   reviewDonation: (id: Id, revision: number, action: 'confirm' | 'reject' | 'undo', amount?: number): Promise<void> => call('POST', `/admin/donations/${id}/review`, { revision, action, amount }),
   donationImage: (id: Id): Promise<string> => receiptImage(`/api/donate/receipts/${id}/image`),
-  me: (withReportLog = false): Promise<Me & { reportLog?: ReportLogEntry[] }> => call('GET', withReportLog ? '/me' : '/me?reportLog=false'),
+  // the device kind rides along (the server keeps it at most once a day, for a broadcast to one platform)
+  me: (withReportLog = false): Promise<Me & { reportLog?: ReportLogEntry[] }> => call('GET', `/me?platform=${tg.kind}${withReportLog ? '' : '&reportLog=false'}`),
   webLogin: (widget: unknown): Promise<void> => changeWebSession('/web/login', widget),
   webLogout: (): Promise<void> => changeWebSession('/web/logout'),
   webLogoutAll: (): Promise<void> => changeWebSession('/web/logout-all'),
@@ -534,7 +550,7 @@ export const server = {
   channelReplyWhy: (id: Id): Promise<{ explain: import('./types').ForumWhy | null }> => call('POST', `/forum-replies/${id}/why`), // the same for my held reply
   deleteChannelPost: (id: Id): Promise<void> => call('DELETE', `/forum-posts/${id}`), // mine: the bot takes it out of the channel
   channelMod: (): Promise<import('./types').ChannelMod> => call('GET', '/forum-posts/mod'), // moderators: held, and this week's live
-  channelModDecide: (id: Id, ok: boolean): Promise<void> => call('POST', `/forum-posts/${id}/mod`, { ok }), // held: out or removed; live: only removed
+  channelModDecide: (id: Id, ok: boolean, again: boolean = false): Promise<void> => call('POST', `/forum-posts/${id}/mod`, { ok, again }), // held: out or removed; live: only removed; again: a lost send, re-sent
   channelModRestore: (id: Id): Promise<void> => call('POST', `/forum-posts/${id}/restore`), // a moderator's take-down undone: published anew
   channelModRepublish: (id: Id): Promise<void> => call('POST', `/forum-posts/${id}/republish`), // a live post sent anew (its message lost in Telegram)
   revealChannelPost: (id: Id): Promise<PersonRef> => call('POST', `/forum-posts/${id}/reveal`), // the owner alone; audited

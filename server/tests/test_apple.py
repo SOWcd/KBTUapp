@@ -13,7 +13,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from fastapi.testclient import TestClient
 
-from kbtu import apns, app as server, bot, db, logic, push
+from kbtu import apns, app as server, db, logic, outbox, push
 from kbtu.logic import apple, web_auth
 from test_core import delete_now, env, set_clock, tma  # noqa: F401
 from test_web_auth import ORIGIN, WEB, WRITE, widget
@@ -224,7 +224,7 @@ def _postman(cfg, telegram: list):
 
     async def go():
         async with httpx.AsyncClient(transport=httpx.MockTransport(tg)) as http:
-            await bot.send_due(cfg, http)
+            await outbox.send_due(cfg, http)
     asyncio.run(go())
 
 
@@ -363,7 +363,7 @@ def test_telegram_picked_in_settings(both):
 def test_group_things_and_forum_comments_stay_telegram(both):
     _, cfg, _, _, _ = both
     m = {"pushable": 1, "kind": "fch_comments"}
-    assert not bot._pushes(cfg, m, "") and not bot._pushes(cfg, {**m, "kind": "tgc_reply"}, "")
-    assert not bot._pushes(cfg, {**m, "kind": "credit_ask"}, "") and bot._pushes(cfg, {**m, "kind": "backup_ok"}, "")
-    assert not bot._pushes(cfg, {"pushable": 1, "kind": "backup_ok"}, [[{"text": "x", "start": "y"}]])  # a keyboard
+    assert not outbox._pushes(cfg, m, "") and not outbox._pushes(cfg, {**m, "kind": "tgc_reply"}, "")
+    assert not outbox._pushes(cfg, {**m, "kind": "credit_ask"}, "") and outbox._pushes(cfg, {**m, "kind": "backup_ok"}, "")
+    assert not outbox._pushes(cfg, {"pushable": 1, "kind": "backup_ok"}, [[{"text": "x", "start": "y"}]])  # a keyboard
     assert push.on(cfg) and not push.on(replace(cfg, apns_key=""))

@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from kbtu import bot, db, logic, texts
+from kbtu import bot, bot_dm, db, logic, texts
 from test_core import env, login, tma  # noqa: F401  (env: the fixture)
 
 
@@ -144,21 +144,21 @@ def test_portal_schedule(env, monkeypatch):
     def send(tg, fid, name="Schedule.webarchive", size=7_000_000):
         msg = {"message_id": 1, "from": {"id": tg}, "chat": {"id": tg, "type": "private"}, "date": logic.now(),
                "document": {"file_id": fid, "file_name": name, "file_size": size}}
-        assert bot._sched_file(msg)
-        return asyncio.run(bot._schedule(cfg, Http(), con, msg))["text"]
+        assert bot_dm._sched_file(msg)
+        return asyncio.run(bot_dm._schedule(cfg, Http(), con, msg))["text"]
     assert send(99, "F1") == texts.bot_message("ru", "sched_signin")[0]
     assert send(51, "F1") == texts.bot_message("ru", "sched_other")[0]            # Bek sends Ali's page: refused
     assert [x["subject"] for x in c.get("/api/me/schedule", headers=tma(51)).json()] == ["Calculus"]   # his own stays
     assert send(50, "F3", "page.html") == texts.bot_message("ru", "sched_not")[0]
     assert send(50, "F3", "file") == texts.bot_message("ru", "sched_not")[0]      # "file": sniffed, not a page
     m = {"from": {"id": 50}, "chat": {"id": 50, "type": "private"}, "document": {"file_id": "F1", "file_name": "file", "mime_type": "application/octet-stream"}}
-    assert bot._sched_file(m) and not bot._sched_file({**m, "chat": {"id": -5, "type": "group"}})
-    assert not bot._sched_file({**m, "document": {**m["document"], "mime_type": "application/pdf"}})
+    assert bot_dm._sched_file(m) and not bot_dm._sched_file({**m, "chat": {"id": -5, "type": "group"}})
+    assert not bot_dm._sched_file({**m, "document": {**m["document"], "mime_type": "application/pdf"}})
     assert send(50, "F1", size=30_000_000) == texts.bot_message("ru", "sched_big")[0]
     assert c.delete("/api/me/schedule", headers=tma(50)).status_code == 204                 # login()'s class gone: his first week
     assert send(50, "F1", "Schedule_webarchive") == texts.bot_message("ru", "sched_ok", n=5)[0]   # iOS: the dot came as "_"
-    assert bot._sched_file({"document": {"file_name": "x", "mime_type": "application/x-webarchive"}})  # or only its type
-    assert not bot._sched_file({"document": {"file_name": "receipt.pdf", "mime_type": "application/pdf"}})
+    assert bot_dm._sched_file({"document": {"file_name": "x", "mime_type": "application/x-webarchive"}})  # or only its type
+    assert not bot_dm._sched_file({"document": {"file_name": "receipt.pdf", "mime_type": "application/pdf"}})
     got = c.get("/api/me/schedule", headers=tma(50)).json()
     assert [(x["weekday"], x["begins"], x["subject"], x["kind"]) for x in got] == [(w[0], w[1], w[3], w[4]) for w in want]
     # the page sent again: its language, then what changed in the week; counts and language names only
@@ -176,7 +176,7 @@ def test_portal_schedule(env, monkeypatch):
     assert all(len(x["names"]) == 3 for x in got)
     dump = "\n".join(con.iterdump())
     assert "Phone Only Course" not in dump                                       # the phone layout ignored
-    assert not bot._sched_file({"document": {"file_name": "receipt.pdf"}})
+    assert not bot_dm._sched_file({"document": {"file_name": "receipt.pdf"}})
 
     # the Week sheet's "Delete schedule": nothing of the week stays anywhere in the database; Bek's stays; again is fine;
     # a guest gets what the GET gives a guest: no error, no week
@@ -219,7 +219,7 @@ def test_schedule_page_sid(env):
                 return Resp(portal_page().replace("00X000000", x).encode())
         msg = {"message_id": 1, "from": {"id": 50}, "chat": {"id": 50, "type": "private"}, "date": logic.now(),
                "document": {"file_id": "F", "file_name": "page.html", "file_size": 9000}}
-        return asyncio.run(bot._schedule(cfg, Http(), con, msg))["text"]
+        return asyncio.run(bot_dm._schedule(cfg, Http(), con, msg))["text"]
     send("24B000009")
     plain = send("24B000009")                                            # the week already in: the plain answer
     send("23B000001")                                                    # another year: left, a line says so

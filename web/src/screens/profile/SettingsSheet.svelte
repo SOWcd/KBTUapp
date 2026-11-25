@@ -14,6 +14,7 @@
   import GraduationCap from '@lucide/svelte/icons/graduation-cap';
   import User from '@lucide/svelte/icons/user';
   import HandHeart from '@lucide/svelte/icons/hand-heart';
+  import Award from '@lucide/svelte/icons/award';
   import Copy from '@lucide/svelte/icons/copy';
   import Check from '@lucide/svelte/icons/check';
   import { fitTitle } from '../../ui/title';
@@ -36,6 +37,7 @@
   import Group from '../../ui/Group.svelte';
   import SettingsList from './SettingsList.svelte';
   import SupportMedal from './SupportMedal.svelte';
+  import SponsorsBoard from './SponsorsBoard.svelte';
   import Row from '../../ui/Row.svelte';
   import Notice from '../../ui/Notice.svelte';
   import { photoItems, editNick, setNick } from './mine';
@@ -45,11 +47,11 @@
   import { setKriGoogle } from '../../lib/kriGoogle';
   type Part = 'last' | 'first' | 'middle';
   type Typed = Exclude<Fixable, 'course' | 'school'>; // the ones typed in (fix); course and school are picked
-  type Kind = 'app' | 'me' | 'notify' | 'name' | 'privacy' | 'phone' | 'city' | 'school' | 'course' | Part | 'sees' | 'about' | 'donate';
+  type Kind = 'app' | 'me' | 'notify' | 'name' | 'privacy' | 'phone' | 'city' | 'school' | 'course' | Part | 'sees' | 'about' | 'donate' | 'sponsors';
   let { overlay, kind }: { overlay: Overlay; kind: Kind } = $props();
   const TITLE: Record<Kind, [Key, typeof Lock]> = { app: ['me.settings', Settings], me: ['set.aboutMe', User], notify: ['me.notifications', Bell], name: ['set.name', User], privacy: ['set.privacy', Lock], phone: ['pd.phone', Phone], city: ['pd.city', MapPin],
     school: ['look.school', GraduationCap], course: ['pd.course', GraduationCap], last: ['login.lastName', User], first: ['login.firstName', User], middle: ['pd.middle', User],
-    sees: ['set.whoSees', Lock], about: ['set.about', Info], donate: ['set.donate', HandHeart] };
+    sees: ['set.whoSees', Lock], about: ['set.about', Info], donate: ['set.donate', HandHeart], sponsors: ['sp.sponsors', Award] };
   const me = $derived(session.me);
   const phone = $derived(me?.student?.phone ? (kzPhone(me.student.phone) ? fmtPhone(me.student.phone) : me.student.phone) : '');
 
@@ -409,6 +411,8 @@
       {@render link(t('set.write'), () => openLink('https://t.me/Sowers'), '@Sowers', true)}
       {@render link(t('set.code'), () => openLink('https://github.com/SOWcd/KBTUapp'), 'GitHub', true)}
     </Group>
+  {:else if kind === 'sponsors'}
+    <SponsorsBoard />
   {:else if kind === 'donate'}
     <!-- one centred column, the title once; the number in one card with its copy as a plain line under
          it; the banks on the page itself; "not a purchase" and "never in DMs" as quiet lines -->

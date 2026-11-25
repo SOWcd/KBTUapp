@@ -84,6 +84,8 @@ export const tg = {
   // does the iPhone app's launch from a notification (ios/: the push's "start")
   startParam: inTelegram || inApp ? W?.initDataUnsafe?.start_param || new URLSearchParams(location.search).get('startapp') || '' : '',
   platform: W?.platform ?? 'unknown',
+  /** the coarse device kind the server keeps (a Telegram computer client is desktop; its web clients and a plain browser, web) */
+  kind: onAndroid ? 'android' : onIos ? 'ios' : inTelegram && !/^web/.test(W!.platform) ? 'desktop' : 'web',
   // outside Telegram its script says 'light' whatever the phone uses: the system's own scheme there
   colorScheme: (): 'light' | 'dark' => (inTelegram ? W?.colorScheme : null) ?? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'),
   can,

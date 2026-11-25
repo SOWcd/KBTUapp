@@ -10,7 +10,7 @@ import httpx
 import pytest
 from PIL import Image
 
-from kbtu import bot, db, logic, texts, tgc
+from kbtu import db, logic, outbox, texts, tgc
 from test_core import delete_now, env, login, set_clock, tma  # noqa: F401  (env: the fixture)
 from test_tgcomments import COPY, Telegram, hear, msg, report, setup, student, tick
 
@@ -218,7 +218,7 @@ def test_sweeps_run_with_the_forum_off(env, monkeypatch):
 
     async def go():
         async with httpx.AsyncClient(transport=httpx.MockTransport(Telegram())) as http:
-            await bot.send_due(cfg, http)
+            await outbox.send_due(cfg, http)
     asyncio.run(go())
     assert not con.execute("SELECT 1 FROM tgc_comments").fetchone() and not con.execute("SELECT 1 FROM fchan_posts").fetchone()
 
@@ -235,13 +235,13 @@ def test_decline_words_in_the_app_only(env):
         VALUES (1, 'Autumn', ?, 'Full this time <b>sorry</b>', 'done', 0, ?)""", (t - 60, t)).lastrowid
     aid = con.execute("""INSERT INTO round_apps (round_id, user_id, departments, answers, stage, created_at, updated_at)
         VALUES (?, ?, '[]', '{}', 'no', 0, 0)""", (rid, bob["id"])).lastrowid
-    text, button, start = bot._render(con, {"kind": "round_no", "ref": f"rn:{aid}", "lang": "en", "user_id": bob["id"]})
+    text, button, start = outbox._render(con, {"kind": "round_no", "ref": f"rn:{aid}", "lang": "en", "user_id": bob["id"]})
     assert "Full this time" not in text and "in the app" in text and start == "iv_1"
     r = c.get("/api/orgs/1/round", headers=tma(11)).json()
     assert (r["mine"]["stage"], r["declineText"]) == ("no", "Full this time <b>sorry</b>")
     con.execute("UPDATE rounds SET decline_text = ''")                          # nothing written: nothing to show
     assert c.get("/api/orgs/1/round", headers=tma(11)).json() is None
-    assert bot._render(con, {"kind": "round_no", "ref": f"rn:{aid}", "lang": "en", "user_id": bob["id"]})[2] == "clubs"
+    assert outbox._render(con, {"kind": "round_no", "ref": f"rn:{aid}", "lang": "en", "user_id": bob["id"]})[2] == "clubs"
 
 
 def test_lost_send_found_by_its_copy(env):

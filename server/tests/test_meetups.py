@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import threading
 
-from kbtu import bot, checkin, db, logic, texts
+from kbtu import checkin, db, logic, outbox, texts
 from test_club_checkin import _join
 from test_core import _club_runs, env, login, set_clock, tma  # noqa: F401
 
@@ -83,16 +83,16 @@ def test_notification_grouped_once_and_current_at_delivery(env):
     m = _notice(con, sid, ids[8])
     first_scan = con.execute('SELECT scanned_at FROM qr_meet_scans WHERE session_id = ?', (sid,)).fetchone()[0]
     assert m and m["send_after"] == first_scan + 30
-    assert bot._render(con, m) == (*texts.bot_message('ru', 'meetup_review', dept='Media'), f'meet_{sid}')
+    assert outbox._render(con, m) == (*texts.bot_message('ru', 'meetup_review', dept='Media'), f'meet_{sid}')
     for tg in (1, 3, 4, 1):
         assert _scan(c, tg, p).status_code == 200
     assert con.execute("SELECT COUNT(*) FROM bot_outbox WHERE kind = 'meetup_review'").fetchone()[0] == 1
-    assert bot._render(con, m) == (*texts.bot_message('ru', 'meetup_ask', dept='Media'), f'meet_{sid}')
+    assert outbox._render(con, m) == (*texts.bot_message('ru', 'meetup_ask', dept='Media'), f'meet_{sid}')
     con.execute("UPDATE bot_outbox SET sent_at = 1 WHERE id = ?", (m['id'],))
     assert _scan(c, 1, p).status_code == 200
     assert con.execute("SELECT COUNT(*) FROM bot_outbox WHERE kind = 'meetup_review'").fetchone()[0] == 1
     con.execute("UPDATE member_tags SET sync = 1 WHERE tag_id = ? AND user_id = ?", (tags[0], ids[8]))
-    assert bot._render(con, m) is None  # a synced department is not authority to manage it
+    assert outbox._render(con, m) is None  # a synced department is not authority to manage it
     con.close()
 
 
@@ -160,9 +160,9 @@ def test_pending_scans_departure_only_and_stale_retry(env, monkeypatch):
     r = _scan(c, 10, p)
     assert r.status_code == 200 and not r.json()['done']
     assert _rows(c, sid)[0]['user'] == pending and _rows(c, sid)[0]['flag'] == 'outsider'
-    c.post(f'/api/screens/{sid}/out', headers=tma(9))
+    out = c.post(f'/api/screens/{sid}/out', headers=tma(9)).json()['param']  # each phase has its own QR
     departure = c.get('/api/me', headers=tma(11)).json()['id']
-    assert _scan(c, 11, p).status_code == 200
+    assert _scan(c, 11, out).status_code == 200
     login(c, 11, 'late')
     checkin.became_student(con, departure)
     assert con.execute('SELECT done_at FROM qr_marks WHERE session_id = ? AND user_id = ?', (sid, departure)).fetchone()[0] is None
@@ -187,7 +187,7 @@ def test_unlinked_leaders_cannot_read_and_deleted_scans_disappear(env):
         con.execute('DELETE FROM students WHERE user_id = ?', (ids[tg],))
         assert c.get(f'/api/screens/{sid}/scans', headers=tma(tg)).status_code == 403
         assert sid not in [s['session'] for s in c.get('/api/screens', headers=tma(tg)).json()]
-    assert bot._render(con, notice) is None
+    assert outbox._render(con, notice) is None
     logic.account.delete_me(con, logic.Viewer(ids[1], 'user', True))
     assert not con.execute('SELECT 1 FROM qr_meet_scans WHERE user_id = ?', (ids[1],)).fetchone()
     assert not con.execute('SELECT 1 FROM qr_marks WHERE user_id = ?', (ids[1],)).fetchone()
@@ -228,14 +228,17 @@ def test_departure_only_retry_never_becomes_arrival(env, monkeypatch):
     monkeypatch.setattr(checkin.time, 'time', lambda: clock[0])
     for tg, action in ((10, 'finish'), (11, 'in')):
         sid, p = _start(c, oid, tags[0])
-        assert c.post(f'/api/screens/{sid}/out', headers=tma(9)).status_code == 200
+        r = c.post(f'/api/screens/{sid}/out', headers=tma(9))
+        assert r.status_code == 200
+        p = r.json()['param']  # each phase has its own QR
         uid = c.get('/api/me', headers=tma(tg)).json()['id']
         assert _scan(c, tg, p).status_code == 200
         assert c.post(f'/api/screens/{sid}/{action}', headers=tma(9)).status_code == 200
         login(c, tg, f'late{tg}')
         checkin.became_student(con, uid)
         clock[0] += checkin.SCAN_OK + 2 * checkin.SLOT
-        assert _scan(c, tg, p).status_code == 200
+        # a leaving QR retried once the door is back to arriving is refused (bound to its phase); after Finish it completes
+        assert _scan(c, tg, p).status_code == (200 if action == 'finish' else 400)
         assert con.execute('SELECT done_at FROM qr_marks WHERE session_id = ? AND user_id = ?', (sid, uid)).fetchone()[0] is None
         assert [x['phase'] for x in _rows(c, sid)] == ['out']
     con.close()
@@ -251,7 +254,9 @@ def test_meetup_keeps_volunteer_door_runners_checkout(env, monkeypatch):
     assert not con.execute('SELECT 1 FROM qr_marks WHERE session_id = ? AND user_id = ?', (sid, ids[9])).fetchone()
     shift = con.execute('SELECT h.id FROM vol_shifts h JOIN vol_people v ON v.id = h.vol_id WHERE h.session_id = ? AND v.user_id = ?', (sid, ids[9])).fetchone()
     assert shift
-    assert c.post(f'/api/screens/{sid}/out', headers=tma(9)).status_code == 200
+    r = c.post(f'/api/screens/{sid}/out', headers=tma(9))
+    assert r.status_code == 200
+    p = r.json()['param']  # each phase has its own QR
     assert _scan(c, 9, p).status_code == 200
     assert con.execute('SELECT out_at FROM vol_shifts WHERE id = ?', (shift[0],)).fetchone()[0] is not None
     assert _scan(c, 4, p).status_code == 200  # departure-only evidence never invents a volunteer shift

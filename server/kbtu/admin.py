@@ -53,10 +53,11 @@
   .venv/bin/python -m kbtu.admin grant session <sid> init26   the badge to everyone counted in a check-in session
   .venv/bin/python -m kbtu.admin santa-news [--dry | <@who>]  (<@who>: to that one President or Vice alone, to read it first) Secret Santa's announcement: queued once to every President and Vice of an active
                                 organization the bot can write to; --dry: the count only. By hand, never on deploy
-  .venv/bin/python -m kbtu.admin broadcast <name> <https://t.me/...> [--dry | <@who>]
+  .venv/bin/python -m kbtu.admin broadcast <name> <https://t.me/...> [--platform android|ios|desktop|web] [--dry | <@who>]
   .venv/bin/python -m kbtu.admin broadcast-votes <name>   the broadcast's Interesting / Not interesting counts
                                 creator only: queue a bot template once per reachable user. --dry counts new recipients;
-                                @username or Telegram ID queues it for one person first
+                                @username or Telegram ID queues it for one person first; --platform: only people who
+                                opened the app on that kind of device in the last 90 days (a preview goes regardless)
   .venv/bin/python -m kbtu.admin team add|del <@username | telegram id>   People of the app's Team (core developers), audited
   .venv/bin/python -m kbtu.admin credit add <telegram id | gh:login> <idea | find | code> "<ru>" "<kk>" "<en>" [--gh <login>]   "People of the app"
                                 (logic/credits.py): a line in OUR words about what they gave (an account isn't needed;
@@ -175,7 +176,7 @@ import time
 from . import config, db, texts
 from pathlib import Path
 
-from .logic.account import _DEL_GONE, staff_row
+from .logic.account import _DEL_GONE, PLATFORMS, staff_row
 from .logic import credits, guests
 from .logic.core import is_staff, staff_sql
 from .logic import RANK, STUDENT_ID, ApiError, Viewer, fix_identity, log_action, _slug_free, create_org, replay_deletions, find_user, notify, now, one, rows, set_role
@@ -204,7 +205,9 @@ def _staff_undo(con, uid: int) -> int:
     return con.execute("DELETE FROM students WHERE user_id = ? AND student_id = ? AND consent_version != 'staff'", (uid, f"staff{uid}")).rowcount
 
 
-def _broadcast(con, name: str, url: str, target: str | None = None) -> None:
+def _broadcast(con, name: str, url: str, target: str | None = None, platform: str | None = None) -> None:
+    if platform is not None and platform not in PLATFORMS:
+        sys.exit(f"broadcast: --platform is one of {', '.join(PLATFORMS)}")
     if not re.fullmatch(r"https://t\.me/[^\s\x00-\x1f\x7f-\x9f\\]*", url):
         sys.exit("broadcast: expected an https://t.me/ URL")
     if not all(texts.broadcast_message(lang, name) for lang in texts.BOT):
@@ -224,16 +227,20 @@ def _broadcast(con, name: str, url: str, target: str | None = None) -> None:
             if len(matches) != 1:
                 sys.exit("broadcast: no unique preview recipient; use their Telegram ID")
             only = matches[0]["id"]
-        # everyone who hasn't turned broadcasts off (Settings, or the broadcast's own button); a preview goes regardless
+        # everyone who hasn't turned broadcasts off (Settings, or the broadcast's own button); a preview goes regardless.
+        # --platform: only those who opened the app on that kind of device in the last 90 days (user_platforms); a
+        # preview goes regardless of it too
         recipients = """FROM users u WHERE u.can_dm = 1 AND u.banned_at IS NULL AND u.tg_id > 0 AND (u.n_broadcasts = 1 OR ? IS NOT NULL)
             AND (? IS NULL OR u.id = ?) AND (? IS NOT NULL OR NOT EXISTS (SELECT 1 FROM bot_outbox b
-                WHERE b.user_id = u.id AND b.kind = 'app_broadcast' AND b.ref = ? AND b.error IS NULL))"""  # a failed one, or a preview, may go again
+                WHERE b.user_id = u.id AND b.kind = 'app_broadcast' AND b.ref = ? AND b.error IS NULL))
+            AND (? IS NULL OR ? IS NOT NULL OR EXISTS (SELECT 1 FROM user_platforms p WHERE p.user_id = u.id AND p.kind = ?))"""  # a failed one, or a preview, may go again
+        args = (only, only, only, only, name, platform, only, platform)
         if dry:
-            count = one(con, f"SELECT COUNT(*) {recipients}", only, only, only, only, name)[0]
+            count = one(con, f"SELECT COUNT(*) {recipients}", *args)[0]
         else:
             count = con.execute(f"""INSERT OR REPLACE INTO bot_outbox (user_id, kind, ref, payload, send_after)
                 SELECT u.id, 'app_broadcast', ?, ?, ? {recipients} ORDER BY u.id""",
-                                (name, json.dumps({"url": url}), now(), only, only, only, only, name)).rowcount
+                                (name, json.dumps({"url": url}), now(), *args)).rowcount
     print(f"{'would queue' if dry else 'queued'} {count}")
 
 
@@ -520,8 +527,16 @@ def main(args: list[str]) -> None:
     elif cmd == "broadcast-votes" and len(args) == 2:
         yes, no = one(con, "SELECT COALESCE(SUM(vote), 0), COALESCE(SUM(1 - vote), 0) FROM broadcast_votes WHERE name = ?", args[1])
         print(f"{args[1]}: {yes} interested, {no} not")
-    elif cmd == "broadcast" and len(args) in (3, 4) and gz is None:
-        _broadcast(con, *args[1:])
+    elif cmd == "broadcast" and len(args) in (3, 4, 5, 6) and gz is None and len(args) - 2 * ("--platform" in args) in (3, 4):
+        rest = args[1:]
+        platform = None
+        if "--platform" in rest:
+            at = rest.index("--platform")
+            if at < 2 or at + 1 >= len(rest):
+                sys.exit("broadcast: --platform android | ios | desktop | web")
+            platform = rest.pop(at + 1)
+            rest.pop(at)
+        _broadcast(con, *rest, platform=platform)
     elif cmd == "credit" and args[1:2] in (["add"], ["gh"], ["ship"], ["list"], ["del"], ["ask"]):  # the people of the app (logic/credits.py)
         try:
             if args[1] == "add" and (len(args) == 7 or (len(args) == 9 and args[7] == "--gh")):

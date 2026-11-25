@@ -8,7 +8,7 @@ import time
 
 import pytest
 
-from kbtu import ai, bot, db, logic, texts
+from kbtu import ai, db, logic, outbox, texts
 from test_core import env, login, tma  # noqa: F401  (env: the fixture)
 
 
@@ -252,7 +252,7 @@ def test_bot_and_calendar_titles_translated(env):
     con.execute("INSERT INTO registrations (event_id, user_id, status, ticket_code, created_at, updated_at) VALUES (1, ?, 'going', 'TABCDEF', 0, 0)", (ali["id"],))
     logic.notify(con, ali["id"], "rate", "rate:1")
     ping = lambda lang: con.execute("SELECT b.*, ? AS lang FROM bot_outbox b WHERE kind = 'rate'", (lang,)).fetchone()  # noqa: E731
-    assert "Board games night" in bot._render(con, ping("en"))[0] and ru in bot._render(con, ping("ru"))[0]
+    assert "Board games night" in outbox._render(con, ping("en"))[0] and ru in outbox._render(con, ping("ru"))[0]
     con.execute("UPDATE users SET lang = 'en' WHERE id = ?", (ali["id"],))
     token = c.post("/api/me/calendar", headers=tma(93, "Ali")).json()["page"].rsplit("/", 1)[1]
     assert "SUMMARY:Board games night" in c.get(f"/cal/{token}.ics").text
@@ -271,7 +271,7 @@ def test_bot_cards_for_helpers_and_invites(env):
     con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, ends_at, emoji, color, created_by, created_at, updated_at)
         VALUES (1, 1, 'published', 'Jam', '305', ?, ?, 'laptop_3d', '#3B6BFF', ?, 0, 0)""", (start, start + 3600, pres["id"]))
     con.execute("INSERT INTO volunteers (event_id, user_id, status, created_at) VALUES (1, ?, 'yes', 0)", (vol["id"],))
-    card = lambda kind, ref: bot._render(con, {"kind": kind, "ref": ref, "lang": "ru", "user_id": vol["id"], "payload": None})  # noqa: E731
+    card = lambda kind, ref: outbox._render(con, {"kind": kind, "ref": ref, "lang": "ru", "user_id": vol["id"], "payload": None})  # noqa: E731
     fields = dict(org="Open Mic", title="Jam", when=texts.when(start, "ru"), place=texts.place_or_tba("305", "ru"))
     assert card("volunteer_yes", "vo:1:0") == (*texts.bot_message("ru", "volunteer_yes", **fields), "ev_1")
     assert card("volunteer_no", "vo:1:0") is None                                      # the decision says yes

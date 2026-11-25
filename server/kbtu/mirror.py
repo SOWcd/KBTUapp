@@ -363,7 +363,7 @@ def gone(con, channel: int, ids: list[int], root: Path | None = None) -> list[in
 
 
 def alive(con) -> None:
-    """The userbot's heartbeat (each sign-in, each finished sweep): bot.userbot_round tells the owner when it stops."""
+    """The userbot's heartbeat (each sign-in, each finished sweep): chores.userbot_round tells the owner when it stops."""
     con.execute("INSERT INTO meta (key, value) VALUES ('userbot_ok', ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value", (str(now()),))
 
 

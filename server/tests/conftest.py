@@ -122,6 +122,17 @@ def before_notification_migration():
         con.executescript("""ALTER TABLE users DROP COLUMN notify_via;
             ALTER TABLE push_devices DROP COLUMN dead_at;
             ALTER TABLE push_devices DROP COLUMN provider;
+            DROP TRIGGER event_guests_key;
+            DROP INDEX event_guests_door_key;
+            ALTER TABLE event_guests DROP COLUMN door_key;
+            DROP TRIGGER roster_pending_key;
+            DROP INDEX roster_pending_door_key;
+            DROP TRIGGER qr_hand_roster_gone;
+            ALTER TABLE roster_pending DROP COLUMN door_key;
+            CREATE TRIGGER qr_hand_roster_gone AFTER DELETE ON roster_pending BEGIN
+                DELETE FROM qr_hand_marks WHERE who = 'r' || old.id;
+            END;
+            ALTER TABLE sponsor_consents DROP COLUMN amount;
             ALTER TABLE event_guests DROP COLUMN walk_in;
             DROP TABLE qr_meet_scans;
             ALTER TABLE qr_marks DROP COLUMN meetup_review;
