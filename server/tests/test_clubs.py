@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from kbtu import auth, bot, db, logic, app as server, texts
+from kbtu import auth, db, logic, outbox, app as server, texts
 from test_core import BOT, INTAKE, env, login, tma  # noqa: F401  (env: the fixture)
 
 
@@ -33,11 +33,11 @@ def test_join_requests(env):
     inbox = c.get("/api/orgs/1/join-requests", headers=P).json()
     assert [(r["fullName"], r["course"]) for r in inbox] == [("Testov Ali", 2)]
     ping = con.execute("SELECT b.*, 'en' AS lang FROM bot_outbox b WHERE kind = 'join_request'").fetchone()
-    assert bot._render(con, ping)[2] == "jr_1"
+    assert outbox._render(con, ping)[2] == "jr_1"
 
     # withdrawn: the club's ping goes nowhere; asking again the same day doesn't ping twice
     assert c.delete("/api/orgs/1/join-requests/mine", headers=A).json()["myRequest"] is None
-    assert bot._render(con, ping) is None
+    assert outbox._render(con, ping) is None
     c.post("/api/orgs/1/join-requests", headers=A)
     assert pings() == 1
 
@@ -63,7 +63,7 @@ def test_join_requests(env):
     assert c.post("/api/orgs/1/join-requests", headers=A).json()["error"] == "conflict"
     told = con.execute("SELECT b.*, 'ru' AS lang FROM bot_outbox b WHERE kind = 'join_decided' ORDER BY id").fetchall()
     assert [r["ref"] for r in told] == [f"jr:{first}:no", f"jr:{second}:yes"]
-    assert [bot._render(con, r)[1:] for r in told] == [(None, "cl_1"), (texts.bot_message("ru", "join_yes", org="")[1], "cl_1")]
+    assert [outbox._render(con, r)[1:] for r in told] == [(None, "cl_1"), (texts.bot_message("ru", "join_yes", org="")[1], "cl_1")]
 
 
 def test_admin_clubs(env):
@@ -466,7 +466,7 @@ def test_registry(env, monkeypatch):
     assert c.post("/api/registry/orgs/1/official", headers=D, json={"on": True}).json()["official"] is True
     c.post("/api/registry/orgs/1/official", headers=D, json={"on": False}); c.post("/api/registry/orgs/1/official", headers=D, json={"on": True})
     told = con.execute("SELECT b.*, 'en' AS lang FROM bot_outbox b WHERE kind = 'club_official'").fetchall()
-    assert [t["user_id"] for t in told] == [pres["id"]] and bot._render(con, told[0])[2] == "cl_1"
+    assert [t["user_id"] for t in told] == [pres["id"]] and outbox._render(con, told[0])[2] == "cl_1"
     assert con.execute("SELECT COUNT(*) FROM audit_log WHERE action = 'official'").fetchone()[0] == 3
     # (after the export: a request refreshes the person's Telegram fields from initData)
     team = {x["person"]["id"]: x["quiet"] for x in c.get("/api/orgs/1/members", headers=tma(81, "Pres")).json()}
@@ -520,7 +520,7 @@ def test_club_applications(env, monkeypatch):
     assert app["status"] == "pending" and c.post("/api/club-applications", headers=A, json=good).json()["message"] == "pending"
     con = db.connect(cfg.db_path)
     ping = con.execute("SELECT b.*, 'ru' AS lang FROM bot_outbox b WHERE kind = 'club_application'").fetchall()
-    assert len(ping) == 1 and bot._render(con, ping[0])[2] == "capps"                               # the admin hears
+    assert len(ping) == 1 and outbox._render(con, ping[0])[2] == "capps"                               # the admin hears
     assert c.get("/api/me", headers=B).json()["counters"]["inbox"] == 1
     assert c.get("/api/admin/inbox", headers=A).status_code == 403
     # all or nothing: a failure after the club is made leaves no club without its President, and the application waits
@@ -537,7 +537,7 @@ def test_club_applications(env, monkeypatch):
     assert [(m["org"]["name"], m["role"]) for m in me["memberships"]] == [("Chess", "president")]
     assert c.get(f"/api/orgs/{done['orgId']}", headers=A).json()["links"] == links           # the club got them all
     told = con.execute("SELECT b.*, 'ru' AS lang FROM bot_outbox b WHERE kind = 'club_application_decided'").fetchone()
-    assert bot._render(con, told)[2] == f"cl_{done['orgId']}"
+    assert outbox._render(con, told)[2] == f"cl_{done['orgId']}"
     go = {**good, "name": "Go Club", "links": ["https://tiktok.com/@go"], "why": "Weekly games"}
     z = c.post("/api/club-applications", headers=Z, json=go).json()
     assert (z["links"], z["why"]) == (go["links"], go["why"])
@@ -764,6 +764,7 @@ def test_team_two(env):
     """Team 2.0 (§2b): the club's own roles are a name on a level (Vice+, strictly below their own); tags are groups
     (Head+); probation is a label (Head+ put it on, the person and Head+ see it, a Vice+ takes it off); a Head's removal is a request, a Vice+ removes at once; a ban keeps
     them out of applications and the link until lifted."""
+    from kbtu import outbox as kbtu_outbox  # "outbox" below is this test's own query helper
     c, cfg = env
     for uid, name in ((20, "pres"), (21, "vic"), (22, "hed"), (10, "ann"), (11, "bob"), (12, "cat")):
         login(c, uid, name)
@@ -868,11 +869,11 @@ def test_team_two(env):
     q = c.get("/api/orgs/1/team", headers=tma(20)).json()["removals"][0]
     assert (q["by"]["id"], q["ban"], q["note"]) == (uid[22], True, "spam")
     ask = con.execute("SELECT ref, user_id FROM bot_outbox WHERE kind = 'removal_ask' AND ref = ?", (f"rm:{q['id']}",)).fetchone()
-    assert "and ban them" in bot._render(con, {"kind": "removal_ask", "ref": ask[0], "lang": "en", "user_id": ask[1]})[0]
+    assert "and ban them" in kbtu_outbox._render(con, {"kind": "removal_ask", "ref": ask[0], "lang": "en", "user_id": ask[1]})[0]
     notice = {"kind": "removal_ask", "ref": ask[0], "lang": "en", "user_id": uid[21]}
-    assert bot._render(con, notice)
+    assert kbtu_outbox._render(con, notice)
     con.execute("UPDATE org_members SET role = 'member' WHERE org_id = 1 AND user_id = ?", (uid[21],))
-    assert bot._render(con, notice) is None
+    assert kbtu_outbox._render(con, notice) is None
     con.execute("UPDATE org_members SET role = 'vice' WHERE org_id = 1 AND user_id = ?", (uid[21],))
     assert c.post(f"/api/removals/{q['id']}", headers=tma(22), json={"approve": True}).status_code == 403
     c.post(f"/api/removals/{q['id']}", headers=tma(20), json={"approve": False})
@@ -895,7 +896,7 @@ def test_team_two(env):
 def test_important_post(env):
     """An "Important" post: Vice+ write it; the club's members (not the author) hear it from the bot, one
     such message a day per club at most; other labels message nobody."""
-    from kbtu import bot
+    from kbtu import outbox
     c, cfg = env
     vice, head, mem = login(c, 61, "vice"), login(c, 62, "head"), login(c, 63, "mem")
     V, H = tma(61, "Vice"), tma(62, "Head")
@@ -915,7 +916,7 @@ def test_important_post(env):
     c.post("/api/orgs/1/posts", headers=V, json={**post, "title": "And again"})
     assert len(sent()) == 2                                                                # once a day per club
     m = con.execute("SELECT b.*, u.lang FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE b.kind = 'important' AND b.user_id = ?", (mem["id"],)).fetchone()
-    text, button, start = bot._render(con, m)
+    text, button, start = outbox._render(con, m)
     assert "IT Club" in text and "Meeting moved to 305" in text and start == "news"
 
 

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import time
 
-from kbtu import admin, bot, logic
+from kbtu import admin, logic, outbox
 from test_core import delete_now, env, login, set_clock, tma  # noqa: F401  (env is a fixture)
 from test_team_guests import _club, _event, _uid
 
@@ -85,7 +85,7 @@ def test_sign_up_draw_and_who_reads_what(env):
     assert sorted(m["user_id"] for m in sent) == sorted(_uid(con, tg) for tg in PLAYERS[:4])
     order = [m["user_id"] for m in sorted(sent, key=lambda m: m["id"])]
     assert order == sorted(order)  # queued by user id: the outbox's ids don't spell out the ring (review, P1)
-    text, _, start = bot._render(con, sent[0])
+    text, _, start = outbox._render(con, sent[0])
     assert start == f"ev_{eid}" and "Testov" not in text and "wish of" not in text
 
 
@@ -186,10 +186,10 @@ def test_santa_news(env, capsys, monkeypatch):
     admin.main(["santa-news", "20"])  # reworded: the one-person send reads it again
     assert capsys.readouterr().out.strip() == "queued 1"
     m = con.execute("SELECT b.*, 'en' AS lang FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE b.kind = 'santa_news' AND u.tg_id = 20").fetchone()
-    text, button, start = bot._render(con, m)
+    text, button, start = outbox._render(con, m)
     assert start == "sn_1" and "IT Club" in text and button
     logic.set_role(con, None, _uid(con, 20), 1, "member", "test")
-    assert bot._render(con, m) is None  # no longer its President: quiet
+    assert outbox._render(con, m) is None  # no longer its President: quiet
 
 
 # ---------------------------------------------------------------- round 2: budget, deadline, the clock, reminders
@@ -250,7 +250,7 @@ def test_budget_and_deadline(env):
     # the invite, as the bot renders it: the budget a number, the date the server's
     logic.set_role(con, None, _uid(con, 10), 1, "member", "test")
     logic.santa.notify(con, _uid(con, 10), "santa_open", f"event:{eid}")
-    text, button, start = bot._render(con, _out(con, "santa_open")[0])
+    text, button, start = outbox._render(con, _out(con, "santa_open")[0])
     assert "7 000 ₽" not in text and "7 000 ₸" in text and "IT Club" in text and start == f"ev_{eid}"
     # a game closer than a week: the deadline halfway there, never past, never after the gifts day
     near = int(time.time()) + 2 * DAY
@@ -266,7 +266,7 @@ def test_deadline_draws_by_itself(env):
     logic.santa.tick(con)  # two: no draw; the President hears it once
     assert _page(c, eid, 20)["santa"]["drawn"] is False
     assert _to(con, "santa_few") == [20]
-    text, _, start = bot._render(con, _out(con, "santa_few")[0])
+    text, _, start = outbox._render(con, _out(con, "santa_few")[0])
     assert start == f"mg_{eid}" and " 2" in text
     logic.santa.tick(con)
     assert len(_out(con, "santa_few")) == 1  # once per deadline, the round doesn't read it again
@@ -282,7 +282,7 @@ def test_deadline_draws_by_itself(env):
     logic.santa.tick(con)
     assert _page(c, eid, 20)["santa"]["drawn"] is True
     assert _to(con, "santa_drawn") == [10, 11, 12]
-    assert bot._render(con, _out(con, "santa_few")[0]) is None  # drawn since: the old message is quiet
+    assert outbox._render(con, _out(con, "santa_few")[0]) is None  # drawn since: the old message is quiet
     logic.santa.tick(con)
     assert len(_out(con, "santa_drawn")) == 3
 
@@ -339,12 +339,12 @@ def test_reminders_once_each(env):
     logic.santa.tick(con)
     assert _to(con, "santa_soon") == [11, 12]  # never to who started the game (20): they set the deadline
     soon = {m["user_id"]: m for m in _out(con, "santa_soon")}
-    text, _, start = bot._render(con, soon[_uid(con, 11)])
+    text, _, start = outbox._render(con, soon[_uid(con, 11)])
     assert start == f"ev_{eid}" and "3 000 ₸" in text
     _go(c, eid, 11, "wish of 11")  # joined since: quiet
-    assert bot._render(con, soon[_uid(con, 11)]) is None
+    assert outbox._render(con, soon[_uid(con, 11)]) is None
     con.execute("DELETE FROM org_members WHERE user_id = ?", (_uid(con, 12),))  # left the club: quiet
-    assert bot._render(con, soon[_uid(con, 12)]) is None
+    assert outbox._render(con, soon[_uid(con, 12)]) is None
     # the gifts day's eve, to those playing, once
     _go(c, eid, 20, "wish of 20")
     _go(c, eid, 15, "x")  # not of the club: a team-only event refuses
@@ -356,7 +356,7 @@ def test_reminders_once_each(env):
     logic.santa.tick(con)
     logic.santa.tick(con)
     assert _to(con, "santa_eve") == [10, 11, 20]
-    text, _, start = bot._render(con, _out(con, "santa_eve")[0])
+    text, _, start = outbox._render(con, _out(con, "santa_eve")[0])
     assert start == f"ev_{eid}" and "\u0417\u0430\u0432\u0442\u0440\u0430" in text  # "Tomorrow" in Russian
     assert [m["user_id"] for m in _out(con, "santa_eve")] == sorted(m["user_id"] for m in _out(con, "santa_eve"))  # never the ring's order
 
@@ -394,7 +394,7 @@ def test_their_santa_hears_the_person_changed(env):
     sent = _out(con, "santa_changed")
     assert [m["user_id"] for m in sent] == [_uid(con, giver[b])]
     assert str(_uid(con, b)) not in sent[0]["ref"].split(":")[2:] and len(sent[0]["ref"].split(":")) == 3  # no leaver in it
-    text, _, start = bot._render(con, sent[0])
+    text, _, start = outbox._render(con, sent[0])
     assert start == f"ev_{eid}" and "Testov" not in text
     # deleting an account: the same
     left = [tg for tg in PLAYERS[:4] if tg != b]
@@ -428,8 +428,8 @@ def test_cancelled_game_and_two_clubs(env):
     # cancelled: everyone in hears it once (event_cancelled); the game's own messages go quiet
     assert c.post(f"/api/events/{eid}/cancel", headers=tma(20)).status_code == 200
     assert _to(con, "event_cancelled") == [10, 11, 12]
-    assert all(bot._render(con, m) is None for m in _out(con, "santa_drawn") if m["ref"] == f"event:{eid}")
-    assert bot._render(con, _out(con, "santa_open")[0]) is None
+    assert all(outbox._render(con, m) is None for m in _out(con, "santa_drawn") if m["ref"] == f"event:{eid}")
+    assert outbox._render(con, _out(con, "santa_open")[0]) is None
 
 
 
@@ -454,7 +454,7 @@ def test_santa_is_for_the_whole_team(env):
     logic.santa.tick(con)
     assert _to(con, "santa_soon") == [11]
     logic.santa.notify(con, _uid(con, 10), "santa_nudge", f"sr:1:{eid}")
-    assert bot._render(con, [m for m in _out(con, "santa_nudge") if m["user_id"] == _uid(con, 10)][0]) is None
+    assert outbox._render(con, [m for m in _out(con, "santa_nudge") if m["user_id"] == _uid(con, 10)][0]) is None
 
 
 def test_short_game_no_double_message(env):
@@ -522,7 +522,7 @@ def test_deadline_an_hour_before_gifts_day(env):
     logic.santa.tick(con)
     logic.santa.tick(con)
     assert _to(con, "santa_late") == [20]
-    text, _, start = bot._render(con, _out(con, "santa_late")[0])
+    text, _, start = outbox._render(con, _out(con, "santa_late")[0])
     assert start == f"mg_{eid}" and text
     assert not con.execute("SELECT drawn_at FROM santa_events WHERE event_id = ?", (eid,)).fetchone()[0]  # nothing drawn on its own
 
@@ -599,12 +599,12 @@ def test_two_left_then_one(env):
     two = _out(con, "santa_two")
     assert sorted(m["user_id"] for m in two) == sorted(_uid(con, tg) for tg in rest)
     assert all(str(_uid(con, leaver)) not in m["ref"] for m in two)
-    text, _, start = bot._render(con, two[0])
+    text, _, start = outbox._render(con, two[0])
     assert start == f"ev_{eid}" and "Testov" not in text
     c.delete(f"/api/events/{eid}/registration", headers=tma(rest[0]))
     assert [m["user_id"] for m in _out(con, "santa_alone")] == [_uid(con, rest[1])]
-    assert bot._render(con, two[0]) is None  # the ring moved on: the old "two of you" stays quiet
-    assert bot._render(con, _out(con, "santa_alone")[0])
+    assert outbox._render(con, two[0]) is None  # the ring moved on: the old "two of you" stays quiet
+    assert outbox._render(con, _out(con, "santa_alone")[0])
 
 
 def test_eve_follows_the_gifts_day(env):
@@ -621,7 +621,7 @@ def test_eve_follows_the_gifts_day(env):
     con.execute("UPDATE events SET starts_at = ? WHERE id = ?", (day1 + 7200, eid))
     logic.santa.tick(con)
     logic.santa.tick(con)
-    assert len(_out(con, "santa_eve")) == 6 and bot._render(con, first[0]) is None
+    assert len(_out(con, "santa_eve")) == 6 and outbox._render(con, first[0]) is None
     # two leave: the last one has nobody to give to and gets no "who I give to"
     a, b = PLAYERS[:2]
     c.delete(f"/api/events/{eid}/registration", headers=tma(a))
@@ -700,7 +700,7 @@ def test_change_my_wishlist(env):
     assert _page(c, eid, santa)["mySanta"]["to"]["wish"] == "a red scarf"  # the Santa reads the newest
     sent = _out(con, "santa_wish")
     assert [m["user_id"] for m in sent] == [_uid(con, santa)] and "scarf" not in str(tuple(sent[0]))
-    text, _, start = bot._render(con, sent[0])
+    text, _, start = outbox._render(con, sent[0])
     assert start == f"ev_{eid}" and "scarf" not in text
     _rewish(c, eid, 10, "a blue scarf")
     assert len(_out(con, "santa_wish")) == 1  # once a day per game
@@ -766,10 +766,10 @@ def test_chat_is_the_pair_alone(env):
     mine = lambda kind, tg: [x for x in _out(con, kind) if x["user_id"] == _uid(con, tg)]  # noqa: E731
     sent = mine("santa_msg", b)
     assert len(sent) == 1 and "tree" not in str(tuple(sent[0]))
-    text, button, start = bot._render(con, sent[0])
+    text, button, start = outbox._render(con, sent[0])
     assert start == f"ev_{eid}" and text.startswith("\U0001f385") and "tree" not in text + str(button) and "Test" not in text
     back = mine("santa_reply", a)
-    assert len(back) == 1 and "thank" not in bot._render(con, back[0])[0]
+    assert len(back) == 1 and "thank" not in outbox._render(con, back[0])[0]
     _say(c, eid, a, "to", "again")
     assert len(mine("santa_msg", b)) == 1
     con.execute("UPDATE bot_outbox SET send_after = send_after - 3601, ref = ref || '0' WHERE kind = 'santa_msg'")
@@ -800,7 +800,7 @@ def test_chat_is_the_pair_alone(env):
     assert c.get("/api/admin/inbox", headers=tma(30)).json()["santa"] == 1
     told = _out(con, "santa_reported")
     assert [x["user_id"] for x in told] == [_uid(con, 30)] and "tree" not in str(tuple(told[0]))
-    text, _, start = bot._render(con, told[0])
+    text, _, start = outbox._render(con, told[0])
     assert text.startswith("\U0001f6a8") and start == "capps" and "Test" not in text
     # a lost seat doesn't take a reported thread from the staff
     c.delete(f"/api/events/{eid}/registration", headers=tma(a))
@@ -810,7 +810,7 @@ def test_chat_is_the_pair_alone(env):
     logic.santa.forget(con)
     assert con.execute("SELECT COUNT(*) FROM santa_msgs").fetchone()[0] == 6  # the pair's four and the report; the third player's own is swept
     assert c.post(f"/api/admin/santa-reports/{reps[0]['id']}/done", headers=tma(30)).status_code == 204
-    assert c.get("/api/admin/santa-reports", headers=tma(30)).json() == [] and bot._render(con, told[0]) is None
+    assert c.get("/api/admin/santa-reports", headers=tma(30)).json() == [] and outbox._render(con, told[0]) is None
     log = con.execute("SELECT actor_id, target, data FROM audit_log WHERE action = 'santa_report_done'").fetchall()
     assert [tuple(x) for x in log] == [(_uid(con, 30), f"santa_report:{reps[0]['id']}", "{}")]  # who and which, never the pair
     con.execute("UPDATE events SET starts_at = ? WHERE id = ?", (int(time.time()) - 29 * DAY, eid))
@@ -882,7 +882,7 @@ def test_chat_cap_end_and_retiring(env, monkeypatch):
     con.execute("UPDATE events SET starts_at = starts_at + ?, ends_at = NULL WHERE id = ?", (30 * DAY, eid))
     assert _chat(c, eid, a).status_code == 404 and _say(c, eid, b, "from").status_code == 404 and _page(c, eid, a)["mySanta"]["chat"] is False
     sent = [m for m in _out(con, "santa_msg") if m["user_id"] == _uid(con, b)]
-    assert sent and bot._render(con, sent[0]) is None  # nor a push about a chat that is over
+    assert sent and outbox._render(con, sent[0]) is None  # nor a push about a chat that is over
     set_clock(monkeypatch, lambda: (int(time.time()) + 5 * 3600) // DAY * DAY + DAY - 5 * 3600 + 60)  # just past Almaty's midnight: the night's round
     logic.stats_day(con)
     set_clock(monkeypatch, lambda: int(time.time()))

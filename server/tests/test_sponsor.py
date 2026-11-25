@@ -16,7 +16,7 @@ from threading import Barrier
 import pytest
 from fastapi.testclient import TestClient
 
-from kbtu import app as server, bot, db, logic, media, receipt, texts
+from kbtu import app as server, db, logic, media, outbox, receipt, texts
 from kbtu.logic import donations, seats, stars
 from test_core import delete_now, env, login, set_clock, tma  # noqa: F401
 from test_review_seats import _paid, _shot
@@ -567,10 +567,10 @@ def test_bot_uses_only_localized_templates_and_suppresses_stale_decisions(suppor
     for lang in ("ru", "kk", "en"):
         con.execute("UPDATE users SET lang = ? WHERE id = ?", (lang, ids[7]))
         row = con.execute("SELECT b.*, ? AS lang FROM bot_outbox b WHERE kind = 'donation_confirmed'", (lang,)).fetchone()
-        assert bot._render(con, row) == (*texts.bot_message(lang, "donation_confirmed"), "donate")
+        assert outbox._render(con, row) == (*texts.bot_message(lang, "donation_confirmed"), "donate")
     assert decide(support, did, "reject").status_code == 204
-    assert bot._render(con, row) is None
+    assert outbox._render(con, row) is None
     rejected = con.execute("SELECT b.*, 'en' AS lang FROM bot_outbox b WHERE kind = 'donation_rejected'").fetchone()
-    assert bot._render(con, rejected) == (*texts.bot_message("en", "donation_rejected"), "donate")
+    assert outbox._render(con, rejected) == (*texts.bot_message("en", "donation_rejected"), "donate")
     assert decide(support, did, "undo").status_code == 204
-    assert bot._render(con, rejected) is None
+    assert outbox._render(con, rejected) is None

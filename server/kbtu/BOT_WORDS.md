@@ -2,6 +2,9 @@
 
 The rule (AGENTS.md): the bot sends templates with a button into the app, never a user's words. The exceptions, all of them:
 
+(Where they are sent from: the postman in `outbox.py`, private chats in `bot_dm.py`, groups, `/all` and the video replies in
+`bot_groups.py`, the channel's comments in `tgc.py`; all through `bot._tg`.)
+
 Two exceptions: a student's own post
 to the forum channel (`FORUM_CHANNEL`), published only after the AI's yes or a moderator's, as plain text without
 links or mentions, signed with the app's name or "Anonymous student"; the author can delete it, a moderator can

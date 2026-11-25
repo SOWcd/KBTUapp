@@ -35,7 +35,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Resp
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.gzip import GZipMiddleware
 
-from . import ai, auth, bot, calpage, casting, checkin as qr, config, db, docs, llm, logic, media, mirror, msauth, receipt, roster, texts, video
+from . import ai, auth, bot, bot_dm, bot_groups, calpage, casting, checkin as qr, config, db, docs, llm, logic, media, mirror, msauth, receipt, roster, texts, video
 from .logic import ApiError, Viewer, donations
 from .logic import web_auth
 
@@ -698,7 +698,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/me/delete")
     def ask_delete(con: Con, v: Me, body: dict | None = Body(None)):
-        """§4.8: in a week, with the way back meanwhile (logic.ask_delete); the bot's round runs it (bot.send_due)."""
+        """§4.8: in a week, with the way back meanwhile (logic.ask_delete); the bot's round runs it (outbox.send_due)."""
         return logic.ask_delete(con, v, (body or {}).get("photos") is True)
 
     @app.post("/api/me/consent")
@@ -1386,7 +1386,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         tg = await run_in_threadpool(logic.chatmod.target, con, v, oid, cid)
         async with httpx.AsyncClient(timeout=10) as http:
             if on:
-                miss = await bot.swear_rights(cfg, http, tg)
+                miss = await bot_groups.swear_rights(cfg, http, tg)
                 if miss is None:
                     raise ApiError("unavailable", "telegram")
                 if miss:
@@ -1947,11 +1947,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         u = logic.one(con, "SELECT tg_id FROM users WHERE id = ?", v.id)
         if not v.student or not u or u["tg_id"] != who or logic.guard_join(con, chat, who) != "approve":
             raise ApiError("forbidden")  # the same rule as at the door, again now (an event's group since, unlinked, banned)
-        tg = f"https://api.telegram.org/bot{cfg.bot_token}/"
         async with httpx.AsyncClient(timeout=15) as http:
-            r = (await http.post(tg + "answerChatJoinRequestQuery", json={"chat_join_request_query_id": qid, "result": "approve"})).json()
+            r = (await bot._tg(cfg, http, "answerChatJoinRequestQuery", {"chat_join_request_query_id": qid, "result": "approve"})).json()
             if not r.get("ok"):  # the query ran out: the request itself may still wait
-                r = (await http.post(tg + "approveChatJoinRequest", json={"chat_id": chat, "user_id": who})).json()
+                r = (await bot._tg(cfg, http, "approveChatJoinRequest", {"chat_id": chat, "user_id": who})).json()
         if not r.get("ok"):
             log.warning("guard: %s", str(r.get("description"))[:200])
             raise ApiError("conflict", "expired")
@@ -2552,8 +2551,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         """A CSV into the person's own chat with the bot (asked for by them): it opens on any phone and can be forwarded."""
         try:
             async with httpx.AsyncClient(timeout=20) as http:
-                r = await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/sendDocument", data={"chat_id": str(tg_id), "caption": caption},
-                                    files={"document": (name, data, "text/csv")})
+                r = await bot._tg(cfg, http, "sendDocument", {"chat_id": str(tg_id), "caption": caption}, files={"document": (name, data, "text/csv")})
             answer = r.json()
         except (httpx.HTTPError, ValueError) as exc:
             log.warning("file: %s", type(exc).__name__)
@@ -2608,7 +2606,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         if not url:
             return {"status": "bad", "title": ""}
         async with httpx.AsyncClient(timeout=10) as http:
-            status, title, _ = await bot.suggest(cfg, http, con, v.id, url)
+            status, title, _ = await bot_dm.suggest(cfg, http, con, v.id, url)
         return {"status": status, "title": title}
 
     @app.post("/api/chats/{cid}/opened", status_code=204)
@@ -2964,7 +2962,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             return {"link": result["reply_markup"]["inline_keyboard"][0][0]["url"]}
         try:
             async with httpx.AsyncClient(timeout=10) as http:
-                r = (await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/savePreparedInlineMessage", json={
+                r = (await bot._tg(cfg, http, "savePreparedInlineMessage", {
                     "user_id": request.state.tg["id"], "result": result,
                     "allow_user_chats": True, "allow_group_chats": True, "allow_channel_chats": True})).json()
         except (httpx.HTTPError, ValueError) as exc:

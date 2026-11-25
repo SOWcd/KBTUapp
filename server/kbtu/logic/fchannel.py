@@ -1035,7 +1035,7 @@ def mod_decide(con, v: Viewer, pid: int, ok: object) -> None:
             _unpost(con, p, "moderator", UNDO_WINDOW)
             _post_off(con, pid, UNDO_WINDOW)
             con.execute("UPDATE fchan_posts SET status = 'hidden', why = 'moderator', tg_msg = NULLIF(tg_msg, 0) WHERE id = ?", (pid,))
-            if p["status"] == "held":  # declined before it went out: its author hears, after the undo minute (bot.py checks it still is)
+            if p["status"] == "held":  # declined before it went out: its author hears, after the undo minute (outbox.py checks it still is)
                 notify(con, p["user_id"], "fch_declined", f"fd:{pid}", after=_now() + UNDO_WINDOW)
         log_action(con, v.id, "fchan_release" if ok else "fchan_hide", f"fchan:{pid}")
 

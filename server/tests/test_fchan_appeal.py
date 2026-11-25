@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import time
 
-from kbtu import ai, bot, db, logic, texts
+from kbtu import ai, db, logic, outbox, texts
 from test_core import env, login, set_clock, tma  # noqa: F401  (env: the fixture)
 from test_fchannel import setup
 
@@ -39,7 +39,7 @@ def test_appeal(env, monkeypatch):
     assert appeal(pid).status_code == 404                                                    # once
     m = con.execute("SELECT *, 'en' AS lang FROM bot_outbox WHERE kind = 'fch_appeal'").fetchall()
     assert [x["user_id"] for x in m] == [mod["id"]]                                         # the moderators hear, a template into Admin
-    assert bot._render(con, m[0]) == (*texts.bot_message("en", "fch_appeal", n=1), "capps")
+    assert outbox._render(con, m[0]) == (*texts.bot_message("en", "fch_appeal", n=1), "capps")
     q = c.get("/api/forum-posts/mod", headers=tma(3)).json()["held"]
     assert [(x["id"], x["why"], x["aiWhy"]) for x in q] == [(pid, "noise", "Looks like a test.")]  # the AI's word and its reason kept
     assert [x["human"] for x in c.get("/api/forum-posts/feed", headers=tma(1)).json() if x["id"] == pid] == [True]

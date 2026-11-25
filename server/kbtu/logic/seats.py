@@ -245,7 +245,7 @@ def channel_gone(con) -> list[tuple[int, str]]:
 
 def channel_discussion(con, post: int) -> sqlite3.Row | None:
     """The channel's post reached its discussion group (Telegram forwards it there by itself): the event whose post it is
-    and that has no first comment yet, else None. The bot then writes the rules under it (bot._discussion)."""
+    and that has no first comment yet, else None. The bot then writes the rules under it (bot_groups._discussion)."""
     return one(con, "SELECT * FROM events WHERE channel_msg = ? AND channel_link IS NULL", post)
 
 
