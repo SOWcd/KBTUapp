@@ -263,7 +263,7 @@ def test_reply_goes_with_post(env, monkeypatch):
     assert w.c.delete(f"/api/forum-posts/{w.pid}", headers=tma(1)).status_code == 204
     tick(w.cfg, w.tg, w.con)
     assert {"chat_id": G, "message_id": msg} in w.tg.of("deleteMessage") and len(group_sends(w.tg)) == 1
-    assert {s for (s,) in w.con.execute("SELECT status FROM fchan_replies")} == {"hidden"}
+    assert {s for (s,) in w.con.execute("SELECT status FROM fchan_replies")} == {"gone"}
     assert w.c.post(f"/api/forum-posts/{w.pid}/replies", headers=tma(1), json={"body": "After the end"}).status_code == 404
 
 
