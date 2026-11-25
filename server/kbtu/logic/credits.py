@@ -288,9 +288,16 @@ def ship(con, cid: int, day: str | None = None) -> str:
         raise ValueError("the day as YYYY-MM-DD") from None
     if len(day) != 10:
         raise ValueError("the day as YYYY-MM-DD")
+    from .profiles import _celebrate, _levels
     with tx(con):
+        # its author's Idea generator / Vibe coder level, recorded now for the app's unlock moment (no bot message)
+        who = one(con, """SELECT u.id FROM credits c JOIN users u ON u.tg_id = c.tg_id AND u.tg_id > 0
+            JOIN students s ON s.user_id = u.id WHERE c.id = ?""", cid)
+        before = _levels(con, who[0]) if who else None
         if not con.execute("UPDATE credits SET shipped_on = ? WHERE id = ?", (day, cid)).rowcount:
             raise ValueError(f"no credit {cid}")
+        if who:
+            _celebrate(con, who[0], before)
     return day
 
 

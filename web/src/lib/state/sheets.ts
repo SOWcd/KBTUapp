@@ -160,8 +160,8 @@ export const sheets = {
   roundApply: (_org: Id, _source?: string) => {},
   roundSetup: (_org: Id, _round?: Round | null, _onsaved?: () => void) => {},
   roundBoard: (_org: Id) => {},
-  /** People of the app: the screen; my own "name me?" sheet */
-  credits: () => {},
+  /** Made together: the screen (at 'support': opened at its Support section); my own "name me?" sheet */
+  credits: (_at?: 'support') => {},
   creditAsk: () => {},
   /** students make the app: the ways to help and the signed offer; what is wrong (anonymous or in Telegram); the admin's list of both */
   helpUs: () => {},
@@ -185,7 +185,7 @@ export const sheets = {
   /** removing someone below me: a Vice+ at once, a Head's as a request (`request`); a ban if wanted */
   removeMember: (_org: Id, _user: Id, _name: string, _request: boolean, _ondone?: (done: boolean) => void) => {},
   /** the pages pushed from the settings under my lanyard (Me): about me, notifications, my name, privacy and its pages, about */
-  settings: (_kind: 'app' | 'me' | 'notify' | 'name' | 'privacy' | 'phone' | 'city' | 'school' | 'course' | 'last' | 'first' | 'middle' | 'sees' | 'about' | 'donate' | 'sponsors') => {},
+  settings: (_kind: 'app' | 'me' | 'notify' | 'name' | 'privacy' | 'phone' | 'city' | 'school' | 'course' | 'last' | 'first' | 'middle' | 'sees' | 'about' | 'donate') => {},
   /** the admin panel (pilot): clubs and their teams */
   admin: () => {},
   /** the campus map, on a floor (step 1: the 2023 plans) */

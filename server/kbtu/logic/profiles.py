@@ -100,6 +100,8 @@ ACHIEVEMENTS = [  # code, emoji, needs, secret (§4.11)
     ("first50", "medal_first500", (1,), False),  # the drawn First 500 medal
     ("creator_laugh", "face_with_tears_of_joy_3d", (1,), True), ("creator_found", "waving_hand_3d_default", (1,), True),
     ("bugs", "lady_beetle_3d", (1, 5, 10, 25), False),  # a bug, literally (no emoji twice)
+    ("ideas", "light_bulb_3d", (1, 3, 7, 15), False),  # my shipped idea lines in People of the app (credits, kind idea)
+    ("coder", "laptop_3d", (1, 3, 7, 15), False),  # "Vibe coder": my shipped code lines there (kind code); finds stay Bug hunter's grants
     ("referral", "megaphone_3d", (1, 3, 5, 10, 15, 25, 50, 75, 100), False),  # students brought by my invite link who signed in with KBTU
     ("init26", "medal_init26_2", (1,), False),  # volunteered at the 2026 freshmen's initiation (given to a check-in session's people)
     ("init26f", "medal_init26f_2", (1,), False),  # was at the 2026 initiation as a freshman (the freshmen list's mark, at sign-in: account.ms_link)
@@ -142,6 +144,9 @@ def _counts(con, uid: int, *, with_activist: bool = True) -> dict[str, int]:
     team = one(con, """SELECT COUNT(*) FROM registrations r JOIN events e ON e.id = r.event_id
         WHERE r.user_id = ? AND r.checked_in_at IS NOT NULL AND e.status = 'published' AND e.visibility = 'members'""", uid)[0]
     posts = _activist_posts(con, uid) if with_activist else 0
+    # shipped People of the app lines by my Telegram id: a GitHub-only line is nobody's here
+    made = dict(rows(con, """SELECT c.kind, COUNT(*) FROM credits c JOIN users u ON u.tg_id = c.tg_id AND u.tg_id > 0
+        WHERE u.id = ? AND c.shipped_on IS NOT NULL GROUP BY c.kind""", uid))
     seasons = Counter(map(_season_start, times))  # the best semester counts
     counts = {
         "regular": len(times), "activist_posts": posts, "activist": _activist_count(posts, len(times)), "first_in": first_in, "soul": soul, "team": team,
@@ -149,7 +154,7 @@ def _counts(con, uid: int, *, with_activist: bool = True) -> dict[str, int]:
         "creator_laugh": grants.get("creator_laugh", 0), "creator_found": grants.get("creator_found", 0), "bugs": grants.get("bugs", 0), "dmp": grants.get("dmp", 0), "referral": referral,
         "init26": grants.get("init26", 0), "init26f": grants.get("init26f", 0), "init26p": grants.get("init26p", 0), "anthem": grants.get("anthem", 0),
         "supporter": grants.get("supporter", 0), "club_founder": grants.get("club_founder", 0), "honor": grants.get("honor", 0),
-        "critic": critic(con, uid) if CRITIC_ON else 0,
+        "critic": critic(con, uid) if CRITIC_ON else 0, "ideas": made.get("idea", 0), "coder": made.get("code", 0),
     }
     if any(a[0] == "streak" for a in ACHIEVEMENTS):
         # Only public event weeks since the first check-in can affect the streak.
@@ -189,7 +194,7 @@ def _celebrate(con, uid: int, before: dict[str, int], after: int | None = None) 
             con.execute("""INSERT INTO achievement_levels (user_id, code, level, reached_at) VALUES (?, ?, ?, ?)
                 ON CONFLICT (user_id, code) DO UPDATE SET level = excluded.level, reached_at = excluded.reached_at
                 WHERE excluded.code != 'activist' OR excluded.level > achievement_levels.level""", (uid, code, level, core.now()))
-            if code not in PRIVATE and code != "activist":  # the activist unlock is shown in the app
+            if code not in PRIVATE and code not in QUIET:  # these unlocks are shown in the app only
                 notify(con, uid, "achievement", f"ach:{code}:{level}", after=after)
 
 
@@ -249,6 +254,7 @@ BADGE_OF = {c: b for b, vs in BADGES.items() for c in vs}
 GRANTABLE = ("bugs", "dmp", "creator_laugh", "creator_found", "init26", "init26f", "init26p", "supporter", "club_founder", "honor")  # the manual ones (§4.11); "First 500" is given at verification
 ADDS_UP = ("bugs", "dmp")  # one grant is +1, not "held": Bug hunter per bug, Attendance per meeting (a day, _grant)
 CREATOR_ONLY = ("creator_laugh", "creator_found", "supporter", "honor")
+QUIET = ("activist", "ideas", "coder")  # no bot card: the app's unlock moment only
 PRIVATE = ("supporter", "sponsor")  # who gave money: no bot card, no rarity, in no admin list but the creator's, on a profile only if showcased
 ONE_BY_ONE = ("supporter", "club_founder", "honor")  # never by a card scan, a link, a shown QR or a check-in session: Fuel is for Stars, a founder names the club
 # art being redone; delete the tuple to bring them back. Out of the catalogs only (Admin -> Awards' rows, the
@@ -779,6 +785,9 @@ def person(con, v: Viewer, uid: int) -> dict:
         going = cards(con, v, [e for e in rows(con, """SELECT e.* FROM registrations r JOIN events e ON e.id = r.event_id
             WHERE r.user_id = ? AND r.status = 'going' AND e.status = 'published' AND e.starts_at > ? ORDER BY e.starts_at""", uid, core.now())
             if _visible(con, v, e, roles, hidden)])
+    # "Bring a friend": the upcoming events I already invited them to, so the Invite sheet opens with them "Invited"
+    invited = [r[0] for r in rows(con, """SELECT i.event_id FROM friend_invites i JOIN events e ON e.id = i.event_id
+        WHERE i.from_id = ? AND i.to_id = ? AND e.starts_at > ?""", v.id, uid, core.now())] if link else []
     earned = rows(con, """SELECT e.* FROM registrations r JOIN events e ON e.id = r.event_id
         WHERE r.user_id = ? AND r.checked_in_at IS NOT NULL AND e.badge_name IS NOT NULL ORDER BY e.starts_at DESC""", uid) if close else []
     # the role shows only to the club's own team: outside, just the club
@@ -807,7 +816,7 @@ def person(con, v: Viewer, uid: int) -> dict:
         # the showcase as picked (achievements earned, badges owned), in order; empty = never picked, the badge shows a default
         "shelf": [k for k in picked if any(a["code"] == k and a["level"] > 0 for a in ach) or any(f"b{b['eventId']}" == k for b in badges)],
         "awards": {"achievements": ach, "badges": badges},
-        "friendship": state, "friendsSince": link["created_at"] if link else None, "going": going,
+        "friendship": state, "friendsSince": link["created_at"] if link else None, "going": going, "invited": invited,
         "username": u["tg_username"] if team else None,
         # a badge picked to be shown, shows; the one that came by itself from a club would tell a stranger the club
         "frame": u["frame"] if u["frame"] in FRAMES else None,  # on the lanyard, as the photo under it: seen by anyone who sees the card

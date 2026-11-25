@@ -588,6 +588,16 @@ export function personCard(id: Id): { p: Promise<PersonCard>; card?: PersonCard 
 // brought the old one back (an unfriended person with their friends-only data)
 export function keepPerson(c: PersonCard): void { people.set(c.id, { at: Date.now(), p: Promise.resolve(c), card: c }); }
 export function forgetPeople(): void { people.clear(); }
+// "Bring a friend": an invite just sent goes onto their kept card (a fetch still on its way too), so the Invite sheet
+// reopened shows it "Invited" at once (it showed "Invite" again: Amina)
+export function noteInvited(id: Id, eid: Id): void {
+  const a = people.get(id);
+  if (!a) return;
+  const add = (c: PersonCard): PersonCard => (c.invited?.includes(eid) ? c : { ...c, invited: [...(c.invited ?? []), eid] });
+  const e = { at: a.at, p: a.p.then(add), card: a.card && add(a.card) };
+  e.p.then((c) => (e.card = c), () => {});
+  people.set(id, e);
+}
 
 export function put(card: EventCard): void {
   data.kept++; taps++; // a list asked before this card is older than it

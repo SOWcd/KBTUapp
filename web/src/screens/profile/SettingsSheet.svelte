@@ -14,7 +14,6 @@
   import GraduationCap from '@lucide/svelte/icons/graduation-cap';
   import User from '@lucide/svelte/icons/user';
   import HandHeart from '@lucide/svelte/icons/hand-heart';
-  import Award from '@lucide/svelte/icons/award';
   import Copy from '@lucide/svelte/icons/copy';
   import Check from '@lucide/svelte/icons/check';
   import { fitTitle } from '../../ui/title';
@@ -37,7 +36,6 @@
   import Group from '../../ui/Group.svelte';
   import SettingsList from './SettingsList.svelte';
   import SupportMedal from './SupportMedal.svelte';
-  import SponsorsBoard from './SponsorsBoard.svelte';
   import Row from '../../ui/Row.svelte';
   import Notice from '../../ui/Notice.svelte';
   import { photoItems, editNick, setNick } from './mine';
@@ -47,11 +45,11 @@
   import { setKriGoogle } from '../../lib/kriGoogle';
   type Part = 'last' | 'first' | 'middle';
   type Typed = Exclude<Fixable, 'course' | 'school'>; // the ones typed in (fix); course and school are picked
-  type Kind = 'app' | 'me' | 'notify' | 'name' | 'privacy' | 'phone' | 'city' | 'school' | 'course' | Part | 'sees' | 'about' | 'donate' | 'sponsors';
+  type Kind = 'app' | 'me' | 'notify' | 'name' | 'privacy' | 'phone' | 'city' | 'school' | 'course' | Part | 'sees' | 'about' | 'donate';
   let { overlay, kind }: { overlay: Overlay; kind: Kind } = $props();
   const TITLE: Record<Kind, [Key, typeof Lock]> = { app: ['me.settings', Settings], me: ['set.aboutMe', User], notify: ['me.notifications', Bell], name: ['set.name', User], privacy: ['set.privacy', Lock], phone: ['pd.phone', Phone], city: ['pd.city', MapPin],
     school: ['look.school', GraduationCap], course: ['pd.course', GraduationCap], last: ['login.lastName', User], first: ['login.firstName', User], middle: ['pd.middle', User],
-    sees: ['set.whoSees', Lock], about: ['set.about', Info], donate: ['set.donate', HandHeart], sponsors: ['sp.sponsors', Award] };
+    sees: ['set.whoSees', Lock], about: ['set.about', Info], donate: ['set.donate', HandHeart] };
   const me = $derived(session.me);
   const phone = $derived(me?.student?.phone ? (kzPhone(me.student.phone) ? fmtPhone(me.student.phone) : me.student.phone) : '');
 
@@ -235,7 +233,7 @@
     if (!(await copyText(session.donate, t('pay.copied')))) return; // the number is selectable too
     copied = true; clearTimeout(copiedT); copiedT = setTimeout(() => (copied = false), 2000);
   }
-  void loadCredits(60000); // People of the app's switch below shows only once the list is known (it isn't loaded at launch)
+  void loadCredits(60000); // Made together's switch below shows only once the list is known (it isn't loaded at launch)
 </script>
 
 <!-- in the app: ›; out of it (out = true): ↗ -->
@@ -323,7 +321,7 @@
           onchange={async (on) => { if (on && !(await sheets.ask({ title: t('pymk.askTitle'), text: t('pymk.askText'), ok: t('pymk.on'), cancel: t('common.cancel') }))) { undo++; return; }
             await set('suggestMe', on, true); void loadFriends(); }} />{/key}
         {#if me.city}<Row title={t('set.hideCity')} accessory="switch" checked={me.city.hidden} onchange={(on) => cityHidden(on)} />{/if}
-        <!-- People of the app, my own consent (lib/credits.ts): only while something there is mine, or my yes stands.
+        <!-- Made together, my own consent (lib/credits.ts): only while something there is mine, or my yes stands.
              The switch shows what is SAVED: a tap on goes back at once and opens the sheet (what everyone would see, the
              yes or the no), and it turns on only when the server kept the yes; off: at once, my name gone from the list -->
         {#if data.credits?.mine}{#key undo}<Row title={t('cr.setRow')} accessory="switch" checked={data.credits.mine.consent === true}
@@ -411,8 +409,6 @@
       {@render link(t('set.write'), () => openLink('https://t.me/Sowers'), '@Sowers', true)}
       {@render link(t('set.code'), () => openLink('https://github.com/SOWcd/KBTUapp'), 'GitHub', true)}
     </Group>
-  {:else if kind === 'sponsors'}
-    <SponsorsBoard />
   {:else if kind === 'donate'}
     <!-- one centred column, the title once; the number in one card with its copy as a plain line under
          it; the banks on the page itself; "not a purchase" and "never in DMs" as quiet lines -->

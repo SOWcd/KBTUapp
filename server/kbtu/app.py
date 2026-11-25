@@ -11,6 +11,7 @@ import asyncio
 import contextlib
 import hashlib
 import hmac
+import ipaddress
 import json
 import logging
 import mimetypes
@@ -57,6 +58,30 @@ async def _picture(fn, *args):
         return await _img(fn, *args)
     except media.BadImage:
         raise ApiError("bad_input", "not_an_image") from None
+
+
+# on every answer (Aldiyar's report): no type sniffing, HTTPS only, and framed only by Telegram Web (the Mini App runs
+# in its iframe) or ourselves; a page with its own stricter CSP (forms, calendar) keeps it
+_HEADERS = ((b"x-content-type-options", b"nosniff"), (b"strict-transport-security", b"max-age=31536000"),
+            (b"content-security-policy", b"frame-ancestors 'self' https://web.telegram.org https://*.telegram.org"))
+
+
+class _Secure:
+    """Plain ASGI (no BaseHTTPMiddleware: it buffers and costs every request); adds what a response doesn't set itself."""
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+
+        async def start(m):
+            if m["type"] == "http.response.start":
+                have = {k.lower() for k, _ in m.get("headers", ())}
+                m = {**m, "headers": [*m.get("headers", ()), *(h for h in _HEADERS if h[0] not in have)]}
+            await send(m)
+        await self.app(scope, receive, start)
+
 
 THREADS = 16               # see lifespan
 GUEST_LIST_BYTES = 2_000_000  # a guest list's JSON body (logic.guests.LIST_ROWS rows); bigger is refused before it is read
@@ -328,6 +353,19 @@ def _web_csrf(request: Request, domain: str) -> None:
         raise ApiError("forbidden", "csrf")
 
 
+def _visitor_ip(request: Request) -> str:
+    """Who is asking. uvicorn takes X-Forwarded-For only from a private peer (the Dockerfile's --forwarded-allow-ips), so
+    a public client address is the real one; Cloudflare's header counts only behind our own proxy (a private or no
+    address): a request straight to the origin can't pick its address and get past a per-address cap (Aldiyar's report)"""
+    peer = request.client.host if request.client else ""
+    try:
+        if ipaddress.ip_address(peer).is_global:
+            return peer
+    except ValueError:  # no address (a test client)
+        pass
+    return request.headers.get("cf-connecting-ip") or peer
+
+
 def _web_cookie(response: Response, token: str) -> None:
     response.set_cookie(web_auth.COOKIE, token, max_age=web_auth.IDLE if token else 0,
                         secure=True, httponly=True, samesite="lax", path="/")
@@ -558,6 +596,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
     app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=6)  # JSON lists; pictures and video are excluded
+    app.add_middleware(_Secure)
 
     def ai_http() -> httpx.AsyncClient:
         """One client for the AI calls (keep-alive: a new one per request pays DNS and TLS each time)."""
@@ -975,9 +1014,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     # the laptop (no Telegram): a pairing code, then what to show; its secret in a header, never in a URL
     @app.post("/api/screen/pair")
     def screen_pair(request: Request, con: Con):
-        # the visitor's address through Cloudflare's tunnel (the socket's peer is the tunnel itself)
-        return {**qr.pair(con, cfg.token_key, request.headers.get("cf-connecting-ip") or (request.client.host if request.client else "")),
-                "bot": f"https://t.me/{cfg.bot_username}?startapp="}
+        return {**qr.pair(con, cfg.token_key, _visitor_ip(request)), "bot": f"https://t.me/{cfg.bot_username}?startapp="}
 
     @app.get("/api/screen")
     def screen_show(con: Con, x_screen: str = Header("")):
@@ -1081,20 +1118,31 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def ms_start(request: Request, v: Me):
         """The Microsoft sign-in link for me (msauth.py); the Mini App opens it outside Telegram"""
         _mini_app_only(request)
-        return {"url": msauth.link(cfg.token_key, v.id, cfg.domain)}
+        return {"url": msauth.start(cfg.token_key, v.id, cfg.domain)}
+
+    @app.get("/ms/go")
+    def ms_go(state: str = ""):
+        """The app's sign-in link opens here: a random PKCE verifier into this browser's cookie, then on to Microsoft"""
+        if not msauth.state_uid(cfg.token_key, state):
+            return RedirectResponse("/ms.html", status_code=302)  # not ours or stale: ms.html says it didn't work
+        verifier = secrets.token_urlsafe(48)
+        r = RedirectResponse(msauth.link(state, verifier, cfg.domain), status_code=302, headers={"Cache-Control": "no-store"})
+        r.set_cookie(msauth.COOKIE, verifier, max_age=msauth.TTL, secure=True, httponly=True, samesite="lax", path="/")
+        return r
 
     @app.get("/api/ms/verifier")
-    def ms_verifier(state: str, con: Con):
-        """The PKCE verifier and whose Telegram the link is for: ms.html asks "link to <name>?" first, so a sign-in link
-        forwarded to someone else can't tie their KBTU account to the sender's Telegram unseen"""
+    def ms_verifier(request: Request, state: str, con: Con):
+        """The PKCE verifier (this browser's, from /ms/go) and whose Telegram the link is for: ms.html asks "link to
+        <name>?" first, so a sign-in link forwarded to someone else can't tie their KBTU account to the sender's Telegram unseen"""
         uid = msauth.state_uid(cfg.token_key, state)
         u = logic.one(con, "SELECT tg_first_name, tg_last_name, tg_username FROM users WHERE id = ?", uid) if uid else None
-        if not u:
-            raise ApiError("not_found")  # a stale link: ms.html says "expired"
+        verifier = request.cookies.get(msauth.COOKIE, "")
+        if not u or not verifier:
+            raise ApiError("not_found")  # a stale link, or a code brought to another browser: ms.html says "expired"
         name = f"{u['tg_first_name']} {u['tg_last_name']}".strip()
         if u["tg_username"]:
             name = f"{name} (@{u['tg_username']})".strip()
-        return {"verifier": msauth.verifier(cfg.token_key, state), "name": name}
+        return {"verifier": verifier, "name": name}
 
     @app.post("/api/ms/finish")
     async def ms_finish(body: dict = Body(...)):

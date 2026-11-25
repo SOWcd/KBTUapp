@@ -87,13 +87,13 @@ SHARE_AWARD = {
 }
 ACH_NAMES = {
     "ru": {"activist": "Главный активист", "regular": "Абонемент", "streak": "Серия", "first_in": "Ранняя пташка", "soul": "Душа тусовки", "season": "Сезон", "first50": "Первые 500",
-           "creator_laugh": "Стендапер", "creator_found": "Встреча века", "bugs": "Охотник за багами", "dmp": "Явка обязательна", "team": "Гроза тимбилдинга", "referral": "Зазывала",
+           "creator_laugh": "Стендапер", "creator_found": "Встреча века", "bugs": "Охотник за багами", "ideas": "Генератор идей", "coder": "Вайб-кодер", "dmp": "Явка обязательна", "team": "Гроза тимбилдинга", "referral": "Зазывала",
            "init26": "Волонтёр посвящения", "init26f": "Посвящение 2026", "init26p": "Выступающий на посвящении", "anthem": "Абсолютный слух", "critic": "Диванный критик", "supporter": "Топливо", "honor": "Почётная медаль", "club_founder": "Основатель клуба"},
     "kk": {"activist": "Бас белсенді", "regular": "Абонемент", "streak": "Серия", "first_in": "Ерте тұрған", "soul": "Ортаның сәні", "season": "Маусым", "first50": "Алғашқы 500",
-           "creator_laugh": "Стендапшы", "creator_found": "Ғасыр кездесуі", "bugs": "Баг аңшысы", "dmp": "Келу міндетті", "team": "Тимбилдинг шебері", "referral": "Шақырушы",
+           "creator_laugh": "Стендапшы", "creator_found": "Ғасыр кездесуі", "bugs": "Баг аңшысы", "ideas": "Идея генераторы", "coder": "Вайб-кодер", "dmp": "Келу міндетті", "team": "Тимбилдинг шебері", "referral": "Шақырушы",
            "init26": "Бағыштау волонтері", "init26f": "Бағыштау 2026", "init26p": "Бағыштауда өнер көрсетуші", "anthem": "Абсолюттік есту", "critic": "Диван сыншысы", "supporter": "Отын", "honor": "Құрмет медалі", "club_founder": "Клуб негізін қалаушы"},
     "en": {"activist": "Chief activist", "regular": "Season ticket", "streak": "Streak", "first_in": "Early bird", "soul": "Life of the party", "season": "Season", "first50": "First 500",
-           "creator_laugh": "Stand-up comic", "creator_found": "Meeting of the century", "bugs": "Bug hunter", "dmp": "Attendance required", "team": "Teambuilding thunder", "referral": "Recruiter",
+           "creator_laugh": "Stand-up comic", "creator_found": "Meeting of the century", "bugs": "Bug hunter", "ideas": "Idea generator", "coder": "Vibe coder", "dmp": "Attendance required", "team": "Teambuilding thunder", "referral": "Recruiter",
            "init26": "Initiation volunteer", "init26f": "Initiation 2026", "init26p": "Initiation performer", "anthem": "Perfect pitch", "critic": "Couch critic", "supporter": "Fuel", "honor": "Honor medal", "club_founder": "Club founder"},
 }
 SCHED_LANG = {  # a schedule's languages in the bot's words ({language} and {languages} in sched_same, sched_added)

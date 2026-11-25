@@ -6,6 +6,8 @@ on:
   push:
     branches: [main]
   pull_request:
+permissions:
+  contents: read  # the token can read the code and nothing else
 jobs:
   english:
     # the pre-commit hook (.githooks/pre-commit) on what this PR or push adds: Cyrillic only in the UI strings
