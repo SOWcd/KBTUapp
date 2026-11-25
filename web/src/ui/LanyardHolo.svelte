@@ -90,8 +90,8 @@
     background: radial-gradient(38% 140% at 0% 50%, rgba(192, 38, 45, 0.5), transparent 70%), linear-gradient(180deg, rgba(30, 30, 33, 0.72), rgba(10, 10, 12, 0.82));
     box-shadow: inset 0 0 0 0.75px rgba(192, 38, 45, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 4px 12px -6px rgba(0, 0, 0, 0.6); }
   .klubanimeshnikov > span { color: rgb(236, 92, 98); }
-  /* óte and kbtu.mag: their colours, matte (the specular dimmed, no white rim) */
-  .teentertainmentkbtu, .kbtumag { --hs: 0.14; box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.22), inset 0 -1px 2px rgba(0, 0, 0, 0.16), 0 4px 10px -6px rgba(0, 0, 0, 0.4); }
+  /* óte, kbtu.mag and Qoloner: their colours, matte (the specular dimmed, no white rim) */
+  .teentertainmentkbtu, .kbtumag, .qoloner { --hs: 0.14; box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.22), inset 0 -1px 2px rgba(0, 0, 0, 0.16), 0 4px 10px -6px rgba(0, 0, 0, 0.4); }
   .club .ch { white-space: nowrap; }
   /* Dice and Destiny: engraved brass: brushed, bevelled, the letters cut into it (a dark cut, light on its
      lower lip), one light sliding with the tilt */

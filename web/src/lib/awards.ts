@@ -40,6 +40,8 @@ import cyberPanther from '../assets/lanyards/cyber-panther.webp';
 import ddDragon from '../assets/lanyards/dd-dragon.webp';
 // The Bay Harbor Society's drop of blood, as they drew it
 import bhDrop from '../assets/lanyards/bh-drop.webp';
+// Qoloner's frog face, redrawn from their logo (.claude/reports/lanyard-qoloner/gen.py's face_mark)
+import qolonerFrog from '../assets/lanyards/qoloner-mark.webp';
 
 /** a badge's variant by name ("Performer"); its meaning ("Performed on stage at ...") */
 export const variantName = (badge: string, code: string): string => t(`ach.${badge}.v.${code}` as 'ach.init26.v.init26');
@@ -372,6 +374,10 @@ export const CLUB_LOOKS = {
   // grey; the strip a glass slide (LanyardHolo); BHS in the role line keeps it one line at 320 px, as DD does
   thebayharborsociety: { strap: 'DEXTER', strip: 'FAN CLUB', short: 'BHS', bg: ['#141416', '#0A0A0A', '#050505'], straps: ['#050505', '#1C1C1E', '#E6E2DA'],
     holo: ['#F2EFEA', '#CFCAC1', '#0A0A0A'], ring: 'linear-gradient(135deg, #F4F1EB, #9A968F 45%, #B3121E)', role: '#E6E2DA', qr: ['#8E0E17', '#0A0A0A'], plate: ['#1C1C1E', '#0A0A0A'], mark: bhDrop },
+  // Qoloner (Nov 25, their logo): purple ink on their cream, the strip in their purple, their frog in the QR's middle
+  qoloner: { strap: 'QOLONER', strip: 'QOLONER KBTU', short: 'Qoloner', bg: ['#FBF6EE', '#F8F1E7', '#EFE4D3'], straps: ['#4A3CA8', '#5A4BC2', '#F8F1E7'],
+    holo: ['#5A4BC2', '#4A3CA8', '#F8F1E7'], role: '#5A4BC2', qr: ['#4A3CA8', '#2E2470'], plate: ['#FBF6EE', '#F3EADC'], mark: qolonerFrog,
+    ink: ['#2A2160', 'rgba(42, 33, 96, 0.68)'] },
 } satisfies Record<string, ClubLook>;
 // the schools' (Nov 2: official shields and colours allowed), each its own students' alone (server: logic.SCHOOL_LANYARDS,
 // by students.school); the scene is ui/SchoolScene, the shield cut by .claude/reports/school-lanyards/make-shields.sh
