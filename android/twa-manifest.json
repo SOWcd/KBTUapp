@@ -1,0 +1,42 @@
+{
+  "packageId": "kz.sow.kbtu",
+  "host": "kbtu.sow.kz",
+  "name": "KBTU App",
+  "launcherName": "KBTU App",
+  "display": "standalone",
+  "orientation": "portrait",
+  "themeColor": "#F2F2F7",
+  "themeColorDark": "#000000",
+  "navigationColor": "#F2F2F7",
+  "navigationColorDark": "#000000",
+  "navigationDividerColor": "#F2F2F7",
+  "navigationDividerColorDark": "#000000",
+  "backgroundColor": "#F2F2F7",
+  "enableNotifications": false,
+  "startUrl": "/",
+  "iconUrl": "https://kbtu.sow.kz/icon-512.png",
+  "maskableIconUrl": "https://kbtu.sow.kz/icon-512.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "./android.keystore",
+    "alias": "upload"
+  },
+  "appVersionName": "1.0.0",
+  "appVersionCode": 1,
+  "shortcuts": [],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://kbtu.sow.kz/manifest.json",
+  "fallbackType": "customtabs",
+  "features": {},
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://kbtu.sow.kz/",
+  "minSdkVersion": 24,
+  "fingerprints": [],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": []
+}

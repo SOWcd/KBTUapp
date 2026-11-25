@@ -124,5 +124,10 @@ Ideas and fixes are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Security is
 - `REPORTS=1`: clubs' event reports in Studio and the member's own log in their profile (`logic/evreports.py`). Off by default. Separate consent covers attendance marks and comments under section 3 of the privacy policy.
 - `ROOMS_FILE`: the map's "Free now", the timetable's busy rooms (`server/tools/rooms.py`, default `rooms.json` next to the database); no file: off.
 - `SUBJECTS_FILE`: the subjects' cards, "find people to study it with" (`server/tools/subjects.py` from the portal's course list scrape, default `subjects.json` next to the database; `logic/subjects.py`: a listing is a find-people request on a subject); no file: off.
+- `PLAY_DEMO=<32+ random characters>`: Google Play's reviewer signs in at the link `admin play-demo` prints, as one
+  made-up, read-only account that is never a student or staff (`android/README.md`). Unset: the link is a 404 and every
+  demo session ends. Only while a review is due.
+- `ANDROID_CERT_SHA256=<AA:BB:...>[,...]`: the Android app's signing certificates for `/.well-known/assetlinks.json`
+  (the upload key's and Play's app signing key's); unset: no file, the app shows a browser bar.
 - No switch changes the policy or the consent version.
 - `WEB_CONCURRENCY`: uvicorn workers (the app is multi-worker safe).

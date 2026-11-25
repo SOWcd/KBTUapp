@@ -1,0 +1,6 @@
+# Bubblewrap generates the Android project here in CI (.github/workflows/android.yml); only its config and docs are kept
+*
+!.gitignore
+!twa-manifest.json
+!README.md
+!listing.md
