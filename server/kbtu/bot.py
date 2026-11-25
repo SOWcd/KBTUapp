@@ -37,7 +37,9 @@ from .logic.core import ApiError
 log = logging.getLogger("kbtu.bot")
 
 POLL = 2                    # seconds between outbox checks
-GAP = 0.05                  # ≤ 20 messages a second (Telegram allows about 30)
+GAP = 0.04                  # the postman's sends start this far apart: ≤ 25 a second overall (Telegram allows about 30)
+SENDERS = 25                # chats the postman writes to at once (one message per chat at a time): its answers take a while
+BATCH = 200                 # queued messages read at once; a full batch is followed by the next in the same round
 AI_GAP = 10                 # seconds between translations (ai.py): a backlog drains without a burst
 LEASE = 60                  # a taken message is free again after this, if its postman died or the network was down
 PEEK = 2                    # seconds between looks for Stars' pre-checkouts while a batch of updates runs (_checkout_watch)
@@ -985,7 +987,7 @@ def _chores(cfg: Config, con) -> None:
 def _due(con) -> list:
     # the partial index outbox_todo (migration 109), named: else the planner picks outbox_due, which walks every failed row
     return rows(con, """SELECT b.*, u.tg_id, u.lang, u.can_dm, u.banned_at FROM bot_outbox b INDEXED BY outbox_todo JOIN users u ON u.id = b.user_id
-        WHERE b.sent_at IS NULL AND b.error IS NULL AND b.send_after <= ? ORDER BY b.send_after, b.id LIMIT 50""", now())
+        WHERE b.sent_at IS NULL AND b.error IS NULL AND b.send_after <= ? ORDER BY b.send_after, b.id LIMIT ?""", now(), BATCH)
 
 
 def _mark(con, m, sent: bool, error: str | None = None) -> None:
@@ -1071,50 +1073,91 @@ async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
             await instagram.sweep(cfg, http, con)  # every half hour: the clubs' Instagram posts as their posts
         if await anyio.to_thread.run_sync(logic._once, con, "chats_day", str(now() // 86400)):
             await refresh_chats(cfg, http, con)  # daily: the chats' avatars and members from their t.me pages
-        for m in await anyio.to_thread.run_sync(_due, con):
-            if _stopping():  # between messages: one taken and cut mid-send would go again after its LEASE, maybe twice
+        while True:  # batch after batch while the queue stays full (a broadcast); the chores above wait for it
+            due = await anyio.to_thread.run_sync(_due, con)
+            if not await _batch(cfg, http, con, due) or len(due) < BATCH:
                 return
-            msg = await anyio.to_thread.run_sync(_take, con, m, bool(cfg.forum_channel))
-            if msg is None:
-                continue
-            text, button, start = msg
-            to = m["tg_id"]
-            if m["kind"] == "credit_ask":  # the account may have moved since the queue was read: to its Telegram of now, or not at all
-                to = logic.credits.asking(con, m["user_id"])
-                if to is None:
-                    _mark(con, m, False, "gone")
-                    continue
-            if m["kind"] in tgc.AUTHOR and not one(con, "SELECT 1 FROM users WHERE id = ? AND tg_id = ?", m["user_id"], to):
-                continue  # the account moved after the batch was read; the retry will use the new chat
-            body = {"chat_id": to, "text": text, "parse_mode": "HTML", "link_preview_options": {"is_disabled": True}}
-            if isinstance(start, list):  # the whole keyboard; "start" buttons open the app there
-                body["reply_markup"] = {"inline_keyboard": [[{"text": b["text"], "url": f"https://t.me/{cfg.bot_username}?startapp={b['start']}"}
-                                                             if "start" in b else b for b in row] for row in start]}
-            elif button:
-                body["reply_markup"] = {"inline_keyboard": [[{"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp={start}"}]]}
-            if category := notifications.CATEGORY_OF.get(m["kind"]):
-                # The settings may have changed while the worker rendered the card.
-                if not notifications.allowed(con, category, m["user_id"], to):
-                    _mark(con, m, False, "gone")
-                    continue
-                if m["kind"] in MUTE_ROW:
-                    body.setdefault("reply_markup", {"inline_keyboard": []})["inline_keyboard"].append(
-                        _feedback_buttons(cfg, to, m["lang"], category))
-            try:
-                r = await tgc.edit_first(cfg, http, con, m, body)  # a comment's verdict: its first message edited
-                if r is None:
-                    r = await _send(cfg, http, body)
-                answer = r.json()
-            except (httpx.HTTPError, ValueError) as exc:
-                log.warning("postman: %s", type(exc).__name__)
-                return  # the network is down: everything stays queued for the next round
-            if not answer.get("ok") and r.status_code == 429:  # too fast: wait as told, this one goes again next round
-                await asyncio.sleep(float(answer.get("parameters", {}).get("retry_after", 5)))
-                return
-            await anyio.to_thread.run_sync(_answered, con, m, r.status_code, answer)
-            await asyncio.sleep(GAP)
     finally:
         con.close()
+
+
+async def _batch(cfg: Config, http: httpx.AsyncClient, con, due: list) -> bool:
+    """One batch side by side: up to SENDERS chats at once, one message per chat at a time and in the queue's order,
+    the sends started GAP apart overall. False: stop the round (stop(), the network or a 429)."""
+    lock, gate, halt = asyncio.Lock(), asyncio.Semaphore(SENDERS), asyncio.Event()
+    nxt = time.monotonic()
+
+    async def turn() -> bool:  # this send's slot, GAP after the one before; False: the round is over
+        nonlocal nxt
+        at = max(nxt, time.monotonic())
+        nxt = at + GAP
+        await asyncio.sleep(at - time.monotonic())
+        return not (halt.is_set() or _stopping())  # between messages: one cut mid-send would go again after its LEASE, maybe twice
+
+    async def chat(ms: list) -> None:
+        async with gate:
+            for m in ms:
+                if not await turn():
+                    return
+                await _deliver(cfg, http, con, m, lock, halt)
+
+    chats: dict[int, list] = {}
+    for m in due:
+        chats.setdefault(m["tg_id"], []).append(m)
+    async with asyncio.TaskGroup() as tg:  # a bug in one cancels the rest: none outlives the connection
+        for ms in chats.values():
+            tg.create_task(chat(ms))
+    return not (halt.is_set() or _stopping())
+
+
+async def _deliver(cfg: Config, http: httpx.AsyncClient, con, m, lock: asyncio.Lock, halt: asyncio.Event) -> None:
+    """One queued message taken, sent and marked. The connection serves one thread at a time (lock), the sends run
+    side by side; the network down or a 429 sets halt."""
+    async with lock:
+        if halt.is_set():  # while this one waited its turn at the database
+            return
+        msg = await anyio.to_thread.run_sync(_take, con, m, bool(cfg.forum_channel))
+        if msg is None:
+            return
+        text, button, start = msg
+        to = m["tg_id"]
+        if m["kind"] == "credit_ask":  # the account may have moved since the queue was read: to its Telegram of now, or not at all
+            to = logic.credits.asking(con, m["user_id"])
+            if to is None:
+                _mark(con, m, False, "gone")
+                return
+        if m["kind"] in tgc.AUTHOR and not one(con, "SELECT 1 FROM users WHERE id = ? AND tg_id = ?", m["user_id"], to):
+            return  # the account moved after the batch was read; the retry will use the new chat
+        body = {"chat_id": to, "text": text, "parse_mode": "HTML", "link_preview_options": {"is_disabled": True}}
+        if isinstance(start, list):  # the whole keyboard; "start" buttons open the app there
+            body["reply_markup"] = {"inline_keyboard": [[{"text": b["text"], "url": f"https://t.me/{cfg.bot_username}?startapp={b['start']}"}
+                                                         if "start" in b else b for b in row] for row in start]}
+        elif button:
+            body["reply_markup"] = {"inline_keyboard": [[{"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp={start}"}]]}
+        if category := notifications.CATEGORY_OF.get(m["kind"]):
+            # The settings may have changed while the worker rendered the card.
+            if not notifications.allowed(con, category, m["user_id"], to):
+                _mark(con, m, False, "gone")
+                return
+            if m["kind"] in MUTE_ROW:
+                body.setdefault("reply_markup", {"inline_keyboard": []})["inline_keyboard"].append(
+                    _feedback_buttons(cfg, to, m["lang"], category))
+    try:
+        async with lock:  # it reads the connection first (and returns at once for any other kind)
+            r = await tgc.edit_first(cfg, http, con, m, body)  # a comment's verdict: its first message edited
+        if r is None:
+            r = await _send(cfg, http, body)
+        answer = r.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        log.warning("postman: %s", type(exc).__name__)
+        halt.set()  # the network is down: the rest stays queued for the next round
+        return
+    if not answer.get("ok") and r.status_code == 429:  # too fast: everyone waits as told; this one goes again after its LEASE
+        halt.set()
+        await asyncio.sleep(float(answer.get("parameters", {}).get("retry_after", 5)))
+        return
+    async with lock:
+        await anyio.to_thread.run_sync(_answered, con, m, r.status_code, answer)
 
 
 def _welcome(con, cfg: Config, msg: dict) -> dict | None:
