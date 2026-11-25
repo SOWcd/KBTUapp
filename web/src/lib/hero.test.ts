@@ -79,6 +79,11 @@ describe('hero lead', () => {
   it("a festival of days I'm in isn't 'soon' all week; a meeting or a team's event is no one's biggest", () => {
     const fest = ev(5, noon - 2 * 86400, 1, { endsAt: noon + 86400, my: { status: 'going' } });
     expect(ids([fest, tonight], noon)).toEqual(['today', 2]);
+    // nor today's or the week's biggest: a crowded festival of days doesn't take the first card all week
+    const crowd = ev(13, noon - 2 * 86400, 900, { endsAt: noon + 3 * 86400 });
+    expect(ids([crowd, tonight], noon)).toEqual(['today', 2]);
+    expect(ids([crowd, week], noon)).toEqual(['week', 1]);
+    expect(ids([crowd], noon)).toBeNull();
     expect(ids([ev(6, noon + H, 500, { meeting: true }), ev(7, noon + H, 400, { visibility: 'members' }), small], noon)).toEqual(['today', 3]);
   });
   it("ties: friends, a cover, the sooner; yesterday's untapped hero steps aside, never my ticket", () => {

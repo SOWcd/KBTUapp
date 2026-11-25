@@ -47,8 +47,9 @@ export const SOON = 3 * 3600;
 type Ev = { id: number; startsAt: number; endsAt: number | null; taken: number; friends: unknown[]; cover: unknown; status: string;
   my: { status: string } | null; visibility?: string; meeting?: boolean };
 export function lead<E extends Ev>(evs: E[], now: number, no = ''): { kind: 'ticket' | 'today' | 'week'; e: E } | null {
-  const on = evs.filter((e) => e.status === 'published' && (e.endsAt ?? e.startsAt + 3 * 3600) > now);
-  const mine = on.filter((e) => e.my?.status === 'going' && e.startsAt - now <= SOON && now - e.startsAt < 12 * 3600)
+  // begun over 12 h ago (a festival, an exhibition of weeks): on, but never the moment's, for any of the three
+  const on = evs.filter((e) => e.status === 'published' && (e.endsAt ?? e.startsAt + 3 * 3600) > now && now - e.startsAt < 12 * 3600);
+  const mine = on.filter((e) => e.my?.status === 'going' && e.startsAt - now <= SOON)
     .sort((a, b) => a.startsAt - b.startsAt)[0];
   if (mine) return { kind: 'ticket', e: mine };
   // a club's meeting or a team-only event is no one else's "biggest"
