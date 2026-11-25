@@ -2203,6 +2203,7 @@ const ru = {
   'cr.title': "Люди приложения",
   'cr.founder': "Создатель",
   'cr.idea': "Идея",
+  'cr.team': "Команда",
   'cr.list': "Идеи и находки",
   'cr.student': "Студент",
   'cr.students': "Студенты",
