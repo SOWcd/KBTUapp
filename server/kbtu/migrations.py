@@ -2289,4 +2289,7 @@ MIGRATIONS: list[tuple[int, str]] = [
       at INTEGER NOT NULL,
       PRIMARY KEY (name, user_id)
     ) STRICT;"""),
+    # Remove personal values copied into audit payloads; retain the action and nonpersonal context.
+    (227, """UPDATE audit_log SET data = json_remove(data, '$.q') WHERE action = 'registry_search';
+    UPDATE audit_log SET data = json_remove(data, '$.was', '$.now') WHERE action = 'staff_kaspi';"""),
 ]

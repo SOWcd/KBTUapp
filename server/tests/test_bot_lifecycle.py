@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import fcntl
+import os
 import sqlite3
 from pathlib import Path
 
@@ -68,6 +69,13 @@ def test_failed_backup_leaves_no_daily_marker(env, monkeypatch):
     con = db.connect(cfg.db_path)
     monkeypatch.setattr(bot.time, "time", lambda: 20000 * 86400 - 5 * 3600 + 5 * 3600)  # 05:00 Almaty
     monkeypatch.setattr(bot, "_backup_retry", 0.0)
+    root = Path(cfg.db_path).parent / "backups"
+    root.mkdir()
+    old, recent = root / "kbtu-old.db", root / "kbtu-recent.db"
+    for path, days in ((old, 16), (recent, 1)):
+        path.write_bytes(b"synthetic snapshot")
+        age = bot.time.time() - days * 86400
+        os.utime(path, (age, age))
 
     class Full:  # the disk is full: VACUUM INTO fails, everything else goes through
         def execute(self, sql, *a):
@@ -77,6 +85,13 @@ def test_failed_backup_leaves_no_daily_marker(env, monkeypatch):
     bot.backup_day(cfg, Full())
     marker = lambda: con.execute("SELECT 1 FROM meta WHERE key = 'backup_day'").fetchone()  # noqa: E731
     assert not marker()
+    assert not old.exists() and recent.exists()
+    # The retry delay must not bypass retention either.
+    old.write_bytes(b"synthetic snapshot")
+    age = bot.time.time() - 41 * 86400
+    os.utime(old, (age, age))
+    bot.backup_day(cfg, Full())
+    assert not old.exists() and recent.exists() and not marker()
     bot._backup_retry = 0.0  # the hour is over
     bot.backup_day(cfg, con)
     assert marker() and list((Path(cfg.db_path).resolve().parent / "backups").glob("kbtu-*.db"))

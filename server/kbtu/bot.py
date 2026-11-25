@@ -633,9 +633,9 @@ def _santa(con, m, lang: str) -> tuple[str, str | None, str] | None:
 def purge(cfg: Config, con) -> None:
     """The accounts whose week ran out (logic.delete_due), and their files on disk (app.py keeps them in the same places)."""
     home = Path(cfg.db_path).resolve().parent
-    receipts, photos = logic.delete_due(con)
-    media.drop(home / "receipts", receipts)  # first: a failing step below mustn't leave the deleted accounts' receipts on disk
-    photos = photos + logic.purge_takedowns(con)  # and what a moderator took down 30 days ago
+    logic.delete_due(con)
+    logic.drain_deleted_files(con)  # first: retry even when SQL erasure committed in an earlier round
+    photos = logic.purge_takedowns(con)  # and what a moderator took down 30 days ago
     gone, pics = logic.events_gone(con)  # the admin's event deletes past their Undo's day
     media.drop(home / "receipts", gone)
     photos = photos + pics + logic.chats_gone(con)  # and chats removed from the catalog a week ago
@@ -833,12 +833,15 @@ def backup_day(cfg: Config, con) -> None:
     for bak in db_path.parent.glob(f"{db_path.name}.v*.bak"):
         if bak.stat().st_mtime < time.time() - 14 * 86400:
             bak.unlink(missing_ok=True)
+    root = db_path.parent / "backups"
+    for old in root.glob("kbtu-*.db"):  # retention also runs when today's copy fails or is not due
+        if old.stat().st_mtime < time.time() - 15 * 86400:
+            old.unlink()
     global _backup_retry
     local = int(time.time()) + 5 * 3600
     day = str(local // 86400)
     if local % 86400 < 4 * 3600 or time.time() < _backup_retry or one(con, "SELECT 1 FROM meta WHERE key = 'backup_day' AND value = ?", day):
         return
-    root = db_path.parent / "backups"
     root.mkdir(exist_ok=True)
     out = root / f"kbtu-{time.strftime('%Y-%m-%d', time.gmtime(local))}.db"
     tmp = out.with_suffix(".tmp")  # a copy cut short (a full disk) never counts among the 14
@@ -854,9 +857,6 @@ def backup_day(cfg: Config, con) -> None:
     con.execute("INSERT INTO meta (key, value) VALUES ('backup_day', ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value", (day,))
     for old in sorted(root.glob("kbtu-*.db"))[:-14]:
         old.unlink()
-    for old in root.glob("kbtu-*.db"):  # by age too: skipped nights mustn't stretch a deleted account's life past 30 days
-        if old.stat().st_mtime < time.time() - 15 * 86400:
-            old.unlink()
     log.warning("backup: %s, %d KB", out.name, out.stat().st_size // 1024)
 
 

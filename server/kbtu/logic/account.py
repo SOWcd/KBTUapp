@@ -1110,6 +1110,18 @@ def delete_due(con) -> tuple[list[str], list[str]]:
     return gone
 
 
+def drain_deleted_files(con) -> None:
+    """Retry committed account erasures, including a crash before the caller could unlink their files."""
+    home = _journal(con).parent
+    with tx(con):  # a new reference cannot appear between the check and unlink
+        for (key,) in rows(con, "SELECT key FROM meta WHERE key GLOB 'del-file:*'"):
+            _, folder, path = key.split(":", 2)
+            free = not one(con, "SELECT 1 FROM files WHERE path = ? AND kind = 'receipt'", path) if folder == "receipts" else chatlist.photo_free(con, path)
+            if free:
+                media.drop(home / folder, [path])
+            con.execute("DELETE FROM meta WHERE key = ?", (key,))
+
+
 DELETION_LOG_DAYS = 40  # longer than any copy lives (R2 ~30 days): an older line can't be needed
 
 
@@ -1184,6 +1196,7 @@ def replay_deletions(con) -> tuple[int, int]:
     """Replay the journal before serving a snapshot. Each snapshot remembers the erasures it already applied."""
     path = _journal(con)
     with tx(con):
+        drain_deleted_files(con)
         applied = {key.removeprefix("delreplay:"): int(value) for key, value in
                    rows(con, "SELECT key, value FROM meta WHERE key GLOB 'delreplay:*'")}
         if not path.exists():
@@ -1240,9 +1253,7 @@ def replay_deletions(con) -> tuple[int, int]:
         con.executemany("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
                         ((f"delreplay:{h}", str(latest[h])) for h in records))
         # All account decisions and SQL succeeded. An unlink failure rolls the checkpoints back for retry.
-        for receipts, pictures in files:
-            media.drop(path.parent / "receipts", receipts)
-            media.drop(path.parent / "media", pictures)
+        drain_deleted_files(con)
         return len(files), len(latest)
 
 
@@ -1379,7 +1390,7 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         mine += gallery.mine_gone(con, v.id)  # posted under my name: they go whatever I chose, with their reports
         if drop:
             con.execute("DELETE FROM event_photos WHERE added_by = ?", (v.id,))
-        avatars = [r[0] for r in rows(con, "SELECT id FROM files WHERE kind = 'avatar' AND owner_id = ?", v.id)]
+        uploads = [r[0] for r in rows(con, "SELECT id FROM files WHERE kind != 'receipt' AND owner_id = ?", v.id)]
         tgpic = one(con, "SELECT tg_photo_path FROM users WHERE id = ?", v.id)[0]  # our copy of the Telegram photo
         con.execute("""UPDATE users SET bio = '', showcase = '', qr_code = NULL, link_code = NULL, cal_token = NULL, nick = NULL, avatar_tg = 1,
             avatar_file_id = NULL, tg_username = NULL, tg_first_name = '', tg_last_name = '', tg_photo_url = NULL, tg_photo_path = NULL, tg_photo_src = NULL, tg_photo_at = NULL, mark = NULL,
@@ -1394,7 +1405,7 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         con.execute("UPDATE roster_pending SET rejected_by = NULL WHERE rejected_by = ?", (v.id,))
         # what a moderator took down of mine, kept for an undo: gone now with its files, no 30 days
         kept = [r[0] for r in rows(con, "DELETE FROM takedowns WHERE user_id = ? RETURNING file_id", v.id)]
-        photos = [p for f in mine + avatars + kept for p in _drop_unused(con, f)]
+        photos = [p for f in mine + uploads + kept for p in _drop_unused(con, f)]
         photos += [tgpic] if tgpic and chatlist.photo_free(con, tgpic) else []
         # the freshmen list's row for my mail or my unfinished Microsoft sign-in's (keyed by email: no foreign key)
         con.execute("""DELETE FROM prefill WHERE email IN (SELECT lower(email) FROM students WHERE user_id = ?
@@ -1459,16 +1470,22 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         con.execute("DELETE FROM bot_outbox WHERE kind = 'sid_page_clash' AND ref LIKE ?", (f"sp:{v.id}:%",))  # so does his schedule-page alert
         # other people's queues that name me by id, sent or not; who he was in the role history
         for kind, ref in (("friend_invite", f"fi:%:{v.id}"), ("friend_new", f"fn:{v.id}:%"), ("friend_request", f"fq:{v.id}:%"), ("join_request", f"jr:%:{v.id}:%"),
-                          ("team_ask", f"ta:%:{v.id}:%"), ("roster_claim", f"rq:%:{v.id}"), ("tgc_good", f"gr:{v.id}")):
+                          ("team_ask", f"ta:%:{v.id}:%"), ("roster_claim", f"rq:%:{v.id}"), ("tgc_good", f"gr:{v.id}"), ("org_ask", f"oa:%:{v.id}")):
             con.execute("DELETE FROM bot_outbox WHERE kind = ? AND ref LIKE ?", (kind, ref))
         con.execute("UPDATE audit_log SET target = 'user', data = '{}' WHERE target IN (?, ?)", (f"user:{v.id}", f"tgreport:{v.id}"))
         con.execute("UPDATE audit_log SET data = '{}' WHERE action = 'presidency_transfer' AND json_extract(data, '$.to') = ?", (v.id,))
+        con.execute("""UPDATE audit_log SET data = '{}' WHERE action IN ('checkin_hand', 'checkin_unhand')
+            AND json_extract(data, '$.who') = ?""", (f"u{v.id}",))
+        con.execute("""UPDATE audit_log SET data = '{}' WHERE action IN ('seat_remove', 'came_by_hand', 'unseat_by_hand')
+            AND json_extract(data, '$.user') = ?""", (v.id,))
         # a lifted take-down of my subject listing (logic/subjects.lift) names me and the subject: it and its undo go
         con.execute("""DELETE FROM audit_log WHERE action IN ('subject_lift', 'subject_unlift') AND target IN (SELECT target FROM audit_log
             WHERE action = 'subject_lift' AND json_extract(data, '$.user_id') = ?)""", (v.id,))
         con.execute("UPDATE audit_log SET data = json_remove(data, '$.by') WHERE action IN ('team_link_join', 'grant_link_used') AND json_extract(data, '$.by') = ?", (v.id,))  # who made the link
         con.execute("UPDATE reports SET note = NULL WHERE (target = 'user' AND target_id = ?) OR reporter_id IS NULL", (v.id,))
         log_action(con, None, "delete_my_data", "user")
+        con.executemany("INSERT OR IGNORE INTO meta (key, value) VALUES (?, '1')",
+                        ((f"del-file:{folder}:{path}",) for folder, paths in (("receipts", receipts), ("media", photos)) for path in paths))
     return receipts, photos
 
 
