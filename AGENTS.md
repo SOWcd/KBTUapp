@@ -45,6 +45,7 @@ screen per PR, never slower than before, checked on a phone in both themes.
 | Test helpers | `env`, `login`, `tma`, `set_clock` in `server/tests/test_core.py` (import them from there) |
 | Android app (Play) | `android/` (a TWA from `twa-manifest.json`; README: release, demo login, Data safety), built only by `.github/workflows/android.yml` |
 | Deep links | parsed in `web/src/App.svelte` (`deepLink`): `ev_<id>`, `cl_<id>`, ... |
+| iPhone app | `ios/` (a web view shell, built only by `.github/workflows/ios.yml`), its bridge `web/src/lib/native.ts`; Sign in with Apple and linked sign-ins `server/kbtu/logic/apple.py`, push `server/kbtu/apns.py` |
 
 ## Run and check
 

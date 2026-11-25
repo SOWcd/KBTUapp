@@ -1,0 +1,6 @@
+/* OfflineView: the site can't load */
+"offline.title" = "Байланыс жоқ";
+"offline.text" = "Интернетті тексеріп, қайта көріңіз.";
+"offline.retry" = "Қайталау";
+"offline.tickets" = "Менің билеттерім";
+"offline.ticketsHint" = "QR-ды кіреберісте көрсетіңіз: ол интернетсіз де жұмыс істейді.";

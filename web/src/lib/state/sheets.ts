@@ -1,11 +1,11 @@
 // Openers for the sheets that are reachable from anywhere (any avatar opens the profile card, any
-// event row opens the event). App wires them up; components call these, so no import cycles.
-import type { ClubTag, EventBracket, EventGroups, TeamMember, TeamSetup } from '../api';
-import type { AlbumPhoto, AttendeeReceipt, Chat, EventCard, EventFull, GrantItem, Id, LinkCard, MemoAsks, OrgCategory, OrgRef, PersonCard, Post, Round, RosterSpot, ScreenSession } from '../api';
-import type { Manual, ShelfItem } from '../awards';
+// event row opens the event). Each is written once, in openers.ts (it fills `sheets` as it loads; App imports it), or
+// for the few that need App's state or its components, in App.svelte; components call these, so no import cycles.
+// This module imports types only: ui.svelte.ts imports it, and so do the unit tests that run without a window.
+import type { EventCard, Id, LinkCard } from '../api';
 import type { AskCtx } from './assistant.svelte';
+import type { openers } from './openers';
 import type { Overlay } from './ui.svelte';
-import type { StoryGroup } from '../posts';
 
 export type SheetKey = number | string;
 
@@ -78,218 +78,21 @@ export function registration(e: EventCard, runs: boolean, vol?: Id): void {
   sheets.scanner(e.id, false, !e.guestHost && (runs || (!e.meeting && e.visibility !== 'members' && e.visibility !== 'leaders' && e.org.id !== vol)));
 }
 
-export const sheets = {
-  /** invite: opened by their invite link r_<code> (its landing: "Add as a friend", one tap) */
-  person: (_id: Id, _invite?: InviteLanding) => {},
-  /** my QR full screen (the corner of my badge) */
-  myQr: (_link: string, _p: PersonCard) => {},
-  /** Admin → Awards → Show QR: the award's rotating code full screen, for the hall's cameras */
-  badgeQr: (_award: Manual, _code: GrantItem['code']) => {},
-  /** a new photo of me (or a club logo) framed in a rounded square; the square crop, or null when cancelled */
-  cropPhoto: (_file: Blob): Promise<Blob | null> => Promise.resolve(null),
-  club: (_id: Id) => {},
-  /** `from`: the tapped poster, which grows into the sheet's header; `album`: its guests' album opened over it (the bot's ph_) */
-  event: (_id: Id, _from?: Element | null, _album?: boolean) => {},
-  /** the event sheet for an unsaved editor form: what students will see */
-  preview: (_e: EventFull) => {},
-  /** a saved draft as students will see it once it's published: the editor's preview of the draft as the server has it */
-  draftPreview: (_id: Id) => {},
-  ticket: (_id: Id) => {},
-  pay: (_id: Id) => {},                 // a held seat of a paid event: the Kaspi details and the receipt (§4.3)
-  receipt: (_r: AttendeeReceipt, _name: string, _ondone?: () => void) => {},  // the organizer's look at one receipt
-  /** an album full screen, from photo `start`; `onremove` takes one out and answers with what is left */
-  //   from: the thumbnail it grows out of and shrinks back into (one element, or one per photo: the grid's, the mosaic's)
-  photos: (_photos: AlbumPhoto[], _start: number, _onremove?: (p: AlbumPhoto) => Promise<AlbumPhoto[] | null>, _ongone?: (p: AlbumPhoto) => void, _from?: Element | ((p: AlbumPhoto) => Element | null | undefined)) => {},
-  /** every photo of an album at once, a grid as in the phone's Photos (live: `list` and `adding` are read as they change) */
-  album: (_list: () => AlbumPhoto[], _onremove?: (p: AlbumPhoto) => Promise<AlbumPhoto[] | null>, _ongone?: (p: AlbumPhoto) => void, _add?: () => void, _adding?: () => number) => {},
-  /** the Gallery: the albums' strip and every photo by place, one "+" to add mine */
-  gallery: () => {},
-  login: (_after?: () => void, _lock?: boolean) => {},
-  // Studio (lazy chunks): the event editor (new when no id), the door scanner, the attendee list
-  editor: (_org: Id, _id?: Id, _staff?: boolean) => {}, // staff: Admin's "an event for a club"
-  scanner: (_id: Id, _names?: boolean, _qr?: boolean, _ondone?: () => void) => {}, // names: a club's own event, marked by name (no tickets); qr: the door screen, its switch to the event's QR
-  // only: a scanner-only door helper (server crew.py): tickets, no list by name
-  scannerOnly: (_id: Id) => {},
-  crew: (_id: Id, _onchange?: (n: number) => void) => {},
-  /** a club's report after its event (server evreports.py, REPORTS); org: the co-host's own (the host's without it) */
-  eventReport: (_id: Id, _org?: Id) => {},
-  /** a club's volunteers ledger (server logic/vol.py): the list (its President and whom she grants), one volunteer (mine: my own) */
-  /** appeals to the Student Government: the composer and my appeals; one of mine; SG's queue and one appeal in it */
-  appeals: () => {},
-  myAppeal: (_id: Id) => {},
-  sgQueue: () => {},
-  sgAppeal: (_id: Id) => {},
-  /** the help desk: the composer with KRI's question in it (sent only on the student's tap) and my questions; one of mine; its queue and one question in it */
-  askHuman: (_q?: string) => {},
-  myAsk: (_id: Id) => {},
-  helpQueue: () => {},
-  helpAppeal: (_id: Id) => {},
-  volLedger: () => {},
-  volDoor: (_session: Id, _title: string) => {}, // a session's door: who left without checking out, the hand-over link
-  volPerson: (_id: Id, _mine?: boolean) => {}, // an event's door helpers (a running club's President or Vice)
-  attendees: (_id: Id) => {},
-  /** the Mark screen's «People»: the team by department and the guests, came / not came, marked by hand; onchange after a mark */
-  doorPeople: (_id: Id, _onchange?: () => void, _guestsOnly?: boolean) => {},
-  /** Studio's «Guest list»: the organizers' file, its preview and save, the door's list as a CSV */
-  guestList: (_id: Id) => {},
+// App's own (App.svelte sets them): no-ops until it does
+const own = {
+  login: (_after?: () => void, _lock?: boolean) => {}, // its LoginSheet, one at a time
   assistant: (_ctx?: AskCtx) => {},      // the students' assistant (with the forum's switch); ctx: asked from that card
-  /** Secret Santa's chat: one thread of my pair ('to': I am the Santa of `name`; 'from': with my own Santa) */
-  santaChat: (_event: Id, _side: 'to' | 'from', _name?: string) => {},
-  santaReports: () => {},                // the staff: reported Secret Santa chats
-  mapFlaws: () => {},                    // the admin: the map's flaws marked with a long press
-  /** an event's rotating check-in QR full screen on the organizer's own phone, no laptop */
-  eventQr: (_event: Id) => {},
-  /** the same screen for someone an organizer let help (server checkin.py); scanner: the event's door scanner too */
-  helperQr: (_session: Id, _event: Id | null, _scanner: boolean) => {},
-  /** the QR an organizer shows to let someone help */
-  handQr: (_session: Id) => {},
-  screens: (_code?: string, _event?: Id, _seed?: ScreenSession, _org?: Id, _crew?: Id) => {}, // /show: pair a laptop's screen (its sh_ QR) and run the check-in; event: its own session; seed: that session alone (the capsule); org: the page from that club's Studio; crew: an event's team, made and started
-  /** Profile's "Big screen": the scanner for a computer's pairing QR; a helper's own QR */
-  bigScreen: () => {},
-  /** Studio → an event: the organizer's screen (money, people, tools); org: a co-host's Studio (its report alone) */
-  manage: (_id: Id, _staff?: boolean, _org?: Id) => {},
-  /** next week's memo to DMP for a club (Head+): from Studio and the bot's Wednesday message */
-  memo: (_org: Id) => {},
-  /** the clubs' rosters (PLAN 95): the claims I confirm */
-  rosterRequests: (_ondone?: () => void, _org?: number) => {},
-  /** one memo item (a room, guests...) without an event, dated from the memo's week `from`; `oninsert` takes its text */
-  /** an event's volunteer applications (the organizers) */
-  volunteers: (_id: Id, _need: number) => {},
-  memoItem: (_org: Id, _kind: keyof MemoAsks, _from: number, _oninsert: (text: string) => void) => {},
-  /** casting (a club's recruitment round): a student's application; the team's setup and board */
-  roundApply: (_org: Id, _source?: string) => {},
-  roundSetup: (_org: Id, _round?: Round | null, _onsaved?: () => void) => {},
-  roundBoard: (_org: Id) => {},
-  /** People of the app: the screen; my own "name me?" sheet */
-  credits: () => {},
-  creditAsk: () => {},
-  /** students make the app: the ways to help and the signed offer; what is wrong (anonymous or in Telegram); the admin's list of both */
-  helpUs: () => {},
-  feedback: () => {},
-  adminVoices: () => {},
-  research: () => {},
-  researchForm: (_survey: import('../api').ResearchSurvey) => {},
-  researchPropose: () => {},
-  adminResearch: () => {},
-  /** Secret Santa's welcome over Studio (the bot's sn_, Studio's row): how it works and the one start */
-  santaHi: (_org: Id) => {},
-  // a club's applications (Vice+) and its "taking applications" switch
-  joinInbox: (_org: Id) => {},
-  /** always-open applications: the club's own questions (Vice+), and a student's answers to them */
-  joinQuestions: (_org: Id) => {},
-  joinApply: (_org: Id) => {},
-  /** Team 2.0 (§2b): the club's roles and tags (Vice+ / Head+ make them), its bans (Vice+); `onchange` after an edit */
-  teamSetup: (_org: Id, _onchange?: () => void) => {},
-  /** one person of a club's Team, their own sheet over it: roles, departments, probation, hand-over, removal */
-  member: (_org: Id, _user: Id, _setup: () => TeamSetup | null, _depts: (x: TeamMember) => ClubTag[], _onchange: () => void) => {},
-  /** removing someone below me: a Vice+ at once, a Head's as a request (`request`); a ban if wanted */
-  removeMember: (_org: Id, _user: Id, _name: string, _request: boolean, _ondone?: (done: boolean) => void) => {},
-  /** the pages pushed from the settings under my lanyard (Me): about me, notifications, my name, privacy and its pages, about */
-  settings: (_kind: 'app' | 'me' | 'notify' | 'name' | 'privacy' | 'phone' | 'city' | 'school' | 'course' | 'last' | 'first' | 'middle' | 'sees' | 'about' | 'donate' | 'sponsors') => {},
-  /** the admin panel (pilot): clubs and their teams */
-  admin: () => {},
-  /** the campus map, on a floor (step 1: the 2023 plans) */
-  map: (_place?: string, _exit?: boolean) => {}, // exit: "Help me get out" (the startapp=exit link); a place with a room ("Aud. 305", a class's "251"): its floor, the room circled
-  /** delete account: what goes, then the KBTU password again */
-  deleteAccount: (_lost: { awards: number; tickets: number; clubs: number }) => {},
   /** the server says the policy changed (a refused write): the fresh /api/me raises the gate (ConsentGate) */
   consent: () => {},
-  /** news as stories (Afisha's List, a club's page): the clubs' posts full screen, from club `start` */
-  stories: (_groups: StoryGroup[], _start?: number, _at?: number) => {},
-  /** a tab's other pages (one tab, one screen): every post (Afisha's "All"), the Feed full screen
-   *  (Afisha's "In a row"), my friends (Profile's row), my club's team (My club's row) */
-  news: () => {},
-  feed: () => {},
-  friends: () => {},
-  team: (_at?: Id) => {},  // at: that person's actions open (Studio's Roles and admins)
-  /** a new post for a club (Head+), from Studio */
-  composer: (_org: Id, _post?: Post, _casting?: boolean) => {},
-  /** add a friend: my one-time QR and link, or a request by @username; 'share' opens Telegram's share picker at once */
-  addFriend: (_mode?: 'share') => {},
   /** a new achievement level just earned in a sheet that stays open (the anthem's): its unlock moment now, over it */
   celebrate: () => {},
-  /** my invite link (referrals): its QR, or sent as our bot's card */
-  referral: (_code: string) => {},
-  /** DMP's registry: a club's roster; the whole registry in a sheet (for the admin) */
-  roster: (_org: OrgRef, _onofficial?: (on: boolean) => void) => {},
-  /** the club's profile (Vice+): name, letters, emoji, cover, about, links */
-  clubEdit: (_org: Id, _at?: 'chats') => {},
-  /** everyone in a club or school (the club sheet's "All members") */
-  people: (_org: Id, _title: string) => {},
-  /** starting a club (§4.6): my application or the form */
-  createClub: () => {},
-  /** KBTU's academic calendar: the year's dates (SPEC §4.11) */
-  academic: () => {},
-  /** KBTU's anthem to listen to and learn: Profile's row, startapp=anthem */
-  anthem: () => {},
-  /** my whole award collection and the showcase picker (Profile: the badge's numbers) */
-  awards: () => {},
-  /** Admin → Clubs and schools: every organization by name */
-  adminClubs: () => {},
-  adminChats: () => {},
-  /** the forum channel's moderation: held posts, this week's live and taken-down ones, the owner's reveal */
-  adminForum: () => {},
-  /** a club of mine: its Studio pushed over the Clubs tab (the tab's Mine row, the bot's links) */
-  studio: (_org: Id, _asCreator?: boolean) => {},
-  /** all my clubs as rows (the Clubs tab's "All" circle, 3+ of them); role: mine there (a club I only follow: null) */
-  clubList: (_view: 'all' | 'schools' | 'quiet' | OrgCategory) => {},
-  myClubs: (_rows: { org: OrgRef; role: string | null; sub: string }[], _title?: string) => {},
-  /** how my week gets into the app: the portal's page saved and sent to the bot (first: right after the sign-in) */
-  schedHowTo: () => {},
-  /** my whole week of classes */
-  week: () => {},
-  /** the subjects' cards: the list with its search; one subject's card (who's looking for study partners) */
-  subjects: () => {},
-  subject: (_id: string) => {},
-  /** the forum (F1 find people), a request opened in it */
-  forum: (_ask?: Id) => {},
-  forumSkills: (_onsaved?: () => void) => {},
-  newAsk: (_onmade?: () => void) => {},
-  /** a new post to the forum channel (the Forum tab's plus); draft: the words back after a refused send */
-  /** my anonymous post: a reply in its comments through the bot, and how my replies stand */
-  channelReply: (_post: { id: Id; body: string }) => {},
-  /** a channel post's comments, written and read in the app; link: the same thread in Telegram, for the rest */
-  channelThread: (_post: { id: Id; body: string; mine: boolean; anon: boolean; link: string }) => {},
-  askPeople: (_ask: Id, _title: string) => {},
-  /** every chat of the directory */
-  chats: (_chats: Chat[]) => {},
-  /** the AI page in Admin: the translator's state and work */
-  adminAi: () => {},
-  /** the creator's private donation receipts */
-  adminDonations: () => {},
-  /** the owner's audit log */
-  adminAudit: () => {},
-  /** suggest any chat for the catalog: paste @name or a link */
-  suggestChat: () => {},
-  registry: () => {},
-  /** DMP's tree of every organisation's groups */
-  dmpChats: () => {},
-  /** comments under a post or an event; `onchange` hears the new count */
-  comments: (_kind: 'post' | 'event', _id: Id, _title: string, _onchange?: (n: number) => void) => {},
-  /** the one report sheet: `about` names the thing, `onsent` hears it went (a photo hides for me) */
-  report: (_target: 'comment' | 'post' | 'event' | 'user' | 'photo' | 'ask' | 'fpost', _id: Id, _about?: string, _onsent?: () => void) => {},
-  /** "Bring a friend" to an event */
-  invite: (_id: Id, _title: string) => {},
-  /** "Bring a friend" from their card: my upcoming events */
-  inviteTo: (_id: Id, _name: string) => {},
-  /** one achievement or badge up close */
-  /** an award up close; `mine` adds Share */
-  award: (_it: ShelfItem, _mine?: boolean) => {},
+  registry: () => {}, // DMP's whole registry in a sheet (for the admin); App notes it opened in this launch (lib/desk.ts)
   /** In-app confirmation (never a system dialog); resolves true on "ok". */
   ask: (_q: Ask): Promise<boolean> => Promise.resolve(false),
   /** the same with a few words to write (a meeting's "Can't make it": why); null = cancelled. tel: a phone number instead,
    *  handed over as +7XXXXXXXXXX; value: filled in to edit; line: one line, Enter answers (a nick) */
   askText: (_q: Ask & { placeholder: string; max: number; tel?: boolean; value?: string; line?: boolean }): Promise<string | null> => Promise.resolve(null),
-  answers: (_title: string, _questions: import('../api').Question[]): Promise<{ q: string; a: string }[] | null> => Promise.resolve(null), // an event's own questions at sign-up
-  /** a team event's sign-up: make a team (its name) or "I have no team"; null: closed, no sign-up (server evteams.py) */
-  teamPick: (_title: string, _min: number, _max: number): Promise<import('../api').TeamPick | 'solo' | null> => Promise.resolve(null),
-  /** a captain's invite link (startapp=et_<token>): the team, one tap to join */
-  teamInvite: (_token: string) => {},
-  /** the organizer's teams: every team, those with none, Form teams */
-  teams: (_id: Id) => {},
-  bracket: (_id: Id, _manage: boolean, _seed: EventBracket, _onchange: (b: EventBracket) => void) => {},
-  /** a team event's group stage: the tables and matches for everyone; manage: the organizers' draw and scores; seed: already loaded; onchange: the opener's copy follows */
-  groups: (_id: Id, _manage?: boolean, _seed?: EventGroups, _onchange?: (g: EventGroups) => void, _replacesBracket?: boolean) => {},
   /** our own t.me link's startapp, opened as if tapped (App.deepLink): a scanner that read one of our QRs */
   deepLink: (_p: string) => {},
 };
+export const sheets = own as typeof own & typeof openers;

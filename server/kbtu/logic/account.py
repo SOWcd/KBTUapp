@@ -528,7 +528,7 @@ def seen_platform(con, uid: int, kind: str | None) -> None:
 
 
 def me(con, v: Viewer) -> dict:
-    from .. import checkin, roster
+    from .. import checkin, push, roster
     if v.student and roster.due(con, v.id):  # a read first: the write lock only when a row would join
         db.maybe(con, roster.match, con, v.id)  # A matching club roster row can add a membership. Skip the match if the database is busy.
     u = one(con, "SELECT * FROM users WHERE id = ?", v.id)
@@ -580,7 +580,10 @@ def me(con, v: Viewer) -> dict:
         # the creator's staff (staff_ok): Microsoft and the policy, no student ID (the welcome's sign-in, the form without it)
         **({"msOnly": True} if not s and not relink and staff_ok(con, v.id, ms_pending(con, v.id)) else {}),
         "referrals": {"count": brought(con, v.id), "code": _qr_code(con, v.id, "link_code")} if s else None,
-        "role": u["role"], "canDm": bool(u["can_dm"]), "founder": bool(u["is_founder"]), "mark": u["mark"], "qr": f"{v.id}_{_qr_code(con, v.id)}" if s else None,
+        "role": u["role"], "canDm": bool(u["can_dm"]),
+        # notifications on one channel (push.py): my pick, and app: a live app token of mine (Settings shows the pick then)
+        "notify": {"via": u["notify_via"], "app": bool(one(con, f"SELECT {push.LIVE.format('?')}", v.id, *push.bounds(core.now()))[0])},
+        "founder": bool(u["is_founder"]), "mark": u["mark"], "qr": f"{v.id}_{_qr_code(con, v.id)}" if s else None,
         "evRef": ev_ref(v.id) if s else None,  # "My link"'s code (seats.ev_ref): the plain t.me share carries it, never the badge's
         "no": (0 if u["is_founder"] else u["card_no"]) if s else None,
         "oversee": any(m["can_oversee"] and m["role"] != "member" for m in members),
@@ -601,7 +604,7 @@ def me(con, v: Viewer) -> dict:
         "unlocked": unlocked(con, v),
         "skin": _skin(con, v.id) if s else None,
         "frame": u["frame"] if s and u["frame"] in FRAMES else None,
-        "deleteAt": u["delete_at"] if s or relink else None,  # a relink account's week shows too
+        "deleteAt": u["delete_at"],  # my week to change my mind, whoever may ask it (a student, relink, an Apple account)
         "city": {"name": u["city"], "hidden": bool(u["city_hidden"])} if u["city"] else None,
         "roster": _roster_mine(con, v.id),
         # the capsule's running check-in, and the check-in page's way in: "pair" for who runs a club's events (Studio's
@@ -993,6 +996,10 @@ def _update_me(con, v: Viewer, patch: dict) -> None:
         if city is not None and (not isinstance(city, str) or not CITY_RE.fullmatch(city := " ".join(city.split()))):
             raise ApiError("bad_input")
         sets["city"] = city
+    if "notifyVia" in patch:  # one channel for my notifications (push.py): the app's push or Telegram's bot
+        if patch["notifyVia"] not in ("app", "telegram"):
+            raise ApiError("bad_input")
+        sets["notify_via"] = patch["notifyVia"]
     if "cityHidden" in patch:  # off my profile, kept for me
         if not isinstance(patch["cityHidden"], bool):
             raise ApiError("bad_input")
@@ -1070,8 +1077,11 @@ def _paid_ahead(con, uid: int) -> bool:
 
 
 def _may_delete(con, v: Viewer) -> None:
-    # Telegram-only donors also need a way to erase their linked payment data.
-    if not v.student and not one(con, "SELECT 1 FROM donations WHERE user_id = ? UNION ALL SELECT 1 FROM sponsor_consents WHERE user_id = ?", v.id, v.id):
+    """A student's account, or one an Apple sign-in made or reaches (App Store 5.1.1(v): an account the app creates can
+    be deleted in it), or a Telegram-only donor's (their linked payment data must be erasable too); any other Telegram
+    guest has nothing of an account to delete."""
+    if not v.student and not one(con, """SELECT 1 FROM identities WHERE user_id = ? UNION ALL SELECT 1 FROM donations WHERE user_id = ?
+                                         UNION ALL SELECT 1 FROM sponsor_consents WHERE user_id = ?""", v.id, v.id, v.id):
         need_student(v)
 
 
@@ -1350,6 +1360,7 @@ _DEL_GONE = {
     ("donations", "user_id"), ("sponsor_consents", "user_id"),
     ("fchan_feed_pages", "user_id"), ("broadcast_votes", "user_id"), ("user_platforms", "user_id"),
     ("web_sessions", "user_id"),
+    ("identities", "user_id"), ("push_devices", "user_id"),  # my Apple sign-in and my iPhones' push tokens (logic/apple.py)
     ("students", "user_id"), ("staff_ok", "user_id"), ("santa_people", "user_id"), ("santa_msgs", "giver_id"), ("santa_msgs", "to_id"), ("santa_sends", "user_id"), ("schedule_classes", "user_id"), ("org_members", "user_id"), ("join_requests", "user_id"),
     ("club_applications", "user_id"), ("subscriptions", "user_id"), ("registrations", "user_id"), ("saved_events", "user_id"),
     ("post_reactions", "user_id"), ("post_reads", "user_id"), ("achievement_grants", "user_id"),

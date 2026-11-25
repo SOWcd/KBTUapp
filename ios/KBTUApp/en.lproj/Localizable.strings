@@ -1,0 +1,6 @@
+/* OfflineView: the site can't load */
+"offline.title" = "No connection";
+"offline.text" = "Check the internet and try again.";
+"offline.retry" = "Try again";
+"offline.tickets" = "My tickets";
+"offline.ticketsHint" = "Show the QR at the door: it works without the internet.";

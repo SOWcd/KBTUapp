@@ -57,18 +57,27 @@ ANDROID_CERT_SHA256=<upload key SHA-256>,<app signing key SHA-256>
 Check: https://kbtu.sow.kz/.well-known/assetlinks.json lists both. Without the Play one, the app installed from Play
 shows a browser bar at the top: that's the sign it is missing or wrong.
 
-## The reviewer's demo login (App access)
+## The reviewer's demo login (App access; the App Store's too)
 
-Google's reviewers have no Telegram. While a review is due:
+The stores' reviewers have no Telegram. One switch serves both stores: `PLAY_DEMO`, a code. The sign-in page shows a
+small, visible **Sign in with a code** under the Telegram button (never a hidden door: App Review 2.5.19); the code
+typed there, or the link below, opens the demo account. While a review is due:
 
 1. Coolify: `PLAY_DEMO=<32+ random characters>` (`python3 -c 'import secrets;print(secrets.token_urlsafe(32))'`), redeploy.
-2. `admin play-demo` (through the prod gate) prints the link `https://kbtu.sow.kz/play-demo?k=...`.
-3. Play Console → App content → App access → "All or some functionality is restricted" → add instructions:
+2. `admin play-demo` (through the prod gate) prints the link `https://kbtu.sow.kz/play-demo?k=<code>`; the part after
+   `k=` is the code.
+3. Something to see: make a free event in your own club for the review weeks (`admin event-new`, or Studio), then
+   `admin play-demo seed <event id> [<event id>]`: the demo account holds a ticket with its QR to each. Its door list
+   shows "Demo Reviewer"; nobody gets a message. After the review: `admin play-demo unseed`.
+4. Play Console → App content → App access → "All or some functionality is restricted" → add instructions
+   (App Store Connect → App Review Information: the same text, and a screenshot of the ticket's QR as the sample QR):
 
-   > Name: Demo access. The app signs in with Telegram, which reviewers may not have. On the test device, open this
-   > link: https://kbtu.sow.kz/play-demo?k=... It opens KBTU App signed in as a demo account (made-up name "Demo
-   > Reviewer"). The demo account can browse events, clubs, news and the campus map; it is read-only. Verifying as a
-   > KBTU student needs a university Microsoft account and is not available to the demo.
+   > Name: Demo access. The app signs in with Telegram, which reviewers may not have. On the sign-in screen, tap
+   > "Sign in with a code" and enter: <code>. (Or open https://kbtu.sow.kz/play-demo?k=<code> on the test device.) It
+   > opens KBTU App as a demo account (made-up name "Demo Reviewer") with tickets to two events: open one in Afisha to
+   > see its QR code, which the organizers scan at the door. The demo can browse events, clubs, news, the timetable
+   > page and the campus map; it is read-only. Verifying as a KBTU student needs a university Microsoft account and
+   > is not available to the demo. The code works for as long as the review lasts, from any country.
 
 What the demo account is: one made-up user (no student row, no role, the bot never writes to it) that can only read
 the catalogue routes listed in `web_auth.DEMO_READS`: no people, no writes. After the review: remove `PLAY_DEMO` (the
@@ -93,22 +102,40 @@ A personal developer account (made after Nov 2023) must run a closed test with a
    - News app: no. Government app: no. Financial features: none (tickets are paid by Kaspi transfer outside the app;
      the app holds no money).
    - Data safety: the answers below.
-   - Account deletion URL: `https://kbtu.sow.kz/privacy?lang=en` (section 11: in the app, Settings → Delete account;
-     or ask @Sowers).
+   - Account deletion URL: `https://kbtu.sow.kz/delete?lang=en` (public: in the app, Settings → Delete account; or
+     ask @Sowers; what stays links to the policy). The App Store listing can give the same page.
 3. Store listing: the texts in [listing.md](listing.md) (en and ru), the 512×512 icon (`web/public/icon-512.png`),
-   a 1024×500 feature graphic, and 2–8 phone screenshots (take them in both themes at phone size).
-4. Test and release → Testing → Closed testing → Create track → Testers: an email list of 12+ Google accounts
-   (friends, club members; leave margin, 15+). Create release → upload `kbtuapp-<code>.aab` → Release notes → Roll
-   out. Send the testers the opt-in link from the track's Testers tab; each one opts in and installs from Play.
-5. Keep at least 12 testers opted in for 14 days (ask them to open the app now and then: Google asks about their
-   feedback when you apply). Each new `.aab` to the same track needs a bigger `version_code`.
-6. Dashboard → Apply for production, answer the questions about the test, wait for review (often several days),
-   then Production → Create release with the same or a newer `.aab`.
+   a 1024×500 feature graphic, and 2–8 phone screenshots (take them in both themes at phone size, from the app
+   installed from Play: tickets, the map, the timetable, the scanner; no browser bar, no university crest). Category:
+   **Education** or **Social**, never News (that brings Play's News declaration).
+4. Test and release → Testing → Closed testing → Create track → Testers: an email list of Google accounts. Aim for
+   about **20 real students** (the rule's 12 plus margin: a tester who leaves early doesn't count), found through the
+   bot or a club chat, each with an Android phone and a Google account. Create release → upload `kbtuapp-<code>.aab`
+   → Release notes → Roll out. Send the testers the opt-in link from the track's Testers tab; each one opts in and
+   installs from Play (not a copy sent by hand: only Play's install shows whether assetlinks.json holds Play's key).
+5. The test itself, **14 days in a row** at least (Google refuses production for weak tests: "testers were not
+   engaged"):
+   - day 1: check on a tester's phone that the app installed from Play opens with no browser bar;
+   - ask the testers to use it for real on several days: their tickets, the timetable, the map, a club, the forum;
+   - ship **2–3 updates** during the test (a fix or a small change each; a new `.aab` needs a bigger `version_code`);
+   - collect feedback in the app (Profile → the app's card → "What's wrong?") and note what changed because of it:
+     the form asks.
+6. Dashboard → Apply for production. Answer concretely (Google reads it): who the testers were (KBTU students, how
+   many, how found), what they used and how often, how feedback was gathered (the in-app form, the bot) and what
+   changed after it, who the app is for ("students of one university in Almaty, unofficial, 16+"), and why it's
+   ready. Wait for review (often several days), then Production → Create release with the same or a newer `.aab`.
+   Refused: Google asks for 14 more days; run them the same way and apply again.
 
 Things a reviewer may question, answered in advance:
 
 - The name holds the university's name: the listing and the app say it is unofficial and independent (impersonation policy).
-- Paid tickets: physical event entry, paid outside Play by Kaspi transfer: outside Play Billing's scope.
+- Paid tickets: physical event entry, paid outside Play by Kaspi transfer: outside Play Billing's scope. Never sell
+  anything digital in the app (premium features, paid badges, coins): that would need Play Billing.
+- User-generated content (forum, comments, profiles, friends): terms accepted before posting, Report on every post and
+  profile, **Block** on every person's card (any avatar opens it: friends end, no requests either way, gone from each
+  other's forum), moderators in the Admin sheet, the contact (@Sowers) on Profile's app card and in the policy.
+- Notifications: `enableNotifications` stays `false`: the app's reminders come from the Telegram bot, and the site
+  sends no web push, so Bubblewrap's notification delegation would ask for a permission it never uses.
 - "Support the app" (Settings, when `DONATE_PHONE` is set) is a voluntary Kaspi transfer to the creator. Play treats
   tipping a developer as digital: if a reviewer objects, the row has to stay hidden in the Android app.
 

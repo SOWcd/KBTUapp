@@ -87,13 +87,13 @@ SHARE_AWARD = {
 }
 ACH_NAMES = {
     "ru": {"activist": "Главный активист", "regular": "Абонемент", "streak": "Серия", "first_in": "Ранняя пташка", "soul": "Душа тусовки", "season": "Сезон", "first50": "Первые 500",
-           "creator_laugh": "Стендапер", "creator_found": "Встреча века", "bugs": "Охотник за багами", "dmp": "Явка обязательна", "team": "Гроза тимбилдинга", "referral": "Зазывала",
+           "creator_laugh": "Стендапер", "creator_found": "Встреча века", "bugs": "Охотник за багами", "ideas": "Генератор идей", "coder": "Вайб-кодер", "dmp": "Явка обязательна", "team": "Гроза тимбилдинга", "referral": "Зазывала",
            "init26": "Волонтёр посвящения", "init26f": "Посвящение 2026", "init26p": "Выступающий на посвящении", "anthem": "Абсолютный слух", "critic": "Диванный критик", "supporter": "Топливо", "honor": "Почётная медаль", "club_founder": "Основатель клуба"},
     "kk": {"activist": "Бас белсенді", "regular": "Абонемент", "streak": "Серия", "first_in": "Ерте тұрған", "soul": "Ортаның сәні", "season": "Маусым", "first50": "Алғашқы 500",
-           "creator_laugh": "Стендапшы", "creator_found": "Ғасыр кездесуі", "bugs": "Баг аңшысы", "dmp": "Келу міндетті", "team": "Тимбилдинг шебері", "referral": "Шақырушы",
+           "creator_laugh": "Стендапшы", "creator_found": "Ғасыр кездесуі", "bugs": "Баг аңшысы", "ideas": "Идея генераторы", "coder": "Вайб-кодер", "dmp": "Келу міндетті", "team": "Тимбилдинг шебері", "referral": "Шақырушы",
            "init26": "Бағыштау волонтері", "init26f": "Бағыштау 2026", "init26p": "Бағыштауда өнер көрсетуші", "anthem": "Абсолюттік есту", "critic": "Диван сыншысы", "supporter": "Отын", "honor": "Құрмет медалі", "club_founder": "Клуб негізін қалаушы"},
     "en": {"activist": "Chief activist", "regular": "Season ticket", "streak": "Streak", "first_in": "Early bird", "soul": "Life of the party", "season": "Season", "first50": "First 500",
-           "creator_laugh": "Stand-up comic", "creator_found": "Meeting of the century", "bugs": "Bug hunter", "dmp": "Attendance required", "team": "Teambuilding thunder", "referral": "Recruiter",
+           "creator_laugh": "Stand-up comic", "creator_found": "Meeting of the century", "bugs": "Bug hunter", "ideas": "Idea generator", "coder": "Vibe coder", "dmp": "Attendance required", "team": "Teambuilding thunder", "referral": "Recruiter",
            "init26": "Initiation volunteer", "init26f": "Initiation 2026", "init26p": "Initiation performer", "anthem": "Perfect pitch", "critic": "Couch critic", "supporter": "Fuel", "honor": "Honor medal", "club_founder": "Club founder"},
 }
 SCHED_LANG = {  # a schedule's languages in the bot's words ({language} and {languages} in sched_same, sched_added)
@@ -271,6 +271,7 @@ BOT = {
         "santa_news": ("🎅 Тайный Санта уже в KBTU App\n🎁 Запусти для <b>{org}</b> одной кнопкой", "🎄 Запустить"),
         "app_home": ("📱 <b>KBTU App почти как отдельное приложение!</b>", "🎬 Смотреть"),
         "acoustic": ("🎸 <b>Acoustic Evening</b>: живая музыка в баре «Танцы»\n📅 26 ноября, 19:30 · 18+\n🔥 <b>Только сегодня с 20:00 до 22:00 билеты на 1000 ₸ дешевле</b>\nВ 22:00 скидка сгорит, успей забрать свой 👇", "🎟 Забрать билет со скидкой"),
+        "android_test": ("🤖 <b>KBTU App выходит в Google Play!</b>\nНужны тестировщики с Android: поставь приложение раньше всех и помоги с запуском 👇", "📲 Стать тестировщиком"),
         "vote_1": ("👍 Интересно", None), "vote_0": ("🔕 Не присылать", None),
         "santa_drawn": ("🎅 Жеребьёвка прошла: <b>{title}</b>\n🎁 Узнай, кому даришь", "🎁 Узнать"),
         "santa_open": ("🎅 <b>{org}</b> играет в Тайного Санту\n🎁 Напиши вишлист, и ты в игре{terms}", "🎄 Играть"),
@@ -498,6 +499,7 @@ BOT = {
         "santa_news": ("🎅 Құпия Санта енді KBTU App-та\n🎁 <b>{org}</b> үшін бір батырмамен баста", "🎄 Бастау"),
         "app_home": ("📱 <b>KBTU App енді жеке қолданбаға ұқсас!</b>", "🎬 Көру"),
         "acoustic": ("🎸 <b>Acoustic Evening</b>: «Танцы» барында тірі музыка\n📅 26 қараша, 19:30 · 18+\n🔥 <b>Тек бүгін 20:00–22:00 билеттер 1000 ₸ арзан</b>\n22:00-де жеңілдік бітеді, үлгеріп қал 👇", "🎟 Жеңілдікпен алу"),
+        "android_test": ("🤖 <b>KBTU App Google Play-ге шығады!</b>\nAndroid-пен тестерлер керек: қолданбаны бәрінен бұрын орнатып, іске қосуға көмектес 👇", "📲 Тестер болу"),
         "vote_1": ("👍 Қызық", None), "vote_0": ("🔕 Жібермеу", None),
         "santa_drawn": ("🎅 Жеребе тартылды: <b>{title}</b>\n🎁 Кімге сыйлайтыныңды біл", "🎁 Білу"),
         "santa_open": ("🎅 <b>{org}</b> Құпия Санта ойынын ойнап жатыр\n🎁 Тілек тізіміңді жаз, сонда ойындасың{terms}", "🎄 Ойнау"),
@@ -719,6 +721,7 @@ BOT = {
         "santa_news": ("🎅 Secret Santa is now in KBTU App\n🎁 Start it for <b>{org}</b> with one button", "🎄 Start"),
         "app_home": ("📱 <b>KBTU App is now almost a real app!</b>", "🎬 Watch"),
         "acoustic": ("🎸 <b>Acoustic Evening</b>: live music at Tantsy bar\n📅 Nov 26, 19:30 · 18+\n🔥 <b>Today only, 20:00-22:00: tickets 1000 ₸ off</b>\nThe deal ends at 22:00, grab yours 👇", "🎟 Grab a discounted ticket"),
+        "android_test": ("🤖 <b>KBTU App is coming to Google Play!</b>\nWe need testers on Android: get the app before everyone and help us launch 👇", "📲 Become a tester"),
         "vote_1": ("👍 Interesting", None), "vote_0": ("🔕 Don't send", None),
         "santa_drawn": ("🎅 The draw is done: <b>{title}</b>\n🎁 See who you're giving to", "🎁 See"),
         "santa_open": ("🎅 <b>{org}</b> is playing Secret Santa\n🎁 Write your wishlist and you are in{terms}", "🎄 Play"),

@@ -2,9 +2,9 @@
   // "Bring a friend" from a friend's card (SPEC §4.7, §4.12): the events I'm going to, and "Invite" next to each — the bot
   // brings them our card, once per event. Nothing upcoming yet: the way to Events.
   import Mail from '@lucide/svelte/icons/mail';
-  import { api, ApiErr, type Id } from '../../lib/api';
+  import { api, ApiErr, type Id, type PersonCard } from '../../lib/api';
   import { say, close, ui, type Overlay, overlays } from '../../lib/state/ui.svelte';
-  import { data } from '../../lib/state/data.svelte';
+  import { data, personCard, noteInvited } from '../../lib/state/data.svelte';
   import { t, placeOf } from '../../lib/i18n/index.svelte';
   import { relDay, time, nowTs } from '../../lib/time';
   import { haptic } from '../../lib/tg';
@@ -20,18 +20,28 @@
   let { overlay, id, name }: { overlay: Overlay; id: Id; name: string } = $props();
   const mine = $derived(data.events.filter((e) => e.status === 'published' && e.startsAt > nowTs() && (e.visibility ?? 'public') === 'public'
     && ['going', 'hold', 'waitlist'].includes(e.my?.status ?? '')).slice(0, 12));
-  let sent = $state<Record<number, 'invited' | 'going'>>({});
-  let busy = $state<number | null>(null);
+  // where each event stands opens from their card (kept since the person sheet under this one): invited by me before,
+  // or going; a fresher card merges in when it lands, never undoing a tap made meanwhile
+  const from = (c?: PersonCard): Record<number, 'invited' | 'going'> => Object.fromEntries([
+    ...(c?.invited ?? []).map((e) => [e, 'invited'] as const), ...(c?.going ?? []).map((e) => [e.id, 'going'] as const)]);
+  // svelte-ignore state_referenced_locally
+  const card = personCard(id); // a sheet is one person for its life
+  let sent = $state(from(card.card));
+  $effect(() => { card.p.then((c) => (sent = { ...from(c), ...sent })).catch(() => {}); });
 
+  // the row says "Invited" in the tap's frame; the server's answer settles it (back to "Invite" on an error)
   async function invite(eid: number) {
-    busy = eid;
+    if (sent[eid]) return;
+    sent = { ...sent, [eid]: 'invited' };
+    haptic.ok(); say(t('inv.sent', { name }), 'love_letter_3d');
     try {
       const l = await api.inviteFriend(eid, id);
-      const st = l.find((x) => x.person.id === id)?.state;
-      sent = { ...sent, [eid]: st === 'going' ? 'going' : 'invited' };
-      haptic.ok(); say(t('inv.sent', { name }), 'love_letter_3d');
-    } catch (e) { haptic.error(); say(e instanceof ApiErr && e.code === 'rate_limited' ? t('inv.tooMany') : t('common.error'), 'warning_3d'); }
-    finally { busy = null; }
+      if (l.find((x) => x.person.id === id)?.state === 'going') sent = { ...sent, [eid]: 'going' };
+      noteInvited(id, eid);
+    } catch (e) {
+      const back = { ...sent }; delete back[eid]; sent = back;
+      haptic.error(); say(e instanceof ApiErr && e.code === 'rate_limited' ? t('inv.tooMany') : t('common.error'), 'warning_3d');
+    }
   }
   // the Afisha in sight: every sheet down (the person's and the Friends sheet were left over it)
   function toEvents() { overlays.forEach((o) => close(o.id, true)); ui.tab = 'afisha'; } // as by a hand: a sheet with unsent text asks first
@@ -49,7 +59,7 @@
         {:else}
           <Row dense title={e.title} subtitle={when}>
             {#snippet lead()}<Poster item={e} size={44} radius={10} />{/snippet}
-            {#snippet trailing()}<Button kind="tinted" size="s" loading={busy === e.id} onclick={() => invite(e.id)}>{#snippet icon()}<Mail size={15} />{/snippet}{t('inv.invite')}</Button>{/snippet}
+            {#snippet trailing()}<Button kind="tinted" size="s" onclick={() => invite(e.id)}>{#snippet icon()}<Mail size={15} />{/snippet}{t('inv.invite')}</Button>{/snippet}
           </Row>
         {/if}
       {/each}

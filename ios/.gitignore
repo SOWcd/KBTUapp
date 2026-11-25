@@ -1,0 +1,5 @@
+# made on the CI runner (project.yml, .github/workflows/ios.yml)
+KBTUApp.xcodeproj/
+KBTUApp/Info.plist
+KBTUApp/KBTUApp.entitlements
+KBTUApp/Assets.xcassets/AppIcon.appiconset/icon-1024.png

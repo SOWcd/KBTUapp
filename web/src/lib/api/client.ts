@@ -17,10 +17,11 @@ const authHeaders = (webWrite = false): Record<string, string> => ({
   ...(!tg.initData || webWrite ? { 'X-KBTU': '1' } : {}),
 });
 export const WEB_SESSION_CHANGE = 'kb-web-session-change';
+type ApplePass = { token: string; nonce: string; consent: string; lang?: string };
 
-async function changeWebSession(path: '/web/login' | '/web/logout' | '/web/logout-all', body?: unknown): Promise<void> {
+async function changeWebSession(path: '/web/login' | '/web/demo' | '/web/apple' | '/web/logout' | '/web/logout-all' | '/me/logins/telegram', body?: unknown): Promise<void> {
   await call('POST', path, body);
-  if (!tg.initData && path !== '/web/login') dispatchEvent(new Event('kb:signedOut'));
+  if (!tg.initData && (path === '/web/logout' || path === '/web/logout-all')) dispatchEvent(new Event('kb:signedOut'));
   try { localStorage.setItem(WEB_SESSION_CHANGE, crypto.randomUUID()); } catch { /* storage may be blocked */ }
 }
 
@@ -195,13 +196,24 @@ export const server = {
   // the device kind rides along (the server keeps it at most once a day, for a broadcast to one platform)
   me: (withReportLog = false): Promise<Me & { reportLog?: ReportLogEntry[] }> => call('GET', `/me?platform=${tg.kind}${withReportLog ? '' : '&reportLog=false'}`),
   webLogin: (widget: unknown): Promise<void> => changeWebSession('/web/login', widget),
+  webDemo: (code: string): Promise<void> => changeWebSession('/web/demo', { code }), // the stores' reviewers (android/README.md)
   webLogout: (): Promise<void> => changeWebSession('/web/logout'),
   webLogoutAll: (): Promise<void> => changeWebSession('/web/logout-all'),
+  // the iPhone app (logic/apple.py): Apple's identity token for this tap's nonce, with the consent of the policy's clause
+  appleLogin: (p: ApplePass): Promise<void> => changeWebSession('/web/apple', p),
+  linkApple: (p: ApplePass): Promise<void> => call('POST', '/me/logins/apple', p),
+  unlinkApple: (): Promise<void> => call('DELETE', '/me/logins/apple'),
+  // Telegram's sign-in page, back with #tgAuthResult (app: to the iPhone app's sign-in sheet through /tg-back)
+  telegramSignInStart: (state: string): Promise<{ url: string }> => call('GET', '/web/telegram' + query({ state })), // the iPhone app's entrance
+  telegramLinkStart: (state: string, app?: boolean): Promise<{ url: string }> => call('GET', '/me/logins/telegram' + query({ state, ios: app ? 1 : undefined })),
+  linkTelegram: (widget: unknown): Promise<void> => changeWebSession('/me/logins/telegram', widget), // a new session: the old one ends
+  pushDevice: (token: string, consent: string): Promise<void> => call('POST', '/me/devices', { token, consent }),
+  dropPushDevice: (): Promise<void> => call('DELETE', '/me/devices'), // notifications off in iOS Settings
   msStart: (): Promise<{ url: string }> => call('POST', '/ms/start'), // the KBTU Microsoft sign-in link, opened outside Telegram
   dmpHi: (): Promise<void> => call('POST', '/me/dmp-hi'), // DMP's one-time hello left (me.dmpHi): never again
   msClaim: (claim: string): Promise<{ ok: true }> => call('POST', '/ms/claim', { claim }), // back from /ms.html (startapp=ms_<claim>): only the Telegram that started it takes it
   manualLogin: (i: { firstName: string; lastName: string; studentId: string; course: number }, consentVersion: string): Promise<Me> => call('POST', '/kbtu/manual', { ...i, consentVersion }), // only while it isn't
-  updateMe: (patch: Partial<Settings> & { bio?: string; showcase?: string[]; nick?: string | null; avatarTg?: boolean; skin?: Id | 'sower' | Archived | null; frame?: string | null; phone?: string | null; school?: string | null; course?: number; city?: string | null; cityHidden?: boolean }
+  updateMe: (patch: Partial<Settings> & { bio?: string; showcase?: string[]; nick?: string | null; avatarTg?: boolean; skin?: Id | 'sower' | Archived | null; frame?: string | null; phone?: string | null; school?: string | null; course?: number; city?: string | null; cityHidden?: boolean; notifyVia?: 'app' | 'telegram' }
     & { [k in Exclude<Fixable, 'course' | 'school'>]?: string }): Promise<Me> => call('PATCH', '/me', patch), // phone, city: null deletes it; a Fixable: once each (the server says `fixed` after)
   uploadMyPhoto: (file: Blob): Promise<Me> => call('POST', '/me/photo', file), // my own photo: "Photo from Telegram" goes off
   deleteMyPhoto: (): Promise<Me> => call('DELETE', '/me/photo'), // gone from the server too; Telegram's is back
