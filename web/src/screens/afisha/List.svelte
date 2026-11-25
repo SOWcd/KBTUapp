@@ -164,7 +164,7 @@
   }
 
   // no timetable: the one card that asks for it (after the first load: a returning student never sees it flash)
-  const askSched = $derived(data.eventsReady && !!session.me?.student && !data.schedule.length);
+  const askSched = $derived(data.scheduleReady && !!session.me?.student && !data.schedule.length);
 
   const past = $derived(data.past); // "Past": the last month's Afisha events, mine marked, newest first (the server's order)
   let allPast = $state(false), pastOpen = $state(false);
