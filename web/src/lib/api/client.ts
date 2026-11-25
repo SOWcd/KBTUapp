@@ -172,7 +172,7 @@ export const server = {
   msStart: (): Promise<{ url: string }> => call('POST', '/ms/start'), // the KBTU Microsoft sign-in link, opened outside Telegram
   msClaim: (claim: string): Promise<{ ok: true }> => call('POST', '/ms/claim', { claim }), // back from /ms.html (startapp=ms_<claim>): only the Telegram that started it takes it
   manualLogin: (i: { firstName: string; lastName: string; studentId: string; course: number }, consentVersion: string): Promise<Me> => call('POST', '/kbtu/manual', { ...i, consentVersion }), // only while it isn't
-  updateMe: (patch: Partial<Settings> & { bio?: string; showcase?: string[]; nick?: string | null; avatarTg?: boolean; skin?: Id | 'sower' | null; frame?: string | null; phone?: string | null; school?: string | null; course?: number; city?: string | null; cityHidden?: boolean }
+  updateMe: (patch: Partial<Settings> & { bio?: string; showcase?: string[]; nick?: string | null; avatarTg?: boolean; skin?: Id | 'sower' | null; frame?: string | null; phone?: string | null; school?: string | null; course?: number; city?: string | null; cityHidden?: boolean; notifyVia?: 'app' | 'telegram' }
     & { [k in Exclude<Fixable, 'course' | 'school'>]?: string }): Promise<Me> => call('PATCH', '/me', patch), // phone, city: null deletes it; a Fixable: once each (the server says `fixed` after)
   uploadMyPhoto: (file: Blob): Promise<Me> => call('POST', '/me/photo', file), // my own photo: "Photo from Telegram" goes off
   deleteMyPhoto: (): Promise<Me> => call('DELETE', '/me/photo'), // gone from the server too; Telegram's is back

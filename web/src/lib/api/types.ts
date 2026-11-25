@@ -336,6 +336,7 @@ export interface Me {
   relink?: boolean; // typed in before Oct 20 (no Microsoft): signed out until Microsoft confirms that row
   role: PlatformRole;
   canDm: boolean;               // the bot may write (Telegram's "allow messages", or the chat opened)
+  notify: { via: 'app' | 'telegram'; app: boolean }; // one channel for my notifications (server push.py): my pick; app: a live app token of mine
   founder: boolean;
   mark?: 'idea' | null;
   no: number | null;            // the card number: the order of first KBTU sign-in, the Creator's 0; null for guests

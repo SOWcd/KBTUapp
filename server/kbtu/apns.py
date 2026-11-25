@@ -1,6 +1,5 @@
-"""Push to the iPhone app through Apple (APNs), beside the bot. The postman (bot.send_due) renders each queued message
-once; a person whose iPhone app has notifications on gets it here instead of a second copy in Telegram: one notice
-per message, whichever way it goes. Its words are the same server template the bot sends (texts.py), never a user's.
+"""The iPhone app's push provider (push.py picks the channel): Apple's APNs. Its words are the same server template
+the bot sends (texts.py), never a user's.
 
 HTTP/2 with a provider token: an ES256 JWT over the .p8 key (APNS_KEY), made again every 50 minutes (Apple refuses one
 older than an hour and throttles one remade too often). TestFlight and App Store builds both use production APNs."""
@@ -13,14 +12,12 @@ import logging
 import re
 import time
 
-import anyio
 import httpx
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
 
 from .config import Config
-from .logic import apple
 
 log = logging.getLogger("kbtu.apns")
 
@@ -56,8 +53,9 @@ def plain(text: str) -> str:
     return html.unescape(re.sub(r"<[^>]+>", "", text)).strip()[:1500]
 
 
-async def _send(cfg: Config, token: str, text: str, start: str) -> str:
-    """'ok', 'gone' (the token is dead: dropped) or 'failed'."""
+async def send(cfg: Config, token: str, text: str, start: str) -> str:
+    """'ok'; 'gone' (Apple says the token is dead for good); 'failed' (Apple refused it); 'down' (no answer from Apple,
+    or our key: nothing said about the token)."""
     global _http
     if _http is None:
         _http = httpx.AsyncClient(http2=True, timeout=15)
@@ -67,7 +65,7 @@ async def _send(cfg: Config, token: str, text: str, start: str) -> str:
             "authorization": f"bearer {_bearer(cfg)}", "apns-topic": cfg.ios_bundle, "apns-push-type": "alert"})
     except (httpx.HTTPError, ValueError) as exc:  # ValueError: a key that doesn't load
         log.warning("apns: %s", type(exc).__name__)
-        return "failed"
+        return "down"
     if r.status_code == 200:
         return "ok"
     try:
@@ -77,15 +75,5 @@ async def _send(cfg: Config, token: str, text: str, start: str) -> str:
     if r.status_code == 410 or reason in GONE:
         return "gone"
     log.warning("apns: %s %s", r.status_code, reason[:60])  # never the token
-    return "failed"
+    return "down" if r.status_code == 403 or r.status_code >= 500 else "failed"  # 403: our key; 5xx: Apple's own
 
-
-async def deliver(cfg: Config, con, uid: int, text: str, start: str) -> bool:
-    """To each of this person's iPhones; True when at least one took it."""
-    sent = False
-    for token in await anyio.to_thread.run_sync(apple.devices, con, uid):
-        got = await _send(cfg, token, text, start)
-        if got == "gone":
-            await anyio.to_thread.run_sync(apple.drop_device, con, token)
-        sent = sent or got == "ok"
-    return sent

@@ -478,7 +478,7 @@ def lent_studio(con, v: Viewer, oid: int) -> dict:
 
 
 def me(con, v: Viewer) -> dict:
-    from .. import checkin, roster
+    from .. import checkin, push, roster
     if v.student and roster._mine(con, v.id)[1]:  # a read first: the write lock only when a row may be mine
         db.maybe(con, roster.match, con, v.id)  # A matching club roster row can add a membership. Skip the match if the database is busy.
     u = one(con, "SELECT * FROM users WHERE id = ?", v.id)
@@ -529,7 +529,10 @@ def me(con, v: Viewer) -> dict:
         # the creator's staff (staff_ok): Microsoft and the policy, no student ID (the welcome's sign-in, the form without it)
         **({"msOnly": True} if not s and not relink and staff_ok(con, v.id, ms_pending(con, v.id)) else {}),
         "referrals": {"count": brought(con, v.id), "code": _qr_code(con, v.id, "link_code")} if s else None,
-        "role": u["role"], "canDm": bool(u["can_dm"]), "founder": bool(u["is_founder"]), "mark": u["mark"], "qr": f"{v.id}_{_qr_code(con, v.id)}" if s else None,
+        "role": u["role"], "canDm": bool(u["can_dm"]),
+        # notifications on one channel (push.py): my pick, and app: a live app token of mine (Settings shows the pick then)
+        "notify": {"via": u["notify_via"], "app": bool(one(con, f"SELECT {push.LIVE.format('?')}", v.id, core.now() - push.STALE)[0])},
+        "founder": bool(u["is_founder"]), "mark": u["mark"], "qr": f"{v.id}_{_qr_code(con, v.id)}" if s else None,
         "evRef": ev_ref(v.id) if s else None,  # "My link"'s code (seats.ev_ref): the plain t.me share carries it, never the badge's
         "no": (0 if u["is_founder"] else u["card_no"]) if s else None,
         "oversee": any(m["can_oversee"] and m["role"] != "member" for m in members),
@@ -922,6 +925,10 @@ def _update_me(con, v: Viewer, patch: dict) -> None:
         if city is not None and (not isinstance(city, str) or not CITY_RE.fullmatch(city := " ".join(city.split()))):
             raise ApiError("bad_input")
         sets["city"] = city
+    if "notifyVia" in patch:  # one channel for my notifications (push.py): the app's push or Telegram's bot
+        if patch["notifyVia"] not in ("app", "telegram"):
+            raise ApiError("bad_input")
+        sets["notify_via"] = patch["notifyVia"]
     if "cityHidden" in patch:  # off my profile, kept for me
         if not isinstance(patch["cityHidden"], bool):
             raise ApiError("bad_input")

@@ -28,7 +28,7 @@ from pathlib import Path
 import anyio.to_thread
 import httpx
 
-from . import ai, apns, casting, db, download, llm, logic, media, mirror, mtbot, offsite, portal, receipt, swear, texts, tgc, tiktok, userbot, video
+from . import ai, casting, db, download, llm, logic, media, mirror, mtbot, offsite, portal, push, receipt, swear, texts, tgc, tiktok, userbot, video
 from .config import Config
 from .logic import notifications, now, one, rows
 from .logic.account import _Taken
@@ -965,17 +965,20 @@ def _chores(cfg: Config, con) -> None:
 
 def _due(con) -> list:
     # the partial index outbox_todo (migration 109), named: else the planner picks outbox_due, which walks every failed row
-    # pushable: the iPhone app's notifications are on for this person (apns.py), the bot's message may go there instead
-    return rows(con, """SELECT b.*, u.tg_id, u.lang, u.can_dm, u.banned_at,
-        EXISTS (SELECT 1 FROM push_devices p WHERE p.user_id = b.user_id) AS pushable
+    # pushable: this person's notifications go to the app (push.py): a live token, and the app picked in Settings (or
+    # no Telegram to write to)
+    t = now()
+    return rows(con, f"""SELECT b.*, u.tg_id, u.lang, u.can_dm, u.banned_at,
+        {push.LIVE.format("b.user_id")} AND (u.notify_via = 'app' OR u.can_dm = 0) AS pushable
         FROM bot_outbox b INDEXED BY outbox_todo JOIN users u ON u.id = b.user_id
-        WHERE b.sent_at IS NULL AND b.error IS NULL AND b.send_after <= ? ORDER BY b.send_after, b.id LIMIT 50""", now())
+        WHERE b.sent_at IS NULL AND b.error IS NULL AND b.send_after <= ? ORDER BY b.send_after, b.id LIMIT 50""",
+                t - push.STALE, t)
 
 
 def _pushes(cfg: Config, m, start) -> bool:
-    """This message goes to the iPhone app instead of Telegram: a template with one way into the app (never a keyboard
-    of votes or links, a forum comment's edits, or the credits' ask, which follow Telegram's own account)."""
-    return apns.on(cfg) and bool(m["pushable"]) and isinstance(start, str) and not m["kind"].startswith("tgc_") \
+    """This message goes to the app instead of Telegram (push.py): a template with one way into the app (never a
+    keyboard of votes or links, a forum comment's edits, or the credits' ask, which follow Telegram's own account)."""
+    return push.on(cfg) and bool(m["pushable"]) and isinstance(start, str) and not m["kind"].startswith("tgc_") \
         and m["kind"] not in ("fch_comments", "credit_ask")
 
 
@@ -985,9 +988,9 @@ def _mark(con, m, sent: bool, error: str | None = None) -> None:
                 (now() if sent else None, error, m["id"], m["user_id"], m["kind"], m["ref"]))
 
 
-def _take(con, m, forum_channel: bool, push: bool = False):
+def _take(con, m, forum_channel: bool, pushable: bool = False):
     """One queued message taken and rendered, or None (the other postman has it, or it can't go: marked why).
-    push: the iPhone app may get it (apns.on and a device), so no Telegram is no reason to drop it yet."""
+    pushable: the app may get it (push.on and a live device), so no Telegram is no reason to drop it yet."""
     # take it first: during a deploy the old and the new container run side by side for a few seconds, and
     # both postmen see the same queue; whoever moves send_after on gets the message (back after LEASE if lost)
     lease = logic.fchannel.COMMENT_GAP if m["kind"] == "fch_comments" else LEASE  # Telegram may receive a send whose answer is lost
@@ -995,7 +998,7 @@ def _take(con, m, forum_channel: bool, push: bool = False):
                        AND send_after = ? AND sent_at IS NULL AND error IS NULL""",
                        (now() + lease, m["id"], m["user_id"], m["kind"], m["ref"], m["send_after"])).rowcount:
         return None
-    if not m["can_dm"] and not push:
+    if not m["can_dm"] and not pushable:
         return _mark(con, m, False, "no_dm")
     if m["banned_at"]:  # banned: the bot stops writing
         return _mark(con, m, False, "banned")
@@ -1051,12 +1054,12 @@ async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
         for m in await anyio.to_thread.run_sync(_due, con):
             if _stopping():  # between messages: one taken and cut mid-send would go again after its LEASE, maybe twice
                 return
-            msg = await anyio.to_thread.run_sync(_take, con, m, bool(cfg.forum_channel), apns.on(cfg) and bool(m["pushable"]))
+            msg = await anyio.to_thread.run_sync(_take, con, m, bool(cfg.forum_channel), push.on(cfg) and bool(m["pushable"]))
             if msg is None:
                 continue
             text, button, start = msg
-            # one notice per message: the iPhone app's when it took it, else Telegram's (if the bot may write)
-            if _pushes(cfg, m, start) and await apns.deliver(cfg, con, m["user_id"], text, start):
+            # one channel per person (push.py): the app's push when it took it, else at once Telegram's (if the bot may write)
+            if _pushes(cfg, m, start) and await push.deliver(cfg, con, m["user_id"], text, start, now()):
                 await anyio.to_thread.run_sync(_pushed, con, m)
                 continue
             if not m["can_dm"]:

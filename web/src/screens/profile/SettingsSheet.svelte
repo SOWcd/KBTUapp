@@ -67,6 +67,16 @@
     } catch { say(t('common.error'), 'warning_3d'); }
   }
 
+  // one channel for my notifications (server push.py): the pick shows at once, back if the server says no
+  async function pickVia(via: 'app' | 'telegram') {
+    if (!me || me.notify.via === via) return;
+    const was = me;
+    haptic.select();
+    session.me = { ...me, notify: { ...me.notify, via } };
+    try { session.me = await api.updateMe({ notifyVia: via }); }
+    catch { session.me = was; haptic.error(); say(t('common.error'), 'warning_3d'); }
+  }
+
   // My data (PLAN 71): the phone an event asked for, changed or deleted (null deletes it); the city from the club's
   // roster (PLAN 95), off the profile or gone. A deleted one takes its page with it.
   async function savePhone(p: string | null, done: string) {
@@ -234,8 +244,17 @@
   {#if kind === 'app'}
     <SettingsList />
   {:else if kind === 'notify' && me}
+    <!-- both ways open (a live app token, the bot may write): one picked, never both; else the one there is -->
+    {@const both = me.notify?.app && me.canDm}
+    {#if both}
+      <Group footnote={t('set.viaHint')}>
+        <Row title={t('set.via')} value={t(me.notify.via === 'app' ? 'set.viaApp' : 'set.viaTg')} menu={[
+          { label: t('set.viaApp'), checked: me.notify.via === 'app', onselect: () => void pickVia('app') },
+          { label: t('set.viaTg'), checked: me.notify.via === 'telegram', onselect: () => void pickVia('telegram') }]} />
+      </Group>
+    {/if}
     {#each notificationSettings as [k, title, hint], i (k)}
-      <div class={{ sw: i > 0 }}><Group footnote={t(hint)}><Row title={t(title)} accessory="switch" checked={me.settings[k]} onchange={(on) => set(k, on)} /></Group></div>
+      <div class={{ sw: i > 0 || both }}><Group footnote={t(hint)}><Row title={t(title)} accessory="switch" checked={me.settings[k]} onchange={(on) => set(k, on)} /></Group></div>
     {/each}
     <p class="foot always">{t('set.always')}</p>
   {:else if kind === 'me' && me?.student}

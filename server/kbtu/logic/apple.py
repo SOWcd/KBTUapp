@@ -184,23 +184,16 @@ def telegram_start(bot_token: str, domain: str) -> str:
 
 
 def add_device(con, uid: int, session: bytes, body: dict, now: int) -> None:
-    """This iPhone's push token, for this signed-in session only (it goes with the session)."""
+    """This iPhone's push token, for this signed-in session only (it goes with the session). The app sends it on every
+    launch: created_at is when it was last seen (push.STALE), and a token marked dead lives again."""
     _consent(body)
     token = body.get("token")
     if not isinstance(token, str) or not DEVICE.fullmatch(token):
         raise ApiError("bad_input")
     con.execute("""INSERT INTO push_devices (token, session, user_id, consent, created_at) VALUES (?, ?, ?, ?, ?)
         ON CONFLICT (token) DO UPDATE SET session = excluded.session, user_id = excluded.user_id,
-        consent = excluded.consent, created_at = excluded.created_at""", (token, session, uid, CONSENT, now))
-
-
-def devices(con, uid: int) -> list[str]:
-    return [r[0] for r in rows(con, "SELECT token FROM push_devices WHERE user_id = ?", uid)]
-
-
-def drop_device(con, token: str) -> None:
-    """APNs said this token is dead (the app deleted, notifications off for good)."""
-    con.execute("DELETE FROM push_devices WHERE token = ?", (token,))
+        consent = excluded.consent, created_at = excluded.created_at, provider = 'apns', dead_at = NULL""",
+        (token, session, uid, CONSENT, now))
 
 
 def keep_devices(con, uid: int, old: list[str], session: bytes, now: int) -> None:
