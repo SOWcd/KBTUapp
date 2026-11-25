@@ -309,8 +309,9 @@ def _feed_cards(con, v: Viewer, ps, hearts=None, comments=None) -> list[dict]:
              "faces": faces.get(p["id"], []), "reactions": _top(p["reactions"]),
              "hot": bool(discussion and (p["comments"] >= HOT and discussion["busy"] >= HOT
                      or p["id"] in live and discussion["talked"] >= TALK_MIN)),  # being discussed (one label, in place): a busy hour, or several people over the day
-             # my own held post: the AI passed it to a person (why != 'check': not still being checked); nobody else's
-             "human": p["user_id"] == v.id and p["status"] == "held" and p["why"] != "check",
+             # my own held post: the AI passed it to a person (why != 'check': not still being checked), or its look is
+             # clearly over with no answer (the moderators' queue has it then too: CHECK_OVER); nobody else's
+             "human": p["user_id"] == v.id and p["status"] == "held" and (p["why"] != "check" or p["created_at"] < _now() - CHECK_OVER),
              # why my held post waits, to me alone (it survives a reload): I sent it to a moderator, it has photos and
              # is anonymous, or the AI's own words (reason, its tip, the piece it stopped at) once it gave them
              **({"review": _review(p)} if p["user_id"] == v.id and p["status"] == "held" and p["why"] != "check" else {})})
@@ -577,6 +578,7 @@ def _refused(pid: int, text: str) -> str:
     return hashlib.sha256(f"{pid}\0{text}".encode()).hexdigest()
 
 
+CHECK_OVER = 60       # a post still 'check' this long after it was written got no AI answer: a moderator's now
 APPEALS_A_DAY = 3      # an author's "Send to a moderator" a day: a human's time is the scarce thing
 APPEAL_WINDOW = 3600   # a refusal can be appealed this long after it (the app asks right away; a reload loses it anyway)
 
@@ -988,7 +990,7 @@ def mod_queue(con, v: Viewer) -> dict:
     author's name; anonymous ones show nobody, to moderators too."""
     _mod(v)
     # 'check' is also the AI's look under way (seconds): shown once it's clearly over (no answer, or the server restarted)
-    held = rows(con, "SELECT * FROM fchan_posts WHERE status = 'held' AND (why != 'check' OR created_at < ?) ORDER BY id", _now() - 60)
+    held = rows(con, "SELECT * FROM fchan_posts WHERE status = 'held' AND (why != 'check' OR created_at < ?) ORDER BY id", _now() - CHECK_OVER)
     live = rows(con, "SELECT * FROM fchan_posts WHERE status = 'live' AND created_at > ? ORDER BY id DESC LIMIT 50", _now() - MOD_RECENT)
     # removed by a moderator this week (by the take-down's audit line, newest first): the way back for a wrong call
     removed = rows(con, """SELECT p.*, MAX(a.at) AS gone_at FROM fchan_posts p

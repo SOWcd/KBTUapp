@@ -1290,9 +1290,6 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def mirror_org_chat(oid: int, cid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.mirror_org_chat(con, v, oid, cid, body.get("on"))
 
-    @app.put("/api/orgs/{oid}/chats/{cid}/call")
-    def call_org_chat(oid: int, cid: int, con: Con, v: Me, body: dict = Body(...)):
-        return logic.chatlist.call_org_chat(con, v, oid, cid, body.get("on"))
 
     @app.put("/api/orgs/{oid}/chats/{cid}/swear")
     async def swear_org_chat(oid: int, cid: int, con: Con, v: Me, body: dict = Body(...)):
@@ -1453,6 +1450,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.delete("/api/friends/{uid}", status_code=204)
     def unfriend(uid: int, con: Con, v: Me):
         logic.unfriend(con, v, uid)
+
+    @app.post("/api/pymk/dismiss", status_code=204)  # People you may know: the card's x (logic/pymk.py)
+    def pymk_dismiss(con: Con, v: Me, body: dict = Body(...)):
+        logic.pymk.dismiss(con, v, body.get("id"))
 
     @app.get("/api/friends/joined")  # my invite QR on screen: who has just become my friend
     def friend_joined(con: Con, v: Me, since: int = 0):

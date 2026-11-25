@@ -14,13 +14,16 @@
   import UsersRound from '@lucide/svelte/icons/users-round';
   import Star from '@lucide/svelte/icons/star';
   import X from '@lucide/svelte/icons/x';
-  import { onMount, tick } from 'svelte';
-  import type { ClassItem, EventCard, Post } from '../../lib/api';
+  import { onMount, tick, untrack } from 'svelte';
+  import type { ChannelFeedPost, ClassItem, EventCard, Media, Post } from '../../lib/api';
+  import { channel } from '../../lib/state/channel.svelte';
+  import { count } from '../../lib/stats';
+  import { load as loadHero, rank as rankHero, save as saveHero, shown as heroShown, tapped as heroTapped, type Pick as HeroPick } from '../../lib/hero';
   import { data, skipped, classKey, skipClass, prefetchEvent, canAskRating, dismissEventRating, loadMyPast, ratingBusy, rateFromPrompt, toggleGoing, goingBusy } from '../../lib/state/data.svelte';
   import { touchAhead } from '../../lib/touch';
   import { session, kriCorner } from '../../lib/state/session.svelte';
   import { sheets, openMapFrom, irisFrom } from '../../lib/state/sheets';
-  import { ui, toTickets } from '../../lib/state/ui.svelte';
+  import { ui, toTickets, goTab } from '../../lib/state/ui.svelte';
   import { t, tn, money, placeOf, subjectOf, friendsLine } from '../../lib/i18n/index.svelte';
   import { lessonKind } from '../../lib/i18n/subjects';
   import { dayNo, nowTs, parts, weekday, weekdayShort, dayMonth, OFFSET, soon, time, dateInput, multiDay, daySpan } from '../../lib/time';
@@ -143,8 +146,73 @@
     const over = on.getBoundingClientRect().right - row.getBoundingClientRect().right;
     if (over > 0) row.scrollLeft += over + 16;
   }
-  const hero = $derived(going[0] ?? coming.find((e) => e.cover || e.video?.poster) ?? coming[0]);
-  const heroPic = $derived(!!(hero?.cover || hero?.video?.poster));
+  // the hero, personal (owner, Nov 25; lib/hero.ts ranks): from what the app already holds, each kind in its own order:
+  // my ticket, where friends go, my clubs' and follows' events, their newest news, the forum's hottest post of the day,
+  // my next class, else the nearest event. The first card is the hero; a swipe brings #2 and #3
+  type Card = HeroPick & ({ e: EventCard } | { p: Post } | { f: ChannelFeedPost } | { cl: ClassItem; b: number; end: number });
+  // ranked by what was learned before this visit: a show or a tap now never reshuffles the cards in view
+  const mem = loadHero(), was: typeof mem = JSON.parse(JSON.stringify(mem));
+  const myOrgs = $derived(new Set([...(session.me?.memberships ?? []).map((m) => m.org.id), ...data.orgs.filter((o) => o.subscribed).map((o) => o.id)]));
+  const heat = (f: ChannelFeedPost) => f.hearts + f.reactions.reduce((n, r) => n + r.n, 0);
+  const cands = $derived.by(() => {
+    const out: Card[] = [], ev = (kind: Card['kind'], e: EventCard, pin = false) => out.push({ key: 'e' + e.id, kind, e, today: pin });
+    for (const e of going) ev('ticket', e, dayNo(e.startsAt) <= today);
+    const open = coming.filter((e) => e.status === 'published' && e.my?.status !== 'going');
+    for (const e of open.filter((x) => x.friends.length).sort((a, b) => b.friends.length - a.friends.length || a.startsAt - b.startsAt)) ev('friends', e);
+    for (const e of open) if (myOrgs.has(e.org.id) || (e.coHost && myOrgs.has(e.coHost.id))) ev('club', e);
+    for (const p of (data.news?.posts ?? []).filter((x) => x.createdAt > now - 3 * 86400).sort((a, b) => +a.read - +b.read || b.createdAt - a.createdAt)) out.push({ key: 'p' + p.id, kind: 'news', p });
+    if (session.channel) for (const f of (channel.feed ?? []).filter((x) => x.status === 'live' && x.at > now - 86400 && heat(x) > 0).sort((a, b) => heat(b) - heat(a))) out.push({ key: 'f' + f.id, kind: 'forum', f });
+    if (left[0]) out.push({ key: classKey(today, left[0].c), kind: 'class', cl: left[0].c, b: left[0].b, end: left[0].e });
+    const nx = coming.find((e) => e.cover || e.video?.poster) ?? coming[0];
+    if (nx) ev('next', nx);
+    return out;
+  });
+  // the cards seen this visit keep their places: the forum's feed landing later never swaps one under the finger
+  let held = $state({ d: 0, keys: [] as string[] });
+  const cards = $derived.by(() => {
+    const keep = held.d === today ? held.keys.map((k) => cands.find((x) => x.key === k)).filter((x): x is Card => !!x) : [];
+    return [...keep, ...rankHero(cands.filter((x) => !keep.some((y) => y.key === x.key)), was, today)].slice(0, 3);
+  });
+  let at = $state(0); // the card in view
+  const atCard = $derived(Math.min(at, cards.length - 1));
+  $effect(() => {
+    const i = atCard, c = cards[i];
+    if (!c || !data.eventsReady || searching || ui.tab !== 'afisha') return;
+    untrack(() => {
+      if (held.d !== today || held.keys.length <= i) held = { d: today, keys: cards.slice(0, i + 1).map((x) => x.key) };
+      if (heroShown(mem, c, today, i === 0)) { count(`hero.show.${c.kind}`); saveHero(mem); }
+    });
+  });
+  function tap(c: Card) {
+    if (heroTapped(mem, c, today)) count(`hero.tap.${c.kind}`);
+    saveHero(mem);
+  }
+  function slid(ev: Event) {
+    const el = ev.currentTarget as HTMLElement, a = el.children[0] as HTMLElement, b = el.children[1] as HTMLElement | undefined;
+    at = b ? Math.round(el.scrollLeft / (b.offsetLeft - a.offsetLeft)) : 0; // one card's step
+  }
+  // my soonest ticket as the hero: "Your events" below holds the rest; another card leads: all of them
+  const leadEv = $derived(cards[0] && 'e' in cards[0] && cards[0].e.my?.status === 'going' ? cards[0].e.id : null);
+  const rest = $derived(going.filter((e) => e.id !== leadEv));
+  type Look = { item: { cover: Media | null; emoji: string; color: null }; color: string; title: string; lead: string; line: string; by: string; room: string | null; open: () => void };
+  // a card that isn't an event, in the hero's own markup: its picture or a 3D mark on the accent, a title, one line
+  function look(c: Exclude<Card, { e: EventCard }>): Look {
+    const when = (ts: number) => (dayNo(ts) === today ? time(ts) : dayMonth(ts));
+    if ('p' in c) {
+      const p = c.p;
+      return { item: { cover: p.photo, emoji: p.org.emoji, color: null }, color: p.photo?.color ?? 'var(--accent)', title: p.title || p.body, lead: '',
+        line: t('page.news') + ' · ' + when(p.createdAt), by: shortOf(p.org), room: null, open: () => sheets.news() };
+    }
+    if ('f' in c) {
+      const f = c.f;
+      return { item: { cover: f.photos[0] ?? null, emoji: 'speech_balloon_3d', color: null }, color: f.photos[0]?.color ?? 'var(--accent)', title: f.body, lead: '',
+        line: t('tab.forum') + ' · ' + when(f.at), by: '', room: null, open: () => { channel.focus = f.id; goTab('forum'); } };
+    }
+    const x = c, live = x.b <= now;
+    return { item: { cover: null, emoji: 'books_3d', color: null }, color: 'var(--accent)', title: subjectOf(x.cl), lead: x.cl.begins + '–' + x.cl.ends,
+      line: [live ? t('list.nowLeft', { n: Math.max(1, Math.ceil((x.end - now) / 60)) }) : soon(x.b, now), x.cl.room].filter(Boolean).join(' · '), by: '',
+      room: floorOf(x.cl.room) != null ? x.cl.room : null, open: () => sheets.week() };
+  }
   // one tap signs up from the hero when there is nothing to ask first that this card can't say: a plain open event
   // (the sheet's own rule is longer: a partner's link, a guest list, a club's own event keep the whole-card tap)
   const canGo = (e: EventCard) => e.status === 'published' && (!e.my || e.my.status === 'cancelled') && e.startsAt > now && !(e.regUntil && e.regUntil <= now)
@@ -164,7 +232,7 @@
   }
 
   // no timetable: the one card that asks for it (after the first load: a returning student never sees it flash)
-  const askSched = $derived(data.eventsReady && !!session.me?.student && !data.schedule.length);
+  const askSched = $derived(data.scheduleReady && !!session.me?.student && !data.schedule.length);
 
   const past = $derived(data.past); // "Past": the last month's Afisha events, mine marked, newest first (the server's order)
   let allPast = $state(false), pastOpen = $state(false);
@@ -180,7 +248,7 @@
   const searching = $derived(!!q.trim());
   // KRI's "My tickets": the search goes, my next event's ticket (the hero) comes into view
   onMount(() => {
-    toTickets.fn = () => { q = ''; void tick().then(() => document.querySelector('.tab.on .hero')?.scrollIntoView({ block: 'center', behavior: 'smooth' })); };
+    toTickets.fn = () => { q = ''; void tick().then(() => (document.querySelector('.tab.on .tix') ?? document.querySelector('.tab.on .heroes'))?.scrollIntoView({ block: 'center', behavior: 'smooth' })); };
     return () => { toTickets.fn = null; };
   });
   const found = $derived(searching ? [...shown, ...past.filter((p) => !shown.some((e) => e.id === p.id))].filter((e) => hit(q, namesOf(e, 'title', 'place')) || orgHit(e.org, q)) : []);
@@ -243,7 +311,6 @@
 
 <div class="page scroll stagger">
   <PullSearch bind:value={q} placeholder={t('list.search')} />
-  <p class="kick">{weekday(dayTs(today) + 12 * 3600)}, {dayMonth(dayTs(today) + 12 * 3600)}{#if data.eventsReady && weekCount}<span class="wk">&nbsp;· {tn('list.week', weekCount)}</span>{/if}</p>
   <header class="hd">
     <span><h1 class="ttl" use:fitTitle use:largeTitle={'afisha'}>{t('common.today')}</h1></span>
     <!-- the map (its home here once KRI took the bar's corner; a guest's corner is the map itself), the Feed full screen, the Gallery, the clubs' news -->
@@ -254,6 +321,8 @@
       <IconButton icon={Newspaper} size="s" label={t('page.news')} onclick={(e) => { irisFrom(e); sheets.news(); }} />
     </span>
   </header>
+  <p class="date" use:fitTitle={20}>{weekday(dayTs(today) + 12 * 3600)}, {dayMonth(dayTs(today) + 12 * 3600)}</p>
+  {#if data.eventsReady && weekCount}<p class="kick">{tn('list.week', weekCount)}</p>{/if}
   {#if searching}
     <div class="past">
       {#each found as e (e.id)}<EventRow {e} showDate dateLine={dayMonth(e.startsAt)} wasThere />
@@ -279,11 +348,15 @@
   <StoryRow />
   {#if showClasses && offToday}<p class="off t-foot">{t('list.dayOff')}</p>{/if}
 
-  {#if hero}
-    {@const e = hero}
+  {#if cards.length}
+    <!-- the hero, personal: the first card, a swipe brings #2 and #3 (snapped); one markup for every kind -->
+    <div class="heroes" role="group" aria-label={t('list.heroPicks')} onscroll={slid}>
+    {#each cards as c, i (c.key)}
+    {#if 'e' in c}
+    {@const e = c.e}
     {@const mine = e.my?.status === 'going'}
-    <!-- the hero: my next event (its ticket and the way there), else the nearest -->
-    <section class="hero" class:nopic={!heroPic} style:--c={e.cover?.color ?? e.video?.poster?.color ?? e.color ?? e.tint}>
+    <!-- an event: my ticket and the way there, else what it is and one tap to go -->
+    <section class="hero" class:tix={mine && i === 0} class:nopic={!(e.cover || e.video?.poster)} style:--c={e.cover?.color ?? e.video?.poster?.color ?? e.color ?? e.tint} onclickcapture={() => tap(c)}>
       <button class="hit" onpointerdown={(ev) => touchAhead(ev, () => prefetchEvent(e.id))} onclick={(ev) => sheets.event(e.id, ev.currentTarget.parentElement?.querySelector('.poster'))} aria-label={e.title}></button>
       <span class="art"><Poster item={e} big radius={0} /></span>
       <div class="shade"></div>
@@ -307,6 +380,26 @@
       </div>
       <span class="rim" aria-hidden="true"></span>
     </section>
+    {:else}
+    {@const v = look(c)}
+    <!-- news, a forum post, my next class: the same card, its picture or a 3D mark, the title and one line -->
+    <section class="hero" class:nopic={!v.item.cover} style:--c={v.color} onclickcapture={() => tap(c)}>
+      <button class="hit" onclick={v.open} aria-label={v.title}></button>
+      <span class="art"><Poster item={v.item} big radius={0} /></span>
+      <div class="shade"></div>
+      <div class="slab">
+        <span class="hero-tx">
+          <b class="clamp-2">{v.title}</b>
+          <span class="where"><span class="ellipsis">{#if v.lead}<b class="num">{v.lead}</b> · {/if}{v.line}</span>{#if v.by}<span class="by ellipsis">&nbsp;· {v.by}</span>{/if}</span>
+        </span>
+        {#if v.room}{@const room = v.room}<span class="acts"><IconButton kind="secondary" size="s" icon={MapPin} label={t('route.open')} onclick={() => sheets.map(room)} /></span>{/if}
+      </div>
+      <span class="rim" aria-hidden="true"></span>
+    </section>
+    {/if}
+    {/each}
+    </div>
+    {#if cards.length > 1}<div class="dots" aria-hidden="true">{#each cards as c, i (c.key)}<i class={{ on: i === atCard }}></i>{/each}</div>{/if}
   {/if}
   {#if data.eventsReady && days.length}
     <nav class="week" aria-label={t('list.title')}>
@@ -319,11 +412,11 @@
     </nav>
   {/if}
 
-  {#if going.length > 1}
-    <!-- the rest of my week: one grouped card, a ticket pill at each row's end -->
+  {#if rest.length}
+    <!-- the rest of my week (all of it when another card leads): one grouped card, a ticket pill at each row's end -->
     <h2 class="sec">{t('list.yours')}</h2>
-    <div class="list">
-      {#each going.slice(1) as e (e.id)}
+    <div class="list" class:tix={leadEv == null}>
+      {#each rest as e (e.id)}
         <div class="row mine">
           <button class="hit" onpointerdown={(ev) => touchAhead(ev, () => prefetchEvent(e.id))} onclick={(ev) => sheets.event(e.id, ev.currentTarget.parentElement?.querySelector('.poster'))} aria-label={e.title}></button>
           <Poster item={e} size={48} radius={12} />
@@ -429,11 +522,13 @@
   .hd > span:first-child { min-width: 0; }
   /* the date yields: too narrow for it beside the buttons (320 px, four of them), the buttons take their own line above,
      at the right (wrap-reverse: the second line goes on top, and flex-start is the line's bottom) */
-  .hd { display: flex; flex-wrap: wrap-reverse; align-items: center; justify-content: space-between; gap: var(--s-3); margin-bottom: var(--s-4); }
+  .hd { display: flex; flex-wrap: wrap-reverse; align-items: center; justify-content: space-between; gap: var(--s-3); }
   .hd > span:first-child { flex: 1 0 120px; }
-  .kick { font: 600 var(--fs-micro)/1.2 var(--font-text); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); margin: 0 0 4px; }
-  .wk { color: var(--accent-text); }
-  .ttl { font: 700 var(--fs-title)/1.05 var(--font-display); letter-spacing: -0.04em; }
+  /* a headline of two lines in two weights (display type): the day, then its date, light; the week's count is a quiet line under them */
+  .ttl { font: 600 var(--fs-title)/1.06 var(--font-display); letter-spacing: -0.045em; }
+  .date { margin-bottom: var(--s-5); white-space: nowrap; font: var(--fw-light) var(--fs-title)/1.1 var(--font-display); letter-spacing: -0.045em; color: var(--text-3); }
+  .date:has(+ .kick) { margin-bottom: var(--s-1); }
+  .kick { margin: 0 0 var(--s-5); font: 450 var(--fs-sub)/1.3 var(--font-text); color: var(--text-3); }
   .tools { flex: none; display: flex; gap: var(--s-3); margin-left: auto; }
   .rate-prompt { margin-bottom: var(--s-3); }
   .rate-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); }
@@ -449,8 +544,8 @@
   .past { display: flex; flex-direction: column; gap: 8px; }
   .lnk { align-self: center; }
 
-  .sec { margin: var(--s-7) var(--s-1) var(--s-3); font: 700 var(--fs-t3)/1.15 var(--font-display); letter-spacing: -0.02em; }
-  .events-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); min-height: var(--tap); margin: var(--s-7) var(--s-1) 0; }
+  .sec { margin: var(--s-7) var(--s-1) var(--s-3); font: var(--fw-light) var(--fs-t1)/1.1 var(--font-display); letter-spacing: -0.04em; }
+  .events-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); min-height: var(--tap); margin: var(--s-7) var(--s-1) 0; padding-top: var(--s-5); box-shadow: inset 0 0.5px 0 var(--separator); } /* a hairline, then the section's light title */
   .sec.two { min-width: 0; margin: 0; }
   /* the filters: one row of chips under the heading, scrolled sideways edge to edge; types, a hairline, schools */
   .chips { display: flex; align-items: center; gap: var(--s-2); overflow-x: auto; margin: var(--s-2) calc(-1 * var(--gutter)) 0; padding: var(--s-1) var(--gutter); scrollbar-width: none; }
@@ -462,8 +557,8 @@
      press and shadow are never clipped) and takes the heading's top margin itself (inside, it would no longer collapse
      with the one above) */
   .day { margin: var(--s-6) calc(-1 * var(--gutter)) 0; padding: 0 var(--gutter); scroll-margin-top: var(--page-top); content-visibility: auto; contain-intrinsic-size: auto 360px; }
-  .dh { margin: 0 var(--s-1) 10px; font: 700 var(--fs-row)/1.2 var(--font-display); letter-spacing: -0.02em; }
-  .dh span { color: var(--text-3); font-weight: 600; }
+  .dh { margin: 0 var(--s-1) 10px; font: 600 var(--fs-row)/1.2 var(--font-display); letter-spacing: -0.025em; }
+  .dh span { color: var(--text-3); font-weight: var(--fw-light); }
   .dh span::first-letter { text-transform: none; }
   .hit { position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
 
@@ -475,12 +570,34 @@
   .hero { --glow: 0.62; position: relative; isolation: isolate; display: flex; flex-direction: column; justify-content: flex-end; min-height: 196px; padding: 72px 6px 6px; /* the picture always keeps its strip, a two-line title under it too */
     border-radius: var(--r-xl); background: var(--media); box-shadow: 0 12px 26px -16px rgba(0, 0, 0, 0.5); transition: transform var(--t-fast) var(--ease); }
   .hero:has(> .hit:active) { transform: scale(0.985); }
+  /* the hero's cards side by side, one in view, snapped; edge to edge so the next one waits just past the gutter. A
+     scroller clips, so it leaves room around the cards for their light (the glow reaches 44px under a card) and takes it
+     back with its margins */
+  .heroes { display: flex; gap: var(--s-3); overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; scrollbar-width: none;
+    margin: calc(-1 * var(--s-4)) calc(-1 * var(--gutter)) -44px; padding: var(--s-4) 0 44px var(--gutter); }
+  .heroes::-webkit-scrollbar { display: none; }
+  .heroes::after { content: ''; flex: 0 0 calc(var(--gutter) - var(--s-3)); } /* the end's gutter (a scroller's end padding is lost in older WebKit) */
+  /* 100% here is the scroller's box minus its left padding: the page's width plus one gutter, so a card takes one gutter
+     less and snaps to its start inside the gutter (centre snapping pushed it past both edges) */
+  .heroes { scroll-padding-inline: var(--gutter); }
+  .heroes > .hero { flex: 0 0 calc(100% - var(--gutter)); min-width: 0; scroll-snap-align: start; scroll-snap-stop: always; } /* min-width: a flex item never shrinks below its content (the one-line meta) unless told: the card grew past the edge */
+  .dots { display: flex; justify-content: center; gap: 6px; margin-top: var(--s-3); }
+  .dots i { width: 6px; height: 6px; border-radius: var(--r-full); background: var(--text-3); opacity: 0.45; transition: opacity var(--t-fast) var(--ease); }
+  .dots i.on { opacity: 1; }
   /* Opal's neon under the card, in the cover's own colour (--c): a close halo and a wide pool below. It blooms once as
      the page opens and rests; the shadow is painted once and only its opacity moves. The card no longer clips (the
      cover does), so the light can leave it */
   .hero::before { content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none; opacity: var(--glow);
     box-shadow: 0 0 14px 0 var(--c, transparent), 0 16px 38px -10px var(--c, transparent); animation: bloom 2.2s var(--ease) 0.2s backwards; }
+  /* the halo always shows against the theme (owner: a pale cover's light vanished on the light ground): the cover's hue,
+     but at least this much colour, lifted on black and deepened on light. Where relative colour isn't known (older
+     iOS) none of it applies and the cover's own colour stays */
   :global(:root[data-theme='light']) .hero { --glow: 0.5; }
+  @supports (color: oklch(from red l c h)) {
+    .hero::before { box-shadow: 0 0 14px 0 var(--cg), 0 16px 38px -10px var(--cg); }
+    .hero { --cg: oklch(from var(--c, transparent) max(l, 0.66) max(c, 0.14) h); }
+    :global(:root[data-theme='light']) .hero { --glow: 0.62; --cg: oklch(from var(--c, transparent) min(l, 0.58) max(c, 0.16) h); }
+  }
   @keyframes bloom { from { opacity: 0; } 40% { opacity: calc(var(--glow) * 1.5); } }
   .art, .shade, .rim { position: absolute; inset: 0; }
   .art, .shade, .rim { border-radius: inherit; pointer-events: none; }
@@ -513,12 +630,14 @@
   .acts { position: relative; z-index: 2; flex: none; display: flex; gap: 8px; max-width: 55%; pointer-events: auto; }
   .acts :global(.btn) { min-width: 0; }
   .acts :global(.btn.round)::before { inset: -4px; } /* 36 seen, 44 to the finger on every side; 8px apart, so two meet and never overlap */
-  .hero-tx { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  /* contain: the words take the width that is left and never ask for more. Without it the one-line meta's full width
+     (nowrap) is the card's min-content, and a flex card grows to it: the root of the card past the right edge (PRs 324, 328) */
+  .hero-tx { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; contain: inline-size; }
   .hero-tx > b { font: 700 var(--fs-t3)/1.18 var(--font-display); letter-spacing: -0.02em; }
-  /* one line: when (in the title's ink), how soon, where, whose. The club gives way first (it shrinks a thousand times faster), the room after it */
-  .where { display: flex; min-width: 0; font: 500 var(--fs-sub)/1.3 var(--font-text); color: var(--text-2); }
+  /* one line: when (in the title's ink), how soon, where, whose. The club goes first and whole: it wraps to a hidden
+     second line (shrunk, it left a lone "·" behind), then the room gives way with an ellipsis */
+  .where { display: flex; flex-wrap: wrap; max-height: 1.3em; overflow: hidden; min-width: 0; font: 500 var(--fs-sub)/1.3 var(--font-text); color: var(--text-2); }
   .where > span { flex: 0 1 auto; min-width: 0; }
-  .where > .by { flex-shrink: 1000; }
   @media (max-width: 340px) { .where > .by { display: none; } } /* 320: the line is the time and the room alone */
   .where b { font-weight: 600; color: var(--text); }
   .hsub { display: flex; align-items: center; gap: 8px; min-width: 0; margin-top: 5px; }

@@ -56,11 +56,12 @@
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import TwoGisMark from '../../ui/TwoGisMark.svelte';
   import { floorOf, addressGis } from '../../lib/map';
+  import { campusPlace } from '../../lib/campusPlace';
   import { meetHost } from '../../lib/meet';
   import { eventLinks } from '../../lib/eventLinks';
   import { api, ApiErr, translated, type AlbumPhoto, type EventCard, type DoorAudience, type EventFull, type EventUpdate, type Id, type MeetingAnswer } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
-  import { data, eventById, eventDetails, galleryGone, goingBusy, loadGallery, toggleGoing, toggleSaved, studioChanged, phrase, declineInvite, saveEventRating } from '../../lib/state/data.svelte';
+  import { data, eventById, eventDetails, eventTeamChunk, galleryGone, goingBusy, loadGallery, toggleGoing, toggleSaved, studioChanged, phrase, declineInvite, saveEventRating } from '../../lib/state/data.svelte';
   import { session } from '../../lib/state/session.svelte';
   import { may, withNick, inner, onTeam, RANK } from '../../lib/perms';
   import { t, tn, money, friendsLine, fmtNum, type Key, placeOf, subjectOf } from '../../lib/i18n/index.svelte';
@@ -76,6 +77,7 @@
   import Notice from '../../ui/Notice.svelte';
   import Field from '../../ui/Field.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
+  import Skeleton from '../../ui/Skeleton.svelte';
 
   // from: the poster that was tapped, which grows into the header as the sheet opens
   // album: the bot's ph_ link, the guests' album opens over the sheet once its details are in
@@ -92,7 +94,8 @@
 
   // the shared card is the live source (it changes when you tap Going); details add the text
   const e = $derived(preview ?? eventById(id) ?? detail);
-  const gis = $derived(e && !e.online ? e.placeUrl || addressGis(e.place) : null); // online: never a route
+  const gis = $derived(e && !e.online ? addressGis(e.place, e.placeUrl) : null); // online: never a route
+  const placeFloor = $derived(floorOf(e?.place));
   // an online event's link: the row says where it leads, its host always in sight (a typed link may be any https host)
   // the link only from the event just loaded (a card the app holds may carry one since changed or removed); https, a
   // plain host, never Telegram's own (it would open inside Telegram as a deep link): the server's rule, checked again
@@ -499,8 +502,9 @@
         <!-- off campus: the place opens in 2GIS, so it wears their mark; a typed street address without a link searches
              2GIS for it (owner, Nov 15: a street address stayed plain text) -->
         <Row title={e.place} subtitle={t('event.route')} accessory="external" onclick={() => openLink(gis)}>{#snippet lead()}<span class="gis"><TwoGisMark size={22} /></span>{/snippet}</Row>
-      {:else if floorOf(e.place) != null}
-        <Row icon={MapIcon} title={e.place} whole value={floorOf(e.place) ? t('route.floor', { n: floorOf(e.place)! }) : t('route.basement')} accessory="chevron" onclick={() => sheets.map(e.place)} />
+      {:else if placeFloor != null}
+        <Row icon={MapIcon} title={placeOf(e.place)} whole value={campusPlace(e.place) ? undefined : (placeFloor ? t('route.floor', { n: placeFloor }) : t('route.basement'))}
+          accessory="chevron" onclick={() => sheets.map(e.place)} />
       {:else if !e.santa || e.place}<Row icon={MapPin} title={placeOf(e.place, e.online)} /><!-- a Santa game started from Studio has no room yet: no "place to be confirmed" -->
       {/if}
     </Group>
@@ -527,8 +531,12 @@
     <!-- below the first screen: built a frame after the sheet appears, so its rise starts at once -->
     {#if later}
     {#if detail?.teams && !preview && !cancelled}
-      {#await import('./EventTeam.svelte') then { default: EventTeam }}
+      {#await eventTeamChunk()}
+        <Skeleton n={1} />
+      {:then { default: EventTeam }}
         <EventTeam {detail} {going} onchange={(d) => (detail = d)} />
+      {:catch}
+        <Notice text={t('common.offline')} />
       {/await}
     {/if}
     {#if e.teamMax && !preview}<TournamentRows {id} manage={head} standalone />{/if}

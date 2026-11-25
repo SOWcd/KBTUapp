@@ -69,7 +69,7 @@ def test_creator_sets_the_kaspi_payee(env):
                      ("org:1", {"event": e["id"], "changed": ["name"]})]
     old = {"event": e["id"], "was": {"name": "Dana S", "phone": "+77011234567"}, "now": {"name": "Aru K", "phone": "+77011234567"}}
     log_id = con.execute("INSERT INTO audit_log (action, target, data, at) VALUES ('staff_kaspi', 'org:1', ?, 0)", (json.dumps(old),)).lastrowid
-    con.executescript(dict(db.MIGRATIONS)[227])
+    con.executescript(dict(db.MIGRATIONS)[231])
     assert json.loads(con.execute("SELECT data FROM audit_log WHERE id = ?", (log_id,)).fetchone()[0]) == {"event": e["id"]}
     # once someone paid, fixed for him as for anyone
     con.execute("INSERT INTO registrations (event_id, user_id, status, ticket_code, created_at, updated_at) VALUES (?, ?, 'going', 'TCK9', 0, 0)", (e["id"], ids["ali"]))

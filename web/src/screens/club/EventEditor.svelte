@@ -62,7 +62,9 @@
   import { session } from '../../lib/state/session.svelte';
   import { useDraft } from '../../lib/draft';
   import { sheets } from '../../lib/state/sheets';
-  import { t, tn } from '../../lib/i18n/index.svelte';
+  import { placeOf, t, tn } from '../../lib/i18n/index.svelte';
+  import { campusPlace } from '../../lib/campusPlace';
+  import CampusPlacePicker from './CampusPlacePicker.svelte';
   import { hit } from '../../lib/clubs';
   import { nowTs, time, relDay, dateInput, fromInputs, weekdayShort, dayMonthShort, multiDay, endTime } from '../../lib/time';
   import { haptic, inTelegram } from '../../lib/tg';
@@ -226,12 +228,12 @@
   const example = { place: realPlaces.length ? any(realPlaces) : phrase('ed.placePh') };
 
   // the place field takes a room or a pasted 2GIS share: the link becomes the route, the text stays the name
+  const hasCampusPlace = $derived(!!campusPlace(f.place));
   $effect(() => {
     const m = f.place.match(GIS_LINK);
-    if (!m) return;
-    f.placeUrl = m[0];
-    f.place = f.place.replace(m[0], ' ').replace(/\s+/g, ' ').replace(/^[\s,.·-]+|[\s,.·-]+$/g, '').slice(0, 80);
-    haptic.ok(); say(phrase('say.gisLink'), 'globe_with_meridians_3d');
+    if (m) f.place = f.place.replace(m[0], ' ').replace(/\s+/g, ' ').replace(/^[\s,.·-]+|[\s,.·-]+$/g, '').slice(0, 80);
+    if (m || hasCampusPlace) f.placeUrl = hasCampusPlace ? '' : (m?.[0] ?? '');
+    if (m && !hasCampusPlace) { haptic.ok(); say(phrase('say.gisLink'), 'globe_with_meridians_3d'); }
   });
   // the Kaspi number written as the phone shows it, as it's typed
   $effect(() => { const v = fmtPhone(f.payPhone); if (v !== f.payPhone) f.payPhone = v; });
@@ -370,6 +372,7 @@
           paid: !!e.price, price: e.price ? String(e.price) : '', payTo: e.payToName ?? myKaspiName, payPhone: fmtPhone(e.payPhone ?? ''), freeFirst: e.freeFirst ? String(e.freeFirst) : '',
           deadline: !!e.regUntil, late: !!e.lateSignup, regDate: e.regUntil ? dateInput(e.regUntil) : '', regTime: e.regUntil ? time(e.regUntil) : '18:00',
           tba: !e.place && !e.online, memo: e.memo ?? {} };
+        if (campusPlace(e.place)) { f.place = placeOf(e.place); f.placeUrl = ''; }
         // a cover's tint used to be the photo's average colour: such an event starts on the photo's dot
         if (e.cover && (photoColor = await coverColor(e.cover)) && e.tint !== shade(f.color)) f.color = photoColor;
         base = JSON.stringify(f);
@@ -945,7 +948,7 @@
               error={tried && err.place ? err.place : undefined} />
           {:else}
           {#if !f.tba}
-            <Field label={t('ed.place')} bind:value={f.place} maxlength={400} placeholder={f.placeUrl ? t('ed.placeName') : example.place} enterkeyhint="done"
+            <CampusPlacePicker bind:value={f.place} placeholder={f.placeUrl ? t('ed.placeName') : example.place}
               error={tried && err.place ? err.place : undefined} />
           {/if}
           {#if !f.placeUrl && !f.tba && addressGis(f.place)}
