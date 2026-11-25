@@ -220,9 +220,7 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         a = one(con, "SELECT * FROM asks WHERE id = ? AND status = 'live' AND expires_at > ?", int(ref[1]), logic.now())
         if not a or not one(con, "SELECT ask_pings FROM users WHERE id = ?", m["user_id"])[0]:
             return None
-        sk = one(con, """SELECT s.name FROM ask_skills k JOIN skills s ON s.id = k.skill_id WHERE k.ask_id = ?
-            ORDER BY EXISTS (SELECT 1 FROM user_skills u WHERE u.user_id = ? AND u.skill_id = s.id) DESC, s.name""", a["id"], m["user_id"])
-        return (*texts.bot_message(lang, kind, skill=sk["name"] if sk else ""), f"fa_{a['id']}")
+        return (*texts.bot_message(lang, kind), f"fa_{a['id']}")
     if kind == "org_ask":  # oa:<event>:<organizer>, payload nick: write to the event's organizer (no username of mine to give
         # him). The ask's own rules (organizing._reach) again: quiet once my seat or the event is gone (cancelled, a
         # week after the end), he lost the club's right or is banned, either of us blocked the other, or his username
@@ -247,9 +245,8 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         if not p:
             return None
         a = one(con, "SELECT title, subject FROM asks WHERE id = ?", c["ask_id"]) if c["ask_id"] else None
-        skills = ", ".join(s["name"] for s in rows(con, "SELECT s.name FROM user_skills k JOIN skills s ON s.id = k.skill_id WHERE k.user_id = ? ORDER BY s.name", p["id"]))
         kind = ("contact_subj" if a["subject"] else "contact_ask") if a else "contact_ask_plain"  # a subject's: its catalogue name
-        text = texts.bot_message(lang, kind, name=logic.short_name(p), title=a["title"] if a else "", skills=skills or "\u2014")[0]
+        text = texts.bot_message(lang, kind, name=logic.short_name(p), title=a["title"] if a else "")[0]
         yes, no = texts.bot_message(lang, "contact_buttons")
         k = f"ct:{c['id']}:{tok}"
         return text, None, [[{"text": yes, "callback_data": f"{k}:y"}, {"text": no, "callback_data": f"{k}:n"}]]
@@ -635,9 +632,9 @@ def _santa(con, m, lang: str) -> tuple[str, str | None, str] | None:
 def purge(cfg: Config, con) -> None:
     """The accounts whose week ran out (logic.delete_due), and their files on disk (app.py keeps them in the same places)."""
     home = Path(cfg.db_path).resolve().parent
-    receipts, photos = logic.delete_due(con)
-    media.drop(home / "receipts", receipts)  # first: a failing step below mustn't leave the deleted accounts' receipts on disk
-    photos = photos + logic.purge_takedowns(con)  # and what a moderator took down 30 days ago
+    logic.delete_due(con)
+    logic.drain_deleted_files(con)  # first: retry even when SQL erasure committed in an earlier round
+    photos = logic.purge_takedowns(con)  # and what a moderator took down 30 days ago
     gone, pics = logic.events_gone(con)  # the admin's event deletes past their Undo's day
     media.drop(home / "receipts", gone)
     photos = photos + pics + logic.chats_gone(con)  # and chats removed from the catalog a week ago
@@ -835,12 +832,15 @@ def backup_day(cfg: Config, con) -> None:
     for bak in db_path.parent.glob(f"{db_path.name}.v*.bak"):
         if bak.stat().st_mtime < time.time() - 14 * 86400:
             bak.unlink(missing_ok=True)
+    root = db_path.parent / "backups"
+    for old in root.glob("kbtu-*.db"):  # retention also runs when today's copy fails or is not due
+        if old.stat().st_mtime < time.time() - 15 * 86400:
+            old.unlink()
     global _backup_retry
     local = int(time.time()) + 5 * 3600
     day = str(local // 86400)
     if local % 86400 < 4 * 3600 or time.time() < _backup_retry or one(con, "SELECT 1 FROM meta WHERE key = 'backup_day' AND value = ?", day):
         return
-    root = db_path.parent / "backups"
     root.mkdir(exist_ok=True)
     out = root / f"kbtu-{time.strftime('%Y-%m-%d', time.gmtime(local))}.db"
     tmp = out.with_suffix(".tmp")  # a copy cut short (a full disk) never counts among the 14
@@ -856,9 +856,6 @@ def backup_day(cfg: Config, con) -> None:
     con.execute("INSERT INTO meta (key, value) VALUES ('backup_day', ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value", (day,))
     for old in sorted(root.glob("kbtu-*.db"))[:-14]:
         old.unlink()
-    for old in root.glob("kbtu-*.db"):  # by age too: skipped nights mustn't stretch a deleted account's life past 30 days
-        if old.stat().st_mtime < time.time() - 15 * 86400:
-            old.unlink()
     log.warning("backup: %s, %d KB", out.name, out.stat().st_size // 1024)
 
 
@@ -1066,6 +1063,8 @@ async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
                 if to is None:
                     _mark(con, m, False, "gone")
                     continue
+            if m["kind"] in tgc.AUTHOR and not one(con, "SELECT 1 FROM users WHERE id = ? AND tg_id = ?", m["user_id"], to):
+                continue  # the account moved after the batch was read; the retry will use the new chat
             body = {"chat_id": to, "text": text, "parse_mode": "HTML", "link_preview_options": {"is_disabled": True}}
             if isinstance(start, list):  # the whole keyboard; "start" buttons open the app there
                 body["reply_markup"] = {"inline_keyboard": [[{"text": b["text"], "url": f"https://t.me/{cfg.bot_username}?startapp={b['start']}"}

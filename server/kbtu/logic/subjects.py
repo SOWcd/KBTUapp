@@ -209,7 +209,7 @@ def unlift(con, v: Viewer, target: str, data: dict) -> None:
 def sweep_counters(con) -> None:
     """The hourly write counters past their hour (forum_sweep, nightly): nothing of who wrote when outlives the hour."""
     hour = _now() // 3600
-    for (k,) in con.execute("SELECT key FROM meta WHERE key LIKE 'subj:%' OR key LIKE 'fsearch:%'").fetchall():
+    for (k,) in con.execute("SELECT key FROM meta WHERE key LIKE 'subj:%' OR key LIKE 'fsearch:%' OR key LIKE 'flook:%'").fetchall():
         if not k.split(":")[-1].isdigit() or int(k.split(":")[-1]) < hour:
             con.execute("DELETE FROM meta WHERE key = ?", (k,))
 
