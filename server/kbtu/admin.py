@@ -70,6 +70,11 @@
                                 moving back does not undo it (re-add the lines by hand);
                                 credit ask [--dry]: the bot's "shall we name you?" once per person (and consent text) with a
                                 shipped line and no answer; prints how many were queued; a no is never asked again
+  .venv/bin/python -m kbtu.admin donation add <telegram id> <amount KZT> [YYYY-MM-DD] [--again]   a Kaspi transfer the
+                                creator checked by hand (outside the app): a confirmed donation, the sponsor medal follows;
+                                the same amount on the same day again only with --again. Never makes anyone public: the name
+                                is the donor's own yes on the Support page. donation list: id, tg id, amount, source, date,
+                                public (no names)
   .venv/bin/python -m kbtu.admin team-consent-ask [--dry]   the bot's "agree to teams" (a button to the event's consent
                                 sheet) to everyone signed up to a coming team event without the teams consent, once per
                                 person and event; --dry: the count only. By hand, never on deploy
@@ -607,6 +612,27 @@ def main(args: list[str]) -> None:
         changed = credits.team(con, u["id"], args[1] == "add")
         print(f"@{u['tg_username'] or u['tg_id']}: " + ("on the Team (shown after their yes; `credit ask` asks)" if args[1] == "add" else "off the Team")
               + ("" if changed else " already"))
+    elif cmd == "donation" and args[1:2] == ["add"] and 4 <= len(args) - ("--again" in args) <= 5 and args[2].isdigit() and args[3].isdigit():
+        from .logic import donations
+        u = one(con, "SELECT id FROM users WHERE tg_id = ? AND tg_id > 0", int(args[2]))
+        if not u:
+            sys.exit(f"{args[2]}: not found — they must open the app once")
+        try:
+            did = donations.add_manual(con, u["id"], int(args[3]), *[a for a in args[4:] if a != "--again"], again="--again" in args)
+        except ValueError:
+            sys.exit("date: YYYY-MM-DD")
+        except ApiError as e:
+            sys.exit(f"{e.code} {e.message}".strip())
+        sum_ = donations.total(con, u["id"])
+        print(f"donation {did}: total {sum_} KZT, tier {donations.tier(sum_)}, "
+              + ("public" if donations.public(con, u["id"]) else "not public (their own yes on the Support page)"))
+    elif cmd == "donation" and args[1:] == ["list"]:  # ids and amounts only, never a name
+        from .logic import donations
+        for r in rows(con, """SELECT d.id, d.user_id, u.tg_id, d.amount, d.source, d.flags, d.status, d.created_at
+                FROM donations d JOIN users u ON u.id = d.user_id ORDER BY d.id"""):
+            day = time.strftime("%Y-%m-%d", time.gmtime(r["created_at"] + 5 * 3600))
+            print(f"#{r['id']}  tg {r['tg_id']}  {r['amount'] or '-'}  {'manual' if r['flags'] == 'manual' else r['source']}  {r['status']}  {day}  "
+                  f"public {'yes' if donations.public(con, r['user_id']) else 'no'}")
     elif cmd == "team-consent-ask" and args[1:] in ([], ["--dry"]):  # signed up before the sign-up became the consent
         from .logic import evteams
         n = evteams.consent_ask(con, dry=bool(args[1:]))

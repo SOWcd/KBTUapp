@@ -16,7 +16,7 @@ from threading import Barrier
 import pytest
 from fastapi.testclient import TestClient
 
-from kbtu import app as server, db, logic, media, outbox, receipt, texts
+from kbtu import admin, app as server, db, logic, media, outbox, receipt, texts
 from kbtu.logic import donations, seats, stars
 from test_core import delete_now, env, login, set_clock, tma  # noqa: F401
 from test_review_seats import _paid, _shot
@@ -574,3 +574,24 @@ def test_bot_uses_only_localized_templates_and_suppresses_stale_decisions(suppor
     assert outbox._render(con, rejected) == (*texts.bot_message("en", "donation_rejected"), "donate")
     assert decide(support, did, "undo").status_code == 204
     assert outbox._render(con, rejected) is None
+
+
+def test_admin_donation_add_by_hand_grants_the_medal_but_never_publishes(support, monkeypatch, capsys):
+    """`admin donation add`: a confirmed manual row and the medal; not public; no twin that day without --again;
+    unknown people and silly amounts refused; `donation list` names nobody."""
+    c, cfg, con, ids, clock = support
+    monkeypatch.setattr(admin.config, "load", lambda: cfg)
+    admin.main(["donation", "add", "7", "6000", "2026-11-20"])
+    assert capsys.readouterr().out.strip().endswith("tier 2, not public (their own yes on the Support page)")
+    assert mine(support)["tier"] == 2 and board(support) == []
+    for bad in (["donation", "add", "7", "6000", "2026-11-20"], ["donation", "add", "999", "100"],
+                ["donation", "add", "7", "0"], ["donation", "add", "7", "10000001"]):
+        with pytest.raises(SystemExit):
+            admin.main(bad)
+    admin.main(["donation", "add", "7", "6000", "2026-11-20", "--again"])
+    assert mine(support)["total"] == 12000
+    assert con.execute("SELECT COUNT(*) FROM donations WHERE flags = 'manual' AND status = 'confirmed'").fetchone()[0] == 2
+    capsys.readouterr()
+    admin.main(["donation", "list"])
+    out = capsys.readouterr().out
+    assert out.count("manual") == 2 and "2026-11-20" in out and "public no" in out and "Aidar" not in out

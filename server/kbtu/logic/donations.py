@@ -6,6 +6,7 @@ charge table remains the replay guard even after an account and its ledger are e
 from __future__ import annotations
 
 import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .. import media, receipt
@@ -130,7 +131,7 @@ def _receipt_slot(con, v: Viewer, payer: int, cfg, consent: str) -> None:
     if not one(con, "SELECT 1 FROM users WHERE id = ? AND tg_id = ? AND banned_at IS NULL AND delete_at IS NULL", v.id, payer):
         raise ApiError("forbidden")
     # Count every submitted row, even one already decided: decisions must not refund the daily limit.
-    if one(con, "SELECT COUNT(*) FROM donations WHERE user_id = ? AND source = 'receipt' AND created_at > ?", v.id, core.now() - 86400)[0] >= RECEIPTS_A_DAY:
+    if one(con, "SELECT COUNT(*) FROM donations WHERE user_id = ? AND source = 'receipt' AND flags != 'manual' AND created_at > ?", v.id, core.now() - 86400)[0] >= RECEIPTS_A_DAY:
         raise ApiError("rate_limited", "donation_receipts")
 
 
@@ -165,6 +166,29 @@ def add_receipt(con, v: Viewer, payer: int, cfg, saved: dict, read: dict | None,
             sync_medal(con, v.id)
             _notify(con, v.id, did, 0, "confirmed")
     return mine(con, v)
+
+
+def add_manual(con, uid: int, amount: int, day: str | None = None, again: bool = False) -> int:
+    """`admin donation add`: a transfer the creator checked by hand (Kaspi, outside the app), confirmed at once.
+    The CHECK on source can't be altered, so it is a receipt row with no file and flags 'manual': the queue, review
+    and sweep skip it (no file), the daily receipt cap doesn't count it. It never touches the donor's consent."""
+    if not 0 < amount <= 10_000_000:
+        raise ApiError("bad_input", "amount")
+    at = core.now()
+    if day:
+        at = int(datetime.strptime(day, "%Y-%m-%d").replace(hour=12, tzinfo=timezone(timedelta(hours=5))).timestamp())
+        if at > core.now() + 86400:
+            raise ApiError("bad_input", "date")
+    start = at - (at + 5 * 3600) % 86400  # the Almaty day it falls on
+    with tx(con):
+        if not again and one(con, """SELECT 1 FROM donations WHERE user_id = ? AND flags = 'manual' AND amount = ?
+                AND created_at >= ? AND created_at < ?""", uid, amount, start, start + 86400):
+            raise ApiError("conflict", "the same amount that day already: --again to add it anyway")
+        did = con.execute("""INSERT INTO donations (user_id, source, status, amount, flags, consent, created_at, reviewed_at)
+            VALUES (?, 'receipt', 'confirmed', ?, 'manual', 'manual', ?, ?)""", (uid, amount, at, core.now())).lastrowid
+        sync_medal(con, uid)
+        core.log_action(con, None, "donation_by_hand", f"user:{uid}", json.dumps({"donation": did, "amount": amount}))
+    return did
 
 
 def _notify(con, uid: int, did: int, revision: int, status: str) -> None:
