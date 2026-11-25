@@ -12,6 +12,7 @@
   import App from '../App.svelte';
   import Button from '../ui/Button.svelte';
   import KbtuMark from '../ui/KbtuMark.svelte';
+  import StandaloneBar from '../ui/StandaloneBar.svelte';
   import { api, ApiErr } from '../lib/api';
   import { WEB_SESSION_CHANGE } from '../lib/api/client';
   import { i18n, t } from '../lib/i18n/index.svelte';
@@ -110,7 +111,7 @@
 </script>
 
 {#if entered}
-  <App />
+  <App standaloneBar={StandaloneBar} />
 {:else}
   <main class="entrance scroll" aria-busy={view === 'checking'}>
     {#if view !== 'checking'}

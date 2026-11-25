@@ -22,7 +22,7 @@ def _club(c, cfg):
 
 def _event(c, start=None, **extra):
     start = start or int(time.time()) + 5 * 3600
-    body = {"title": "Case", "place": "Hall", "startsAt": start, "endsAt": start + 7200, "emoji": "laptop_3d", "color": "#3B6BFF", **extra}
+    body = {"seats": None, "title": "Case", "place": "Hall", "startsAt": start, "endsAt": start + 7200, "emoji": "laptop_3d", "color": "#3B6BFF", **extra}
     ev = c.post("/api/orgs/1/events", headers=tma(20), json=body).json()
     assert c.post(f"/api/events/{ev['id']}/publish", headers=tma(20)).status_code == 200, ev
     return ev["id"]

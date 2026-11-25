@@ -29,7 +29,7 @@ def _clubs(c, cfg, official=True):
 
 
 def _event(c, host, publish=True, **kw):
-    e = c.post(f"/api/orgs/{host}/events", headers=tma(HOST), json={**EV, "title": "Anime Quiz", "startsAt": logic.core.now() + 86400, **kw}).json()
+    e = c.post(f"/api/orgs/{host}/events", headers=tma(HOST), json={"seats": None, **EV, "title": "Anime Quiz", "startsAt": logic.core.now() + 86400, **kw}).json()
     return c.post(f"/api/events/{e['id']}/publish", headers=tma(HOST)).json() if publish else e
 
 
@@ -75,7 +75,7 @@ def test_invite_accept_decline_leave(env):
     team = _event(c, host, visibility="members")
     assert c.put(f"/api/events/{team['id']}/cohost", headers=tma(HOST), json={"orgId": co}).status_code == 400
     assert invite().status_code == 200
-    body = {**EV, "title": "Anime Quiz", "startsAt": logic.core.now() + 86400, "visibility": "members"}
+    body = {"seats": None, **EV, "title": "Anime Quiz", "startsAt": logic.core.now() + 86400, "visibility": "members"}
     assert c.patch(f"/api/events/{eid}", headers=tma(HOST), json=body).status_code == 400
 
 
@@ -122,13 +122,13 @@ def test_cohost_can_scan_but_not_run(env):
     # the list for the co-host: short names, no answers; a change of time tells its leaders once
     a = c.get(f"/api/events/{eid}/attendees", headers=tma(CO)).json()[0]
     assert a["fullName"] == "Other T" and a["answers"] is None and a["receipt"] is None
-    body = {**EV, "title": "Anime Quiz", "startsAt": logic.core.now() + 7200}
+    body = {"seats": None, **EV, "title": "Anime Quiz", "startsAt": logic.core.now() + 7200}
     assert c.patch(f"/api/events/{eid}", headers=tma(HOST), json=body).status_code == 200
-    assert c.patch(f"/api/events/{eid}", headers=tma(HOST), json={**body, "startsAt": body["startsAt"] + 60}).status_code == 200
+    assert c.patch(f"/api/events/{eid}", headers=tma(HOST), json={"seats": None, **body, "startsAt": body["startsAt"] + 60}).status_code == 200
     told = con.execute("SELECT u.tg_id FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE b.kind = 'cohost_changed'").fetchall()
     assert [t[0] for t in told] == [CO]
     assert c.post(f"/api/events/{eid}/attendees/export", headers=tma(CO)).status_code == 403
-    body = {**EV, "title": "Taken over", "startsAt": logic.core.now() + 86400}
+    body = {"seats": None, **EV, "title": "Taken over", "startsAt": logic.core.now() + 86400}
     for r in (c.patch(f"/api/events/{eid}", headers=tma(CO), json={**body, "price": 5000, "payToName": "Me", "payPhone": "87011234567"}),
               c.patch(f"/api/events/{eid}", headers=tma(CO), json=body), c.post(f"/api/events/{eid}/seats", headers=tma(CO), json={"add": 5}),
               c.post(f"/api/events/{eid}/cancel", headers=tma(CO)), c.delete(f"/api/events/{eid}", headers=tma(CO)),

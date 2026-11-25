@@ -6,7 +6,7 @@
   // Studio's "Recruiting" opens this only while applications wait (or without the casting right).
   // ponytail: "Write" needs a Telegram @username (no username, no chat link); a bot relay if that bites.
   import TelegramMark from '../../ui/TelegramMark.svelte';
-  import { api, type Id, type JoinRequest, type Round } from '../../lib/api';
+  import { api, ApiErr, type Id, type JoinRequest, type Round } from '../../lib/api';
   import { data, phrase, studioChanged } from '../../lib/state/data.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
@@ -46,7 +46,10 @@
       await api.decideJoin(r.id, accept);
       say(phrase(accept ? 'say.accepted' : 'say.declined'), accept ? 'party_popper_3d' : 'waving_hand_3d_default');
       studioChanged(); // member counts and the Studio row
-    } catch {
+    } catch (e) {
+      if (e instanceof ApiErr && e.code === 'conflict') {
+        say(t('adm.decidedAnon'), 'warning_3d'); studioChanged(); return;
+      }
       list = [r, ...list!].sort((a, b) => a.id - b.id);
       haptic.error(); say(t('common.error'), 'warning_3d');
     }

@@ -30,6 +30,13 @@ COMMENT_GAP = 7200      # a post's comments looked at again after 2 hours at mos
 MEMBERS_CAP = 1000      # a group's members listed at most (a bigger one: those, nobody forgotten)
 GROUP_GAP = 2           # between two groups' lists
 
+_ENTITY_KINDS = {
+    "MessageEntityBold": "bold", "MessageEntityItalic": "italic", "MessageEntityUnderline": "underline",
+    "MessageEntityStrike": "strike", "MessageEntitySpoiler": "spoiler", "MessageEntityCode": "code",
+    "MessageEntityPre": "pre", "MessageEntityBlockquote": "blockquote", "MessageEntityTextUrl": "text_link",
+    "MessageEntityUrl": "url",
+}
+
 
 def missing(cfg: Config) -> str | None:
     """Why the userbot stays off, or None."""
@@ -158,8 +165,10 @@ class Mirror:
             kind = "file"  # a document, a voice, a poll: in Telegram
         res = getattr(m.reactions, "results", None)
         reactions = [(getattr(r.reaction, "emoticon", None) or "★", r.count) for r in res] if res is not None else ([] if m.reactions is None else None)
+        entities = [(style, e.offset, e.length, getattr(e, "url", None))
+                    for e in getattr(m, "entities", None) or () if (style := _ENTITY_KINDS.get(type(e).__name__))]
         return mirror.Msg(id=m.id, date=int(m.date.timestamp()), text=m.message or "", grouped=m.grouped_id, photo=photo, media=kind,
-                          views=m.views, reactions=reactions)
+                          views=m.views, reactions=reactions, entities=entities)
 
     def drop(self, path: str) -> None:
         for ext in (".webp", ".t.webp", ".jpg"):

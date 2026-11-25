@@ -206,7 +206,7 @@ def _cov(con, eid):
 def _save(c, con, eid, **extra):
     """The editor's save of the draft by its President."""
     e = con.execute("SELECT * FROM events WHERE id = ?", (eid,)).fetchone()
-    body = {"title": e["title"], "place": e["place"], "startsAt": e["starts_at"], "emoji": e["emoji"], "color": e["color"], **extra}
+    body = {"seats": None, "title": e["title"], "place": e["place"], "startsAt": e["starts_at"], "emoji": e["emoji"], "color": e["color"], **extra}
     r = c.patch(f"/api/events/{eid}", headers=tma(20), json=body)
     assert r.status_code == 200, r.text
     con.execute("UPDATE events SET updated_at = updated_at + 5 WHERE id = ?", (eid,))  # saved a moment after it was made

@@ -26,7 +26,7 @@ def _setup(c, cfg):
 
 
 def _event(c, org, who, title):
-    e = c.post(f"/api/orgs/{org}/events", headers=tma(who), json={**EV, "title": title, "startsAt": logic.core.now() + 86400}).json()
+    e = c.post(f"/api/orgs/{org}/events", headers=tma(who), json={"seats": None, **EV, "title": title, "startsAt": logic.core.now() + 86400}).json()
     return c.post(f"/api/events/{e['id']}/publish", headers=tma(who)).json()["id"]
 
 

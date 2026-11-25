@@ -2,7 +2,8 @@
 // The Russian inputs are written as escapes (\u0410\u0443\u0434 = "Aud", \u0410\u0431\u0430\u044f = "Abaya") to keep the source English.
 import { describe, expect, it } from 'vitest';
 import ru from './i18n/ru';
-import { addressGis, atBldg2, awayOf, bldg2Room, floorOf, nearRooms, roomOf, spotOf, adminZone } from './map';
+import { DORM_2GIS, addressGis, atBldg2, awayOf, bldg2Room, floorOf, nearRooms, roomOf, spotOf, adminZone, locate, tapAt } from './map';
+import uniqRooms from '../assets/map/uniq-rooms.json';
 
 it('finds the floor of a room, never of an address', () => {
   const cases: [string, number | null][] = [
@@ -82,6 +83,8 @@ it('the institutes off campus', () => {
 });
 
 it('a typed street address becomes a 2GIS search; rooms and campus places never do', () => {
+  expect(addressGis('KBTU Jastar City (Dormitory), Islam Karimova, 70k4')).toBe(DORM_2GIS);
+  expect(addressGis('\u041e\u0431\u0449\u0430\u0433\u0430')).toBe(DORM_2GIS);
   expect(addressGis('Gogolya 157')).toBe('https://2gis.kz/almaty/search/Gogolya%20157');
   expect(addressGis('\u0443\u043b. \u0410\u0431\u0430\u044f 150, 2 \u044d\u0442\u0430\u0436')).toContain('2gis.kz/almaty/search/');
   for (const p of ['305', 'Room 412', '251a', '\u0430\u0443\u0434. 305', 'Hall', '']) expect(addressGis(p)).toBeNull();
@@ -162,5 +165,50 @@ describe('the map frame', () => {
     expect(fit('Halyk Co-working', wide, false)[1]).toBe('Halyk Co-working');
     expect(fit('Halyk Co-working', narrow, false)[1]).toBe('Halyk\nCo-working');
     expect(fit('Canteen', [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], true)[0]).toBe(0); // a wall right at it: it waits forever
+  });
+});
+
+// locate: the room-code resolver behind a route's ends and "Show on map" (a code typed in, or from the timetable)
+describe('locate', () => {
+  const rooms: Record<string, number[][]>[] = [{ '45': [[0.1, 0.1]] }, { '158': [[0.2, 0.7]] }, {}, { '305': [[0.8, 0.2]], '377': [[0.5, 0.5]] }, {}, {}];
+  const doors = [{ f: 1, u: 0.4, v: 0.9, k: 'x', name: 'Tole bi' }, { f: 3, u: 0.6, v: 0.6, r: ['312'] }];
+  const at = (text: string) => locate(text, rooms, doors, 1);
+  it('puts a typed room where its number is printed, whatever the prefix', () => {
+    expect(at('\u0410\u0443\u0434. 305')).toEqual({ f: 3, u: 0.8, v: 0.2, room: '305' });
+    expect(at('Room 305')).toMatchObject({ f: 3, room: '305' });
+    expect(at('045')).toMatchObject({ f: 0, u: 0.1, room: '45' }); // the basement, the leading zero dropped
+  });
+  it('falls back to the door on the graph, then to the nearest numbered neighbour', () => {
+    expect(at('312')).toEqual({ f: 3, u: 0.6, v: 0.6, room: '312' });
+    expect(at('376')).toEqual({ f: 3, u: 0.5, v: 0.5, room: '377', near: '376' });
+  });
+  it('knows entrances and named places by name', () => {
+    expect(at('Tole bi')).toEqual({ f: 1, u: 0.4, v: 0.9, room: 'Tole bi' });
+    expect(at(ru['route.spot.canteen'])).toMatchObject({ f: 0, spot: 'canteen' });
+    expect(at(ru['route.spot.library'])).toMatchObject({ f: 1, room: '158' }); // a named room: its number
+  });
+  it('resolves nothing for what is not on the main map', () => {
+    for (const text of ['\u0410\u0431\u0430\u044f 150', '1203', '999', '312 (\u043a\u043e\u0440\u043f\u0443\u0441 \u2116 2)', '', 'hello']) expect(at(text), text).toBeNull();
+  });
+  it('resolves every room the real plan prints', () => {
+    const real = uniqRooms as unknown as Record<string, number[][]>[];
+    expect(locate('305', real, [], 1)).toMatchObject({ f: 3, room: '305' });
+    expect(locate('\u0430\u0443\u0434 158', real, [], 1)).toMatchObject({ f: 1, room: '158' });
+  });
+});
+
+// tapAt: what a tap on the map means for a route's end
+describe('tapAt', () => {
+  const rooms: Record<string, number[][]>[] = [{}, { '120': [[0.3, 0.3]], '121': [[0.35, 0.3]] }];
+  const doors = [{ f: 1, u: 0.5, v: 0.5, k: 'x', name: 'Panfilov' }, { f: 1, u: 0.31, v: 0.31 }];
+  it('takes the nearest room number within reach, on the floor tapped', () => {
+    expect(tapAt({ f: 1, u: 0.34, v: 0.3 }, rooms, doors, 1, 0.03)).toEqual({ room: '121' });
+    expect(tapAt({ f: 1, u: 0.31, v: 0.3 }, rooms, doors, 1, 0.03)).toEqual({ room: '120' });
+    expect(tapAt({ f: 2, u: 0.3, v: 0.3 }, rooms, doors, 1, 0.03)).toBeNull();
+  });
+  it('an entrance or a named place before a room; nothing near: the point itself', () => {
+    expect(tapAt({ f: 1, u: 0.51, v: 0.5 }, rooms, doors, 1, 0.03)).toEqual({ exit: 'Panfilov' });
+    expect(tapAt({ f: 0, u: 0.55, v: 0.6 }, rooms, doors, 1, 0.03)).toEqual({ spot: 'canteen' });
+    expect(tapAt({ f: 1, u: 0.9, v: 0.9 }, rooms, doors, 1, 0.03)).toBeNull();
   });
 });

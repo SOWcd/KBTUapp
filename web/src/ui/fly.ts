@@ -26,8 +26,8 @@ function launch(from: Element, to: HTMLElement, panel: HTMLElement, focus?: [num
 
   // where the header rests: the sheet's rise has only begun, so take its current lift off
   const aim = () => {
-    const tf = getComputedStyle(panel).transform;
-    const lift = (tf === 'none' ? 0 : new DOMMatrix(tf).m42) + (parseFloat(getComputedStyle(panel).translate.split(' ')[1]) || 0); // + a growing sheet's glide (Sheet)
+    const style = getComputedStyle(panel), tf = style.transform;
+    const lift = (tf === 'none' ? 0 : new DOMMatrix(tf).m42) + (parseFloat(style.translate.split(' ')[1]) || 0); // + a growing sheet's glide (Sheet)
     const b = to.getBoundingClientRect(), W = b.width, H = b.height, top = b.top - lift;
     // the poster's shape inside the header: same aspect, as large as fits, placed by the focus
     const sw = a.width / a.height < W / H ? H * a.width / a.height : W, sh = sw * a.height / a.width;
@@ -39,6 +39,9 @@ function launch(from: Element, to: HTMLElement, panel: HTMLElement, focus?: [num
       { transform: 'translate(0px, 0px) scale(1)', clipPath: `inset(0px 0px 0px 0px round ${r1}px)` },
     ];
   };
+  const root = getComputedStyle(document.documentElement), t = root.getPropertyValue('--t-slow').trim();
+  const ease = root.getPropertyValue('--ease-spring').trim() || 'ease-out';
+  const ms = (parseFloat(t) || 0.38) * (t.endsWith('ms') ? 1 : 1000);   // the browser may hand it back in seconds
   Object.assign(copy.style, { position: 'fixed', margin: '0', zIndex: '55', pointerEvents: 'none', transformOrigin: '0 0' });
   copy.setAttribute('aria-hidden', 'true');
   const frames = aim();
@@ -50,9 +53,6 @@ function launch(from: Element, to: HTMLElement, panel: HTMLElement, focus?: [num
   const ro = new ResizeObserver(() => anim?.effect instanceof KeyframeEffect && anim.effect.setKeyframes(aim()));
   ro.observe(panel);
   const stop = () => { ro.disconnect(); anim?.cancel(); copy.remove(); src.style.visibility = to.style.visibility = ''; };
-  const root = getComputedStyle(document.documentElement), t = root.getPropertyValue('--t-slow').trim();
-  const ease = root.getPropertyValue('--ease-spring').trim() || 'ease-out';
-  const ms = (parseFloat(t) || 0.38) * (t.endsWith('ms') ? 1 : 1000);   // the browser may hand it back in seconds
   anim = copy.animate(frames, { duration: ms, easing: ease, fill: 'both' });
   // the header's chips were not on the small poster: they come in on the way
   copy.querySelectorAll(':scope > :not(.poster)').forEach((c) => c.animate([{ opacity: 0 }, { opacity: 0, offset: 0.3 }, { opacity: 1 }], { duration: ms }));

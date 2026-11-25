@@ -177,7 +177,7 @@ def test_receipt_reading(env, monkeypatch):
     assert con.execute("SELECT via FROM receipts ORDER BY id DESC").fetchone()[0] == "bot"
 
     # two seats on hold: the bot asks which, and the tap finds the file in the message its buttons answer
-    ev2 = c.post("/api/orgs/1/events", headers=tma(20), json={"title": "Quiz", "place": "305", "startsAt": int(time.time()) + 7200, "emoji": "laptop_3d",
+    ev2 = c.post("/api/orgs/1/events", headers=tma(20), json={"seats": None, "title": "Quiz", "place": "305", "startsAt": int(time.time()) + 7200, "emoji": "laptop_3d",
                                                               "color": "#3B6BFF", "price": 500, "payToName": "Arman A.", "payPhone": "87071234567"}).json()
     c.post(f"/api/events/{ev2['id']}/publish", headers=tma(20))
     for e in (eid, ev2["id"]):

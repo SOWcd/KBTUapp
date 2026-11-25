@@ -27,6 +27,7 @@
   import CastingBlock from '../../ui/CastingBlock.svelte';
   import { nameOf } from '../../lib/short';
   import Linked from '../../ui/Linked.svelte';
+  import RichText from '../../ui/RichText.svelte';
   import { linkButtons } from '../../lib/social';
   import { menu } from '../../ui/menu';
 
@@ -169,14 +170,15 @@
 
     {#key p.id}
       <!-- a post with text: on frosted glass, a busy poster behind it made it unreadable -->
-      <!-- its links as buttons under the words, never a bare address -->
-      {@const lt = linkButtons(p.title)}
-      {@const lb = linkButtons(p.body)}
+      <!-- App-written links become buttons; Telegram ranges need the original text. -->
+      {@const rich = p.titleFmt || p.fmt}
+      {@const lt = rich ? { rest: p.title, buttons: [] } : linkButtons(p.title)}
+      {@const lb = rich ? { rest: p.body, buttons: [] } : linkButtons(p.body)}
       {@const btns = [...lt.buttons, ...lb.buttons.filter((b) => !lt.buttons.some((x) => x.url === b.url))].slice(0, 2)}
       <div class="txt" class:card={(lb.rest || btns.length) && p.photo} class:plain={!p.photo}>
         {#if p.casting}<CastingBlock casting={p.casting} onphoto />{/if}
-        {#if lt.rest}<h2>{lt.rest}</h2>{/if}
-        {#if lb.rest}<p class="scroll"><Linked text={lb.rest} /></p>{/if}
+        {#if lt.rest}<h2>{#if rich}<RichText text={lt.rest} entities={p.titleFmt} />{:else}{lt.rest}{/if}</h2>{/if}
+        {#if lb.rest}<p class="scroll">{#if rich}<RichText text={lb.rest} entities={p.fmt} />{:else}<Linked text={lb.rest} />{/if}</p>{/if}
         {#if btns.length}<div class="links">{#each btns as b (b.url)}<button class="lk" onclick={() => openLink(b.url)}>{#if b.kind === 'telegram'}<TelegramMark size={17} />{/if}{b.join ? t('story.join') : b.kind === 'telegram' ? t('tg.open') : t('story.link')}</button>{/each}</div>{/if}
       </div>
     {/key}

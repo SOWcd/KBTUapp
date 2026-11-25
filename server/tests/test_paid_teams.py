@@ -91,7 +91,7 @@ def test_paid_team_end_to_end(env):
     t0 = _mine(c, eid, caps[0])["token"]
     assert c.post(f"/api/events/{eid}/team/join", headers=tma(caps[15]), json={"token": t0}).status_code == 200
     # the cap can't drop below the teams already made
-    base = {"title": "Case Cup", "place": "Hall", "startsAt": _sheet(c, eid, 20)["startsAt"], "emoji": "laptop_3d", "color": "#3B6BFF"}
+    base = {"seats": None, "title": "Case Cup", "place": "Hall", "startsAt": _sheet(c, eid, 20)["startsAt"], "emoji": "laptop_3d", "color": "#3B6BFF"}
     assert c.patch(f"/api/events/{eid}", headers=tma(20), json={**base, **CS2, "teamCap": 15, "seats": 75}).json()["message"] == "team_cap"
 
     # a rejected receipt takes the player out of the team (the ticket ends: migration 161's trigger)
@@ -132,7 +132,7 @@ def test_form_teams_skips_unpaid_and_keeps_the_cap(env):
 
 
 def _base(c, eid):
-    return {"title": "Case Cup", "place": "Hall", "startsAt": _sheet(c, eid, 20)["startsAt"], "emoji": "laptop_3d", "color": "#3B6BFF"}
+    return {"seats": None, "title": "Case Cup", "place": "Hall", "startsAt": _sheet(c, eid, 20)["startsAt"], "emoji": "laptop_3d", "color": "#3B6BFF"}
 
 
 def test_seats_held_to_cap_times_max(env):
@@ -140,7 +140,7 @@ def test_seats_held_to_cap_times_max(env):
     c, cfg = env
     _club(c, cfg)
     start = int(time.time()) + 5 * 3600
-    body = {"title": "Cup", "place": "Hall", "startsAt": start, "emoji": "laptop_3d", "color": "#3B6BFF", **CS2}
+    body = {"seats": None, "title": "Cup", "place": "Hall", "startsAt": start, "emoji": "laptop_3d", "color": "#3B6BFF", **CS2}
     for seats in (None, 81):
         r = c.post("/api/orgs/1/events", headers=tma(20), json={**body, "seats": seats}).json()
         assert r["message"] == "team_seats", seats

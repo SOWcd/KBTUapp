@@ -50,7 +50,7 @@ def test_photos(env):
     assert served.headers["content-type"] == "image/webp" and "immutable" in served.headers["cache-control"]
     assert not Image.open(io.BytesIO(served.content)).getexif()                                        # no EXIF, no GPS
     start = int(time.time()) + 86400
-    body = {"title": "Poster", "place": "305", "startsAt": start, "emoji": "laptop_3d", "color": "#3B6BFF", "coverId": up["id"]}
+    body = {"seats": None, "title": "Poster", "place": "305", "startsAt": start, "emoji": "laptop_3d", "color": "#3B6BFF", "coverId": up["id"]}
     ev = c.post("/api/orgs/1/events", headers=tma(20), json=body).json()
     assert ev["cover"]["thumb"] == up["thumb"] and ev["tint"] == "#2c50bf"                            # the colour sent: the editor picks the photo's
     assert ev["cover"]["focus"] is None                                                                # the middle until marked
@@ -115,7 +115,7 @@ def test_videos(env, tmp_path):
     assert c.put(f"/api/videos/{vid}?at={half}", headers=P, content=raw[half:]).json() == {"at": len(raw)}
     assert c.post(f"/api/videos/{vid}/done", headers=P).json()["status"] == "queued"
     start = int(time.time()) + 86400
-    body = {"title": "Reel", "place": "305", "startsAt": start, "emoji": "laptop_3d", "color": "#3B6BFF", "videoId": vid}
+    body = {"seats": None, "title": "Reel", "place": "305", "startsAt": start, "emoji": "laptop_3d", "color": "#3B6BFF", "videoId": vid}
     ev = c.post("/api/orgs/1/events", headers=P, json=body).json()
     assert ev["video"]["status"] == "queued"                                                           # the editor sees it coming
     c.post(f"/api/events/{ev['id']}/publish", headers=P)

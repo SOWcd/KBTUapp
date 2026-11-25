@@ -1,12 +1,13 @@
 // Shared data the screens read, kept in one place per entity so a change shows everywhere at once
 // (one home per thing). Actions update optimistically and roll back if the server says no.
-import { api, ApiErr, type AlbumPhoto, type GalleryAlbum, type GalleryTopic, type AdminStats, type Inbox, type ClassItem, type Membership, type EventCard, type Chats, type Credits, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type ChatTree, type StaffMute, type TeamMember, type VolLedger, type Appeal, type SgQueue, type Solved, type TeamPick } from '../api';
-import type { MyRegistration } from '../api';
+import { api, ApiErr, type AlbumPhoto, type GalleryAlbum, type GalleryPage, type AdminStats, type Inbox, type ClassItem, type Membership, type EventCard, type Chats, type Credits, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type ChatTree, type StaffMute, type TeamMember, type VolLedger, type Appeal, type SgQueue, type Solved, type TeamPick } from '../api';
+import type { MyRegistration, SantaChats } from '../api';
 import { joinClasses } from '../classes';
 import { teamError } from '../teams';
 import { teamConsentOk, TEAM_CONSENT } from '../teamConsent';
 import { t, tn, type Key, subjectOf, i18n } from '../i18n/index.svelte';
-import { shrink } from '../photo';
+import { galleryJpeg } from '../photo';
+import { sited, type Place } from '../place';
 import { close, overlays, say } from './ui.svelte';
 import { asStudent, loadMe, session } from './session.svelte';
 import { staffStill, onStaffLoss } from './staffAccess.svelte';
@@ -31,10 +32,10 @@ export const data = $state({
   credits: null as Credits | null, // the people of the app (server credits.py): with the app, so its row and screen never wait
   chats: null as Chats | null, // KBTU's chats for Clubs: loaded with the Afisha, so the row is there before the page opens (B5)
   gallery: [] as AlbumPhoto[], // the Afisha's Gallery, newest first: the student's first page, with the app (loadGallery)
-  galleryAlbums: [] as GalleryAlbum[], // the events' albums on its shelf, the newest first (with the first page)
-  galleryPost: null as { events: { id: Id; title: string }[] } | null, // I may post (GALLERY), and to which of my events
+  galleryAlbums: [] as GalleryAlbum[], // the events' albums on its strip, the newest first (with the first page)
+  galleryPost: null as NonNullable<GalleryPage['post']> | null, // I may post (GALLERY), and my answer to the place-label ask
   galleryState: 'new' as 'new' | 'ready' | 'failed', // the Gallery's first page: not here yet, here, or the load failed with nothing to show
-  galleryPosted: 0, // my posts started (postGallery): the Gallery goes to All and its top, where they land
+  galleryPosted: 0, // my posts started (postGallery): the Gallery scrolls to where they land
   orgs: [] as Org[],
   small: [] as Org[], // under the registry's size bar: search alone finds them
   schedule: [] as ClassItem[],
@@ -57,10 +58,26 @@ export const data = $state({
   adminStats: null as AdminStats | null,      // the admins' Admin → stats card: with the inbox (moderators never see it)
   staffMutes: null as StaffMute[] | null,     // Admin → My notifications: with the inbox's first load, again as the page opens
   staffMutesFailed: false,
+  santaChat: {} as Record<number, SantaChats>, // Secret Santa's chat by game: read as its page or a thread opens, never kept on the phone
   error: false,
   rev: 0,                  // bumps after a Studio change, so the Studio lists reload
   kept: 0,                 // bumps after a change inside a list (a tap), so the phone's copy is saved again (App)
 });
+
+/** Secret Santa's chat of one game: read again whenever its page or a thread opens or the app comes back (the bot's
+ *  push leads there); no polling. One read at a time per game. false: there is no chat for me any more (over, retired,
+ *  out of the game): what the phone held of it is dropped at once. A network failure keeps what is shown. */
+const santaReads = new Map<Id, Promise<boolean>>();
+export function loadSantaChat(id: Id): Promise<boolean> {
+  let read = santaReads.get(id);
+  if (!read) {
+    read = api.santaChat(id).then((c) => { data.santaChat[id] = c; return true; })
+      .catch((e) => { if (!(e instanceof ApiErr) || (e.code !== 'not_found' && e.code !== 'forbidden')) return true; delete data.santaChat[id]; return false; })
+      .finally(() => santaReads.delete(id));
+    santaReads.set(id, read);
+  }
+  return read;
+}
 
 /** A friendship changed (a request answered, a QR used): the Friends page and the Profile tab's dot catch up. */
 export function friendsChanged(): void { people.clear(); void loadFriends(); void loadMe(); }
@@ -83,7 +100,7 @@ export async function loadGallery(all = false): Promise<void> {
   if (data.galleryState === 'failed') data.galleryState = 'new';
   try {
     let page = await api.gallery();
-    data.galleryPost = page.post ?? null;
+    data.galleryPost = page.post ? { placeConsent: page.post.placeConsent } : null;
     data.galleryAlbums = page.albums ?? [];
     const got = [...page.photos];
     while (all && page.more && got.length < 600) { page = await api.gallery(got[got.length - 1].id); got.push(...page.photos); }
@@ -92,36 +109,39 @@ export async function loadGallery(all = false): Promise<void> {
     warm(got.slice(0, 4).map((p) => p.thumb));
   } catch { if (data.galleryState === 'new') data.galleryState = 'failed'; /* else the last copy stays */ }
 }
-/** A theme's first page into the same list (the Gallery's filter shows what is here at once; this brings what the
- *  list hasn't reached yet). Newest first stays: a file's id is the order. false: it failed. */
-export async function loadGalleryTheme(topic: GalleryTopic | 'events'): Promise<boolean> {
-  try {
-    const got = (await api.gallery(undefined, topic)).photos, have = new Set(data.gallery.map((p) => p.id));
-    const fresh = got.filter((p) => !have.has(p.id)), mine = (p: AlbumPhoto) => p.pending || p.failed;
-    if (fresh.length) data.gallery = [...data.gallery.filter(mine), ...[...data.gallery.filter((p) => !mine(p)), ...fresh].sort((a, b) => b.id - a.id)];
-    return true;
-  } catch { return false; }
-}
 /** Reported from the Gallery: gone for me at once. */
 export const galleryGone = (p: AlbumPhoto): void => { data.gallery = data.gallery.filter((x) => x.id !== p.id); };
 
-/** My photos into the Gallery (to an event's album too): each on top of the grid at once from the phone's own copy, in
- *  its own shape, marked while it uploads (one after another); the server's then takes its tile over (key: the same
- *  element, no flash). A refused one goes, with a toast; one the network dropped stays with Retry and Remove. */
+/** My photos into the Gallery: each in the grid as it is picked, from the phone's own copy, under the place its EXIF
+ *  names (lib/place.ts: the word alone goes up, the upload itself is redrawn without EXIF), marked while it uploads
+ *  (one after another); the server's then takes its tile over (key: the same element, no flash). A refused one goes,
+ *  with a toast; one the network dropped stays with Retry and Remove. */
 let pendingId = -1;
-const waiting = new Map<Id, { file: File; event?: Id; topic?: GalleryTopic }>(); // my uploads not landed yet, by their tile
+const GALLERY_CONSENT = 'place1'; // gallery.CONSENT: the policy's place-label clause
+let galleryChoice: { uid: Id; answer: Promise<boolean> } | undefined;
+const waiting = new Map<Id, { file: File; place?: Place; consent?: string }>(); // my uploads not landed yet, by their tile
 const size = (url: string) => new Promise<{ w: number; h: number }>((done) => {
   const img = new Image();
   img.onload = () => done({ w: img.naturalWidth, h: img.naturalHeight });
   img.onerror = () => done({ w: 0, h: 0 });
   img.src = url;
 });
-export async function postGallery(files: File[], event?: Id, topic?: GalleryTopic): Promise<void> {
-  const to = data.galleryPost?.events.find((e) => e.id === event); // under its theme at once
+export async function postGallery(files: File[]): Promise<void> {
+  const uid = session.me?.id, stored = data.galleryPost?.placeConsent;
+  if (uid === undefined) return;
+  if (stored == null && galleryChoice?.uid !== uid) {
+    galleryChoice = { uid, answer: sheets.ask({ title: t('gallery.consentTitle'), text: t('gallery.consentText'),
+      ok: t('gallery.consentYes'), cancel: t('gallery.consentNo') }) };
+  }
+  const choice = stored == null ? await galleryChoice?.answer : undefined;
+  if (session.me?.id !== uid) return;
+  const consent = choice === undefined ? undefined : choice ? GALLERY_CONSENT : `${GALLERY_CONSENT}-no`;
   const mine = await Promise.all(files.slice(0, 10).map(async (file) => {
+    const place = (stored ?? choice) ? await sited(file) : undefined;
     const url = URL.createObjectURL(file), id = pendingId--;
-    waiting.set(id, { file, event, topic });
-    return { id, key: id, url, thumb: url, ...(await size(url)), blur: '', canDelete: false, by: session.me?.name ?? null, mine: true, pending: true, ...(to ? { event: to } : { topic }) } satisfies AlbumPhoto;
+    waiting.set(id, { file, place, consent });
+    return { id, key: id, url, thumb: url, w: 0, h: 0, blur: '', canDelete: false, by: session.me?.name ?? null, mine: true, pending: true,
+      ...(place ? { place } : {}) } satisfies AlbumPhoto;
   }));
   data.gallery = [...[...mine].reverse(), ...data.gallery]; // the last one uploads last: the newest, on top
   data.galleryPosted++;
@@ -144,7 +164,8 @@ async function send(p: AlbumPhoto): Promise<'ok' | 'failed' | 'stop' | 'gone'> {
   const w = waiting.get(p.id);
   if (!w) return 'gone';
   try {
-    const got = await api.postGalleryPhoto(await shrink(w.file), w.event, w.topic);
+    const body = await galleryJpeg(w.file, p.url).catch(() => { throw new ApiErr('bad_input', 'image'); });
+    const got = await api.postGalleryPhoto(body, w.place, w.consent);
     await size(got.thumb); // fetched before it takes the tile over: the phone's copy never gives way to a blank
     data.gallery = data.gallery.filter((x) => x.id !== got.id).map((x) => (x.id === p.id ? { ...got, key: p.id } : x));
     waiting.delete(p.id);

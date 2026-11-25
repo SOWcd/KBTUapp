@@ -5,12 +5,17 @@ What the app is and how to run it: [README.md](README.md). How to contribute: [C
 
 ## The goals (the owner's hard rules, in this order)
 
-1. **Speed.** The app is incredibly fast: every tap answers in the same frame, nothing waits that could be ready.
+1. **Speed and convenience.** The app is incredibly fast and effortless: every tap answers in the same frame, nothing
+   waits that could be ready, every flow takes the fewest taps.
 2. **Beauty, never at speed's cost.** Visuals, motion and style are as beautiful, modern, aesthetic and professional
    as the best iOS apps. How it works inside doesn't matter; what the person sees and feels does. No visible seams,
    bands, jumps or mismatched colours ship.
 3. **A simple repository.** The code stays clear, minimal and efficient, so any agent or person understands it fast:
    no bloat, no speculative layers, delete before adding.
+
+Both 1 and 2 matter; when they truly conflict, faster and more convenient wins. We never stand still: the app is
+improved screen by screen toward ideal (owner, Nov 23): design goes to the best model by contest (so far Fable), one
+screen per PR, never slower than before, checked on a phone in both themes.
 
 ## The project in one screen
 
@@ -27,7 +32,7 @@ What the app is and how to run it: [README.md](README.md). How to contribute: [C
 | What | Where |
 | --- | --- |
 | API routes | `server/kbtu/app.py` |
-| Rules by area | `server/kbtu/logic/*.py` (`core` shared helpers; `seats` sign-up and tickets; `organizing` Studio, the door; `fchannel` the forum channel's posts; `tgcomments` its comments; `forum` find-people; `account` me, settings, deleting an account; `moderation` reports; `daily` the weekly DMP memo and `stats_day` (the nightly retention sweep: a new cleanup goes there; the scheduler is `bot.py::_chores`); `clubs` clubs and join requests (`join_requests`; not `club_applications` = a new club, nor `casting` = recruitment rounds); `stats` anonymous usage counters; `credits` the people of the app, its own consent) |
+| Rules by area | `server/kbtu/logic/*.py` (`core` shared helpers; `seats` sign-up and tickets; `organizing` Studio, the door; `fchannel` the forum channel's posts; `tgcomments` its comments; `forum` find-people; `account` me, settings, deleting an account; `moderation` reports; `daily` the weekly DMP memo and `stats_day` (the nightly retention sweep: a new cleanup goes there; the scheduler is `bot.py::_chores`); `clubs` clubs and join requests (`join_requests`; not `club_applications` = a new club, nor `casting` = recruitment rounds); `stats` anonymous usage counters; `credits` the people of the app, its own consent; `helpus` to the creator from the app: an anonymous line (no author kept, by design) and a signed offer to help) |
 | Schema | read `server/kbtu/schema.current.sql` (generated: today's tables); change it only by appending to `MIGRATIONS` in `server/kbtu/migrations.py` (read that file with `tail`), then run `server/tools/schema_dump.py` |
 | Bot texts | `server/kbtu/texts.py` (ru, kk, en, the same placeholders in each) |
 | Privacy policy, terms | `server/kbtu/i18n/legal/*.html` (Russian binding) |
@@ -81,6 +86,9 @@ tab freezes animations and `requestAnimationFrame`: look with it visible.
 - **The bot** sends templates with a button into the app, never a user's words. The few exceptions (forum channel posts and
   replies, `/all`, restored comments, share cards, group video replies) are listed in `server/kbtu/BOT_WORDS.md`: read
   it before touching bot.py, fchannel.py, tgcomments.py or tiktok.py.
+- **Bot texts the owner sees first**: every bot message opens with an emoji (a test checks), is short (a few
+  lines, emoji over words), and a new or changed one, above all a broadcast, goes to the owner as a preview
+  (`admin broadcast ... @who`, or a screenshot) for his yes before anyone else gets it.
 - **One interface for everyone**: the app looks and works exactly the same for every person: a student, a moderator,
   an admin, the creator. Staff get one extra thing, the Admin sheet; every staff and moderation control lives there
   and nowhere else (no "take down", "publish", "reveal" or role badges with actions in normal tabs). A club's own

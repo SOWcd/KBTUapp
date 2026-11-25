@@ -138,11 +138,16 @@ def test_channel_mirror(env, tmp_path):
     pic = media.save(png.getvalue(), tmp_path)
     outbox = con.execute("SELECT COUNT(*) FROM bot_outbox").fetchone()[0]
 
-    # a post: the first line its title
-    p1 = mirror.take(con, 500, mirror.Msg(id=10, date=logic.now() - 60, text="Stand-up night on Friday\nSign up by Thursday.\nFree entry.",
-                                           photo=pic, views=120, reactions=[("\U0001F525", 7), ("\u2764", 3), ("\u2605", 0)]))
+    # The title split and trimming preserve the Telegram offsets, including the title's emoji.
+    text = "  \U0001F3A4 Stand-up night on Friday  \n  Sign up by Thursday.\nFree entry."
+    url = "https://example.com/signup"
+    p1 = mirror.take(con, 500, mirror.Msg(id=10, date=logic.now() - 60, text=text, photo=pic,
+                                        entities=[("bold", 5, 8, None), ("bold", 34, 7, None), ("text_link", 45, 8, url),
+                                                  ("text_link", 55, 4, "tg://resolve?domain=mic_news")],
+                                        views=120, reactions=[("\U0001F525", 7), ("\u2764", 3), ("\u2605", 0)]))
     got = {x["id"]: x for x in c.get("/api/posts?scope=org:1", headers=tma(81)).json()}[p1]
-    assert (got["title"], got["body"]) == ("Stand-up night on Friday", "Sign up by Thursday.\nFree entry.")
+    assert (got["title"], got["body"]) == ("\U0001F3A4 Stand-up night on Friday", "Sign up by Thursday.\nFree entry.")
+    assert got["titleFmt"] == [["bold", 3, 8, None]] and got["fmt"] == [["bold", 0, 7, None], ["text_link", 11, 8, url]]
     assert got["photo"] and got["tg"] == {"url": "https://t.me/mic_news/10", "views": 120, "reactions": [["\U0001F525", 7], ["\u2764", 3]], "media": None}
     assert got["commentsOn"] is False and got["canEdit"] is False
     assert c.get("/api/posts?scope=org:1", headers=tma(80)).json()[0]["canEdit"] is False   # not even its President: Telegram's
@@ -151,11 +156,14 @@ def test_channel_mirror(env, tmp_path):
     assert c.patch(f"/api/posts/{p1}", headers=tma(80), json={"pinned": True}).json()["pinned"] is True  # a pin is the club's own
     assert con.execute("SELECT COUNT(*) FROM bot_outbox").fetchone()[0] == outbox                      # nobody notified
 
-    # an edit, and the counts later
+    # A formatting-only edit replaces both sets of ranges. Removing every entity clears the field.
+    assert mirror.take(con, 500, mirror.Msg(id=10, date=0, text=text, entities=[("italic", 34, 7, None)])) == p1
+    got = c.get("/api/posts?scope=org:1", headers=tma(81)).json()[0]
+    assert got["fmt"] == [["italic", 0, 7, None]] and "titleFmt" not in got and got["editedAt"]
     assert mirror.take(con, 500, mirror.Msg(id=10, date=0, text="Stand-up night moved to Saturday", views=300, reactions=[("\U0001F525", 9)])) == p1
     got = {x["id"]: x for x in c.get("/api/posts?scope=org:1", headers=tma(81)).json()}[p1]
     assert (got["title"], got["body"], got["tg"]["views"], got["tg"]["reactions"]) == ("Stand-up night moved to Saturday", "", 300, [["\U0001F525", 9]])
-    assert got["editedAt"] and got["photo"]                                                             # the photo stays
+    assert got["editedAt"] and got["photo"] and "fmt" not in got
 
     # an album: three messages, one post; its caption on the second; a video only a link
     a = [mirror.Msg(id=20, date=logic.now(), grouped=77, photo=pic), mirror.Msg(id=21, date=logic.now(), grouped=77, text="Photos from the night"),
@@ -305,10 +313,12 @@ def test_mirror_languages(env):
     ru = "\u0420\u0430\u0441\u043f\u0438\u0441\u0430\u043d\u0438\u0435 \u0438\u0437\u043c\u0435\u043d\u0438\u043b\u043e\u0441\u044c\n\u0412 \u0441\u0440\u0435\u0434\u0443"
     pid = mirror.take(con, 700, mirror.Msg(id=10, date=t0, text=kk, views=50))
     assert mirror.take(con, 700, mirror.Msg(id=11, date=t0 + 60, text=ru, views=7)) == pid
-    assert mirror.take(con, 700, mirror.Msg(id=12, date=t0 + 120, text="Timetable changed\nOn Wednesday")) == pid
+    assert mirror.take(con, 700, mirror.Msg(id=12, date=t0 + 120, text="Timetable changed\nOn Wednesday",
+                                          entities=[("italic", 21, 9, None)])) == pid
     got = {x["id"]: x for x in c.get("/api/posts?scope=org:1", headers=tma(80)).json()}
     assert list(got) == [pid] and got[pid]["title"].startswith("\u0414\u04d9\u0440\u0456\u0441") and got[pid]["tg"]["views"] == 50  # the first message's counts
-    assert got[pid]["i18n"] == {"ru": {"title": ru.split("\n")[0], "body": ru.split("\n")[1]}, "en": {"title": "Timetable changed", "body": "On Wednesday"}}
+    assert got[pid]["i18n"] == {"ru": {"title": ru.split("\n")[0], "body": ru.split("\n")[1]},
+                               "en": {"title": "Timetable changed", "body": "On Wednesday", "fmt": [["italic", 3, 9, None]]}}
     two = mirror.take(con, 700, mirror.Msg(id=13, date=t0 + 180, text="Another announcement"))    # English again: another post
     late = mirror.take(con, 700, mirror.Msg(id=14, date=t0 + 7200, text=ru))                     # two hours later: another post
     assert len({pid, two, late}) == 3

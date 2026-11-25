@@ -75,6 +75,17 @@ async def read_upload(request: Request, most: int = media.MAX_BYTES) -> bytes:
     return bytes(data)
 
 
+def json_body(most: int):
+    """A JSON body as a dependency, capped at `most` bytes before it is parsed (Body(...) reads it whole first); put it
+    after Me, so a stranger's body is never read."""
+    async def read(request: Request) -> object:
+        try:
+            return json.loads(await read_upload(request, most))
+        except (ValueError, RecursionError):
+            raise ApiError("bad_input") from None
+    return read
+
+
 class _Route(APIRoute):
     """Answers go out through pydantic's JSON writer (Rust) instead of FastAPI's jsonable_encoder, which walks every value
     in Python: two thirds of the Afisha's time on a big database (load test). Our answers are plain JSON
@@ -123,7 +134,8 @@ PERSONAL_EVENT_ROUTES = frozenset({("POST", "/api/events/{eid}/receipt"), ("POST
                                    ("POST", "/api/events/{eid}/volunteer"), ("DELETE", "/api/events/{eid}/volunteer"),
                                    ("POST", "/api/events/{eid}/team-ask"), ("DELETE", "/api/events/{eid}/team-ask"),
                                    ("POST", "/api/events/{eid}/decline"), ("PUT", "/api/events/{eid}/rating"), ("PUT", "/api/events/{eid}/rating/dismiss"),
-                                   ("PUT", "/api/events/{eid}/santa/wish"),
+                                   ("PUT", "/api/events/{eid}/santa/wish"), ("GET", "/api/events/{eid}/santa/chat"),
+                                   ("POST", "/api/events/{eid}/santa/chat"), ("POST", "/api/events/{eid}/santa/chat/report"),
                                    ("GET", "/api/events/{eid}/invites"), ("POST", "/api/events/{eid}/invites"),
                                    # his own application to a round and his own interview booking
                                    ("POST", "/api/rounds/{rid}/apply"), ("DELETE", "/api/rounds/{rid}/apply"), ("POST", "/api/rounds/{rid}/book")})
@@ -979,21 +991,22 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/gallery")
     async def post_gallery_photo(request: Request, con: Con, v: Me, event: int | None = Query(None, ge=1, lt=1 << 62),
-            topic: str | None = Query(None, max_length=16)):
+            topic: str | None = Query(None, max_length=16), place: str | None = Query(None, max_length=8),
+            consent: str | None = Query(None, max_length=12)):
         """A photo into the Gallery (GALLERY), the file is the body as in /api/photos; `event`: into its album too;
-        `topic` (gallery.TOPICS): what a photo of no event is about."""
+        `topic` (gallery.TOPICS): an old bundle's theme; `place` (gallery.PLACES): where the phone says it was taken."""
         # one at a time per person (the picture workers are shared with receipts and avatars), counted before the work
         # ponytail: per worker process; a meta row as the lock if one person's parallel uploads over workers ever matter
         if v.id in posting:
             raise ApiError("rate_limited", "busy")
         posting.add(v.id)
         try:
-            await run_in_threadpool(logic.gallery.check, con, v, event, topic)  # a plain no costs no upload
+            await run_in_threadpool(logic.gallery.check, con, v, event, topic, place, consent)  # a plain no costs no upload
             data = await read_upload(request)
-            await run_in_threadpool(logic.gallery.attempt, con, v, event, topic)
-            saved = await _picture(media.save, data, photos)
+            await run_in_threadpool(logic.gallery.attempt, con, v, event, topic, place, consent)
+            saved = await _picture(media.save_gallery, data, photos)
             try:
-                return await run_in_threadpool(logic.gallery.post, con, v, saved, event, topic)
+                return await run_in_threadpool(logic.gallery.post, con, v, saved, event, topic, place, consent)
             except ApiError:  # refused on the second look (the flag, the album filled): no file left behind without a row
                 if logic.photo_free(con, saved["path"]):
                     media.drop(photos, [saved["path"]])
@@ -1277,6 +1290,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def mirror_org_chat(oid: int, cid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.mirror_org_chat(con, v, oid, cid, body.get("on"))
 
+    @app.put("/api/orgs/{oid}/chats/{cid}/call")
+    def call_org_chat(oid: int, cid: int, con: Con, v: Me, body: dict = Body(...)):
+        return logic.chatlist.call_org_chat(con, v, oid, cid, body.get("on"))
+
     @app.put("/api/orgs/{oid}/chats/{cid}/swear")
     async def swear_org_chat(oid: int, cid: int, con: Con, v: Me, body: dict = Body(...)):
         """The group's swear filter (logic/chatmod.py), its President's or Vice's. On only where our bot may delete and
@@ -1517,8 +1534,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         return casting.showed(con, v, aid, body)
 
     @app.post("/api/rounds/{rid}/send")
-    def round_send(rid: int, con: Con, v: Me, body: dict | None = Body(None)):
-        return casting.send(con, v, rid, (body or {}).get("final", True) is not False)  # no body: an older app's final send
+    def round_send(rid: int, con: Con, v: Me, body: dict = Body(...)):
+        return casting.send(con, v, rid, body.get("final", True) is not False)
 
     @app.get("/api/orgs/{oid}/memo")
     def org_memo(oid: int, con: Con, v: Me, later: bool = False):
@@ -2282,6 +2299,26 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             board_writer(request, board_viewer(request, v), con)
         logic.mapflaws.report(con, v, body, student)
 
+    # to the creator (logic/helpus.py): an anonymous line (no author kept), a signed offer to help; the admin's list
+    helpus_body = Depends(json_body(logic.helpus.BODY_MOST))
+
+    @app.post("/api/helpus/anon", status_code=204)
+    def helpus_anon(con: Con, v: Me, body: object = helpus_body):
+        logic.helpus.send_anon(con, v, body)
+
+    @app.post("/api/helpus/offer", status_code=204)
+    def helpus_offer(con: Con, v: Me, body: object = helpus_body):
+        logic.helpus.offer(con, v, body)
+
+    @app.get("/api/helpus")
+    def helpus_list(con: Con, v: Me, response: Response):
+        response.headers["Cache-Control"] = "private, no-store"  # contacts and notes never kept on the device
+        return logic.helpus.listing(con, v)
+
+    @app.post("/api/helpus/seen", status_code=204)
+    def helpus_seen(con: Con, v: Me, body: object = helpus_body):
+        logic.helpus.seen(con, v, body)
+
     @app.get("/api/map/flaws")
     def map_flaws(con: Con, v: Me):
         return logic.mapflaws.listing(con, v)
@@ -2619,6 +2656,26 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def santa_wish(eid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.santa.rewish(con, v, eid, body.get("wish"))
 
+    @app.get("/api/events/{eid}/santa/chat")  # my two threads (with my person, with my Santa): the pair's own people alone
+    def santa_chat(eid: int, con: Con, v: Me):
+        return logic.santa.chat(con, v, eid)
+
+    @app.post("/api/events/{eid}/santa/chat")
+    def santa_write(eid: int, con: Con, v: Me, body: dict = Body(...)):
+        return logic.santa.write(con, v, eid, body)
+
+    @app.post("/api/events/{eid}/santa/chat/report", status_code=204)
+    def santa_report(eid: int, con: Con, v: Me, body: dict = Body(...)):
+        logic.santa.report(con, v, eid, body)
+
+    @app.get("/api/admin/santa-reports")  # the app's staff: the reported threads, whole, with both their people
+    def santa_reports(con: Con, v: Me):
+        return logic.santa.reports(con, v)
+
+    @app.post("/api/admin/santa-reports/{rid}/done", status_code=204)
+    def santa_report_done(rid: int, con: Con, v: Me):
+        logic.santa.report_done(con, v, rid)
+
     @app.post("/api/events/{eid}/santa/remind")  # "Remind those not in yet", once a day
     def santa_remind(eid: int, con: Con, v: Me):
         return logic.santa.remind(con, v, eid)
@@ -2694,11 +2751,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             start = f"ev_{ref}_{logic.seats.ev_ref(v.id)}" if body.get("mine") and logic.role_in(con, v, e["org"]["id"]) else f"ev_{ref}"
             result = {"type": "photo", "id": f"ev-{ref}-{stamp}", "photo_url": photo, "thumbnail_url": photo, "caption": caption, "parse_mode": "HTML",
                       "reply_markup": {"inline_keyboard": [[{"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp={start}"}]]}}
-        elif kind in ("fr", "rf", "join", "pres", "rc", "gl"):
+        elif kind in ("rf", "join", "pres", "rc", "gl"):
             if kind == "gl":  # the admin's award link (logic.grant_link): up to `uses` people (null: no cap) for `days`
                 code = body.get("code")
-                # an older app's "many": no cap, 14 days
-                uses, days = (None, 14) if body.get("many") is True else (body.get("uses", 1), body.get("days", 7))
+                uses, days = body.get("uses", 1), body.get("days", 7)
                 token = logic.grant_link(con, v, code, uses, days)
                 start = f"gl_{token}"
                 fields = {"award": texts.pick(texts.BADGE_TITLES if code in logic.BADGE_OF else texts.ACH_NAMES, lang)[code],
@@ -2711,10 +2767,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                 if not r:
                     raise ApiError("closed")
                 start, fields = f"rc_{ref}", {"club": r["name"], "until": texts.when(r["closes_at"], lang)}
-            elif kind in ("rf", "fr"):  # my one invite link (referral and friends; "fr" an older app's): my link code, never my ID nor my badge's secret
+            elif kind == "rf":  # my one invite link (referral and friends): my link code, never my ID nor my badge's secret
                 if not v.student:
                     raise ApiError("need_student")
-                kind, start = "rf", f"r_{logic._qr_code(con, v.id, 'link_code')}"
+                start = f"r_{logic._qr_code(con, v.id, 'link_code')}"
                 fields = {"name": logic.shown_name(logic.one(con, logic.PERSON + " WHERE u.id = ?", v.id))}
             elif kind == "join":  # a one-time member link (§4.5), Vice+; each card is a fresh link; many: the team's 7-day link
                 link = logic.team_link(con, v, ref) if body.get("many") is True else logic.invite(con, v, ref)
@@ -3057,6 +3113,18 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
 .ver {{ color: var(--dim); font-size: 14px; margin-top: 0; }} a {{ color: var(--accent); }} li {{ margin: 6px 0; }} ul {{ padding-left: 22px; }}
 </style></head><body><main><nav><a href="{other}?lang={lang}">{LEGAL_NAMES[other][lang]}</a><span>{langs}</span></nav>{body}</main></body></html>"""
         return Response(html, media_type="text/html", headers={"Cache-Control": "no-cache"})
+
+    # public forms (logic/forms.py): no account, nothing about the sender kept
+    @app.get("/f/{slug}")
+    def form_page(con: Con, slug: str):
+        status, body = logic.forms.page(con, slug)
+        return Response(body, status_code=status, media_type="text/html", headers={
+            "Cache-Control": "no-cache", "Referrer-Policy": "no-referrer", "Content-Security-Policy": logic.forms.CSP})
+
+    @app.post("/api/f/{slug}")  # no account in front: the body is capped before it is parsed
+    def form_submit(con: Con, slug: str, body: object = Depends(json_body(logic.forms.MOST))):
+        logic.forms.submit(con, slug, body)
+        return {"ok": True}
 
     if cfg.old_dir:
         app.mount("/old", StaticFiles(directory=cfg.old_dir, html=True), name="old")

@@ -89,7 +89,7 @@ def test_casting(env):
     assert c.post(f"/api/round-apps/{ann['id']}/decide", headers=tma(20), json={"stage": "yes", "tagId": 1}).json()["takenTag"] == 1
     assert c.get("/api/orgs/1/round", headers=tma(20)).json()["counts"] == {"yes": 1, "no": 1}
 
-    assert c.post(f"/api/rounds/{rid}/send", headers=tma(20)).json() == {"accepted": 1, "declined": 1}
+    assert c.post(f"/api/rounds/{rid}/send", headers=tma(20), json={"final": True}).json() == {"accepted": 1, "declined": 1}
     assert con.execute("SELECT role FROM org_members WHERE org_id = 1 AND user_id = ?", (uid[10],)).fetchone()[0] == "member"
     assert [tuple(x) for x in con.execute("SELECT tag_id FROM member_tags WHERE user_id = ?", (uid[10],))] == [(1,)]
     assert con.execute("SELECT 1 FROM org_members WHERE org_id = 1 AND user_id = ?", (uid[11],)).fetchone() is None
@@ -97,7 +97,8 @@ def test_casting(env):
     assert sent == {"round_yes": uid[10], "round_no": uid[11]}
     row = con.execute("SELECT b.*, u.lang FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE kind = 'round_yes'").fetchone()
     assert "SMM" in bot._render(con, row)[0]
-    assert c.get("/api/orgs/1/round", headers=tma(11)).json() is None and c.post(f"/api/rounds/{rid}/send", headers=tma(20)).status_code == 409
+    assert c.get("/api/orgs/1/round", headers=tma(11)).json() is None
+    assert c.post(f"/api/rounds/{rid}/send", headers=tma(20), json={"final": True}).status_code == 409
     # sixty days after the results the answers and notes go; who applied and how it ended stay
     con.execute("UPDATE rounds SET sent_at = ? WHERE id = ?", (int(time.time()) - 61 * 86400, rid))
     casting.forget(con)
@@ -189,7 +190,7 @@ def test_casting_whole_club(env):
     assert c.post(f"/api/rounds/{r['id']}/apply", headers=tma(10), json={"departments": [], "answers": {q: "Anime"}}).json()["mine"]["departments"] == []
     app = c.get(f"/api/rounds/{r['id']}/apps", headers=tma(20)).json()[0]
     assert c.post(f"/api/round-apps/{app['id']}/decide", headers=tma(20), json={"stage": "yes"}).json() == {"stage": "yes", "takenTag": None}
-    assert c.post(f"/api/rounds/{r['id']}/send", headers=tma(20)).json() == {"accepted": 1, "declined": 0}
+    assert c.post(f"/api/rounds/{r['id']}/send", headers=tma(20), json={"final": True}).json() == {"accepted": 1, "declined": 0}
     assert con.execute("SELECT role FROM org_members WHERE org_id = 1 AND user_id = ?", (ann,)).fetchone()[0] == "member"
     # one department: the student picks nothing, it's that one; no next text and no slots: no audition step
     con.execute("INSERT INTO org_tags (id, org_id, name, color, created_at) VALUES (1, 1, 'Art', '#FF4FA3', 0)")

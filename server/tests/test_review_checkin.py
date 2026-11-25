@@ -47,7 +47,7 @@ def test_share_badge_link_bad_code_is_400(env):
     con = db.connect(cfg.db_path)
     con.execute("UPDATE users SET role = 'admin', is_founder = 1 WHERE id = ?", (boss["id"],))
     x = TestClient(server.create(cfg), raise_server_exceptions=False)
-    assert x.post("/api/share", headers=tma(60), json={"kind": "gl", "code": ["init26"], "many": True}).status_code == 400
+    assert x.post("/api/share", headers=tma(60), json={"kind": "gl", "code": ["init26"], "uses": None}).status_code == 400
     con.close()
 
 

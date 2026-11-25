@@ -49,11 +49,11 @@ def test_memo(env, monkeypatch):
     monday = logic._next_week()
     base = {"emoji": "laptop_3d", "color": "#3B6BFF", "seats": 50}
     asks = {"room": {"any": True, "projector": True}, "guests": {"side": "tole", "list": "Ivanov Ivan, Satbayev University\n"}}
-    a = c.post("/api/orgs/1/events", headers=tma(20), json={**base, "title": "Hackday", "place": "Aud. 305", "startsAt": monday + 86400 + 13 * 3600, "memo": asks}).json()
+    a = c.post("/api/orgs/1/events", headers=tma(20), json={"seats": None, **base, "title": "Hackday", "place": "Aud. 305", "startsAt": monday + 86400 + 13 * 3600, "memo": asks}).json()
     assert a["memo"] == asks                                                                  # the editor gets it back (Head+)
-    b = c.post("/api/orgs/1/events", headers=tma(20), json={**base, "title": "Quiz", "place": "", "startsAt": monday + 3 * 86400 + 13 * 3600, "memo": {"room": {}}}).json()
-    c.post("/api/orgs/1/events", headers=tma(20), json={**base, "title": "Talk", "place": "Atrium", "startsAt": monday + 2 * 86400})
-    assert c.post("/api/orgs/1/events", headers=tma(20), json={**base, "title": "X", "place": "", "startsAt": monday, "memo": {"cake": {}}}).status_code == 400
+    b = c.post("/api/orgs/1/events", headers=tma(20), json={"seats": None, **base, "title": "Quiz", "place": "", "startsAt": monday + 3 * 86400 + 13 * 3600, "memo": {"room": {}}}).json()
+    c.post("/api/orgs/1/events", headers=tma(20), json={"seats": None, **base, "title": "Talk", "place": "Atrium", "startsAt": monday + 2 * 86400})
+    assert c.post("/api/orgs/1/events", headers=tma(20), json={"seats": None, **base, "title": "X", "place": "", "startsAt": monday, "memo": {"cake": {}}}).status_code == 400
     for e in (a, b):
         c.post(f"/api/events/{e['id']}/publish", headers=tma(20))
     assert c.get(f"/api/events/{a['id']}", headers=tma(10)).json()["memo"] is None             # students never see it
@@ -92,7 +92,7 @@ def test_memo(env, monkeypatch):
     # DMP gave a room: typed in, nobody is told now
     c.post(f"/api/events/{b['id']}/registration", headers=tma(10), json={})
     before = con.execute("SELECT COUNT(*) FROM bot_outbox WHERE kind = 'event_changed'").fetchone()[0]
-    upd = c.patch(f"/api/events/{b['id']}", headers=tma(20), json={**base, "title": "Quiz", "place": "Aud. 412", "startsAt": b["startsAt"]})
+    upd = c.patch(f"/api/events/{b['id']}", headers=tma(20), json={"seats": None, **base, "title": "Quiz", "place": "Aud. 412", "startsAt": b["startsAt"]})
     assert upd.status_code == 200 and con.execute("SELECT COUNT(*) FROM bot_outbox WHERE kind = 'event_changed'").fetchone()[0] == before
 
 
@@ -122,7 +122,7 @@ def test_memo_v2(env, monkeypatch):
              "print": {"items": [{"name": "Poster", "count": 5, "format": "A3", "bw": False, "density": 2}]},
              "film": {"date": "2026-10-21", "from": "10:00", "to": "12:00", "note": "interview"}}
     base = {"emoji": "laptop_3d", "color": "#3B6BFF", "seats": 50}
-    a = c.post("/api/orgs/1/events", headers=tma(21), json={**base, "title": "Hackday", "place": "Aud. 305", "startsAt": monday + 86400 + 13 * 3600, "memo": every})
+    a = c.post("/api/orgs/1/events", headers=tma(21), json={"seats": None, **base, "title": "Hackday", "place": "Aud. 305", "startsAt": monday + 86400 + 13 * 3600, "memo": every})
     assert a.status_code == 200
     a = a.json()
     con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, emoji, color, visibility, meeting, memo, created_by, created_at, updated_at)
@@ -173,7 +173,7 @@ def test_memo_v2(env, monkeypatch):
     con.commit()
     sent = c.get("/api/registry/memos", headers=tma(29)).json()
     assert len(sent) == 1 and sent[0]["org"]["id"] == 1 and sent[0]["by"] and {x["id"] for x in sent[0]["events"]} == {a["id"], 90}
-    c.patch(f"/api/events/{a['id']}", headers=tma(20), json={**base, "title": "Hackday", "place": "Aud. 305", "startsAt": a["startsAt"], "memo": {"room": {}}})
+    c.patch(f"/api/events/{a['id']}", headers=tma(20), json={"seats": None, **base, "title": "Hackday", "place": "Aud. 305", "startsAt": a["startsAt"], "memo": {"room": {}}})
     assert [x["title"] for x in c.get("/api/orgs/1/memo", headers=tma(20)).json()["events"]] == ["Hackday"]
     one_ = c.get("/api/orgs/1/memo", headers=tma(20)).json()["text"]
     assert one_.split("\n")[1] == texts.MEMO2_TITLE[0] and texts.MEMO2_FOR["event"].split("{")[0] not in one_  # one event: no per-event line
@@ -190,7 +190,7 @@ def test_memo_v2(env, monkeypatch):
     con.execute("UPDATE events SET memo = NULL WHERE org_id = 1")
     m = c.get("/api/orgs/1/memo", headers=tma(21)).json()
     assert m["text"].startswith(texts.MEMO2_TO) and texts.MEMO2_BLANK.format(org="StudEx") in m["text"] and m["signFrom"] in m["text"]
-    item = {"kind": "room", "fields": {"any": True, "projector": True}, "place": "Aud. 305", "startsAt": monday + 86400 + 13 * 3600, "endsAt": monday + 86400 + 15 * 3600}
+    item = {"seats": None, "kind": "room", "fields": {"any": True, "projector": True}, "place": "Aud. 305", "startsAt": monday + 86400 + 13 * 3600, "endsAt": monday + 86400 + 15 * 3600}
     r = c.post("/api/orgs/1/memo/item", headers=tma(21), json=item)
     assert r.status_code == 200 and "305" in r.json()["text"] and "13:00-15:00" in r.json()["text"]
     assert c.post("/api/orgs/1/memo/item", headers=tma(22), json=item).status_code == 403   # a Head without "memo"
@@ -330,7 +330,7 @@ def test_memo_is_a_recognised_clubs_alone(env):
     rights = {m["org"]["id"]: m["rights"] for m in c.get("/api/me", headers=tma(20)).json()["memberships"]}
     assert "memo" not in rights[1] and "memo" in rights[2] and "events" in rights[1]
     monday = logic._next_week()
-    ev = {"emoji": "laptop_3d", "color": "#3B6BFF", "title": "Talk", "place": "", "startsAt": monday + 86400 + 13 * 3600, "memo": {"room": {"any": True}}}
+    ev = {"seats": None, "emoji": "laptop_3d", "color": "#3B6BFF", "title": "Talk", "place": "", "startsAt": monday + 86400 + 13 * 3600, "memo": {"room": {"any": True}}}
     assert c.post("/api/orgs/1/events", headers=tma(20), json=ev).json()["memo"] is None
     assert c.post("/api/orgs/2/events", headers=tma(20), json=ev).json()["memo"] == {"room": {"any": True}}
     assert c.get(f"/api/orgs/1/memo?week={monday}", headers=tma(20)).status_code == 403

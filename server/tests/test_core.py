@@ -149,7 +149,7 @@ def test_multi_day_event(env, monkeypatch):
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'president', 0)", (pres["id"],))
     start = int(time.time()) + 3 * 3600
     end = start + 10 * 86400
-    body = {"title": "Casting", "place": "305", "startsAt": start, "endsAt": start, "emoji": "laptop_3d", "color": "#3B6BFF"}
+    body = {"seats": None, "title": "Casting", "place": "305", "startsAt": start, "endsAt": start, "emoji": "laptop_3d", "color": "#3B6BFF"}
     assert c.post("/api/orgs/1/events", headers=tma(20), json=body).json()["error"] == "bad_input"   # ends when it starts
     assert c.post("/api/orgs/1/events", headers=tma(20), json={**body, "endsAt": start + 40 * 86400}).json()["error"] == "bad_input"  # days, not years
     eid = c.post("/api/orgs/1/events", headers=tma(20), json={**body, "endsAt": end}).json()["id"]
@@ -276,9 +276,9 @@ def test_postman(env, monkeypatch):
     con.execute("UPDATE users SET can_dm = 1, lang = 'kk'")
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
     con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, emoji, color, created_at, updated_at)
-        VALUES (5, 1, 'published', 'Hack <night>', '305', 1791090000, 'laptop_3d', '#3B6BFF', 0, 0)""")
+        VALUES (20003, 1, 'published', 'Hack <night>', '305', 1791090000, 'laptop_3d', '#3B6BFF', 0, 0)""")
     uid = con.execute("SELECT id FROM users WHERE tg_id = 10").fetchone()[0]
-    for kind, ref in (("seat_free", "event:5"), ("new_event", "event:5"), ("event_changed", "event:404:1")):
+    for kind, ref in (("usage_week", "uw:20003"), ("seat_free", "event:20003"), ("new_event", "event:20003"), ("event_changed", "event:404:1")):
         con.execute("INSERT INTO bot_outbox (user_id, kind, ref, send_after) VALUES (?, ?, ?, 0)", (uid, kind, ref))
     sent = []
 
@@ -295,14 +295,14 @@ def test_postman(env, monkeypatch):
     from kbtu import texts
     kk = texts.bot_message("kk", "seat_free", title="Hack <night>", when=texts.when(1791090000, "kk"), place="305")[0]
     assert first["chat_id"] == 10 and first["text"] == kk and "Hack &lt;night&gt;" in kk   # Kazakh, escaped
-    assert first["reply_markup"]["inline_keyboard"][0][0]["url"].endswith("startapp=tk_5")
+    assert first["reply_markup"]["inline_keyboard"][0][0]["url"].endswith("startapp=tk_20003")
     state = dict(con.execute("SELECT kind, COALESCE(error, 'sent') FROM bot_outbox").fetchall())
-    assert state == {"seat_free": "sent", "new_event": "blocked", "event_changed": "gone"} and len(sent) == 2
+    assert state == {"usage_week": "gone", "seat_free": "sent", "new_event": "blocked", "event_changed": "gone"} and len(sent) == 2
     assert con.execute("SELECT can_dm FROM users WHERE id = ?", (uid,)).fetchone()[0] == 0
 
     con.execute("DELETE FROM bot_outbox")
     con.execute("UPDATE users SET can_dm = 1")
-    con.execute("INSERT INTO bot_outbox (user_id, kind, ref, send_after) VALUES (?, 'seat_free', 'event:5', 0)", (uid,))
+    con.execute("INSERT INTO bot_outbox (user_id, kind, ref, send_after) VALUES (?, 'seat_free', 'event:20003', 0)", (uid,))
     stale = bot.rows(con, "SELECT b.*, u.tg_id, u.lang, u.can_dm FROM bot_outbox b JOIN users u ON u.id = b.user_id")
     sent.clear()
 

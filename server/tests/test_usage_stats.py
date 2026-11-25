@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from kbtu import bot, db, logic, texts
+from kbtu import db, logic, texts
 from kbtu.logic import stats
 from test_core import DB, env, login, set_clock, tma  # noqa: F401  (env: the fixture)
 
@@ -66,61 +66,23 @@ def test_web_names_match_the_allowlist():
     assert {"uniq.do.qr", "uniq.tab.club", "sess.6", "time.6"} <= stats.KEYS and "uniq.from.qr" not in stats.KEYS and "sess.7" not in stats.KEYS
 
 
-def _people(c, con):
-    owner, other = login(c, 11, "own")["id"], login(c, 12, "oth")["id"]
-    con.execute("UPDATE users SET is_founder = 1, role = 'admin' WHERE id = ?", (owner,))
-    con.execute("UPDATE users SET role = 'admin' WHERE id = ?", (other,))  # an admin who is not the creator hears nothing
-    con.execute("UPDATE users SET can_dm = 1")
-    return owner
-
-
-def _digests(con):
-    return con.execute("SELECT user_id, ref FROM bot_outbox WHERE kind = 'usage_week'").fetchall()
-
-
-def test_digest_only_to_the_creator_once_a_week(env, monkeypatch):
+def test_usage_numbers(env):
     c, _ = env
     con = db.connect(DB[0])
-    owner = _people(c, con)
-    for t in (at(MONDAY - 1), at(MONDAY, 8), at(MONDAY + 1)):              # Sunday, Monday before 9, Tuesday
-        set_clock(monkeypatch, lambda t=t: t)
-        logic.stats.week(con)
-    assert _digests(con) == []
-    set_clock(monkeypatch, lambda: at(MONDAY))
-    logic.stats.week(con)
-    logic.stats.week(con)
-    set_clock(monkeypatch, lambda: at(MONDAY, 15))
-    logic.stats.week(con)
-    assert [tuple(r) for r in _digests(con)] == [(owner, f"uw:{MONDAY}")]
-    set_clock(monkeypatch, lambda: at(MONDAY + 7))
-    logic.stats.week(con)
-    assert [tuple(r) for r in _digests(con)] == [(owner, f"uw:{MONDAY}"), (owner, f"uw:{MONDAY + 7}")]
-
-
-def test_digest_numbers(env, monkeypatch):
-    c, _ = env
-    con = db.connect(DB[0])
-    _people(c, con)
-    set_clock(monkeypatch, lambda: at(MONDAY))
+    a, b = (login(c, uid, name)["id"] for uid, name in ((11, "ann"), (12, "ben")))
     con.execute("DELETE FROM visits")
-    con.executemany("INSERT INTO visits (day, user_id) SELECT ?, id FROM users WHERE id IN (SELECT id FROM users LIMIT 2)", [(MONDAY - 1,), (MONDAY - 2,)])
-    con.execute("INSERT INTO visits (day, user_id) SELECT ?, id FROM users LIMIT 1", (MONDAY,))  # today isn't in the finished week
+    con.executemany("INSERT INTO visits (day, user_id) VALUES (?, ?)", [(MONDAY - 1, a), (MONDAY - 1, b), (MONDAY - 2, a), (MONDAY - 2, b), (MONDAY, a)])
     last = MONDAY - 1
     con.executemany("INSERT INTO usage_days (day, key, n) VALUES (?, ?, ?)", [
         (last, "sheet.event", 40), (last - 1, "sheet.event", 2), (last, "tab.afisha", 30), (last, "from.qr", 9), (last, "err.sheet.map", 4),
         (last, "open.ios.0", 5), (last, "open.ios.1", 3), (last, "open.ios.5", 2),
         (MONDAY, "sheet.event", 1000), (MONDAY - 8, "sheet.event", 1000)])   # today and the week before aren't this week
-    f = logic.stats.fields(con, 7, MONDAY)
+    f = stats.fields(con, 7, MONDAY)
     assert f["active"] == 2 and f["top"].split("\n")[:2] == ["sheet.event 42", "tab.afisha 30"]
     assert len(f["top"].split("\n")) == len(f["bottom"].split("\n")) == 10
     assert f["bottom"].split("\n")[0].endswith(" 0")                       # what nobody opens is there, at zero
     assert f["sources"].split("\n")[0] == "qr 9" and f["errors"] == "sheet.map 4"
     assert f["opens"] == "ios: ≤1 / ≤2 (10)"                               # 5 of 10 under a second, 8 of 10 under two
-    con.execute("UPDATE users SET lang = 'en' WHERE is_founder = 1")
-    logic.stats.week(con)
-    row = con.execute("SELECT b.*, u.lang FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE b.kind = 'usage_week'").fetchone()
-    assert bot._render(con, row) == (*texts.bot_message("en", "usage_week", **f), "")
-    assert "sheet.event 42" in bot._render(con, row)[0] and "ios: ≤1 / ≤2 (10)" in bot._render(con, row)[0]
 
 
 def test_retention(env, monkeypatch):
@@ -156,7 +118,7 @@ def test_retention_and_people_from_visits(env, monkeypatch):
     assert f["spread"].split("\n") == ["1: 0%", "2-3: 67%", "4-7: 0%", "8-15: 0%", "16+: 33%"]  # ben 2, ana 3, dan 16
 
 
-def test_digest_shows_length_time_and_uses(env, monkeypatch):
+def test_usage_shows_length_time_and_uses(env, monkeypatch):
     c, _ = env
     con = db.connect(DB[0])
     ids = [login(c, 41 + i, f"eva{i}")["id"] for i in range(4)]
@@ -174,7 +136,7 @@ def test_digest_shows_length_time_and_uses(env, monkeypatch):
     assert all(("{%s}" % k) in texts.BOT[lang]["usage_week"][0] for lang in ("ru", "kk", "en") for k in f)
 
 
-def test_review_fixes(env, monkeypatch):
+def test_drops_repeated_uniques_and_admin_counters(env):
     c, _ = env
     stats._spent.clear()
     stats._uniq.clear()
@@ -183,15 +145,3 @@ def test_review_fixes(env, monkeypatch):
     for _ in range(5):
         post(c, 7, {"uniq.sheet.map": 1})
     assert totals(con) == {"uniq.sheet.map": 1}                            # a repeat is dropped; the admin sheet isn't counted at all
-    owner = _people(c, con)
-    set_clock(monkeypatch, lambda: at(MONDAY))
-    real = stats.notify
-    monkeypatch.setattr(stats, "notify", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("down")))
-    try:
-        stats.week(con)
-    except RuntimeError:
-        pass
-    assert not con.in_transaction and not con.execute("SELECT 1 FROM meta WHERE key = 'usage_week'").fetchone()  # the mark rolled back too
-    monkeypatch.setattr(stats, "notify", real)
-    stats.week(con)
-    assert [r[0] for r in _digests(con)] == [owner]

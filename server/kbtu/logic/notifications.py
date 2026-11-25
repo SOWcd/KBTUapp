@@ -10,11 +10,11 @@ from .core import one, rows
 CATEGORIES = {
     "nRemind": ("n_remind", ("remind_2h", "saved_tomorrow", "rate", "comment_question", "comment_answer",
                             "comment_reply", "photo_report", "photo_call", "round_iv_nudge", "round_iv_remind",
-                            "santa_soon", "santa_nudge", "santa_eve")),
+                            "santa_soon", "santa_nudge", "santa_eve", "santa_msg", "santa_reply")),
     "nNewEvents": ("n_new_events", ("new_event", "casting_open", "round_open")),
     "nForumComments": ("n_forum_comments", ("fch_comments",)),
     "nBroadcasts": ("n_broadcasts", ("broadcast", "santa_news", "santa_open")),
-    "nDigests": ("n_digests", ("usage_week", "memo_ready", "place_tba")),
+    "nDigests": ("n_digests", ("memo_ready", "place_tba")),
     "nFriends": ("n_friends", ("friend_request", "friend_new")),
     "nProjectPings": ("ask_pings", ("ask_match",)),
 }
@@ -71,12 +71,6 @@ def switch_from_chat(con, tg: int, key: str, turn_on: bool, undo: str, sent_at: 
         return u["lang"], enabled, can_undo
 
 
-def can_mark_useful(con, tg: int, key: str, undo: str) -> bool:
-    # An older Useful snapshot must never replace a successful mute or its Undo.
-    return one(con, """SELECT 1 FROM users WHERE tg_id = ? AND banned_at IS NULL
-        AND json_extract(notification_undo, ?) IS NOT ?""", tg, f"$.{key}.card", undo) is not None
-
-
 def _day(at: int) -> int:
     from .daily import day_of
     return day_of(at)
@@ -89,7 +83,7 @@ def delivered(con, key: str, at: int) -> None:
 
 def feedback(con, key: str, sent_at: int, action: str) -> None:
     # Put feedback on the delivery day so the numerator and denominator describe the same messages.
-    col = {"useful": "useful", "off": "turned_off"}[action]
+    col = {"off": "turned_off"}[action]
     day, today = _day(sent_at), _day(core.now())
     if today - WINDOW < day <= today:
         # A tap can arrive while the postman is still waiting for the send response.
@@ -99,12 +93,12 @@ def feedback(con, key: str, sent_at: int, action: str) -> None:
 
 def summary(con, at: int) -> list[dict]:
     today = _day(at)
-    totals = {r[0]: tuple(r)[1:] for r in rows(con, """SELECT category, SUM(sent), SUM(useful), SUM(turned_off)
+    totals = {r[0]: tuple(r)[1:] for r in rows(con, """SELECT category, SUM(sent), SUM(turned_off)
         FROM notification_days WHERE day BETWEEN ? AND ? GROUP BY category""", today - WINDOW + 1, today)}
     out = []
     for key in CATEGORIES:
-        sent, useful, off = totals.get(key, (0, 0, 0))
-        out.append({"category": key, "sent": sent, "useful": useful, "turnedOff": off})
+        sent, off = totals.get(key, (0, 0))
+        out.append({"category": key, "sent": sent, "turnedOff": off})
     return out
 
 

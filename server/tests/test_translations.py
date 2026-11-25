@@ -25,6 +25,16 @@ def test_bot_texts_match_across_languages():
                 assert [fields(x) for x in ru if isinstance(x, str)] == [fields(x) for x in other if isinstance(x, str)], (key, lang)
 
 
+def test_bot_texts_open_with_an_emoji():
+    """The owner's hard rule: every bot message starts with an emoji (a bare paragraph gets skipped)."""
+    import unicodedata
+    for lang, table in texts.BOT.items():
+        for key, v in table.items():
+            text = (v[0] if isinstance(v, tuple) else v).lstrip()
+            if isinstance(text, str) and text and not text.startswith("{"):
+                assert unicodedata.category(text[0]) == "So" or text[0] in "ℹ", (lang, key, text[:30])
+
+
 def test_translations(env):
     """PLAN 9 (ai.py): the source language from the letters; the model's answer parsed or refused; only public published
     events and active clubs are sent; an edit of the text (not of the time) translates again; a translation never
@@ -95,7 +105,7 @@ def test_translations(env):
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at, description, official) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0, '', 1)")
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'president', 0)", (pres["id"],))
     start = (int(time.time()) // 86400 + 1) * 86400 + 7 * 3600  # noon in Almaty: the range stays within one day
-    body = {"title": "\u041d\u043e\u0447\u044c \u0445\u0430\u043a\u0430\u0442\u043e\u043d\u0430", "description": "\u041a\u043e\u0434\u0438\u043c \u0434\u043e \u0443\u0442\u0440\u0430", "place": "305", "startsAt": start, "endsAt": start + 7200,
+    body = {"seats": None, "title": "\u041d\u043e\u0447\u044c \u0445\u0430\u043a\u0430\u0442\u043e\u043d\u0430", "description": "\u041a\u043e\u0434\u0438\u043c \u0434\u043e \u0443\u0442\u0440\u0430", "place": "305", "startsAt": start, "endsAt": start + 7200,
             "emoji": "laptop_3d", "color": "#3B6BFF"}
     ev = c.post("/api/orgs/1/events", headers=tma(20), json=body).json()
     assert logic.ai_next(con) is None                                     # a draft stays home; a club with no description too

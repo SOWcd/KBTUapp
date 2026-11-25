@@ -439,16 +439,18 @@ def for_event(con, key: bytes, v: Viewer, eid: int) -> dict:
     x = one(con, "SELECT * FROM qr_sessions WHERE event_id = ?", eid)
     if x and logic.vol.holds(con, v, x):  # the volunteers ledger's door, handed to me: its session as it is
         return _row(con, key, x)
-    if not (v.role == "admin" or can(con, v, e["org_id"], "events") or logic.co_runs(con, v, eid)):  # not its organizer (_runs): a member at its door
-        _door(con, v, e, x and x["id"])
-    with tx(con):
-        if not one(con, "SELECT 1 FROM qr_sessions WHERE event_id = ?", eid):
-            con.execute("INSERT INTO qr_sessions (title, pin_hash, org_id, event_id, created_at) VALUES (?, ?, ?, ?, ?)",
-                        (e["title"], secrets.token_hex(32), e["org_id"], eid, now()))
-            logic.vol.meet(con, one(con, "SELECT id FROM qr_sessions WHERE event_id = ?", eid)[0], e["org_id"])
-        if not (v.role == "admin" or can(con, v, e["org_id"], "events") or logic.co_runs(con, v, eid)):  # the code goes to this member: mark's "own"
-            con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, '1')", (f"qrshow:{one(con, 'SELECT id FROM qr_sessions WHERE event_id = ?', eid)[0]}:{v.id}",))
+    with tx(con):  # rights and qrshow together: a demotion cannot skip the self-check-in guard
+        runs = v.role == "admin" or can(con, v, e["org_id"], "events") or logic.co_runs(con, v, eid)  # its organizer (_runs)
+        if not runs:  # a member at its door
+            _door(con, v, e, x and x["id"])
         x = one(con, "SELECT * FROM qr_sessions WHERE event_id = ?", eid)
+        if not x:
+            sid = con.execute("INSERT INTO qr_sessions (title, pin_hash, org_id, event_id, created_at) VALUES (?, ?, ?, ?, ?)",
+                              (e["title"], secrets.token_hex(32), e["org_id"], eid, now())).lastrowid
+            logic.vol.meet(con, sid, e["org_id"])
+            x = one(con, "SELECT * FROM qr_sessions WHERE id = ?", sid)
+        if not runs:  # the code goes to this member: mark's "own"
+            con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, '1')", (f"qrshow:{x['id']}:{v.id}",))
         if x["started_at"] and not x["ended_at"]:  # its organizer opening the running guests' QR: the team's session too (one QR at the door)
             crew_open(con, v, e)
         return _row(con, key, x)
@@ -670,7 +672,12 @@ def _mark(con, v: Viewer, sid: int, slot: int) -> dict:
             **({"team": True} if s["crew_event_id"] else {})}
 
 
-def _team(con, v: Viewer, e, s, t: int) -> dict | None:
+def _before_day(e, t: int) -> bool:
+    """t is before the event's day (Almaty's): the team's session isn't made or counted yet."""
+    return (t + 5 * 3600) // 86400 < (e["starts_at"] + 5 * 3600) // 86400
+
+
+def _team(con, v: Viewer, e, s, t: int, by: int | None = None) -> dict | None:
     """One QR at the door: at a public event (_guests), a member of its own club (org_members now) with
     no guest seat ('going': a paid one, a let-in team_ask, a President's; or a 'hold' offered) scanning the guests' QR is marked in its team's
     session (crew), exactly as a scan of that QR; on the event's day, the door open or not (a team comes early), never
@@ -681,7 +688,7 @@ def _team(con, v: Viewer, e, s, t: int) -> dict | None:
     "team" routes every scan here, whoever it is (the Talent Show: guests not recorded), someone not signed in yet
     waiting on the team's list (became_student counts them); "both" (NULL) as above."""
     aud = e["door_audience"] or "both"
-    if aud == "guests" or e["status"] != "published" or logic.door_shut(e, t) == "closed" or (t + 5 * 3600) // 86400 < (e["starts_at"] + 5 * 3600) // 86400:
+    if aud == "guests" or e["status"] != "published" or logic.door_shut(e, t) == "closed" or _before_day(e, t):
         return None
     with tx(con):  # who they are, read under the write lock with the mark: a removal or a sign-up landing meanwhile wins
         member = bool(one(con, "SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ?", e["org_id"], v.id))
@@ -694,9 +701,9 @@ def _team(con, v: Viewer, e, s, t: int) -> dict | None:
         if not x:
             return None
         had = one(con, "SELECT done_at FROM qr_marks WHERE session_id = ? AND user_id = ?", x[0], v.id)
-        con.execute("INSERT OR IGNORE INTO qr_marks (session_id, user_id, scanned_at) VALUES (?, ?, ?)", (x[0], v.id, t))
-        if v.student:
-            con.execute("UPDATE qr_marks SET done_at = ? WHERE session_id = ? AND user_id = ? AND done_at IS NULL", (t, x[0], v.id))
+        con.execute("INSERT OR IGNORE INTO qr_marks (session_id, user_id, scanned_at, marked_by) VALUES (?, ?, ?, ?)", (x[0], v.id, t, by))
+        if v.student:  # a badge keeps its marker for the CSV
+            con.execute("UPDATE qr_marks SET done_at = ?, marked_by = COALESCE(marked_by, ?) WHERE session_id = ? AND user_id = ? AND done_at IS NULL", (t, by, x[0], v.id))
     title, event = _title_for(con, s, v.id, v.student)
     # team: the club's own only (the app's cue for the reports' consent); a guest at a team-only door is just counted
     return {"title": title, "done": v.student, "left": False, "event": event, "again": bool(had and had["done_at"]), **({"team": True} if member else {})}
@@ -725,7 +732,7 @@ def crew_open(con, v: Viewer, e) -> None:
     outside the club caps (one per event, never more)."""
     t = now()
     if not (v.role == "admin" or can(con, v, e["org_id"], "events")) or not _guests(con, e, None) or e["status"] != "published" or e["door_audience"] == "guests" \
-            or (t + 5 * 3600) // 86400 < (e["starts_at"] + 5 * 3600) // 86400 or logic.door_shut(e, t) == "closed" \
+            or _before_day(e, t) or logic.door_shut(e, t) == "closed" \
             or not one(con, "SELECT 1 FROM orgs WHERE id = ? AND status = 'active'", e["org_id"]):  # Almaty's day
         return
     with tx(con):
@@ -758,6 +765,13 @@ def badge(con, v: Viewer, sid: int, raw: object) -> dict:
         if not m or uid == v.id or not one(con, "SELECT 1 FROM users u JOIN students st ON st.user_id = u.id AND st.manual = 0 WHERE u.id = ? AND u.qr_code = ? AND u.banned_at IS NULL", uid, m[2]):
             raise ApiError("not_found", "badge")  # a wrong, foreign, stale (rotated) or own badge
         t = now()
+        e = s["event_id"] and one(con, "SELECT * FROM events WHERE id = ?", s["event_id"])
+        if e and _guests(con, e, sid) and not one(con, "SELECT 1 FROM qr_marks WHERE session_id = ? AND user_id = ?", sid, uid) \
+                and (r := _team(con, Viewer(uid, "user", True), e, s, t, v.id)):
+            if r["again"]:
+                raise ApiError("conflict", "already")
+            log_action(con, v.id, "checkin_badge", f"user:{uid}", json.dumps({"session": sid, "team": True}))
+            return {"person": logic.short_name(one(con, logic.PERSON + " WHERE u.id = ?", uid)), "done": True}
         if s["event_id"]:
             guests.need_ticket(con, s["event_id"], uid)
             result = logic.screen_came(con, s["event_id"], uid, t)
@@ -931,7 +945,7 @@ def team_mark(con, v: Viewer, eid: int, key: object, on: bool = True) -> dict:
     if not s and on and runs:
         crew_open(con, v, e)  # its organizer marking before the QR was opened (on the event's day)
         if not _guests(con, e, None) and e["status"] == "published" and not e["guest_host"] and e["org_id"] != logic.vol.org_id(con) \
-                and (now() + 5 * 3600) // 86400 >= (e["starts_at"] + 5 * 3600) // 86400:
+                and not _before_day(e, now()):
             for_event(con, None, v, eid)  # a meeting's: its own session, as Show QR makes it (crew_open's day)
         s = _marks_at(con, e)
     if not s or now() >= _until(e):

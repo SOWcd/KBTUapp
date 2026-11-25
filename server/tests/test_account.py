@@ -486,8 +486,7 @@ def test_app_team(env):
         async with httpx.AsyncClient(transport=httpx.MockTransport(lambda q: sent.append(q) or httpx.Response(200, json={"ok": True, "result": {}}))) as http:
             await bot.send_due(cfg, http)
     asyncio.run(go())
-    # the bot keeps quiet to him. Only his chat counts: send_due also runs the chores, and on a Monday from 9:00 (Almaty)
-    # stats.week() sends the owner (a founder here) the week's digest (was: `not sent`, which failed every Monday)
+    # The bot skips the banned user's chat.
     assert not [q for q in sent if json.loads(q.content).get("chat_id") == 32]
     assert logic.one(con, "SELECT error FROM bot_outbox WHERE user_id = ?", ids["M"])["error"] == "banned"
     assert ban(O, "M", False).status_code == 200 and c.get("/api/me", headers=M).status_code == 200
@@ -627,7 +626,7 @@ def test_phone_asked_at_signup(env):
     start = int(time.time()) + 3600
     eids = []
     for title in ("Trip", "Hike"):
-        ev = c.post("/api/orgs/1/events", headers=tma(20), json={"title": title, "place": "305", "startsAt": start, "emoji": "laptop_3d",
+        ev = c.post("/api/orgs/1/events", headers=tma(20), json={"seats": None, "title": title, "place": "305", "startsAt": start, "emoji": "laptop_3d",
                                                                   "color": "#3B6BFF", "needsPhone": True}).json()
         assert ev["needsPhone"] is True
         c.post(f"/api/events/{ev['id']}/publish", headers=tma(20))
@@ -641,7 +640,7 @@ def test_phone_asked_at_signup(env):
     assert c.get("/api/me", headers=tma(10)).json()["student"]["phone"] == "+77012345678"
     assert go(eids[1]).json()["my"]["status"] == "going"                 # kept: one tap
     # a club whose event never asked doesn't get the kept phone in its guest list
-    plain = c.post("/api/orgs/1/events", headers=tma(20), json={"title": "Talk", "place": "305", "startsAt": start, "emoji": "laptop_3d", "color": "#3B6BFF"}).json()
+    plain = c.post("/api/orgs/1/events", headers=tma(20), json={"seats": None, "title": "Talk", "place": "305", "startsAt": start, "emoji": "laptop_3d", "color": "#3B6BFF"}).json()
     c.post(f"/api/events/{plain['id']}/publish", headers=tma(20))
     go(plain["id"])
     v = logic.Viewer(pres["id"], "user", True)

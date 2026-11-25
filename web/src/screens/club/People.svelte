@@ -13,7 +13,7 @@
   import { api, ApiErr, type DoorPerson, type Id, type TeamList } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
-  import { eventById } from '../../lib/state/data.svelte';
+  import { errorText, eventById } from '../../lib/state/data.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { hit } from '../../lib/search';
   import { time, nowTs } from '../../lib/time';
@@ -25,6 +25,9 @@
   import Segmented from '../../ui/Segmented.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
   import Tag from '../../ui/Tag.svelte';
+  import { checkinMessages } from './checkinMessages';
+  import SortChip from '../../ui/SortChip.svelte';
+  import { sorted, byName, usual, type Order } from '../../lib/sort.svelte';
 
   let { overlay, id, onchange, guestsOnly = false }: { overlay: Overlay; id: Id; onchange?: () => void; guestsOnly?: boolean } = $props();
 
@@ -49,6 +52,9 @@
       at: d.checkedInAt, manual: d.manual, app: true, adult: d.adult })) : []), // adult: an age_check event's door mark
   ]);
   let tab = $state<'not' | 'came' | 'other'>('not');
+  // inside each group; the groups stay where they are. By the time they came: in «Came» only, so a row ticked in
+  // «Not came» stays under the thumb
+  const ORDERS: Order<Item>[] = [usual(), byName((x) => x.name), { id: 'came', label: 'sort.came', by: (x) => (tab === 'came' ? x.at : null), desc: true }];
   // rows marked or unmarked in this tab stay in it until the next switch
   let stay = $state<string[]>([]);
   let q = $state('');
@@ -62,11 +68,12 @@
       if (x.at) g.came++;
       if (((tab === 'came') === !!x.at || stay.includes(x.key)) && want(x)) g.rows.push(x);
     }
+    for (const g of by.values()) g.rows = sorted('door', ORDERS, g.rows);
     return [...by].filter(([, g]) => g.rows.length);
   });
   const others = $derived((aud !== 'guests' ? team?.other ?? [] : []).filter(want));
 
-  const err = (e: unknown) => { haptic.error(); say(t(e instanceof ApiErr && e.code === 'closed' ? 'mk.closed' : 'common.error'), 'warning_3d'); };
+  const err = (e: unknown) => { haptic.error(); say(e instanceof ApiErr && e.code === 'closed' ? t('mk.closed') : errorText(e), 'warning_3d'); };
   const keep = (x: Item) => { if (!stay.includes(x.key)) stay.push(x.key); };
   async function mark(x: Item, admit = false) {
     haptic.ok(); keep(x);
@@ -84,7 +91,7 @@
           else if (!admit && await sheets.ask({ title: t('mk.admitAsk'), ok: t('mk.admit'), cancel: t('common.cancel') })) void mark(x, true);
           return;
         }
-        if (r.result !== 'ok' && r.result !== 'already') { set(x, was.at, was.manual); haptic.error(); say(t(r.result === 'closed' ? 'scan.closed' : r.result === 'not_open' ? 'scan.notOpen' : 'common.error'), 'warning_3d'); return; }
+        if (!('at' in r)) { set(x, was.at, was.manual); haptic.error(); say(t(checkinMessages[r.result]), 'warning_3d'); return; }
         set(x, r.at, r.result === 'ok');
       }
       onchange?.();
@@ -143,6 +150,7 @@
         <Group>{#each others as o, i (i)}<Row dense title={o.name} value={time(o.at)} />{/each}</Group>
       {:else}<EmptyState inline text={t('mk.none')} />{/if}
     {:else if groups.length}
+      {#if items.length > 1}<SortChip list="door" orders={ORDERS} />{/if}
       {#each groups as [name, g] (name)}
         <Group caption={name} note={t('mk.ofN', { n: g.came, m: g.all })}>
           {@const rest = g.rows.filter((x) => !x.at && (x.pend || x.uid != null))}

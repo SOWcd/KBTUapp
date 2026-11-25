@@ -27,7 +27,7 @@ def _clubs(c, cfg):
 
 
 def _event(c, org, who=INI, start=86400, **kw):
-    e = c.post(f"/api/orgs/{org}/events", headers=tma(who), json={**EV, "title": "Anime Quiz", "startsAt": logic.core.now() + start, **kw}).json()
+    e = c.post(f"/api/orgs/{org}/events", headers=tma(who), json={"seats": None, **EV, "title": "Anime Quiz", "startsAt": logic.core.now() + start, **kw}).json()
     return c.post(f"/api/events/{e['id']}/publish", headers=tma(who)).json()
 
 
@@ -57,7 +57,7 @@ def test_collab_goes_to_the_channel_and_back(env):
     _posted(con, eid, sig)
     assert logic.channel_due(con) == [] and con.execute("SELECT channel_via FROM events WHERE id = ?", (eid,)).fetchone()[0] == off
     # any change is told to the official club (the description too)
-    body = {**EV, "title": "Anime Quiz", "startsAt": row["starts_at"], "description": "new words"}
+    body = {"seats": None, **EV, "title": "Anime Quiz", "startsAt": row["starts_at"], "description": "new words"}
     assert c.patch(f"/api/events/{eid}", headers=tma(INI), json=body).status_code == 200
     assert con.execute("SELECT COUNT(*) FROM bot_outbox WHERE kind = 'cohost_changed'").fetchone()[0] == 1
     assert c.delete(f"/api/events/{eid}/cohost", headers=tma(OFF)).status_code == 204  # "Leave"
@@ -128,7 +128,7 @@ def test_invite_limits_and_mute(env):
     assert c.delete(f"/api/orgs/{off}/mutes/{ini}", headers=tma(OFF)).status_code == 204
     assert c.put(f"/api/events/{again}/cohost", headers=tma(INI), json={"orgId": off}).status_code == 200
     # free only: the initiative can't price (as before), and a priced event of a club that lost the mark can't invite
-    body = {**EV, "title": "Paid", "startsAt": logic.core.now() + 86400, "price": 1000, "payToName": "A B", "payPhone": "+77010000000"}
+    body = {"seats": None, **EV, "title": "Paid", "startsAt": logic.core.now() + 86400, "price": 1000, "payToName": "A B", "payPhone": "+77010000000"}
     assert c.post(f"/api/orgs/{ini}/events", headers=tma(INI), json=body).status_code in (400, 403)
     con.execute("DELETE FROM meta WHERE key LIKE 'cohost_wk:%'")
     priced = _event(c, ini)["id"]

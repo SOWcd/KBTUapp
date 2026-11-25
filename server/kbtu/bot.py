@@ -153,6 +153,11 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
     """(text, button, startapp) for one outbox row, or None when what it was about is gone. A list in place of startapp
     is the whole keyboard (rows of buttons: "start" opens the app there, "url" a link, "callback_data" a tap)."""
     kind, ref, lang = m["kind"], m["ref"].split(":"), m["lang"]
+    if kind == "app_broadcast":  # the creator's CLI announcement, with a Telegram URL button
+        msg = texts.broadcast_message(lang, m["ref"])
+        url = json.loads(m["payload"]).get("url")
+        votes = [{"text": texts.bot_message(lang, f"vote_{v}")[0], "callback_data": f"bv:{v}:{m['ref']}"} for v in (1, 0)]
+        return (msg[0], None, [[{"text": msg[1], "url": url}], votes]) if msg and url else None
     ev = lambda e: {"title": logic.title_in(e, lang), "when": texts.when(e["starts_at"], lang), "place": texts.place_or_tba(e["place"], lang, "online" in e.keys() and e["online"] is not None)}  # noqa: E731
     reminders = lambda: one(con, "SELECT n_remind FROM users WHERE id = ?", m["user_id"])[0]  # noqa: E731  (the switch for cards about events)
 
@@ -333,12 +338,18 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
     if kind == "event_reported":  # er:<event>:<its oldest open report>, to moderators: 3 people reported it; quiet once decided or taken down
         r = one(con, "SELECT 1 FROM reports r JOIN events e ON e.id = r.target_id AND e.hidden_at IS NULL WHERE r.id = ? AND r.status = 'open'", int(ref[2]))
         return (*texts.bot_message(lang, kind), "capps") if r else None
+    if kind == "santa_reported":  # srp:<report>, to moderators: a Santa chat was reported; quiet once handled
+        r = one(con, "SELECT 1 FROM santa_msgs WHERE id = ? AND text IS NULL AND done_at IS NULL", int(ref[1]))
+        return (*texts.bot_message(lang, kind), "capps") if r else None
     if kind == "chat_suggested":  # cs:<day>, to admins and moderators: once a day at most, while some still wait
         n = one(con, "SELECT COUNT(*) FROM chats WHERE status = 'pending'")[0]
         return (*texts.bot_message(lang, kind, n=n), "achats") if n else None
     if kind == "chat_approved":  # ca:<chat>, to each who suggested it, while it is still in the catalog: the Chats screen
         c = one(con, "SELECT title, kind, forum FROM chats WHERE id = ? AND status = 'live'", int(ref[1]))
         return (*texts.chat_approved(lang, "forum" if c["forum"] else c["kind"], c["title"]), "chats") if c else None
+    if kind in ("anon_feedback", "helper_offer"):  # afb:<day> | ho:<id>, to the creator: the template only, the words are read in Admin
+        boss = one(con, "SELECT 1 FROM users WHERE id = ? AND is_founder = 1 AND role = 'admin'", m["user_id"])  # still the creator
+        return (*texts.bot_message(lang, kind), "voices") if boss else None
     if kind == "club_application":  # capp:<id>, to moderators and the admin while it waits
         a = one(con, "SELECT name, status FROM club_applications WHERE id = ?", int(ref[1]))
         return (*texts.bot_message(lang, kind, name=a["name"]), "capps") if a and a["status"] == "pending" else None
@@ -490,8 +501,8 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         if a["decline_text"]:  # the club's own words are in the app, never in the bot's message (AGENTS.md: templates only)
             return (*texts.bot_message(lang, "round_no_why", org=a["name"]), f"iv_{a['org_id']}")
         return (*texts.bot_message(lang, kind, org=a["name"]), "clubs")
-    if kind == "usage_week":  # uw:<monday>, to the creator alone: the anonymous counters of the seven days before it
-        return (*texts.bot_message(lang, kind, **logic.stats.fields(con, 7, int(ref[1]))), "")
+    if kind == "usage_week":  # retired (owner, Nov 23): a row still queued from before goes nowhere
+        return None
     if kind == "memo_ready":  # memo:<org>:<monday>, to whoever has "memo"; gone if nothing asks DMP any more or it's sent
         o = one(con, "SELECT name FROM orgs WHERE id = ?", int(ref[1]))
         n = one(con, """SELECT COUNT(*) FROM events WHERE org_id = ? AND status IN ('draft', 'published') AND memo IS NOT NULL
@@ -577,7 +588,7 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
 
 
 SANTA_KINDS = frozenset({"santa_open", "santa_soon", "santa_nudge", "santa_drawn", "santa_changed", "santa_wish", "santa_two", "santa_alone", "santa_eve",
-                         "santa_few", "santa_wait", "santa_late"})
+                         "santa_few", "santa_wait", "santa_late", "santa_msg", "santa_reply"})
 
 
 def _santa(con, m, lang: str) -> tuple[str, str | None, str] | None:
@@ -589,7 +600,8 @@ def _santa(con, m, lang: str) -> tuple[str, str | None, str] | None:
     e = one(con, """SELECT e.*, o.name AS org, s.drawn_at, g.budget FROM events e JOIN orgs o ON o.id = e.org_id AND o.status = 'active'
         JOIN santa_events s ON s.event_id = e.id LEFT JOIN santa_games g ON g.event_id = e.id
         WHERE e.id = ? AND e.status = 'published' AND e.hidden_at IS NULL""", eid)
-    if not e or (e["starts_at"] <= t) != (kind == "santa_late"):  # only "the gifts day came undrawn" speaks of a day begun
+    chat = kind in ("santa_msg", "santa_reply")  # the chat outlives the gifts day
+    if not e or not chat and (e["starts_at"] <= t) != (kind == "santa_late"):  # only "the gifts day came undrawn" speaks of a day begun
         return None
     playing = one(con, logic.santa._GOING + " AND p.user_id = ?", e["id"], uid)
     title, go = logic.title_in(e, lang), f"ev_{e['id']}"
@@ -612,6 +624,8 @@ def _santa(con, m, lang: str) -> tuple[str, str | None, str] | None:
         return None  # everyone else left: no person to give to (santa_alone says so)
     if kind == "santa_eve" and len(ref) > 2 and int(ref[2]) != e["starts_at"]:
         return None  # the gifts day moved since: the new eve has its own message
+    if chat and not logic.santa.pushable(con, e["id"], uid, kind):
+        return None  # no chat for them any more (retired, over, out of the club) or the thread shut; never its words, only that there are some
     where = f"\n📍 {e['place']}" if e["place"] else ""  # a Santa game: never online
     return (*texts.bot_message(lang, kind, title=title, when=texts.when(e["starts_at"], lang), where=where), go)
 
@@ -929,7 +943,6 @@ def _chores(cfg: Config, con) -> None:
     """The round's own database work, in a thread (send_due): with 15 s of busy_timeout a write burst would otherwise
     hold the API worker's event loop, /healthz included."""
     logic.strip_emoji_names(con)  # Normalize stored names once so the displayed names follow the club naming rules.
-    logic.stats.week(con)  # Monday morning: the week's usage numbers to the creator
     logic.memo_week(con)  # Wednesday morning: next week's memo for DMP is ready (each runs once, by its meta key)
     logic.tba_day(con)    # 10:00: events still without a place, to their organizers
     logic.saved_day(con)  # 12:00: saved events tomorrow, to those not going
@@ -1040,8 +1053,9 @@ async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
                 if not notifications.allowed(con, category, m["user_id"], to):
                     _mark(con, m, False, "gone")
                     continue
-                body.setdefault("reply_markup", {"inline_keyboard": []})["inline_keyboard"].append(
-                    _feedback_buttons(cfg, to, m["lang"], category))
+                if m["kind"] in MUTE_ROW:
+                    body.setdefault("reply_markup", {"inline_keyboard": []})["inline_keyboard"].append(
+                        _feedback_buttons(cfg, to, m["lang"], category))
             try:
                 r = await tgc.edit_first(cfg, http, con, m, body)  # a comment's verdict: its first message edited
                 if r is None:
@@ -1359,6 +1373,11 @@ async def _receipt(cfg: Config, http: httpx.AsyncClient, con, msg: dict, eid: in
     return taken(eid, next(h["title"] for h in holds if h["id"] == eid), c)
 
 
+# Only announcements a student can browse or ignore get "Don't send these" (Codex review, owner Nov 23); a ticket, a
+# reply or a reminder keeps the whole keyboard for its own action. Settings still mutes every category.
+MUTE_ROW = {"new_event", "casting_open", "round_open", "broadcast"}
+
+
 def _feedback_token(cfg: Config, chat: int, action: str, category: str, nonce: str, mid: int = 0) -> str:
     key = f"nf:{action}:{category}:{nonce}"
     mac = hmac.new(cfg.token_key, f"{key}:{chat}:{mid}".encode(), hashlib.sha256).hexdigest()[:20]
@@ -1368,7 +1387,7 @@ def _feedback_token(cfg: Config, chat: int, action: str, category: str, nonce: s
 def _feedback_buttons(cfg: Config, chat: int, lang: str, category: str) -> list[dict]:
     nonce = secrets.token_hex(8)
     return [{"text": texts.bot_message(lang, f"feedback_{action}")[0],
-             "callback_data": _feedback_token(cfg, chat, action, category, nonce)} for action in ("useful", "off")]
+             "callback_data": _feedback_token(cfg, chat, action, category, nonce)} for action in ("off",)]
 
 
 # Telegram holds the button state. ponytail: keep the last 512 edits in memory for taps already in
@@ -1377,7 +1396,7 @@ _feedback_edits: OrderedDict[str, set[str]] = OrderedDict()
 
 
 async def _feedback_tap(cfg: Config, http: httpx.AsyncClient, con, cq: dict, msg: dict, data: str) -> None:
-    match = re.fullmatch(r"nf:(useful|off|undo):([A-Za-z]+):([0-9a-f]{16}):[0-9a-f]{20}", data)
+    match = re.fullmatch(r"nf:(off|undo):([A-Za-z]+):([0-9a-f]{16}):[0-9a-f]{20}", data)
     chat = msg.get("chat") or {}
     tg, mid, sent_at = chat.get("id"), msg.get("message_id"), msg.get("date")
     if not match or chat.get("type") != "private" or tg != (cq.get("from") or {}).get("id") or not tg or not mid or not sent_at:
@@ -1390,42 +1409,34 @@ async def _feedback_tap(cfg: Config, http: httpx.AsyncClient, con, cq: dict, msg
     if not keyboard or not any(b.get("callback_data") == data for b in keyboard[-1]):
         return
     edits = _feedback_edits.get(nonce, set())
-    if action in edits or (action == "useful" and "off" in edits):
+    if action in edits:
         return
     ids = {"chat_id": tg, "message_id": mid}
     links = keyboard[:-1]
     undo = _feedback_token(cfg, tg, "undo", category, nonce, mid)
     card = undo.rsplit(":", 1)[1]
-    if action == "useful":
-        if not await anyio.to_thread.run_sync(notifications.can_mark_useful, con, tg, category, card):
-            return
-        row = [{**b, "text": "✓", "callback_data": "nf:seen"} if b.get("callback_data") == data else b for b in keyboard[-1]]
-        r = await _tg(cfg, http, "editMessageReplyMarkup", {**ids, "reply_markup": {"inline_keyboard": [*links, row]}})
-    else:
-        state = await anyio.to_thread.run_sync(notifications.switch_from_chat, con, tg, category, action == "undo", card, sent_at)
-        if state is None:
-            return
-        lang, on, can_undo = state
-        original = msg.get("text") or ""
-        if action == "undo":
-            for locale in texts.BOT:
-                off = texts.bot_message(locale, "feedback_disabled")[0]
-                original = "" if original == off else original.removesuffix(f"\n\n{off}")
-        status, button = texts.bot_message(lang, "feedback_enabled" if on else "feedback_disabled")
-        edited = f"{original}\n\n{status}" if original else status
-        entities = msg.get("entities") or []
-        if len(edited) > 4096:
-            edited, entities = status, []
-        keys = [*links, [{"text": button, "callback_data": undo}]] if can_undo else links
-        r = await _tg(cfg, http, "editMessageText", {**ids, "text": edited, "entities": entities,
-            "link_preview_options": {"is_disabled": True}, "reply_markup": {"inline_keyboard": keys}})
+    state = await anyio.to_thread.run_sync(notifications.switch_from_chat, con, tg, category, action == "undo", card, sent_at)
+    if state is None:
+        return
+    lang, on, can_undo = state
+    original = msg.get("text") or ""
+    if action == "undo":
+        for locale in texts.BOT:
+            off = texts.bot_message(locale, "feedback_disabled")[0]
+            original = "" if original == off else original.removesuffix(f"\n\n{off}")
+    status, button = texts.bot_message(lang, "feedback_enabled" if on else "feedback_disabled")
+    edited = f"{original}\n\n{status}" if original else status
+    entities = msg.get("entities") or []
+    if len(edited) > 4096:
+        edited, entities = status, []
+    keys = [*links, [{"text": button, "callback_data": undo}]] if can_undo else links
+    r = await _tg(cfg, http, "editMessageText", {**ids, "text": edited, "entities": entities,
+        "link_preview_options": {"is_disabled": True}, "reply_markup": {"inline_keyboard": keys}})
     if r.json().get("ok"):
         _feedback_edits[nonce] = edits | {action}
         _feedback_edits.move_to_end(nonce)
         if len(_feedback_edits) > 512:
             _feedback_edits.popitem(last=False)
-        if action == "useful":
-            await anyio.to_thread.run_sync(notifications.feedback, con, category, sent_at, "useful")
 
 
 async def _tapped(cfg: Config, http: httpx.AsyncClient, con, cq: dict, again: bool = False) -> None:
@@ -1435,6 +1446,15 @@ async def _tapped(cfg: Config, http: httpx.AsyncClient, con, cq: dict, again: bo
     msg, data = cq.get("message") or {}, str(cq.get("data") or "")
     if data.startswith("nf:"):
         await _feedback_tap(cfg, http, con, cq, msg, data)
+        return
+    if v := re.fullmatch(r"bv:([01]):([a-z0-9_]{1,40})", data):  # a broadcast's Interesting / Not interesting: the tapper's own vote, changeable
+        u = one(con, "SELECT id FROM users WHERE tg_id = ?", (cq.get("from") or {}).get("id"))
+        if u:
+            con.execute("INSERT OR REPLACE INTO broadcast_votes (name, user_id, vote, at) VALUES (?, ?, ?, ?)", (v[2], u["id"], int(v[1]), int(time.time())))
+            con.execute("UPDATE users SET n_broadcasts = ? WHERE id = ?", (int(v[1]), u["id"]))  # "don't send these" turns broadcasts off (Settings turns them back on)
+        if msg.get("message_id") and (kb := (msg.get("reply_markup") or {}).get("inline_keyboard")):  # the vote row says thanks, the link stays
+            await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/editMessageReplyMarkup", json={
+                "chat_id": (msg.get("chat") or {}).get("id"), "message_id": msg["message_id"], "reply_markup": {"inline_keyboard": kb[:1]}})
         return
     # the forum's cards: Accept/Decline an offer, stop the pings; an: more messages like the elective's? (the tapper's own row)
     if f := re.fullmatch(r"(ct|ps):(\d+)(?::([0-9a-f]{8}))?(?::([yn]))?|an:([yn])", data):
@@ -1880,12 +1900,16 @@ async def _video_reply(http: httpx.AsyncClient, api: str, chat: dict, mid: int, 
         if not entry:
             return None
         file_id, duration = entry
-        if isinstance(file_id, tuple):  # a slideshow's photos
+        if isinstance(file_id, tuple):  # an album's items: a slideshow's photos, a post's photos and videos
             if len(file_id) == 1:
-                r = await http.post(api + "sendPhoto", json={**chat, "reply_parameters": reply, "photo": file_id[0]}, timeout=60)
+                (one,) = file_id
+                kind, media = one["type"], one["media"]
+                extra = {k: v for k, v in one.items() if k not in ("type", "media")}
+                r = await http.post(api + ("sendPhoto" if kind == "photo" else "sendVideo"),
+                                    json={**chat, "reply_parameters": reply, **extra, kind: media}, timeout=60)
             else:
-                media = [{"type": "photo", "media": p} for p in file_id]
-                r = await http.post(api + "sendMediaGroup", json={**chat, "reply_parameters": reply, "media": media}, timeout=60)
+                r = await http.post(api + "sendMediaGroup",
+                                    json={**chat, "reply_parameters": reply, "media": [dict(m) for m in file_id]}, timeout=60)
         elif short_host and duration >= 180:
             return "unavailable"  # youtu.be has a stricter duration limit than /shorts/
         else:
@@ -1915,7 +1939,7 @@ async def _video_reply(http: httpx.AsyncClient, api: str, chat: dict, mid: int, 
         if not got:
             shared.gone = True
             return "unavailable"
-        if isinstance(got, list):
+        if isinstance(got, (list, tiktok.Album)):  # an Album's key is its link's (ig:<code>): this flight's
             async with _video_uploads:
                 route = await _video_album(http, api, form, got, alias)
             shared.gone = route == "unavailable"
@@ -1956,12 +1980,7 @@ async def _video_send(http: httpx.AsyncClient, api: str, body: dict, form: dict,
                     upload = None
                 if not upload:
                     continue  # e.g. the real size exceeds the estimate: try the next resolution
-                video, thumb, tracks = upload
-                meta = {k: int(tracks[k]) for k in ("duration", "width", "height") if tracks.get(k)}
-                files = {"video": ("video.mp4", video, "video/mp4")}
-                if thumb:
-                    files["thumbnail"] = ("thumbnail.jpg", thumb, "image/jpeg")
-                    meta["thumbnail"] = "attach://thumbnail"
+                meta, files = _video_files(tiktok.Part(*upload), "video", "thumbnail")
                 r = await http.post(api + "sendVideo", data={**form, **meta, "supports_streaming": "true"}, files=files, timeout=120)
                 answer = r.json()
                 route = "upload"
@@ -1974,26 +1993,78 @@ async def _video_send(http: httpx.AsyncClient, api: str, body: dict, form: dict,
     return "unavailable"
 
 
-async def _video_album(http: httpx.AsyncClient, api: str, form: dict, urls: list[str], alias: str) -> str:
-    photos = await tiktok.photos(http, urls)
-    if not photos:
-        return "unavailable"
-    if len(photos) == 1:
-        method, files = "sendPhoto", {"photo": ("tiktok.jpg", photos[0], "image/jpeg")}
+def _video_files(part: tiktok.Part, name: str, thumb: str) -> tuple[dict, dict]:
+    """A video upload's InputMedia fields (its real duration and size, the thumbnail as an attachment) and its files."""
+    meta = {k: int(part.tracks[k]) for k in ("duration", "width", "height") if part.tracks.get(k)}
+    files = {name: (f"{name}.mp4", part.data, "video/mp4")}
+    if part.thumb:
+        files[thumb] = (f"{thumb}.jpg", part.thumb, "image/jpeg")
+        meta["thumbnail"] = f"attach://{thumb}"
+    return meta, files
+
+
+async def _video_album(http: httpx.AsyncClient, api: str, form: dict, got: list[str] | tiktok.Album, alias: str) -> str:
+    """A slideshow's photos, or an Instagram post's photos and videos: one alone as itself, more as one album, no
+    caption. The items that failed are left out; none left: nothing at all."""
+    if isinstance(got, tiktok.Album):
+        parts = await tiktok.gather(http, got)
     else:
-        method = "sendMediaGroup"
-        files = {f"p{i}": (f"{i}.jpg", p, "image/jpeg") for i, p in enumerate(photos)}
-        form["media"] = json.dumps([{"type": "photo", "media": f"attach://{k}"} for k in files])
-    answer = (await http.post(api + method, data=form, files=files, timeout=120)).json()
+        parts = [tiktok.Part(p) for p in await tiktok.photos(http, got)]
+    answer: dict = {}
+    for attempt in range(2):
+        if not parts:
+            return "unavailable"
+        answer = await _album_send(http, api, form, parts)
+        if answer.get("ok") or attempt:
+            break
+        # Telegram refuses an album whole for one item it can't take, naming it ("message #3"): once, the rest go
+        bad = re.search(r"message #(\d+) ", str(answer.get("description") or ""))
+        if answer.get("error_code") != 400 or not bad or len(parts) < 2 or not 1 <= int(bad[1]) <= len(parts):
+            break
+        del parts[int(bad[1]) - 1]
     if not answer.get("ok"):
         return "refused"
     sent = answer.get("result")
     sent = sent if isinstance(sent, list) else [sent]
-    # each photo's largest size: another chat gets them by id, without a second download
-    ids = tuple(((m.get("photo") or [{}])[-1] or {}).get("file_id") if isinstance(m, dict) else None for m in sent)
-    if len(ids) == len(photos) and all(isinstance(i, str) for i in ids):
-        tiktok.remember(alias, ids, 0)
-    return "photos"
+    # each item's file id (a photo's largest size): another chat gets them by id, without a second download
+    media = tuple(_sent_media(m, p) for m, p in zip(sent, parts))
+    if len(sent) == len(parts) and all(media):
+        tiktok.remember(alias, media, 0)
+    return "photos" if all(p.tracks is None for p in parts) else "album"
+
+
+async def _album_send(http: httpx.AsyncClient, api: str, form: dict, parts: list[tiktok.Part]) -> dict:
+    if len(parts) == 1 and parts[0].tracks is None:
+        method, data, files = "sendPhoto", form, {"photo": ("tiktok.jpg", parts[0].data, "image/jpeg")}
+    elif len(parts) == 1:
+        meta, files = _video_files(parts[0], "video", "thumbnail")
+        method, data = "sendVideo", {**form, **meta, "supports_streaming": "true"}
+    else:
+        files, media = {}, []
+        for i, p in enumerate(parts):  # each file its own part; a video's thumbnail beside it
+            if p.tracks is None:
+                files[f"p{i}"] = (f"{i}.jpg", p.data, "image/jpeg")
+                media.append({"type": "photo", "media": f"attach://p{i}"})
+            else:
+                meta, more = _video_files(p, f"v{i}", f"t{i}")
+                files.update(more)
+                media.append({"type": "video", "media": f"attach://v{i}", **meta, "supports_streaming": True})
+        method, data = "sendMediaGroup", {**form, "media": json.dumps(media)}
+    r = await http.post(api + method, data=data, files=files, timeout=120)
+    answer = r.json()
+    return answer if answer.get("ok") else {**answer, "error_code": answer.get("error_code", r.status_code)}
+
+
+def _sent_media(m, part: tiktok.Part) -> dict | None:
+    """The InputMedia that sends this item again by its file id."""
+    if not isinstance(m, dict):
+        return None
+    if part.tracks is None:
+        file_id = ((m.get("photo") or [{}])[-1] or {}).get("file_id")
+        return {"type": "photo", "media": file_id} if isinstance(file_id, str) else None
+    file_id = (m.get("video") or {}).get("file_id")
+    meta = {k: int(part.tracks[k]) for k in ("duration", "width", "height") if part.tracks.get(k)}
+    return {"type": "video", "media": file_id, **meta, "supports_streaming": True} if isinstance(file_id, str) else None
 
 
 async def _discussion(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> bool:
@@ -2033,7 +2104,9 @@ def guard_key(cfg: Config) -> bytes:
 
 
 async def _join(cfg: Config, http: httpx.AsyncClient, con, req: dict) -> None:
-    """A join request to an event's group: those signed up (and volunteers, the team) in, the rest declined. In a chat
+    """A join request to an event's group: those signed up (and volunteers, the team) in, the rest declined. A club's
+    chat linked in the app (the bot an admin that may add members): a confirmed student in, a banned person out, anyone
+    else left to the chat's admins. In a chat
     whose guard bot we are (a query_id, answered within 10 s): a student in at once, a stranger gets the app to sign up
     (POST /api/guard lets them in after), a banned person out."""
     if qid := req.get("query_id"):
@@ -2046,8 +2119,11 @@ async def _join(cfg: Config, http: httpx.AsyncClient, con, req: dict) -> None:
             log.warning("guard: %s", str(r.json().get("description"))[:200])
         return
     ok = logic.chat_join(con, req["chat"]["id"], req["from"]["id"])
-    if ok is None:
-        return
+    if ok is None:  # not an event's chat: a chat linked in the app lets a confirmed student in (owner, Nov 24)
+        d = logic.guard_join(con, req["chat"]["id"], req["from"]["id"])
+        if d not in ("approve", "decline"):  # someone we don't know, or a chat we don't know: its admins decide
+            return
+        ok = d == "approve"
     await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/{'approve' if ok else 'decline'}ChatJoinRequest",
                     json={"chat_id": req["chat"]["id"], "user_id": req["from"]["id"]})
 

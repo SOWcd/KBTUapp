@@ -242,12 +242,14 @@ def stats_day(con) -> None:
     stats.forget(con)  # the anonymous usage counters: 180 days
     appeals.forget(con)  # appeals to SG: 90 days after closing, 180 at most
     mapflaws.sweep(con)
+    helpus.sweep(con)  # anonymous lines to the creator: 90 days; offers to help: 180
     chatmod.sweep(con)  # swear warnings in clubs' groups: 90 days
     assistant.sweep(con)
     # the answers to an event's questions at sign-up go 30 days after it (the privacy policy's promise for them)
     con.execute("""UPDATE registrations SET answers = NULL WHERE answers IS NOT NULL AND event_id IN
         (SELECT id FROM events WHERE COALESCE(ends_at, starts_at) < ?)""", (core.now() - 30 * 86400,))
     con.execute("DELETE FROM santa_people WHERE event_id IN (SELECT id FROM events WHERE COALESCE(ends_at, starts_at) < ?)", (core.now() - 30 * 86400,))  # Secret Santa's wishlists and pairs with them
+    santa.forget(con)  # its chat: 3 days after the gifts day
     # a check-in screen's expected list (names, mails, phones) goes 30 days after its session ended, or 90 after one
     # never ended (never run, or left running); the session and its scans stay (they are the check-ins)
     con.execute("""DELETE FROM qr_expected WHERE session_id IN (SELECT id FROM qr_sessions WHERE ended_at < ?
@@ -345,7 +347,7 @@ from .account import _prune_deletion_log, me  # noqa: E402
 from .forum import asks, forum_sweep  # noqa: E402
 from .moderation import TAKEDOWN_KEEP  # noqa: E402
 from .newsfeed import wipe_post  # noqa: E402
-from . import appeals, assistant, chatlist, chatmod, chatsync, mapflaws, stats, web_auth  # noqa: E402
+from . import appeals, assistant, chatlist, chatmod, chatsync, helpus, mapflaws, santa, stats, web_auth  # noqa: E402
 from .oversight import _admin  # noqa: E402
 from .queues import AI_TRIES, ai_state  # noqa: E402
 from .seats import notify  # noqa: E402

@@ -23,6 +23,7 @@
   import cyberLogo from '../assets/lanyards/cyber-logo.webp'; // their badge on its black, squared
   import ddLogo from '../assets/lanyards/dd-logo.webp'; // their round logo on its black, squared
   import bhLogo from '../assets/lanyards/bh-logo.webp'; // The Bay Harbor Society's DEXTER on its black, squared
+  import qolonerLogo from '../assets/lanyards/qoloner-logo.webp'; // Qoloner's frog in their ring on cream, redrawn (their round logo's lettering is mush at 48 px)
 
   // Cinema's avatar is an AI picture; our camera in their gold on their navy (DRAWN)
   let { look, logo = null }: { look: Look; logo?: string | null } = $props();
@@ -30,7 +31,7 @@
   // the official logos we ship: this file whatever the org's avatar is
   const OFFICIAL: Partial<Record<Look, string>> = { studex: studexLogo, moments: momentsLogo, knights: knightsLogo, shadekbtu: shadeLogo,
     teentertainmentkbtu: oteLogo, kbtumag: magLogo, cybersportkbtu: cyberLogo, diceanddestinykbtu: ddLogo,
-    thebayharborsociety: bhLogo };
+    thebayharborsociety: bhLogo, qoloner: qolonerLogo };
   const own = $derived(logo && !DRAWN.includes(look) && !isSchool(look) ? logo : null);
 </script>
 

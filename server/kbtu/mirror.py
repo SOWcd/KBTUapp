@@ -1,5 +1,5 @@
 """An org's main Telegram channel in its news (PLAN 86 part 2): what the userbot (userbot.py) saw,
-written as the org's posts. Here only the database: the Telegram side hands over plain messages (Msg), so the rules
+written as the org's posts. Here only the database: the Telegram side hands over messages (Msg), so the rules
 are tested without Telegram.
 
 The source is the org's MAIN public channel with its Studio switch on (chats.main, chats.mirror); the userbot joins it
@@ -30,6 +30,8 @@ TITLE, BODY = 120, 2000   # what an app post holds (logic.create_post)
 FOLD_GAP = 1800           # the same announcement in another language: posted within half an hour (SITE posts kk/ru/en)
 COMMENT_DAYS = 2          # how long the channel's own comments are looked at for a post's translations
 
+Entity = tuple[str, int, int, str | None]
+
 
 @dataclass
 class Msg:
@@ -43,6 +45,7 @@ class Msg:
     media: str | None = None
     views: int | None = None
     reactions: list[tuple[str, int]] | None = field(default=None)
+    entities: list[Entity] = field(default_factory=list)  # Telegram's UTF-16 offsets
 
 
 def username(url: str) -> str | None:
@@ -99,22 +102,52 @@ def last(con, channel: int) -> int:
     return c["last_msg"] if c else 0
 
 
-def _split(text: str, fallback: str) -> tuple[str, str]:
+def _slice_fmt(text: bytes, start: int, end: int, entities: list[Entity]) -> list[Entity]:
+    out = []
+    for kind, offset, length, url in entities:
+        left, right = max(start, offset), min(end, offset + length)
+        if left >= right:
+            continue
+        if kind == "text_link" and not re.match(r"https?://[^/\s?#]+", url or "", re.I):
+            continue
+        if kind == "url" and (left, right) != (offset, offset + length):
+            url = text[2 * offset:2 * (offset + length)].decode("utf-16-le", errors="replace")
+        out.append((kind, left - start, right - left, url))
+    return out
+
+
+def _split(text: str, fallback: str, entities: list[Entity] | None = None) -> dict:
     """A post's title and text: its first line, the rest under it; a long first line is cut at a word and the whole
     text follows it, so nothing is lost; past what a post holds, the rest is a tap away in Telegram."""
-    text = text.strip()
-    if not text:
-        return fallback[:TITLE], ""
-    first, _, rest = text.partition("\n")
-    first = first.strip()
+    start = len(text) - len(text.lstrip())
+    text = text.rstrip()
+    if start >= len(text):
+        return {"title": fallback[:TITLE], "body": ""}
+    first, _, rest = text[start:].partition("\n")
+    first = first.rstrip()
     if len(first) <= TITLE:
-        title, body = first, rest.strip()
+        title, body = first, rest.lstrip()
+        title_end = start + len(title)
+        body_start = len(text) - len(body)
     else:
         cut = first[:TITLE - 1].rsplit(" ", 1)[0] or first[:TITLE - 1]
-        title, body = cut.rstrip(" ,.;:-") + "…", text
+        cut = cut.rstrip(" ,.;:-")
+        title, body = cut + "…", text[start:]
+        title_end, body_start = start + len(cut), start
+    body_end = len(text)
     if len(body) > BODY:
-        body = body[:BODY - 1].rsplit(" ", 1)[0] + "…"
-    return title or fallback[:TITLE], body
+        cut = body[:BODY - 1].rsplit(" ", 1)[0]
+        body, body_end = cut + "…", body_start + len(cut)
+    post = {"title": title, "body": body}
+    if entities:
+        encoded = text.encode("utf-16-le")
+        for key, left, right in (("titleFmt", start, title_end), ("fmt", body_start, body_end)):
+            # The split uses Python string indices; Telegram counts UTF-16 code units.
+            left_units = len(text[:left].encode("utf-16-le")) // 2
+            right_units = left_units + len(text[left:right].encode("utf-16-le")) // 2
+            if fmt := _slice_fmt(encoded, left_units, right_units, entities):
+                post[key] = fmt
+    return post
 
 
 def _photo(con, saved: dict) -> int:
@@ -162,15 +195,16 @@ def take(con, channel: int, m: Msg) -> int | None:
                 con.execute("INSERT INTO tg_post_msgs (channel, msg_id, post_id, grouped, lang) VALUES (?, ?, ?, ?, NULL)", (channel, m.id, pid, m.grouped))
             _counted(con, channel, pid, m)
             return pid
+        post = _split(m.text, title, m.entities)
         if had and had["lang"]:  # a translation folded into another post: its edit is that language's text
             if m.text.strip():
-                _set_tr(con, pid, had["lang"], _split(m.text, title))
+                _set_tr(con, pid, had["lang"], post)
             _counted(con, channel, pid, m)
             return pid
         if pid is None and lang and (into := _fold_target(con, channel, m.date, lang)):
             # the same announcement in another language: one post, this text as its translation
             con.execute("INSERT INTO tg_post_msgs (channel, msg_id, post_id, grouped, lang) VALUES (?, ?, ?, ?, ?)", (channel, m.id, into, m.grouped, lang))
-            _set_tr(con, into, lang, _split(m.text, title))
+            _set_tr(con, into, lang, post)
             if m.photo and not one(con, "SELECT photo_file_id FROM posts WHERE id = ?", into)["photo_file_id"]:
                 con.execute("UPDATE posts SET photo_file_id = ? WHERE id = ?", (_photo(con, m.photo), into))
                 autoev.cover(con, into)  # the photo after the text: the draft found in it gets it too
@@ -186,26 +220,31 @@ def take(con, channel: int, m: Msg) -> int | None:
                 con.execute("UPDATE posts SET photo_file_id = ? WHERE id = ?", (gone_photo, into))
                 autoev.cover(con, into)
             con.execute("DELETE FROM posts WHERE id = ?", (pid,))  # made a moment ago, nobody saw it yet
-            _set_tr(con, into, lang, _split(m.text, title))
+            _set_tr(con, into, lang, post)
             _counted(con, channel, into, m)
             return into
+        t, b = post["title"], post["body"]
+        fmt = {k: post[k] for k in ("titleFmt", "fmt") if k in post}
+        # Keep the source of a formatted album caption so only its own edit can clear it.
+        tg_fmt = json.dumps({"msg": m.id, **fmt}, ensure_ascii=False) if fmt else None
         if pid is None:
             if not stories_open(con, one(con, "SELECT * FROM orgs WHERE id = ?", oid)):
                 return None  # a student initiative below the Ascent's collab step posts no stories, mirrored ones neither
-            t, b = _split(m.text, title)
-            pid = con.execute("""INSERT INTO posts (org_id, author_id, audience, title, body, photo_file_id, comments_on, created_at,
-                    tg_channel, tg_url, tg_media) VALUES (?, NULL, 'public', ?, ?, ?, 0, ?, ?, ?, ?)""",
-                              (oid, t, b, _photo(con, m.photo) if m.photo else None, m.date, channel, f"https://t.me/{name}/{m.id}", m.media)).lastrowid
+            pid = con.execute("""INSERT INTO posts (org_id, author_id, audience, title, body, tg_fmt, photo_file_id, comments_on,
+                    created_at, tg_channel, tg_url, tg_media) VALUES (?, NULL, 'public', ?, ?, ?, ?, 0, ?, ?, ?, ?)""",
+                              (oid, t, b, tg_fmt, _photo(con, m.photo) if m.photo else None, m.date, channel,
+                               f"https://t.me/{name}/{m.id}", m.media)).lastrowid
         else:
             p = one(con, "SELECT * FROM posts WHERE id = ?", pid)
             sets = {}
-            if m.text.strip() or had:  # an album's caption sits on one of its messages; an edit may empty the text
-                t, b = _split(m.text, title)
-                if (t, b) != (p["title"], p["body"]) and (m.text.strip() or not p["body"]):
-                    sets.update(title=t, body=b)
+            caption = p["tg_fmt"] and json.loads(p["tg_fmt"])["msg"] == m.id
+            if m.text.strip() or (had and (not m.grouped or caption)):
+                text_changed = (t, b) != (p["title"], p["body"])
+                if text_changed or tg_fmt != p["tg_fmt"]:
+                    sets.update(title=t, body=b, tg_fmt=tg_fmt)
                     if had:
                         sets["edited_at"] = now()
-                    if p["tr_by"] == "ai":  # our translation was of the old text: done again
+                    if text_changed and p["tr_by"] == "ai":  # our translation was of the old text: done again
                         sets.update(i18n=None, lang=None, tr_by=None, ai_tries=0)
             if m.photo and not p["photo_file_id"]:
                 sets["photo_file_id"] = _photo(con, m.photo)
@@ -252,11 +291,11 @@ def _fold_target(con, channel: int, date: int, lang: str, but: int | None = None
     return None
 
 
-def _set_tr(con, pid: int, lang: str, tb: tuple[str, str]) -> None:
+def _set_tr(con, pid: int, lang: str, post: dict) -> None:
     """One language of a post from the channel itself; an AI translation it had is dropped (official only)."""
     p = one(con, "SELECT * FROM posts WHERE id = ?", pid)
     have = json.loads(p["i18n"]) if p["i18n"] and p["tr_by"] == "tg" else {}
-    have[lang] = {"title": tb[0], "body": tb[1]}
+    have[lang] = post
     con.execute("UPDATE posts SET i18n = ?, lang = ?, tr_by = 'tg' WHERE id = ?",
                 (json.dumps(have, ensure_ascii=False), _langs(con, p)[0], pid))
 
@@ -336,7 +375,8 @@ def shape(p) -> dict | None:
 
 def i18n(p) -> dict | None:
     """A post's other languages for the app (api/client.ts localize: title and body), official or our AI's."""
-    return {k: {"title": x.get("title", ""), "body": x.get("body", "")} for k, x in json.loads(p["i18n"]).items()} if p["i18n"] else None
+    return {k: {"title": x.get("title", ""), "body": x.get("body", ""), **{f: x[f] for f in ("titleFmt", "fmt") if f in x}}
+            for k, x in json.loads(p["i18n"]).items()} if p["i18n"] else None
 
 
 # Read the public embed page (t.me/<channel>/<id>?embed=1) for the CDN URL so the app can play the video inline.

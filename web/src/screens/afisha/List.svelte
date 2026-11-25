@@ -16,14 +16,14 @@
   import X from '@lucide/svelte/icons/x';
   import { onMount, tick } from 'svelte';
   import type { ClassItem, EventCard, Post } from '../../lib/api';
-  import { data, skipped, classKey, skipClass, prefetchEvent, canAskRating, dismissEventRating, loadMyPast, ratingBusy, rateFromPrompt } from '../../lib/state/data.svelte';
+  import { data, skipped, classKey, skipClass, prefetchEvent, canAskRating, dismissEventRating, loadMyPast, ratingBusy, rateFromPrompt, toggleGoing, goingBusy } from '../../lib/state/data.svelte';
   import { touchAhead } from '../../lib/touch';
   import { session, kriCorner } from '../../lib/state/session.svelte';
   import { sheets, openMapFrom, irisFrom } from '../../lib/state/sheets';
   import { ui, toTickets } from '../../lib/state/ui.svelte';
-  import { t, money, placeOf, subjectOf, friendsLine } from '../../lib/i18n/index.svelte';
+  import { t, tn, money, placeOf, subjectOf, friendsLine } from '../../lib/i18n/index.svelte';
   import { lessonKind } from '../../lib/i18n/subjects';
-  import { dayNo, nowTs, parts, weekday, dayMonth, OFFSET, soon, time, dateInput, multiDay, daySpan } from '../../lib/time';
+  import { dayNo, nowTs, parts, weekday, weekdayShort, dayMonth, OFFSET, soon, time, dateInput, multiDay, daySpan } from '../../lib/time';
   import { byStart, classesOn, classesLeft } from '../../lib/classes';
   import { noClasses } from '../../lib/academic';
   import { floorOf, atDorm, DORM_2GIS, atBldg2, bldg2Room, BLDG2_2GIS, awayOf } from '../../lib/map';
@@ -31,7 +31,7 @@
   import { castingOn, tagName } from '../../lib/posts';
   import CastingCard from '../../ui/CastingCard.svelte';
   import { nameOf, shortOf } from '../../lib/short';
-  import { inner } from '../../lib/perms';
+  import { inner, onTeam } from '../../lib/perms';
   import Poster from '../../ui/Poster.svelte';
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import Group from '../../ui/Group.svelte';
@@ -46,13 +46,15 @@
   import IconButton from '../../ui/IconButton.svelte';
   import Card from '../../ui/Card.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
-  import StatRow from '../../ui/StatRow.svelte';
   import ActionCard from '../../ui/ActionCard.svelte';
   import StoryRow from './StoryRow.svelte';
   import PullSearch from '../../ui/PullSearch.svelte';
   import { hit as orgHit } from '../../lib/clubs';
   import { hit, namesOf } from '../../lib/search';
   import GalleryCard from './GalleryCard.svelte';
+  import Chip from '../../ui/Chip.svelte';
+  import { afishaFilter, filterEvents, choices, active, pick, clearFilter } from '../../lib/state/afisha.svelte';
+  import { schoolName } from '../../lib/short';
 
   const TIMETABLE = 'kbtu.afisha.classes';
   let showClasses = $state((() => { try { return localStorage.getItem(TIMETABLE) !== 'hidden'; } catch { return true; } })());
@@ -80,6 +82,7 @@
 
   const featured = $derived(data.posts.find((p) => p.featured));
   const shown = $derived(data.events.filter((e) => e.status !== 'cancelled'));
+  const filtering = $derived(active(afishaFilter)); // a school or a type chosen (lib/state/afisha): castings step aside
 
   type Item = { key: string; at: number } & ({ c: ClassItem; end: number } | { e: EventCard } | { p: Post });
   const classesOf = (d: number): Item[] => classesOn(data.schedule, d).map((x) => ({ key: classKey(d, x.c), at: x.b, end: x.e, c: x.c }));
@@ -88,9 +91,9 @@
   const running = $derived(data.events.filter((e) => dayNo(e.startsAt) < today && endOf(e) > now).map((e) => e.id).join());
   const days = $derived.by(() => {
     const by = new Map<number, Item[]>(), on = new Set(running.split(',').map(Number));
-    for (const e of data.events) { const d = Math.max(dayNo(e.startsAt), on.has(e.id) ? today : -1); if (d < today) continue; if (!by.has(d)) by.set(d, []); by.get(d)!.push({ key: 'e' + e.id, at: e.startsAt, e }); }
+    for (const e of filterEvents(data.events, afishaFilter)) { const d = Math.max(dayNo(e.startsAt), on.has(e.id) ? today : -1); if (d < today) continue; if (!by.has(d)) by.set(d, []); by.get(d)!.push({ key: 'e' + e.id, at: e.startsAt, e }); }
     // an offline casting isn't an event (no sign-up) but it has its hour: on its day, or on today while it runs
-    for (const p of data.castings) { if (!p.casting || !castingOn(p.casting, nowTs())) continue; const d = Math.max(dayNo(p.casting.from), today); if (!by.has(d)) by.set(d, []); by.get(d)!.push({ key: 'p' + p.id, at: p.casting.from, p }); }
+    for (const p of data.castings) { if (filtering || !p.casting || !castingOn(p.casting, nowTs())) continue; const d = Math.max(dayNo(p.casting.from), today); if (!by.has(d)) by.set(d, []); by.get(d)!.push({ key: 'p' + p.id, at: p.casting.from, p }); }
     // the coming week's class days too (so a class day isn't missed), later only event days; today's classes stay
     // here too: their rows are where "I won't go" is tapped (and taken back)
     const week = !showClasses ? [] : Array.from({ length: 7 }, (_, i) => today + i).filter((d) => d === today || data.schedule.some((c) => c.weekday === (parts(dayTs(d) + 12 * 3600).wd || 7)));
@@ -130,13 +133,35 @@
 
   // Opal's one hero: my next event, else the nearest coming one (a real cover first: the hero carries the screen's colour)
   const coming = $derived(shown.filter((e) => endOf(e) > now).sort((a, b) => a.startsAt - b.startsAt));
+  // the filters (a school, a type) narrow the days below only, on the list held: the chips are what it has
+  const chips = $derived(choices(coming, afishaFilter));
+  const matched = $derived(filtering ? filterEvents(coming, afishaFilter).length : coming.length);
+  // a kept chip past the row's edge (a school at 320 px) comes into view with the tab: never on unseen
+  function showPicked(row: HTMLElement) {
+    const on = [...row.querySelectorAll<HTMLElement>('[aria-pressed="true"]')].at(-1);
+    if (!on) return;
+    const over = on.getBoundingClientRect().right - row.getBoundingClientRect().right;
+    if (over > 0) row.scrollLeft += over + 16;
+  }
   const hero = $derived(going[0] ?? coming.find((e) => e.cover || e.video?.poster) ?? coming[0]);
   const heroPic = $derived(!!(hero?.cover || hero?.video?.poster));
-  const stats = $derived([
-    { label: t('list.statWeek'), value: weekCount, key: true },
-    ...(going.length ? [{ label: t('list.statGoing'), value: going.length }] : []), // no "0": shown only when I'm going somewhere
-    ...(showClasses && data.schedule.length ? [{ label: t('list.statLeft'), value: left.length }] : []),
-  ]);
+  // one tap signs up from the hero when there is nothing to ask first that this card can't say: a plain open event
+  // (the sheet's own rule is longer: a partner's link, a guest list, a club's own event keep the whole-card tap)
+  const canGo = (e: EventCard) => e.status === 'published' && (!e.my || e.my.status === 'cancelled') && e.startsAt > now && !(e.regUntil && e.regUntil <= now)
+    && !e.externalUrl && !e.guestHost && !e.guestList && !inner(e) && !e.santa && !(e.seats != null && e.taken >= e.seats) && !onTeam(e, session.me?.memberships);
+  // the week at a glance, in place of the lone counters: seven days from today, a dot where something is on (the accent:
+  // I'm going), a tap goes to that day's card. Built from the days above: nothing is read twice
+  const strip = $derived(Array.from({ length: 7 }, (_, i) => {
+    const d = today + i, ev = days.find((x) => x.d === d)?.items.filter((x) => 'e' in x) ?? [];
+    return { d, on: days.some((x) => x.d === d && (x.items.length || (showClasses && data.schedule.length))), n: ev.length, mine: ev.some((x) => 'e' in x && x.e.my?.status === 'going') };
+  }));
+  async function toDay(d: number) {
+    haptic.select();
+    // its rows drawn first, only as far as that day (the list draws a few days per idle moment)
+    upto = Math.max(upto, days.slice(0, days.findIndex((x) => x.d === d) + 1).reduce((n, x) => n + x.items.length, 0));
+    await tick();
+    document.querySelector(`.tab.on .day[data-d="${d}"]`)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }
 
   // no timetable: the one card that asks for it (after the first load: a returning student never sees it flash)
   const askSched = $derived(data.eventsReady && !!session.me?.student && !data.schedule.length);
@@ -218,15 +243,15 @@
 
 <div class="page scroll stagger">
   <PullSearch bind:value={q} placeholder={t('list.search')} />
-  <p class="kick">{weekday(dayTs(today) + 12 * 3600)}, {dayMonth(dayTs(today) + 12 * 3600)}</p>
+  <p class="kick">{weekday(dayTs(today) + 12 * 3600)}, {dayMonth(dayTs(today) + 12 * 3600)}{#if data.eventsReady && weekCount}<span class="wk">&nbsp;· {tn('list.week', weekCount)}</span>{/if}</p>
   <header class="hd">
     <span><h1 class="ttl" use:fitTitle use:largeTitle={'afisha'}>{t('common.today')}</h1></span>
     <!-- the map (its home here once KRI took the bar's corner; a guest's corner is the map itself), the Feed full screen, the Gallery, the clubs' news -->
     <span class="tools">
-      {#if kriCorner()}<IconButton icon={MapIcon} label={t('map.open')} onclick={openMapFrom} />{/if}
-      {#if shown.length}<IconButton icon={Play} label={t('list.inRow')} onclick={(e) => { irisFrom(e); sheets.feed(); }} />{/if}
-      <IconButton icon={Images} label={t('gallery.title')} onclick={(e) => { irisFrom(e); sheets.gallery(); }} />
-      <IconButton icon={Newspaper} label={t('page.news')} onclick={(e) => { irisFrom(e); sheets.news(); }} />
+      {#if kriCorner()}<IconButton icon={MapIcon} size="s" label={t('map.open')} onclick={openMapFrom} />{/if}
+      {#if shown.length}<IconButton icon={Play} size="s" label={t('list.inRow')} onclick={(e) => { irisFrom(e); sheets.feed(); }} />{/if}
+      <IconButton icon={Images} size="s" label={t('gallery.title')} onclick={(e) => { irisFrom(e); sheets.gallery(); }} />
+      <IconButton icon={Newspaper} size="s" label={t('page.news')} onclick={(e) => { irisFrom(e); sheets.news(); }} />
     </span>
   </header>
   {#if searching}
@@ -258,31 +283,41 @@
     {@const e = hero}
     {@const mine = e.my?.status === 'going'}
     <!-- the hero: my next event (its ticket and the way there), else the nearest -->
-    <section class="hero" class:nopic={!heroPic}>
+    <section class="hero" class:nopic={!heroPic} style:--c={e.cover?.color ?? e.video?.poster?.color ?? e.color ?? e.tint}>
       <button class="hit" onpointerdown={(ev) => touchAhead(ev, () => prefetchEvent(e.id))} onclick={(ev) => sheets.event(e.id, ev.currentTarget.parentElement?.querySelector('.poster'))} aria-label={e.title}></button>
       <span class="art"><Poster item={e} big radius={0} /></span>
       <div class="shade"></div>
       <div class="slab">
-        <div class="top">
-          <span class="hero-tx">
-            <b class="clamp-2">{e.title}</b>
-            <span class="where ellipsis">{placeOf(e.place, e.online)} · {shortOf(e.org)}{#if e.coHost} × {shortOf(e.coHost)}{/if}</span>
-            {#if !mine}<span class="hsub">{@render status(e)}</span>{/if}
-          </span>
-          <span class="when num"><span>{soon(e.startsAt, now)}</span><b class="ellipsis">{multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : time(e.startsAt)}</b></span>
-        </div>
+        <span class="hero-tx">
+          <b class="clamp-2">{e.title}</b>
+          <span class="where"><span class="ellipsis"><b class="num">{multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : time(e.startsAt)}</b> · {soon(e.startsAt, now)} · {placeOf(e.place, e.online)}</span><span class="by ellipsis">&nbsp;· {shortOf(e.org)}{#if e.coHost} × {shortOf(e.coHost)}{/if}</span></span>
+          {#if !mine}<span class="hsub">{@render status(e)}</span>{/if}
+        </span>
+        <!-- under the thumb, at the slab's end: my ticket and the way there, two round icons; not mine yet: one tap signs up (a paid one opens its payment) -->
         {#if mine}
-          <!-- the same pills as "Your events" below, side by side under the thumb -->
           <span class="acts">
-            <Button kind="secondary" size="s" onclick={() => sheets.ticket(e.id)}>{#snippet icon()}<QrCode size={15} />{/snippet}{t('event.ticket')}</Button>
-            {#if floorOf(e.place) != null}<Button kind="secondary" size="s" onclick={() => sheets.map(e.place)}>{#snippet icon()}<MapPin size={15} />{/snippet}{t('route.open')}</Button>{/if}
+            <IconButton kind="tinted" size="s" icon={QrCode} label={t('event.ticket')} onclick={() => sheets.ticket(e.id)} />
+            {#if floorOf(e.place) != null}<IconButton kind="secondary" size="s" icon={MapPin} label={t('route.open')} onclick={() => sheets.map(e.place)} />{/if}
           </span>
+        {:else if e.my?.status === 'hold'}
+          <span class="acts"><Button kind="tinted" size="s" onclick={() => sheets.pay(e.id)}>{t('event.pay', { price: money(e.price ?? 0) })}</Button></span>
+        {:else if canGo(e)}
+          <span class="acts"><Button kind="tinted" size="s" loading={goingBusy.has(e.id)} onclick={() => toggleGoing(e.id, () => sheets.pay(e.id))}>{e.price ? e.freeLeft && session.me?.student?.freeFirst ? t('event.goFree') : t('event.goPrice', { price: money(e.price) }) : t('event.go')}</Button></span>
         {/if}
       </div>
       <span class="rim" aria-hidden="true"></span>
     </section>
   {/if}
-  {#if data.eventsReady}<div class="stats"><StatRow items={stats} /></div>{/if}
+  {#if data.eventsReady && days.length}
+    <nav class="week" aria-label={t('list.title')}>
+      {#each strip as w (w.d)}
+        {@const ts = dayTs(w.d) + 12 * 3600}
+        <button class={['wd', { today: w.d === today, has: w.n }]} disabled={!w.on} aria-label={weekday(ts) + ', ' + dayMonth(ts) + (w.n ? ' · ' + w.n : '')} onclick={() => void toDay(w.d)}>
+          <span>{weekdayShort(ts)}</span><b class="num">{parts(ts).d}</b><i class={{ on: w.mine }}></i>
+        </button>
+      {/each}
+    </nav>
+  {/if}
 
   {#if going.length > 1}
     <!-- the rest of my week: one grouped card, a ticket pill at each row's end -->
@@ -302,13 +337,24 @@
   {#if showClasses && askSched}
     <!-- no timetable yet: one card at the top, under my events (an empty "Your events" over this card in
          today's list read as two empty states); no plans at all: no section, the events below are the way on -->
-    <div class="ask"><ActionCard icon={CalendarPlus} title={t('sched.cardTitle')} text={t('sched.cardSub')} action={t('sched.cardAdd')} onclick={() => sheets.schedHowTo()} /></div>
+    <div class="ask"><ActionCard icon={CalendarPlus} title={t('sched.cardTitle')} action={t('sched.cardAdd')} onclick={() => sheets.schedHowTo()} /></div>
   {/if}
 
   <div class="events-head">
     <h2 class="sec two">{t('list.title')}</h2>
-    <label class="cls sw-on">{t('list.classes')}<input type="checkbox" role="switch" checked={showClasses} onchange={toggleClasses} /></label>
+    <!-- no timetable: nothing to show or hide (kept while off: switching it back on brings the card that asks for one) -->
+    {#if data.schedule.length || !showClasses}<label class="cls sw-on">{t('list.classes')}<input type="checkbox" role="switch" checked={showClasses} onchange={toggleClasses} /></label>{/if}
   </div>
+  {#if filtering || coming.length > 1}
+    <div class="chips" role="group" aria-label={t('list.f.label')} use:showPicked>
+      {#each chips.types as k (k)}<Chip selected={afishaFilter.type === k} onclick={() => { haptic.select(); pick('type', k); }}>{t(`list.f.${k}`)}</Chip>{/each}
+      {#if chips.types.length && chips.schools.length}<i class="sep" aria-hidden="true"></i>{/if}
+      {#each chips.schools as s (s)}<Chip selected={afishaFilter.school === s} onclick={() => { haptic.select(); pick('school', s); }}>{schoolName(s)}</Chip>{/each}
+    </div>
+  {/if}
+  {#if filtering && !matched}
+    <div class="none"><EmptyState title={t('list.f.none')} action={{ label: t('list.f.all'), onclick: () => { haptic.select(); clearFilter(); } }} /></div>
+  {/if}
 
   {#if featured}
     <div class="pin"><Card onclick={() => (openPost = !openPost)}>
@@ -323,7 +369,7 @@
     <!-- without a timetable an empty day isn't shown: not a "free day" we can't know (the card above asks for it) -->
     {#if day.items.length || (showClasses && data.schedule.length)}
       {@const [a, b] = head(day.d)}
-      <div class="day">
+      <div class="day" data-d={day.d}>
       <h3 class="dh">{a}<span>&nbsp;/ {b}</span></h3>
       <!-- one timeline: an event's full row, a class's thin one between them -->
       <div class="list">
@@ -383,11 +429,12 @@
   .hd > span:first-child { min-width: 0; }
   /* the date yields: too narrow for it beside the buttons (320 px, four of them), the buttons take their own line above,
      at the right (wrap-reverse: the second line goes on top, and flex-start is the line's bottom) */
-  .hd { display: flex; flex-wrap: wrap-reverse; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+  .hd { display: flex; flex-wrap: wrap-reverse; align-items: center; justify-content: space-between; gap: var(--s-3); margin-bottom: var(--s-4); }
   .hd > span:first-child { flex: 1 0 120px; }
   .kick { font: 600 var(--fs-micro)/1.2 var(--font-text); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); margin: 0 0 4px; }
+  .wk { color: var(--accent-text); }
   .ttl { font: 700 var(--fs-title)/1.05 var(--font-display); letter-spacing: -0.04em; }
-  .tools { flex: none; display: flex; gap: var(--s-2); margin-left: auto; }
+  .tools { flex: none; display: flex; gap: var(--s-3); margin-left: auto; }
   .rate-prompt { margin-bottom: var(--s-3); }
   .rate-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); }
   .rate-head > div { min-width: 0; }
@@ -396,71 +443,113 @@
   .rate-stars { display: grid; grid-template-columns: repeat(5, 1fr); gap: var(--s-1); margin-top: var(--s-2); }
   .rate-stars button { display: grid; place-items: center; min-height: var(--tap); border-radius: var(--r-m); background: var(--fill); color: var(--warning-text); }
   .rate-stars button:active { transform: scale(0.94); }
-  .off { margin: 12px 4px 0; color: var(--text-2); }
+  .off { margin: var(--s-3) var(--s-1) 0; color: var(--text-2); }
   .pastrow { margin-top: var(--s-4); }
   .pastrow + .past { margin-top: 8px; }
   .past { display: flex; flex-direction: column; gap: 8px; }
   .lnk { align-self: center; }
 
-  .sec { margin: 30px var(--s-1) 12px; font: 700 var(--fs-t3)/1.15 var(--font-display); letter-spacing: -0.02em; }
-  .events-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); margin: 34px var(--s-1) 4px; }
+  .sec { margin: var(--s-7) var(--s-1) var(--s-3); font: 700 var(--fs-t3)/1.15 var(--font-display); letter-spacing: -0.02em; }
+  .events-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); min-height: var(--tap); margin: var(--s-7) var(--s-1) 0; }
   .sec.two { min-width: 0; margin: 0; }
+  /* the filters: one row of chips under the heading, scrolled sideways edge to edge; types, a hairline, schools */
+  .chips { display: flex; align-items: center; gap: var(--s-2); overflow-x: auto; margin: var(--s-2) calc(-1 * var(--gutter)) 0; padding: var(--s-1) var(--gutter); scrollbar-width: none; }
+  .chips::-webkit-scrollbar { display: none; }
+  .sep { flex: none; width: 0.5px; height: 20px; background: var(--separator); }
+  .none { margin-top: var(--s-4); }
   .cls { flex: none; display: flex; align-items: center; gap: 10px; font: 500 var(--fs-body)/1 var(--font-text); color: var(--text-2); cursor: pointer; }
   /* a day: skipped while off screen (its size remembered once seen); a paint box, so it spans the gutters too (a row's
      press and shadow are never clipped) and takes the heading's top margin itself (inside, it would no longer collapse
      with the one above) */
-  .day { margin: 26px calc(-1 * var(--gutter)) 0; padding: 0 var(--gutter); content-visibility: auto; contain-intrinsic-size: auto 360px; }
+  .day { margin: var(--s-6) calc(-1 * var(--gutter)) 0; padding: 0 var(--gutter); scroll-margin-top: var(--page-top); content-visibility: auto; contain-intrinsic-size: auto 360px; }
   .dh { margin: 0 var(--s-1) 10px; font: 700 var(--fs-row)/1.2 var(--font-display); letter-spacing: -0.02em; }
   .dh span { color: var(--text-3); font-weight: 600; }
   .dh span::first-letter { text-transform: none; }
   .hit { position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
 
-  /* the hero: the one rich visual, kept calm (owner, Nov 22: the coloured halo, the blurred cover and the circling
-     light read as childish). Opal's card size, about 156px. The cover sharp edge to edge, a little dimmed; the words on
-     a slab of the app's own glass along the bottom (--glass-bg, the fringes: the capsule's and the tab bar's family; it
-     follows the theme and stays legible whatever the cover is), the time at its right end, my ticket and the way
-     there in a row at its foot */
-  .hero { position: relative; isolation: isolate; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; min-height: 164px; padding: 44px 6px 6px; /* the picture always keeps its strip */
+  /* the hero: the one rich visual, kept calm (owner, Nov 22: the blurred cover and the circling light read as
+     childish). The cover sharp edge to edge, a little dimmed, and most of the card (owner, Nov 24); the words on
+     a low slab of the app's own glass along the bottom (--glass-bg, the fringes: the capsule's and the tab bar's family; it
+     follows the theme and stays legible whatever the cover is): the title, one line of when and where, and my ticket and the way
+     there as two round icons at its end */
+  .hero { --glow: 0.62; position: relative; isolation: isolate; display: flex; flex-direction: column; justify-content: flex-end; min-height: 196px; padding: 72px 6px 6px; /* the picture always keeps its strip, a two-line title under it too */
     border-radius: var(--r-xl); background: var(--media); box-shadow: 0 12px 26px -16px rgba(0, 0, 0, 0.5); transition: transform var(--t-fast) var(--ease); }
   .hero:has(> .hit:active) { transform: scale(0.985); }
+  /* Opal's neon under the card, in the cover's own colour (--c): a close halo and a wide pool below. It blooms once as
+     the page opens and rests; the shadow is painted once and only its opacity moves. The card no longer clips (the
+     cover does), so the light can leave it */
+  .hero::before { content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none; opacity: var(--glow);
+    box-shadow: 0 0 14px 0 var(--c, transparent), 0 16px 38px -10px var(--c, transparent); animation: bloom 2.2s var(--ease) 0.2s backwards; }
+  /* the halo always shows against the theme (owner: a pale cover's light vanished on the light ground): the cover's hue,
+     but at least this much colour, lifted on black and deepened on light. Where relative colour isn't known (older
+     iOS) none of it applies and the cover's own colour stays */
+  :global(:root[data-theme='light']) .hero { --glow: 0.5; }
+  @supports (color: oklch(from red l c h)) {
+    .hero::before { box-shadow: 0 0 14px 0 var(--cg), 0 16px 38px -10px var(--cg); }
+    .hero { --cg: oklch(from var(--c, transparent) max(l, 0.66) max(c, 0.14) h); }
+    :global(:root[data-theme='light']) .hero { --glow: 0.62; --cg: oklch(from var(--c, transparent) min(l, 0.58) max(c, 0.16) h); }
+  }
+  @keyframes bloom { from { opacity: 0; } 40% { opacity: calc(var(--glow) * 1.5); } }
   .art, .shade, .rim { position: absolute; inset: 0; }
-  .shade, .rim { border-radius: inherit; pointer-events: none; }
-  .shade { background: rgba(0, 0, 0, 0.2); }
-  /* no cover: the event's 3D mark stands at the left, its foot behind the frost */
-  .nopic .art :global(.poster) { align-items: flex-start; justify-content: flex-start; padding: 4px 0 0 12px; }
-  /* the rim: a hair of white lit at the top left, as glass is. The light comes round once as the card arrives and rests
+  .art, .shade, .rim { border-radius: inherit; pointer-events: none; }
+  .art { overflow: hidden; }
+  /* the cover clear at the top (it is the screen's one picture), deeper toward the slab: the glass has something calm to sit on */
+  .shade { background: linear-gradient(rgba(0, 0, 0, 0.04), rgba(0, 0, 0, 0.38)); }
+  /* no cover: the club's colour lit from the top left and deep at the far corner, the event's 3D mark large and
+     tilted at the right, its foot behind the frost (the title's side stays clean) */
+  .nopic .shade { background: radial-gradient(90% 130% at 0% 0%, rgba(255, 255, 255, 0.2), transparent 60%), linear-gradient(155deg, transparent 35%, rgba(0, 0, 0, 0.5)); }
+  .nopic .art :global(.poster) { align-items: flex-start; justify-content: flex-end; padding: var(--s-1) var(--s-5) 0 0; }
+  .nopic .art :global(.poster > *) { transform: rotate(9deg) scale(1.2); transform-origin: 50% 0; }
+  /* the rim: a hair of white lit at the top left in the cover's colour, as neon glass is. The light comes round once as the card arrives and rests
      there: a big conic square turning under a ring mask, transform only (and no @property: Button owns --rim) */
   .rim { z-index: 1; overflow: hidden; padding: 1px;
     -webkit-mask: linear-gradient(black 0 0) content-box, linear-gradient(black 0 0); -webkit-mask-composite: xor;
     mask: linear-gradient(black 0 0) content-box, linear-gradient(black 0 0); mask-composite: exclude; }
   .rim::before { content: ''; position: absolute; left: 50%; top: 50%; width: 150%; aspect-ratio: 1; margin: -75% 0 0 -75%;
-    background: conic-gradient(rgba(255, 255, 255, 0.12) 0deg, rgba(255, 255, 255, 0.1) 100deg, rgba(255, 255, 255, 0.22) 125deg, rgba(255, 255, 255, 0.1) 150deg,
-      rgba(255, 255, 255, 0.1) 265deg, rgba(255, 255, 255, 0.55) 296deg, rgba(255, 255, 255, 0.12) 340deg);
+    background: conic-gradient(rgba(255, 255, 255, 0.12) 0deg, rgba(255, 255, 255, 0.1) 95deg, var(--c, rgba(255, 255, 255, 0.22)) 125deg, rgba(255, 255, 255, 0.1) 155deg,
+      rgba(255, 255, 255, 0.1) 250deg, var(--c, rgba(255, 255, 255, 0.55)) 284deg, rgba(255, 255, 255, 0.7) 296deg, var(--c, rgba(255, 255, 255, 0.55)) 308deg, rgba(255, 255, 255, 0.12) 345deg);
     animation: arrive 1.8s var(--ease-spring) 0.25s backwards; }
   @keyframes arrive { from { transform: rotate(-200deg); } }
-  @media (prefers-reduced-motion: reduce) { .rim::before { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { .hero::before, .rim::before { animation: none; } }
   /* the slab: a static blur over a still picture (never animated); 6px in, so its corners follow the card's. In the
      dark it also dims what is under it: white words hold 4.5:1 over a white cover */
-  .slab { --dim: 0.7; --edge: rgba(255, 255, 255, 0.16); position: relative; display: flex; flex-direction: column; gap: 10px; padding: 11px 12px 12px 14px;
+  .slab { --dim: 0.7; --edge: rgba(255, 255, 255, 0.16); position: relative; z-index: 2; /* over the card's own tap: its blur makes it a stacking context, so the buttons' own z-index never left it */ display: flex; align-items: center; gap: 10px; padding: 9px 10px 10px 14px;
     border-radius: var(--r-l); color: var(--text); background: var(--glass-bg); pointer-events: none;
     box-shadow: inset 0 1px 0 var(--edge), inset 0 0 0 0.5px var(--edge), inset 1.5px 0 1px -0.5px rgba(255, 120, 200, 0.22), inset -1.5px 0 1px -0.5px rgba(90, 190, 255, 0.26);
     -webkit-backdrop-filter: blur(28px) saturate(150%) brightness(var(--dim)); backdrop-filter: blur(28px) saturate(150%) brightness(var(--dim)); }
   :global(:root[data-theme='light']) .slab { --dim: 1; --edge: rgba(255, 255, 255, 0.8); }
-  .top { display: flex; align-items: center; gap: 12px; }
-  .acts { position: relative; z-index: 2; display: flex; gap: 8px; margin-left: -2px; pointer-events: auto; }
-  .acts :global(.btn) { flex: 1; min-width: 0; }
+  .acts { position: relative; z-index: 2; flex: none; display: flex; gap: 8px; max-width: 55%; pointer-events: auto; }
+  .acts :global(.btn) { min-width: 0; }
+  .acts :global(.btn.round)::before { inset: -4px; } /* 36 seen, 44 to the finger on every side; 8px apart, so two meet and never overlap */
   .hero-tx { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-  .hero-tx b { font: 700 var(--fs-t3)/1.18 var(--font-display); letter-spacing: -0.02em; }
-  .where { font: 500 var(--fs-sub)/1.3 var(--font-text); color: var(--text-2); }
-  .when { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; max-width: 45%; }
-  .when span { font: 600 var(--fs-micro)/1.2 var(--font-text); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-2); }
-  .when b { max-width: 100%; font: 700 var(--fs-t3)/1.1 var(--font-display); letter-spacing: -0.02em; }
+  .hero-tx > b { font: 700 var(--fs-t3)/1.18 var(--font-display); letter-spacing: -0.02em; }
+  /* one line: when (in the title's ink), how soon, where, whose. The club gives way first (it shrinks a thousand times faster), the room after it */
+  .where { display: flex; min-width: 0; font: 500 var(--fs-sub)/1.3 var(--font-text); color: var(--text-2); }
+  .where > span { flex: 0 1 auto; min-width: 0; }
+  .where > .by { flex-shrink: 1000; }
+  @media (max-width: 340px) { .where > .by { display: none; } } /* 320: the line is the time and the room alone */
+  .where b { font-weight: 600; color: var(--text); }
   .hsub { display: flex; align-items: center; gap: 8px; min-width: 0; margin-top: 5px; }
-  .hsub:empty { display: none; }
-  .stats { margin: 22px 0 6px; }
+  .hsub:not(:has(*)) { display: none; } /* nothing to say: no line (:empty misses it, the snippet leaves white space) */
+  /* the week: seven even columns on the bare ground (no card: the hero above and the days below are the cards); today
+     the one solid disc, a day with events on a soft one (it reads as a button), a quiet day dimmed and not a button; the
+     accent dot: I'm going */
+  .week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); margin: var(--s-4) 0 0; }
+  .wd { display: flex; flex-direction: column; align-items: center; gap: var(--s-1); min-height: var(--tap); padding: 2px 0; color: var(--text); }
+  .wd span { font: 600 var(--fs-micro)/1.2 var(--font-text); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); }
+  .wd b { display: grid; place-items: center; width: var(--ctl-s); height: var(--ctl-s); border-radius: var(--r-full); font: 600 var(--fs-row)/1 var(--font-display); letter-spacing: -0.02em;
+    transition: transform 450ms var(--ease-bounce), background-color var(--t-base) var(--ease); }
+  .wd:active b { transform: scale(0.88); transition-duration: 80ms; background: var(--fill); }
+  .wd.has b { background: var(--fill); font-weight: 700; }
+  .wd.today b { background: var(--text); color: var(--bg); }
+  .wd:disabled:not(.today) { opacity: 0.6; }
+  .wd:disabled b { color: var(--text-3); font-weight: 450; }
+  .wd.today:disabled b { background: none; box-shadow: inset 0 0 0 1.5px var(--text-3); color: var(--text); } /* nothing on today: a ring, not a button */
+  .wd i { width: 5px; height: 5px; border-radius: var(--r-full); }
+  .wd i.on { background: var(--accent); }
 
   /* the featured post: its own card, the body folded to two lines */
-  .pin { margin: 10px 0 0; }
+  .pin { margin: var(--s-3) 0 0; }
   .pin :global(.card) { display: flex; flex-direction: column; gap: 6px; }
   .pin-top { display: flex; align-items: center; gap: 8px; min-width: 0; font: 500 var(--fs-sub)/1.2 var(--font-text); color: var(--text-2); }
   .pin b { font: 700 var(--fs-card)/1.25 var(--font-text); }
@@ -526,6 +615,6 @@
   .cl-r.on :global(.btn) { max-width: 100%; padding: 0 var(--s-3); } /* a little tighter: the subject's room */
   .free { margin: 0 var(--s-1); color: var(--text-3); }
 
-  .ask { margin-top: 14px; }
+  .ask { margin-top: var(--s-4); }
   .tail { height: calc(var(--bottom) + 24px); }
 </style>

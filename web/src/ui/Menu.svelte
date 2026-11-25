@@ -84,7 +84,7 @@
   <div class="menu glass glass-sheet" role="menu" tabindex="-1" bind:this={panel} style="visibility:hidden" onkeydown={key}>
     {#each [actions, red] as group, g (g)}
       {#if g && group.length && actions.length}<div class="sep" role="separator"></div>{/if}
-      {#each group as it (it.label)}
+      {#each group as it, i (i)}<!-- by place: two items may share a label (a club's roles named alike), and a duplicate key threw and froze the app (owner, Nov 24) -->
         <button class="it" class:red={it.destructive} class:picks role={it.checked === undefined ? 'menuitem' : 'menuitemradio'} aria-checked={it.checked}
           disabled={it.disabled} onclick={() => pick(it)}>
           {#if picks}<span class="ck">{#if it.checked}<Check size={18} strokeWidth={2.4} />{/if}</span>{/if}
