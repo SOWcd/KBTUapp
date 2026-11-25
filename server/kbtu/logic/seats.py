@@ -440,8 +440,10 @@ def sweep_holds(con) -> None:
             promote(con, one(con, "SELECT * FROM events WHERE id = ?", r[0]))
 
 
-def events(con, v: Viewer, frm: int | None = None, to: int | None = None, org: int | None = None) -> list[dict]:
-    sweep_holds(con)
+def events(con, v: Viewer, frm: int | None = None, to: int | None = None, org: int | None = None, *,
+           sweep: bool = True) -> list[dict]:
+    if sweep:  # off for the read-only demo (app.is_demo): the worker sweeps anyway
+        sweep_holds(con)
     hide_first = v.student and one(con, "SELECT hide_first_year FROM users WHERE id = ?", v.id)[0]
     # Bound starts_at to use an index range. The lookback covers even stored events longer than the
     # 31-day cap in organizing.clean_event, so they stay visible while they run.
@@ -522,8 +524,9 @@ def _event(con, v: Viewer, eid: int) -> sqlite3.Row:
     return e
 
 
-def event(con, v: Viewer, eid: int) -> dict:
-    sweep_holds(con)
+def event(con, v: Viewer, eid: int, *, sweep: bool = True) -> dict:
+    if sweep:
+        sweep_holds(con)
     return full(con, v, _event(con, v, eid))
 
 
@@ -879,7 +882,8 @@ def _receipt_flags(con, e: sqlite3.Row, sha: str, read: dict | None, rid: int = 
     got = read or {}
     out = []
     # a receipt someone else replaced counts too, or replacing it would wash a reused one clean
-    if one(con, "SELECT 1 FROM files WHERE sha256 = ? AND kind = 'receipt'", sha) or \
+    if one(con, "SELECT 1 FROM donations WHERE sha256 = ? OR receipt_no = ?", sha, got.get("no")) or \
+            one(con, "SELECT 1 FROM files WHERE sha256 = ? AND kind = 'receipt'", sha) or \
             one(con, "SELECT 1 FROM receipt_replaced WHERE sha256 = ? AND registration_id != ?", sha, rid) or \
             got.get("no") and (one(con, "SELECT 1 FROM receipts WHERE receipt_no = ?", got["no"])
                                or one(con, "SELECT 1 FROM receipt_replaced WHERE receipt_no = ? AND registration_id != ?", got["no"], rid)) or \
@@ -915,7 +919,9 @@ def _same_minute(con, got: dict) -> list[sqlite3.Row]:
     """Receipts with this one's minute, sum and payee (Kaspi prints the minute)."""
     if not (got.get("paid_at") and got.get("amount") and got.get("recipient")):
         return []
-    return rows(con, "SELECT sender_name FROM receipts WHERE paid_at = ? AND amount = ? AND recipient_name = ?", got["paid_at"], got["amount"], got["recipient"])
+    return rows(con, """SELECT sender_name FROM receipts WHERE paid_at = ? AND amount = ? AND recipient_name = ?
+        UNION ALL SELECT sender_name FROM donations WHERE paid_at = ? AND read_amount = ? AND recipient_name = ?""",
+                *([got["paid_at"], got["amount"], got["recipient"]] * 2))
 
 
 def _receipt_clean(con, e: sqlite3.Row, sha: str, read: dict | None, flags: str) -> bool:

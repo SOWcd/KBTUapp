@@ -846,6 +846,9 @@ export interface Friends { friends: FriendRow[]; incoming: FriendRow[]; outgoing
 export type Friendship = PersonCard['friendship'];
 /** A student found by @username, and where the two of us stand. */
 export interface FoundStudent { person: PersonRef; course: number | null; school: string | null; friendship: Friendship; me: boolean; closed?: boolean }
+/** The global search's server half (GET /api/search/more, server logic/search.more): people who made themselves
+ *  findable (an exact @username; "open to projects" where the find-people forum is open to me), the channel's live posts. */
+export interface SearchMore { people: { person: PersonRef; course: number | null }[]; posts: ChannelFeedPost[] }
 /** Opening someone's one-time friend link: friends at once, or why not. */
 /** someone's invite link r_<code> opened: whose it is, and where we stand ('self': my own) */
 export interface LinkCard { person: PersonRef; friendship: Friendship | 'self'; registered: boolean }
@@ -927,3 +930,16 @@ export interface SantaThread { closed: boolean; msgs: SantaMsg[] } // closed: on
 export interface SantaReport { id: Id; at: Ts; title: string; giver: PersonRef | null; to: PersonRef | null; byGiver: boolean; msgs: { id: Id; fromGiver: boolean; text: string; at: Ts }[] }
 /** to: where I write as my person's Santa; from: with my own Santa (null: no such pair) */
 export interface SantaChats { to: SantaThread | null; from: SantaThread | null }
+
+/** Private support data; never embedded in another person's card. */
+export interface Support {
+  total: number; tier: number; thresholds: number[]; starRate: number;
+  version: string; receiptConsent: string; show: boolean; rev: number | null;
+  receipts: { id: Id; status: 'pending' | 'confirmed' | 'rejected'; amount: number | null; at: Ts }[];
+}
+export interface Sponsor { name: string; tier: number }
+export interface DonationReview {
+  id: Id; name: string; status: 'pending' | 'confirmed' | 'rejected'; amount: number | null;
+  readAmount: number | null; recipient: string | null; sender: string | null; no: string | null; paidAt: Ts | null;
+  flags: string[]; auto: boolean; image: boolean; at: Ts; revision: number; undo: boolean;
+}

@@ -537,6 +537,11 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
                                    ban=texts.pick(texts.BAN, lang) if q["ban"] else ""), f"tm_{q['org_id']}")
     if kind in SANTA_KINDS:
         return _santa(con, m, lang)
+    if kind in ("donation_confirmed", "donation_rejected"):
+        d = one(con, "SELECT status, revision FROM donations WHERE id = ? AND user_id = ?", int(ref[1]), m["user_id"])
+        if not d or d["status"] != kind.removeprefix("donation_") or d["revision"] != int(ref[2]):
+            return None
+        return (*texts.bot_message(lang, kind), "donate")
     if kind == "credit_ask":  # cra, kbtu.admin credit ask: "shall we name you?", once; quiet once answered or nothing shipped is theirs
         return (*texts.bot_message(lang, kind), "people") if logic.credits.asking(con, m["user_id"]) else None  # (send_due reads where to again)
     if kind == "santa_news":  # sn:<org>, to its President or Vice (kbtu.admin santa-news), opens the Santa welcome over Studio: quiet once they aren't
@@ -2231,7 +2236,7 @@ def _wanted(cfg: Config) -> str:
 
 async def _answer_checkout(cfg: Config, http: httpx.AsyncClient, q: dict) -> bool:
     """One try. True when there is no use in another: answered, or refused for good (a query too old, 400)."""
-    good = logic.stars.checkout_ok(q)
+    good = logic.stars.checkout_ok(cfg.bot_token, q, (q.get("from") or {}).get("id"))
     why = {} if good else {"error_message": texts.pick(texts.STARS_REFUSED, str((q.get("from") or {}).get("language_code") or ""))}
     try:
         r = await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/answerPreCheckoutQuery", timeout=CHECKOUT_HTTP,
@@ -2492,7 +2497,7 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
                 msg = upd.get("message") or {}
                 if payment := msg.get("successful_payment"):  # before the ban skip: the Stars have arrived; no answer but Telegram's own receipt
                     try:
-                        await asyncio.to_thread(logic.stars.paid, con, payment, (msg.get("from") or {}).get("id"))
+                        await asyncio.to_thread(logic.stars.paid, con, payment, (msg.get("from") or {}).get("id"), cfg.bot_token)
                     except sqlite3.Error as exc:  # paid but unrecorded: this update again next round (paid is idempotent by the charge id)
                         log.warning("stars paid: %s", type(exc).__name__)
                         await asyncio.sleep(1)
