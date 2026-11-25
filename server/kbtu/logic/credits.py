@@ -30,7 +30,7 @@ support), and nothing else of his is shown here. The idea's author follows the r
 Deleting an account: its consents go (`_DEL_GONE`) and its lines lose the Telegram id (`gone`): what the app got stays
 in the list as nameless "Student" rows (the team's name for it goes too) (a line with a login: under that login, as any such line), and nothing left
 behind points at the account. An account moved to another
-Telegram (`kbtu.admin move`) takes its lines along and its yes ends (`moved`): the new profile is previewed afresh.
+Telegram (`kbtu.admin move`) takes its lines along and is hidden (`moved` writes a no): the new profile shows only after their own yes.
 """
 from __future__ import annotations
 
@@ -219,7 +219,7 @@ def gone(con, tg_id: int) -> None:
 
 def moved(con, uid: int, old_tg: int, new_tg: int, merge: bool = False) -> None:
     """`kbtu.admin move`, inside its transaction: the account's lines follow it to its new Telegram, and its yes ends
-    (another name and face may stand there now: asked afresh; a merged move is not undone by moving back). Lines already written for the new Telegram id would
+    (another name and face may stand there now: hidden until they show it again; a merged move is not undone by moving back). Lines already written for the new Telegram id would
     come under this account too: refused unless the team says they are the same person's (`--merge-credits`)."""
     if not merge and one(con, "SELECT 1 FROM credits WHERE tg_id = ?", new_tg):
         raise ValueError("the target Telegram has its own lines in People of the app: --merge-credits if they are this person's too")

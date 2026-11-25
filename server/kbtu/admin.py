@@ -73,8 +73,8 @@
                                 shipped line and no answer; prints how many were queued; a no is never asked again
   .venv/bin/python -m kbtu.admin donation add <telegram id> <amount KZT> [YYYY-MM-DD] [--again]   a Kaspi transfer the
                                 creator checked by hand (outside the app): a confirmed donation, the sponsor medal follows;
-                                the same amount on the same day again only with --again. Never makes anyone public: the name
-                                is the donor's own yes on the Support page. A donor who also uploaded this transfer's
+                                the same amount on the same day again only with --again. Shown on the Sponsors list (name and
+                                total) unless the donor hid it on the Support page. A donor who also uploaded this transfer's
                                 receipt in the app would be counted twice: check `donation list` first.
                                 donation list: id, user id (internal), amount, source, date, public (no names, no
                                 Telegram ids); donation remove <id>: a manual row typed wrong goes, the medal follows
@@ -629,7 +629,7 @@ def main(args: list[str]) -> None:
             sys.exit(f"{e.code} {e.message}".strip())
         sum_ = donations.total(con, u["id"])
         print(f"donation {did}: total {sum_} KZT, tier {donations.tier(sum_)}, "
-              + ("public" if donations.public(con, u["id"]) else "not public (their own yes on the Support page)"))
+              + ("public" if donations.public(con, u["id"]) else "hidden (their own switch on the Support page)"))
     elif cmd == "donation" and args[1:2] == ["remove"] and len(args) == 3 and args[2].isdigit():  # a manual row typed wrong
         from .logic import donations
         try:

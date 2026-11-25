@@ -982,7 +982,7 @@ export interface Support {
   version: string; amountVersion: string; receiptConsent: string; show: boolean; showAmount: boolean; rev: number | null;
   receipts: { id: Id; status: 'pending' | 'confirmed' | 'rejected'; amount: number | null; at: Ts }[];
 }
-/** amount: the confirmed total, only when they agreed to show it (sa1) */
+/** amount: the confirmed total, unless they hid it (server donations.listing) */
 export interface Sponsor { name: string; tier: number; amount?: number }
 export interface DonationReview {
   id: Id; name: string; status: 'pending' | 'confirmed' | 'rejected'; amount: number | null;

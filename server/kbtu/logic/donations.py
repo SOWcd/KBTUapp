@@ -1,4 +1,8 @@
-"""Support: a private ledger, receipt decisions and an optional public name + tier.
+"""Support: a private ledger, receipt decisions and a public name, tier and total on the Sponsors list.
+
+Shown by default (the owner, Nov 26): no answer is shown, name and total; only the donor's own switch hides (the
+latest `sponsor_consents` row: show 0 hides all, show 1 with amount NULL hides the total). Receipts and single
+payments stay private.
 
 Amounts never enter achievement counts: those carry only the tier. Stars' anonymous
 charge table remains the replay guard even after an account and its ledger are erased.
@@ -14,9 +18,9 @@ from ..db import tx
 from . import core, seats
 from .core import ApiError, Viewer, one, rows, shown_name
 
-CONSENT = "sp1"
-AMOUNT_CONSENT = "sa1"  # a second switch: the total beside the name, only while sp1 is on too
-RECEIPT_CONSENT = "dn1"
+CONSENT = "sp1"         # recorded on each answer row; any version: only a no hides
+AMOUNT_CONSENT = "sa1"  # the total beside the name: hidden by its own switch, and with the name
+RECEIPT_CONSENT = "dn2"  # dn1 said a name is published only on a separate yes
 STAR_KZT = 10  # A fixed recognition rate, not a market price; owner confirms before rollout.
 TIERS = (1, 5000, 20000)
 RECEIPTS_A_DAY = 5
@@ -26,6 +30,7 @@ PENDING_KEEP = 90 * 86400
 MAX_AMOUNT = 100_000_000
 _LAST = "LEFT JOIN sponsor_consents c ON c.id = (SELECT id FROM sponsor_consents WHERE user_id = u.id ORDER BY id DESC LIMIT 1)"
 _NAMES = "u.nick, u.tg_first_name, s.first_name, s.last_name"
+_SHOWN = "(c.id IS NULL OR c.show = 1)"  # over _LAST: no answer, or a show
 
 
 def tier(amount: int) -> int:
@@ -38,7 +43,7 @@ def total(con, uid: int) -> int:
 
 def public(con, uid: int) -> bool:
     return bool(one(con, f"""SELECT 1 FROM users u {_LAST} WHERE u.id = ? AND u.tg_id > 0
-        AND u.banned_at IS NULL AND c.show = 1 AND c.version = ?""", uid, CONSENT))
+        AND u.banned_at IS NULL AND {_SHOWN}""", uid))
 
 
 def owner(con, v: Viewer) -> bool:
@@ -68,30 +73,30 @@ def mine(con, v: Viewer) -> dict:
     with tx(con, write=False):
         amount = total(con, v.id)
         consent = one(con, "SELECT * FROM sponsor_consents WHERE user_id = ? ORDER BY id DESC LIMIT 1", v.id)
-        show = bool(consent and consent["show"] and consent["version"] == CONSENT)
+        show = not consent or bool(consent["show"])
         return {"total": amount, "tier": tier(amount), "thresholds": TIERS, "starRate": STAR_KZT,
                 "version": CONSENT, "amountVersion": AMOUNT_CONSENT, "receiptConsent": RECEIPT_CONSENT,
-                "show": show, "showAmount": show and consent["amount"] == AMOUNT_CONSENT,
+                "show": show, "showAmount": show and (not consent or consent["amount"] is not None),
                 "rev": consent["id"] if consent else None,
                 "receipts": [{"id": r["id"], "status": r["status"], "amount": r["amount"], "at": r["created_at"]}
                              for r in rows(con, "SELECT * FROM donations WHERE user_id = ? AND source = 'receipt' ORDER BY id DESC LIMIT 30", v.id)]}
 
 
 def listing(con) -> list[dict]:
-    """The honour board. Tier first (already public), then the shown totals, largest first; a hidden total sorts after
-    the shown ones of its tier by name, so a place never hints at an amount nobody agreed to show."""
+    """The honour board. Tier first, then the shown totals, largest first; a hidden total sorts after the shown ones
+    of its tier by name, so a place never hints at an amount someone hid."""
     return [{"name": shown_name(r), "tier": r["level"], **({"amount": r["shown"]} if r["shown"] is not None else {})}
-            for r in rows(con, f"""SELECT {_NAMES}, l.level, CASE WHEN c.amount = ? THEN
+            for r in rows(con, f"""SELECT {_NAMES}, l.level, CASE WHEN c.id IS NULL OR c.amount IS NOT NULL THEN
               (SELECT SUM(amount) FROM donations WHERE user_id = u.id AND status = 'confirmed') END AS shown
         FROM achievement_levels l JOIN users u ON u.id = l.user_id AND l.code = 'sponsor'
         LEFT JOIN students s ON s.user_id = u.id {_LAST}
-        WHERE u.tg_id > 0 AND u.banned_at IS NULL AND c.show = 1 AND c.version = ?
-        ORDER BY l.level DESC, shown IS NULL, shown DESC, COALESCE(u.nick, s.first_name, u.tg_first_name), u.id""",
-                              AMOUNT_CONSENT, CONSENT)]
+        WHERE u.tg_id > 0 AND u.banned_at IS NULL AND {_SHOWN}
+        ORDER BY l.level DESC, shown IS NULL, shown DESC, COALESCE(u.nick, s.first_name, u.tg_first_name), u.id""")]
 
 
 def answer(con, v: Viewer, payer: int, body: dict, field: str = "show") -> dict:
-    """One switch: field 'show' (the name, sp1) or 'amount' (the total beside it, sa1). Each row holds both."""
+    """One switch: field 'show' (the name) or 'amount' (the total beside it). Each row holds both. Shown until the
+    first answer; turning one back on after a hide needs the current revision."""
     if type(body.get("show")) is not bool:
         raise ApiError("bad_input")
     on, version = body["show"], (CONSENT if field == "show" else AMOUNT_CONSENT)
@@ -99,17 +104,17 @@ def answer(con, v: Viewer, payer: int, body: dict, field: str = "show") -> dict:
         if not one(con, "SELECT 1 FROM users WHERE id = ? AND tg_id = ? AND banned_at IS NULL", v.id, payer):
             raise ApiError("forbidden")
         last = one(con, "SELECT * FROM sponsor_consents WHERE user_id = ? ORDER BY id DESC LIMIT 1", v.id)
-        named = bool(last and last["show"] and last["version"] == CONSENT)
+        named = not last or bool(last["show"])
         if on:
             if body.get("consent") != version or not (body.get("rev") is None or type(body["rev"]) is int):
                 raise ApiError("bad_input", "consent")
             # The amount needs the name on: a figure beside nobody would be no honour, only a leak.
             if body.get("rev") != (last["id"] if last else None) or not total(con, v.id) or (field == "amount" and not named):
                 raise ApiError("conflict")
-        # A late withdrawal always wins; a late yes must name the current revision. Hiding the name hides the
-        # amount too, so showing the name again later never brings the figure back unasked.
+        # A late hide always wins; a late show must name the current revision. Hiding the name hides the amount
+        # too, so showing the name again later never brings the figure back unasked.
         if field == "show":
-            show, amount = on, (last["amount"] if on and named else None)
+            show, amount = on, ((last["amount"] if last else AMOUNT_CONSENT) if on and named else None)
         else:
             show, amount = named, (AMOUNT_CONSENT if on else None)
         con.execute("INSERT INTO sponsor_consents (user_id, version, show, amount, at) VALUES (?, ?, ?, ?, ?)",
@@ -171,7 +176,7 @@ def add_receipt(con, v: Viewer, payer: int, cfg, saved: dict, read: dict | None,
 def add_manual(con, uid: int, amount: int, day: str | None = None, again: bool = False) -> int:
     """`admin donation add`: a transfer the creator checked by hand (Kaspi, outside the app), confirmed at once.
     The CHECK on source can't be altered, so it is a receipt row with no file and flags 'manual': the queue, review
-    and sweep skip it (no file), the daily receipt cap doesn't count it. It never touches the donor's consent."""
+    and sweep skip it (no file), the daily receipt cap doesn't count it. It never touches the donor's switches."""
     if not 0 < amount <= 10_000_000:
         raise ApiError("bad_input", "amount")
     at = core.now()

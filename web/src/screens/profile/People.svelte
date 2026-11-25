@@ -146,8 +146,8 @@
         </Group></div>
       {/if}
 
-      <!-- only who agreed to be named (sp1), each with their medal; the total only with its own yes (sa1). The server
-           orders it: tier, then the shown totals, so a place never hints at an amount nobody agreed to show -->
+      <!-- everyone who supported, unless they hid (server donations.py), each with their medal and total unless hidden. The server
+           orders it: tier, then the shown totals, so a place never hints at an amount someone hid -->
       {#if data.sponsors?.length || session.donate}
         <div use:jump><div class="up" style:--d="3">
           <Group caption={t('cr.support')} note={data.sponsors?.length ? String(data.sponsors.length) : undefined} footnote={t('sp.listHint')}>
