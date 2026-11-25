@@ -95,6 +95,12 @@ class Config:
     # ANDROID_CERT_SHA256: the Android app's signing certificates (AA:BB:..., comma-separated) for
     # /.well-known/assetlinks.json; empty: no file, the app shows a browser bar
     android_certs: tuple[str, ...] = ()
+    # Apple Wallet (wallet.py): the Pass Type ID certificate followed by Apple's WWDR intermediate (PEM), its key, the
+    # pass type ID and the team ID; any empty: off (no button, the route is a 404)
+    wallet_cert: str = field(default="", repr=False)
+    wallet_key: str = field(default="", repr=False)
+    wallet_type_id: str = ""
+    apple_team_id: str = ""
 
 
 def _dotenv() -> dict[str, str]:
@@ -201,4 +207,8 @@ def load() -> Config:
         subjects_file=env.get("SUBJECTS_FILE") or str(Path(db_path).parent / "subjects.json"),
         play_demo=_play_demo(env.get("PLAY_DEMO", "").strip()),
         android_certs=_certs(env.get("ANDROID_CERT_SHA256", "")),
+        wallet_cert=env.get("WALLET_PASS_CERT", "").strip(),
+        wallet_key=env.get("WALLET_PASS_KEY", "").strip(),
+        wallet_type_id=env.get("WALLET_PASS_TYPE_ID", "").strip(),
+        apple_team_id=env.get("APPLE_TEAM_ID", "").strip(),
     )

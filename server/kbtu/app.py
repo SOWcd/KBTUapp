@@ -35,7 +35,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Resp
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.gzip import GZipMiddleware
 
-from . import ai, auth, bot, calpage, casting, checkin as qr, config, db, docs, llm, logic, media, mirror, msauth, receipt, roster, texts, video
+from . import ai, auth, bot, calpage, casting, checkin as qr, config, db, docs, llm, logic, media, mirror, msauth, receipt, roster, texts, video, wallet
 from .logic import ApiError, Viewer, donations
 from .logic import web_auth
 
@@ -579,6 +579,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     if cfg.docs and not logic.assistant.DOCS.ready():
         log.warning("DOCS is on but %s doesn't open: the assistant answers without the documents", cfg.docs_db)
     logic.profiles.QR_KEY = hmac.new(cfg.token_key, b"kbtu-badge-qr", hashlib.sha256).digest()  # Admin → Awards → Show QR
+    passes = wallet.signer(cfg)  # Apple Wallet's badge pass (WALLET_PASS_*); None: off
 
     # ------------------------------------------------------------ errors
 
@@ -668,6 +669,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                     reports["reportLog"] = logic.evreports.own_log(con, v) if summary["consent"] else []
         return logic.me(con, v) | {"consentNow": policy_for(con, v, policy), "board": board_on(app.state.cfg, v), "support": [] if demo else logic.account.support(con),
                                    **({"forumChannel": True} if app.state.cfg.forum_channel else {}),
+                                   # my badge as an Apple Wallet pass: a link to it (no link: no button)
+                                   **({"wallet": x} if passes and not demo and (x := wallet.link(cfg, con, v.id)) else {}),
                                    **({"subjects": True} if v.student and logic.subjects.on(cfg.subjects_file) else {}),  # the subjects' cards
                                    **reports,
                                    "teams": logic.evteams.summary(con, v),  # team events' own consent (evteams.CONSENT)
@@ -1124,6 +1127,15 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.delete("/api/me/calendar", status_code=204)
     def reset_my_calendar(con: Con, v: Me):
         logic.reset_cal_token(con, v)
+
+    @app.get("/wallet/{uid:int}-{sig}.pkpass")
+    def wallet_pass(uid: int, sig: str, con: Con):
+        # no session: Telegram hands the link to Safari, which hands the file to Wallet; the link is the key (wallet.link)
+        body = passes and wallet.build(cfg, passes, con, uid, sig)
+        if not body:
+            raise ApiError("not_found")
+        return Response(body, media_type="application/vnd.apple.pkpass",
+                        headers={"Content-Disposition": 'attachment; filename="kbtu-badge.pkpass"', "Cache-Control": "no-store"})
 
     @app.get("/cal/{token}.ics")
     def calendar_feed(token: str, con: Con):
