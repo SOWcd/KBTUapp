@@ -87,6 +87,8 @@
                                 (guests and event-new also take `--gz <base64 gzip>` at the end instead of stdin)
   .venv/bin/python -m kbtu.admin reg-until <event id> <ISO time with offset>   close an event's sign-up at that time (an organizer's ask)
   .venv/bin/python -m kbtu.admin event-link <event id> <https url>   change an event's "register elsewhere" link (an organizer's ask)
+  .venv/bin/python -m kbtu.admin play-demo [revoke]   Google Play's reviewer link to the made-up demo account (PLAY_DEMO on;
+                                android/README.md); revoke signs every demo session out (after changing PLAY_DEMO)
   .venv/bin/python -m kbtu.admin groups-draw <event id> <teams per group> <advance>   draw an event's group stage (an organizer's ask)
                                 JSON: title, description, starts_at and optional ends_at (ISO with offsets), place,
                                 optional poster_b64, guest_list: true, age_check: true. Prints the id and link.
@@ -441,6 +443,16 @@ def main(args: list[str]) -> None:
                 sys.exit("no such event with an outside link")
             log_action(con, None, "event_link", f"event:{args[1]}", json.dumps({"url": args[2]}))
         print("link", args[2])
+    elif cmd == "play-demo" and args[1:] in ([], ["revoke"]):
+        from .logic import web_auth
+        if not args[1:] and not cfg.play_demo:
+            sys.exit("PLAY_DEMO is off: set it to 32+ random characters (python -c 'import secrets;print(secrets.token_urlsafe(32))')")
+        with db.tx(con):
+            if args[1:]:
+                web_auth.revoke_demo(con)  # never refused: an odd demo row is when it's needed most
+            else:
+                web_auth.demo_user(con, now())
+        print("demo sessions signed out" if args[1:] else f"https://{cfg.domain}/play-demo?k={cfg.play_demo}")
     elif cmd == "event-new" and len(args) == 2:
         _event_new(con, cfg, args[1], gz)
     elif cmd == "roster" and args[1:2] == ["load"] and (len(args) == 4 or (len(args) == 2 and gz is not None)):
@@ -749,7 +761,7 @@ def main(args: list[str]) -> None:
             con.execute("UPDATE users SET tg_id = (SELECT min(tg_id) FROM users) - 1 WHERE id = ?", (a["id"],))
             con.execute(f"UPDATE users SET {sets} WHERE id = ?", (*ra, b["id"]))
             con.execute(f"UPDATE users SET {sets} WHERE id = ?", (*rb, a["id"]))
-            con.execute("UPDATE tgc_comments SET author_tg = ? WHERE author_tg = ?", (rb[0], ra[0]))  # his channel comments go too
+            con.execute("UPDATE tgc_comments SET author_tg = ?, dm_id = NULL WHERE author_tg = ?", (rb[0], ra[0]))  # comments move; DMs stay in the old chat
             try:  # his lines in People of the app go too, his yes there ends; the target's own lines: refused unless --merge-credits
                 credits.moved(con, a["id"], ra[0], rb[0], merge=len(args) == 4)
             except ValueError as exc:

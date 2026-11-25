@@ -485,7 +485,8 @@ export const server = {
   subject: (id: string): Promise<SubjectCard> => call('GET', `/subjects/${encodeURIComponent(id)}`),
   joinSubject: (id: string, note: string): Promise<SubjectCard> => call('PUT', `/subjects/${encodeURIComponent(id)}/me`, { note }),
   leaveSubject: (id: string): Promise<void> => call('DELETE', `/subjects/${encodeURIComponent(id)}/me`),
-  subjectOffer: (ask: Id): Promise<{ status: 'pending' }> => call('POST', '/subjects/offer', { ask }),
+  subjectOffer: (ask: Id): Promise<{ id: Id; status: 'pending' | 'accepted' | 'declined' }> => call('POST', '/subjects/offer', { ask }),
+  withdrawSubjectOffer: (id: Id): Promise<void> => call('DELETE', `/subjects/offer/${id}`),
   releaseAsk: (id: Id): Promise<Ask> => call('POST', `/forum/asks/${id}/release`),
   hideAsk: (id: Id): Promise<void> => call('POST', `/forum/asks/${id}/hide`),
   liftHold: (id: Id): Promise<void> => call('POST', `/forum/holds/${id}`), // a subject take-down lifted (Done's Undo makes it again)
@@ -580,6 +581,7 @@ export const server = {
   staff: (): Promise<Staff> => call('GET', '/admin/staff'), // admin: the app's team and the banned
   staffSearch: (q: string): Promise<StaffRow[]> => call('GET', '/admin/people?q=' + encodeURIComponent(q)),
   search: (q: string): Promise<{ events: EventCard[]; clubs: OrgRef[] }> => call('GET', '/search?q=' + encodeURIComponent(q)), // the one search: by any name, what I may see (the admin: all)
+  searchMore: (q: string): Promise<import('./types').SearchMore> => call('GET', '/search/more?q=' + encodeURIComponent(q)), // the global search: what the app doesn't hold
   staffMutes: (): Promise<import('./types').StaffMute[]> => call('GET', '/admin/notifications'), // staff: my work-item notifications
   setStaffMute: (kind: string, on: boolean): Promise<import('./types').StaffMute[]> => call('PUT', `/admin/notifications/${kind}`, { on }), // admin → People: by name, @username, student ID or id
   inbox: (): Promise<import('./types').Inbox> => call('GET', '/admin/inbox'), // staff: everything waiting, and what was done lately
