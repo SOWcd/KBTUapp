@@ -34,6 +34,10 @@ function first(path: string): Promise<Response> | undefined {
   return f.auth === tg.initData && Date.now() - f.at < 20_000 ? p : undefined;
 }
 
+// the waits between tries of /me while the server restarts (call), and the answers that mean it is restarting
+const RESTART = [500, 1000, 2000, 4000];
+const RESTARTING = new Set([502, 503, 504]);
+
 /** Events the admin opened from Admin: their own routes go as their organizers' (server app.viewer, X-Staff-Event),
  *  each write in the owner's log. Only Admin adds to it. */
 export const staffEvents = new Set<Id>();
@@ -68,15 +72,25 @@ async function call<T>(method: string, path: string, body?: unknown, staffEvent?
     account.addEventListener('abort', cancel, { once: true });
     timeout.addEventListener('abort', cancel, { once: true });
   }
+  const send = () => fetch('/api' + path, {
+    method,
+    headers: { ...authHeaders(path.startsWith('/web/')), ...staffOf(method, path, staffEvent), ...(body === undefined ? {} : { 'Content-Type': raw ? body.type || 'application/octet-stream' : 'application/json' }) },
+    body: body === undefined ? undefined : raw ? body : JSON.stringify(body),
+    // a lost answer (a deploy's restart, iOS backgrounding the app) would spin forever: Cloudflare gives up at 100 s
+    // anyway; files are spared (a slow upload takes longer). No AbortSignal.timeout before iOS 16: no limit there
+    signal: timeout ? (fallback?.signal ?? AbortSignal.any([account, timeout])) : account,
+  });
   try {
-    r = await ((method === 'GET' && body === undefined && first(path)) || fetch('/api' + path, {
-      method,
-      headers: { ...authHeaders(path.startsWith('/web/')), ...staffOf(method, path, staffEvent), ...(body === undefined ? {} : { 'Content-Type': raw ? body.type || 'application/octet-stream' : 'application/json' }) },
-      body: body === undefined ? undefined : raw ? body : JSON.stringify(body),
-      // a lost answer (a deploy's restart, iOS backgrounding the app) would spin forever: Cloudflare gives up at 100 s
-      // anyway; files are spared (a slow upload takes longer). No AbortSignal.timeout before iOS 16: no limit there
-      signal: timeout ? (fallback?.signal ?? AbortSignal.any([account, timeout])) : account,
-    }));
+    let p = (method === 'GET' && body === undefined && first(path)) || send();
+    // /me decides whether the app opens at all: a deploy's restart (the proxy's 502-504, or a dropped line for a few
+    // seconds) is waited out, ~8 s in all, instead of the failure screen. Reads only, so a repeat is harmless
+    if (method === 'GET' && /^\/me(?:\?|$)/.test(path)) for (const ms of RESTART) {
+      const x = await p.catch(() => null);
+      if (x && !RESTARTING.has(x.status) || account.aborted) break;
+      await new Promise((ok) => setTimeout(ok, ms));
+      p = send();
+    }
+    r = await p;
     if (r.status !== 204) data = await r.json().catch(() => null);
   } catch {
     throw new ApiErr('unavailable', 'network');
