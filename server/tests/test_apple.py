@@ -367,3 +367,22 @@ def test_group_things_and_forum_comments_stay_telegram(both):
     assert not outbox._pushes(cfg, {**m, "kind": "credit_ask"}, "") and outbox._pushes(cfg, {**m, "kind": "backup_ok"}, "")
     assert not outbox._pushes(cfg, {"pushable": 1, "kind": "backup_ok"}, [[{"text": "x", "start": "y"}]])  # a keyboard
     assert push.on(cfg) and not push.on(replace(cfg, apns_key=""))
+
+
+def test_a_linked_apple_shows_in_telegram_and_can_be_undone(phone):
+    c, _ = phone
+    assert c.post("/api/web/login", headers=WRITE, json=widget(715)).status_code == 204
+    assert c.post("/api/me/logins/apple", headers=WRITE, json=proof("sub.thief")).status_code == 204  # a borrowed session
+    assert "logins" not in c.get("/api/me", headers=tma(716)).json()  # nothing linked: the Mini App shows no sign-ins
+    assert c.get("/api/me", headers=tma(715)).json()["logins"] == {"telegram": True, "apple": True}  # the owner sees it
+    assert c.delete("/api/me/logins/apple", headers=tma(715)).status_code == 204  # and undoes it there
+    fresh = TestClient(c.app, base_url=ORIGIN)
+    assert apple_in(fresh, proof("sub.thief")).status_code == 204
+    assert fresh.get("/api/me", headers=WEB).json()["logins"] == {"telegram": False, "apple": True}  # a new, empty account
+
+
+def test_a_deeply_nested_token_is_refused_not_a_crash(phone):
+    c, _ = phone
+    deep = b64(b"[" * 3000 + b"]" * 3000)
+    body = {**proof(), "token": f"{deep}.{deep}.{b64(b'x')}"}
+    assert apple_in(TestClient(c.app, base_url=ORIGIN), body).status_code == 403

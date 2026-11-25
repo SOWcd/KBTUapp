@@ -10,6 +10,11 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions options: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        // the Keychain outlives an uninstall: a fresh install starts signed out
+        if !UserDefaults.standard.bool(forKey: "installed") {
+            Keychain.delete()
+            UserDefaults.standard.set(true, forKey: "installed")
+        }
         window = UIWindow(frame: UIScreen.main.bounds)
         window?.backgroundColor = UIColor(named: "Ground")
         window?.rootViewController = web

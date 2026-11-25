@@ -81,7 +81,7 @@ def subject(token: object, nonce: object, audience: str, now: int) -> str | None
         if key is None:
             return None
         key.verify(_b64(sig), f"{head}.{body}".encode(), padding.PKCS1v15(), hashes.SHA256())
-    except (ValueError, TypeError, InvalidSignature):  # malformed base64, JSON or parts; a wrong signature
+    except (ValueError, TypeError, RecursionError, InvalidSignature):  # malformed base64, JSON (or absurdly nested) or parts; a wrong signature
         return None
     aud = c.get("aud")
     sub, iat, exp = c.get("sub"), c.get("iat"), c.get("exp")

@@ -754,6 +754,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def me_payload(request: Request, con: Con, v: Me, *, report_log: bool = False):
         demo = is_demo(request)  # the reviewer sees no real person: no support contacts, no donation number
         web = bool(getattr(request.state, "web_token", ""))
+        lg = logic.apple.logins(con, v.id)
         if not web:
             logic.guests.claim_username(con, v.id)  # a guest list's ticket by Telegram username, at once
         reports = {}
@@ -765,7 +766,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                     reports["reportLog"] = logic.evreports.own_log(con, v) if summary["consent"] else []
         return logic.me(con, v) | {"consentNow": policy_for(con, v, policy), "board": board_on(app.state.cfg, v), "support": [] if demo else logic.account.support(con),
                                    # outside Telegram: which sign-ins reach this account (Settings links the other one)
-                                   **({"logins": logic.apple.logins(con, v.id)} if web else {}),
+                                   **({"logins": lg} if web or lg["apple"] else {}),  # the Mini App too once Apple is linked: a link from a borrowed session is seen and undone there
                                    **({"forumChannel": True} if app.state.cfg.forum_channel else {}),
                                    **({"subjects": True} if v.student and logic.subjects.on(cfg.subjects_file) else {}),  # the subjects' cards
                                    **reports,
