@@ -286,8 +286,7 @@ def admin_stats(con, v: Viewer) -> dict:
 
 
 def admin_day(con, v: Viewer, day: int) -> dict:
-    """One day of the chart: how many opened the app and who, the newcomers marked. `people` is None for
-    a day before the visits were kept (or past their 30 days): only the nightly count is known."""
+    """One day of the chart. Only the owner sees the people who visited, during the 30-day retention window."""
     _admin(v)
     lo = day * 86400 - 5 * 3600
     who = rows(con, """SELECT u.id, u.tg_first_name, u.tg_last_name, u.tg_username, u.nick, u.created_at >= ? AS new, s.user_id IS NOT NULL AS student,
@@ -299,7 +298,7 @@ def admin_day(con, v: Viewer, day: int) -> dict:
     return {"day": day, "active": len(who) if kept else (row["active"] if row else 0), "new": sum(r["new"] for r in who) if kept else (row["new"] if row else 0),
             "people": [{"id": r["id"], "name": r["nick"] or " ".join(x for x in (r["tg_first_name"], r["tg_last_name"]) if x) or "—",
                         "username": r["tg_username"], "new": bool(r["new"]), "student": bool(r["student"]),
-                        "profile": bool(r["profile"])} for r in who] if kept else None}   # no profile (only opened the app): the row opens Telegram
+                        "profile": bool(r["profile"])} for r in who] if kept and _owner(con, v) else None}
 
 
 # what the translator works on (ai_next's own conditions): what the AI page counts and its retry resets
@@ -349,7 +348,7 @@ from .forum import asks, forum_sweep  # noqa: E402
 from .moderation import TAKEDOWN_KEEP  # noqa: E402
 from .newsfeed import wipe_post  # noqa: E402
 from . import appeals, assistant, chatlist, chatmod, chatsync, forms, helpus, mapflaws, santa, stats, web_auth  # noqa: E402
-from .oversight import _admin  # noqa: E402
+from .oversight import _admin, _owner  # noqa: E402
 from .queues import AI_TRIES, ai_state  # noqa: E402
 from .seats import notify  # noqa: E402
 from .teams import roles_backfill  # noqa: E402
