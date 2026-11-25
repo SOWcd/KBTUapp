@@ -179,3 +179,38 @@ it.each([
 ])('%s is not a link the table knows', async (p) => {
   expect(await run(p)).toEqual({ opened: false, log: [] });
 });
+
+// main's own patterns, copied from its deepLink: what the table opens is exactly what they took
+const MAIN = [
+  /^join_(\d+)_([0-9a-f]{24})$/, /^pres_(\d+)_([0-9a-f]{24})$/, /^gl_([0-9a-f]{24})$/, /^bq_[0-9a-f]{24}_\d{1,12}_[0-9a-f]{16}$/,
+  /^gq_([A-Za-z0-9_-]+\.[0-9a-f]{24})$/, /^ms_([\w-]{24})$/, /^apl_(\d+)$/, /^ask_(\d+)$/, /^ph_(\d+)$/, /^cp_(\d+)$/, /^cm_(\d+)$/,
+  /^aw_([a-z0-9_]{1,40})$/, /^ci_\d+_\d+_[0-9a-f]{16}$/, /^hq_\d+_\d+_\d+_[0-9a-f]{16}$/, /^et_([0-9a-f]{24})$/, /^vh_([0-9a-f]{32})$/,
+  /^meet_(\d+)$/, /^sh_([0-9a-f]{16})$/, /^fp(?:_(\d+))?$/, /^sj_([0-9a-f]{10})$/, /^fa_(\d+)$/, /^r_([A-Z2-7]{10})$/, /^ce_(\d+)$/,
+  /^rc_(\d+)$/, /^iv_(\d+)$/, /^tc_(\d+)$/, /^memo_(\d+)$/, /^(ev|tk|cl|jr|u|tm|st|sn|mg)_(\d+)(?:_[A-Z2-7]{10})?$/,
+];
+const PREFIXES = ['join', 'pres', 'gl', 'bq', 'gq', 'ms', 'apl', 'ask', 'ph', 'cp', 'cm', 'aw', 'ci', 'hq', 'et', 'vh', 'meet', 'sh', 'fp', 'sj', 'fa', 'r',
+  'ce', 'rc', 'iv', 'tc', 'memo', 'ev', 'tk', 'cl', 'jr', 'u', 'tm', 'st', 'sn', 'mg'];
+// each prefix with good and bad arguments: not a number, signs and dots, spaces, a cut or a long code, the wrong case
+const ARGS = ['', 'abc', '1x', 'x1', '-1', '+1', '1.5', '1e3', ' 1', '1 ', '0x1f', 'NaN', 'Infinity', '١', '5\n', '05', '5', '5_',
+  `5_${H10}`, `5_${H10.toLowerCase()}`, `5_${H10.slice(1)}`, `5_${H10}K`, `5_${H10}_${H10}`, `12_${H24}`, `12_${H24}_`, H10, H16, H24, H32,
+  H24.toUpperCase(), `${H24}_123_${H16}`, `${H24}_1234567890123_${H16}`, `1_2_${H16}`, `1_2_3_${H16}`, `club.${H24}`, `a_b-c.${H24}`,
+  `.${H24}`, 'init26f', 'Init', 'a'.repeat(40), 'a'.repeat(41), '0123abcdef', '0123ABCDEF', 'ABCDEFGH18', 'ABCDEFGH19'];
+const corpus = PREFIXES.flatMap((k) => [k, ...ARGS.map((a) => `${k}_${a}`)]);
+
+it(`the table opens exactly what main's patterns took (${corpus.length} links, in Telegram and outside)`, async () => {
+  for (const inTg of [true, false]) {
+    h.tg.in = inTg;
+    for (const p of corpus) {
+      const before = { tab: h.ui.tab, club: h.ui.club };
+      const main = MAIN.some((re) => re.test(p)) && (inTg || !p.startsWith('ms_'));
+      const opened = openDeepLink(p, app);
+      if (opened) { await tick(); await tick(); } // what it opened settles; a link not taken scheduled nothing
+      const log = h.log.splice(0);
+      expect([p, inTg, opened]).toEqual([p, inTg, main]);
+      if (!opened) expect([p, log, h.ui.tab, h.ui.club]).toEqual([p, [], before.tab, before.club]);
+      // an id the opener gets is a whole number, never NaN from a suffix that slipped through
+      for (const v of log.flat(2)) if (typeof v === 'number') expect([p, Number.isSafeInteger(v)]).toEqual([p, true]);
+      h.ui.tab = 'afisha'; h.ui.club = null;
+    }
+  }
+}, 30_000);
