@@ -59,9 +59,9 @@ def test_lost_post_goes_again_only_when_asked(env, monkeypatch):
     fchannel.mod_decide(con, mod, pid, True, True)
     assert con.execute("SELECT status, why FROM fchan_posts WHERE id = ?", (pid,)).fetchone()[:] == ("live", None)
     # a lost one may still be removed without asking; a held one that isn't lost goes out as before
-    lost = con.execute("INSERT INTO fchan_posts (user_id, body, anon, status, why, created_at) VALUES (?, 'b', 0, 'held', 'lost', 0)", (ann["id"],)).lastrowid
+    lost = con.execute("INSERT INTO fchan_posts (user_id, body, anon, status, why, created_at) VALUES (?, 'bb', 0, 'held', 'lost', 0)", (ann["id"],)).lastrowid
     fchannel.mod_decide(con, mod, lost, False)
-    held = con.execute("INSERT INTO fchan_posts (user_id, body, anon, status, why, created_at) VALUES (?, 'c', 0, 'held', 'person', 0)", (ann["id"],)).lastrowid
+    held = con.execute("INSERT INTO fchan_posts (user_id, body, anon, status, why, created_at) VALUES (?, 'cc', 0, 'held', 'person', 0)", (ann["id"],)).lastrowid
     fchannel.mod_decide(con, mod, held, True)
     assert con.execute("SELECT status FROM fchan_posts WHERE id = ?", (held,)).fetchone()[0] == "live"
 
