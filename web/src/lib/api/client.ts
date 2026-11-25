@@ -505,6 +505,8 @@ export const server = {
   revealChannelPost: (id: Id): Promise<PersonRef> => call('POST', `/forum-posts/${id}/reveal`), // the owner alone; audited
   channelReplies: (post: Id): Promise<import('./types').ChannelReply[]> => call('GET', `/forum-posts/${post}/replies`), // my replies under my anonymous post
   newChannelReply: (post: Id, body: string, link: string): Promise<import('./types').ChannelReply> => call('POST', `/forum-posts/${post}/replies`, { body, link }), // the AI first; the bot sends it seconds later
+  channelThread: (post: Id): Promise<import('./types').ChannelComment[]> => call('GET', `/forum-posts/${post}/thread`), // the comments written in the app
+  newChannelComment: (post: Id, body: string): Promise<import('./types').ChannelReply> => call('POST', `/forum-posts/${post}/comments`, { body }), // signed with my name; the AI first, the bot sends it seconds later
   deleteChannelReply: (id: Id): Promise<void> => call('DELETE', `/forum-replies/${id}`), // mine: out of the group
   channelReplyMod: (id: Id, ok: boolean, again: boolean = false): Promise<void> => call('POST', `/forum-replies/${id}/mod`, { ok, again }), // held: out or removed; live: kept or taken down; again: a lost send, re-sent
   channelReplyRestore: (id: Id): Promise<void> => call('POST', `/forum-replies/${id}/restore`), // a take-down undone

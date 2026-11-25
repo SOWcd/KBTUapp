@@ -3,7 +3,7 @@
   // glass (base.css .glass-pill, Button's glass); each post the app's card on the plain ground: the face
   // (an accent dot on it: new since my last visit), the name over the time, the words; under them Telegram's reactions
   // as bare counts (read-only: they are Telegram's; no chip around them, nothing to press) and, on the right, the one way
-  // to the comments, which live in Telegram: who replied, and a grey button with Telegram's mark and the count (an accent
+  // to the comments, which open in the app (ChannelThread): who replied, and a grey button with the count (an accent
   // one on every card outshouted the words). The post itself opens nothing. My own posts are marked (on their way, under review, removed) and can be deleted.
   // Nothing jumps: the 30 s refresh never puts posts above the one I'm reading; they wait behind an "N new" pill (at
   // the top already: they just come in). Under the 50th, "Show earlier" brings the next 50.
@@ -18,7 +18,7 @@
   import { fade, type TransitionConfig } from 'svelte/transition';
   import { calm } from '../../ui/fold';
   import ArrowUp from '@lucide/svelte/icons/arrow-up';
-  import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
+  import MessageCircle from '@lucide/svelte/icons/message-circle';
   import Lightbulb from '@lucide/svelte/icons/lightbulb';
   import SquarePen from '@lucide/svelte/icons/square-pen';
   import Trash2 from '@lucide/svelte/icons/trash-2';
@@ -41,7 +41,7 @@
   import { sheets } from '../../lib/state/sheets';
   import { t, tn } from '../../lib/i18n/index.svelte';
   import { nickName } from '../../lib/i18n/nicks';
-  import { haptic, inTelegram, on, openLink, shareCard } from '../../lib/tg';
+  import { haptic, inTelegram, on, shareCard } from '../../lib/tg';
   import { phrase } from '../../lib/state/data.svelte';
   import { ago } from '../../lib/time';
   import { compact } from '../../lib/chats';
@@ -49,7 +49,6 @@
   import EmptyState from '../../ui/EmptyState.svelte';
   import IconButton from '../../ui/IconButton.svelte';
   import Button from '../../ui/Button.svelte';
-  import TelegramMark from '../../ui/TelegramMark.svelte';
   import Marked from './Marked.svelte';
   import PullSearch, { PULL } from '../../ui/PullSearch.svelte';
   const TOP = inTelegram ? PULL : 0; // the pull-down search field above the feed is Telegram's only (PullSearch)
@@ -252,8 +251,8 @@
       .catch(() => { haptic.error(); say(t('common.error'), 'warning_3d'); });
   };
 
-  // the comments, in Telegram: its button alone opens them
-  const talk = (p: ChannelFeedPost) => { haptic.tap(); openLink(comments(p)); };
+  // the comments: written and read in the app (ChannelThread); the sheet's last row opens the same thread in Telegram
+  const talk = (p: ChannelFeedPost) => { haptic.tap(); sheets.channelThread({ id: p.id, body: p.body, mine: p.mine, anon: p.anon, link: comments(p) }); };
 </script>
 
 <svelte:document bind:visibilityState={visibility} />
@@ -351,7 +350,7 @@
               {#if p.faces.length}<span class="faces" aria-hidden="true">{#each p.faces as f, i (i)}<span class="f" style:z-index={p.faces.length - i}><Avatar person={{ ...f, id: f.name.charCodeAt(0) }} size={20} tappable={false} /></span>{/each}</span>{/if}
               <span class="share"><IconButton kind="plain" size="s" icon={Share} label={t('event.share')} onclick={() => share(p)} /></span>
               <span class="talk"><Button kind="gray" size="s" label="{t('fc.comments')}{p.comments ? `: ${p.comments}` : ''}" onclick={() => talk(p)}>
-                {#snippet icon()}<TelegramMark size={16} />{/snippet}<span class="go">{t('fc.discuss')}{#if p.comments}<span class="n">{compact(p.comments)}</span>{/if}<ArrowUpRight size={14} strokeWidth={2.4} aria-hidden="true" /></span>
+                {#snippet icon()}<MessageCircle size={16} />{/snippet}<span class="go">{t('fc.discuss')}{#if p.comments}<span class="n">{compact(p.comments)}</span>{/if}</span>
               </Button></span>
             </div>
           {/if}
@@ -484,7 +483,7 @@
   /* share: a quiet icon just before the comments, the actions together under the thumb */
   .share { flex: none; display: flex; margin-left: auto; --plain-ink: var(--text-3); }
   .faces + .share { margin-left: 0; }
-  .go { display: inline-flex; align-items: center; gap: 2px; white-space: nowrap; } /* ↗: it leaves the app, for Telegram */
+  .go { display: inline-flex; align-items: center; gap: 2px; white-space: nowrap; }
   .n { margin-left: 2px; opacity: 0.6; font-variant-numeric: tabular-nums; }
   @media (max-width: 359px) { .r:nth-child(n + 2), .faces { display: none; } .faces + .share { margin-left: auto; } } /* 320: the top reaction, the button on the right */
 

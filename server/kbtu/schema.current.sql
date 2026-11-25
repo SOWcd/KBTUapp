@@ -516,7 +516,7 @@ CREATE TABLE fchan_replies (
       send_at     INTEGER,
       drop_at     INTEGER,
       created_at  INTEGER NOT NULL
-    , explained INTEGER, ai_reason TEXT) STRICT;
+    , explained INTEGER, ai_reason TEXT, user_id INTEGER REFERENCES users(id) ON DELETE CASCADE) STRICT;
 CREATE TABLE fchan_reply_reports (
       reply_id INTEGER NOT NULL REFERENCES fchan_replies(id) ON DELETE CASCADE,
       user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
