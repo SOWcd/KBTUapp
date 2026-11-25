@@ -17,7 +17,8 @@ import anyio.to_thread
 import httpx
 
 from . import db, logic, media, portal, receipt, texts
-from .bot import FRESH, _avatar, _drop_free, _student, _tg
+from .bot import FRESH, _student, _tg
+from .chores import _avatar, _drop_free
 from .config import Config
 from .logic import notifications, now, one, rows
 from .logic.account import _Taken

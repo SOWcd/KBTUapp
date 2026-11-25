@@ -5,7 +5,7 @@ import sqlite3
 import threading
 import time
 
-from kbtu import bot, db, logic, outbox
+from kbtu import chores, db, logic, outbox
 from test_core import env, login, tma  # noqa: F401  (env: the fixture)
 
 
@@ -97,8 +97,8 @@ def test_optimize_runs_once_a_night(env, monkeypatch):
     monkeypatch.setattr(time, "time", lambda: 86400 * 100 + 3600)  # 06:00 Almaty
     q: list[str] = []
     con.set_trace_callback(q.append)
-    bot.optimize_day(con)
-    bot.optimize_day(con)
+    chores.optimize_day(con)
+    chores.optimize_day(con)
     assert sum(s.startswith("PRAGMA optimize") for s in q) == 1
 
 

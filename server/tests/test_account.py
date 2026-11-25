@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from kbtu import auth, bot, config, db, logic, outbox, app as server
+from kbtu import auth, chores, config, db, logic, outbox, app as server
 from test_core import BOT, delete_now, env, login, set_clock, tma  # noqa: F401  (env: the fixture)
 
 
@@ -74,7 +74,7 @@ def test_delete_my_data(env):
     assert delete(tma(23, "Guest")).status_code == 401
     at = delete(A).json()["deleteAt"]                                                    # a week to change my mind
     assert at > time.time() + 6 * 86400 and con.execute("SELECT 1 FROM bot_outbox WHERE user_id = ? AND kind = 'delete_soon'", (ali["id"],)).fetchone()
-    bot.purge(cfg, con)
+    chores.purge(cfg, con)
     assert c.get("/api/me", headers=A).json()["student"] is not None                    # not yet
     assert c.post("/api/me/keep", headers=A).json()["deleteAt"] is None                 # changed my mind
     no = con.execute("SELECT card_no FROM users WHERE id = ?", (ali["id"],)).fetchone()[0]
@@ -113,7 +113,7 @@ def test_delete_my_data(env):
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'member', 0)", (zhan["id"],))
     assert delete(tma(20, "Pres"), photos=True).status_code == 200
     con.execute("UPDATE users SET delete_at = 0 WHERE id = ?", (pres["id"],))
-    bot.purge(cfg, con)
+    chores.purge(cfg, con)
     assert con.execute("SELECT user_id FROM org_members WHERE org_id = 1 AND role = 'president'").fetchone()[0] == zhan["id"]
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (2, 'solo', 'club', 'Solo', 'S', 'laptop_3d', 0)")
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (2, ?, 'president', 0)", (zhan["id"],))
@@ -151,7 +151,7 @@ def test_delete_with_a_ticket_out_of_sight(env):
     logic.notify(con, zhan["id"], "friend_invite", f"fi:1:{ali['id']}")
     c.post("/api/me/delete", headers=A, json={"photos": True})
     con.execute("UPDATE users SET delete_at = 0 WHERE id = ?", (ali["id"],))
-    bot.purge(cfg, con)
+    chores.purge(cfg, con)
     assert c.get("/api/me", headers=A).json()["student"] is None
     assert con.execute("SELECT status FROM registrations WHERE user_id = ?", (zhan["id"],)).fetchone()[0] == "going"
     assert not con.execute("SELECT 1 FROM bot_outbox WHERE kind = 'friend_invite'").fetchone()
@@ -180,7 +180,7 @@ def test_delete_waits_for_a_paid_ticket(env):
     delete_now(c, cfg, A)
     assert c.get("/api/me", headers=A).json()["student"] is not None                    # waits for the event
     con.execute("UPDATE events SET starts_at = ?", (int(time.time()) - 5 * 3600,))
-    bot.purge(cfg, con)
+    chores.purge(cfg, con)
     assert c.get("/api/me", headers=A).json()["student"] is None
 
 
@@ -429,7 +429,7 @@ def test_forgetting(env, monkeypatch):
     for f, age in ((old, 15), (new, 1)):
         f.write_bytes(b"x")
         os.utime(f, (t - age * 86400, t - age * 86400))
-    bot.backup_day(cfg, con)
+    chores.backup_day(cfg, con)
     assert not old.exists() and new.exists()
 
 

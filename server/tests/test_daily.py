@@ -7,7 +7,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from kbtu import ai, auth, bot, db, logic, outbox, app as server, texts
+from kbtu import ai, auth, chores, db, logic, outbox, app as server, texts
 from test_core import env, login, set_clock, tma  # noqa: F401  (env: the fixture)
 
 
@@ -204,8 +204,8 @@ def test_nightly_backup(env, monkeypatch):
     day0 = 20000 * 86400 - 5 * 3600                                    # 00:00 Almaty
     for d in range(16):
         for hour in (3, 5, 6):                                         # before 04:00 nothing; after, once
-            monkeypatch.setattr(bot.time, "time", lambda: day0 + d * 86400 + hour * 3600)
-            bot.backup_day(cfg, con)
+            monkeypatch.setattr(chores.time, "time", lambda: day0 + d * 86400 + hour * 3600)
+            chores.backup_day(cfg, con)
     kept = sorted((Path(cfg.db_path).resolve().parent / "backups").glob("kbtu-*.db"))
     assert len(kept) == 14 and kept[-1].name == "kbtu-2024-10-19.db"
     copy = db.connect(str(kept[-1]))
@@ -232,57 +232,57 @@ def test_offsite_backup(env, monkeypatch):
     monkeypatch.setattr(offsite, "upload", up)
     sunday = 20002 * 86400                                              # 05:00 Almaty, Sunday 2024-10-06
     clock = [sunday]
-    monkeypatch.setattr(bot.time, "time", lambda: clock[0])
+    monkeypatch.setattr(chores.time, "time", lambda: clock[0])
     set_clock(monkeypatch, lambda: clock[0])
-    monkeypatch.setattr(bot, "now", lambda: clock[0])
+    monkeypatch.setattr(chores, "now", lambda: clock[0])
     jobs = []
     class Loop:
         def create_task(self, coro):
             coro.close()
             return None
-    monkeypatch.setattr(bot.asyncio, "get_running_loop", lambda: Loop())
-    monkeypatch.setattr(bot.asyncio, "to_thread", lambda fn, *a: (jobs.append(a), fn(*a), _noop())[2])
-    bot.backup_day(cfg, con)
-    bot.offsite_round(cfg, con)                                         # the first try fails
+    monkeypatch.setattr(chores.asyncio, "get_running_loop", lambda: Loop())
+    monkeypatch.setattr(chores.asyncio, "to_thread", lambda fn, *a: (jobs.append(a), fn(*a), _noop())[2])
+    chores.backup_day(cfg, con)
+    chores.offsite_round(cfg, con)                                         # the first try fails
     assert sent == [] and len(jobs) == 1
     fail[0] = False
-    bot.offsite_round(cfg, con)                                         # within the hour: not again
+    chores.offsite_round(cfg, con)                                         # within the hour: not again
     assert len(jobs) == 1
     clock[0] += 3600
-    bot.offsite_round(cfg, con)
+    chores.offsite_round(cfg, con)
     assert [n.split("/")[0] for n, _ in sent] == ["db", "media"] and sent[0][1] == ["kbtu-2024-10-06.db", "receipts", "deletions.log", "deletions.salt"]
     clock[0] += 3600
-    bot.offsite_round(cfg, con)                                         # done for the day
+    chores.offsite_round(cfg, con)                                         # done for the day
     assert len(sent) == 2
     con.execute("INSERT INTO users (tg_id, role, created_at, seen_at) VALUES (9001, 'admin', 0, 0)")
     alerts = lambda: con.execute("SELECT COUNT(*) FROM bot_outbox WHERE kind = 'backup_failed'").fetchone()[0]  # noqa: E731
     fail[0] = True
     clock[0] = sunday + 86400 + 6 * 3600                                # Monday 11:00, failing: Sunday's copy is there
-    bot.offsite_round(cfg, con)
+    chores.offsite_round(cfg, con)
     assert alerts() == 0
     clock[0] += 86400                                                   # Tuesday 11:00: two nights without one
-    bot.offsite_round(cfg, con)
+    chores.offsite_round(cfg, con)
     clock[0] += 3600
-    bot.offsite_round(cfg, con)                                         # once per outage, not once a day
+    chores.offsite_round(cfg, con)                                         # once per outage, not once a day
     clock[0] += 86400
-    bot.offsite_round(cfg, con)                                         # Wednesday, still failing: no second alert
+    chores.offsite_round(cfg, con)                                         # Wednesday, still failing: no second alert
     assert alerts() == 1
     oks = lambda: con.execute("SELECT COUNT(*) FROM bot_outbox WHERE kind = 'backup_ok'").fetchone()[0]  # noqa: E731
     fail[0] = False
     clock[0] += 3600
-    bot.backup_day(cfg, con)                                            # the night's local copy, as the bot makes it
-    bot.offsite_round(cfg, con)                                         # tonight's copy gets through
+    chores.backup_day(cfg, con)                                            # the night's local copy, as the bot makes it
+    chores.offsite_round(cfg, con)                                         # tonight's copy gets through
     assert oks() == 0                                                   # (counted once R2 said 200)
     clock[0] += 60
-    bot.offsite_round(cfg, con)
+    chores.offsite_round(cfg, con)
     clock[0] += 3600
-    bot.offsite_round(cfg, con)
+    chores.offsite_round(cfg, con)
     assert oks() == 1 and not con.execute("SELECT 1 FROM meta WHERE key = 'offsite_alert'").fetchone()
     fail[0] = True                                                      # a new outage: alerted again, once
     clock[0] += 2 * 86400
-    bot.offsite_round(cfg, con)
+    chores.offsite_round(cfg, con)
     clock[0] += 3600
-    bot.offsite_round(cfg, con)
+    chores.offsite_round(cfg, con)
     assert alerts() == 2
     payload = con.execute("SELECT payload, ref FROM bot_outbox WHERE kind IN ('backup_failed', 'backup_ok')").fetchall()
     assert all("key" not in (p or "").lower() and "secret" not in (p or "").lower() for p, _ in payload)  # nothing of the R2 credentials

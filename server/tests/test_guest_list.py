@@ -3,7 +3,7 @@ import time
 
 import pytest
 
-from kbtu import admin, bot, db, logic, outbox
+from kbtu import admin, chores, db, logic, outbox
 from kbtu.logic import guests
 from test_core import _club_runs, env, login, set_clock, tma  # noqa: F401
 
@@ -242,7 +242,7 @@ def test_guest_door_age_notify_and_retention(door_event, monkeypatch):
     base, door, scanner = "/api/events/1", tma(9), tma(5)
     now = int(time.time())
     set_clock(monkeypatch, lambda: now)
-    monkeypatch.setattr(bot, "now", lambda: now)
+    monkeypatch.setattr(chores, "now", lambda: now)
     monkeypatch.setattr(outbox, "now", lambda: now)
     assert c.post(f"{base}/age", headers=tma(1), json={"user_id": minor, "adult": False}).status_code == 403
     assert c.post(f"{base}/age/notify", headers=tma(1)).status_code == 403
@@ -280,13 +280,13 @@ def test_guest_door_age_notify_and_retention(door_event, monkeypatch):
     assert guests.import_csv(con, 2, ["24B030001,0,,Jane Testov", "24B030005,0,,Jane Testov"]) == (1, 1, 0, 0)
     end = con.execute("SELECT ends_at FROM events WHERE id = 1").fetchone()[0]
     monkeypatch.setattr(logic, "stats_day", lambda con: None)
-    monkeypatch.setattr(bot, "backup_day", lambda cfg, con: None)
+    monkeypatch.setattr(chores, "backup_day", lambda cfg, con: None)
     now = end + 86399
-    bot._chores(cfg, con)
+    chores._chores(cfg, con)
     assert con.execute("SELECT COUNT(*) FROM reg_age").fetchone()[0] == 3
     assert [r[0] for r in con.execute("SELECT event_id FROM event_guests")] == [1]
     now += 1
-    bot._chores(cfg, con)
+    chores._chores(cfg, con)
     for table in ("reg_age", "event_guests"):
         assert not con.execute(f"SELECT 1 FROM {table}").fetchone()
     assert not con.execute("SELECT 1 FROM bot_outbox WHERE kind = 'u18_leave'").fetchone()

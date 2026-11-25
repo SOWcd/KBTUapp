@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from kbtu import auth, bot, bot_dm, config, db, logic, receipt, app as server, texts
+from kbtu import auth, bot, bot_dm, chores, config, db, logic, receipt, app as server, texts
 
 
 BOT = "123:" + "test" * 9
@@ -26,7 +26,7 @@ def delete_now(c, cfg, h: dict) -> None:
     assert c.post("/api/me/delete", headers=h).status_code == 200
     con = db.connect(cfg.db_path)
     con.execute("UPDATE users SET delete_at = 0 WHERE delete_at IS NOT NULL")
-    bot.purge(cfg, con)
+    chores.purge(cfg, con)
     con.close()
 
 

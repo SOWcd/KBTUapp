@@ -14,7 +14,8 @@ import time
 import httpx
 
 from . import bot, db, logic, media, mtbot, swear, texts, tgc, tiktok
-from .bot import FRESH, _call, _nap, _send, _video_seen, chat_card, premium
+from .bot import FRESH, _call, _nap, _send, _video_seen, premium
+from .chores import chat_card
 from .config import Config
 from .logic import one
 
