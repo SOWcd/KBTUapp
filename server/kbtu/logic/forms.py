@@ -25,6 +25,7 @@ from . import core
 from .core import ApiError, one, rows
 
 A_DAY = 500          # answers a form takes in a day, from everyone: a flood can't fill the disk
+KEEP = 365 * 86400   # at most one year after closing
 LONG, SHORT = 4000, 200
 MOST = 1 << 20       # an answer sheet's bytes: far above a real one; no account guards the route, so it's capped unread
 OTHER = "__other__"  # the "Other" chip's value; its words come in the field "<id>~"
@@ -154,9 +155,13 @@ def listing(con) -> list[tuple[str, bool, int]]:
         (SELECT COUNT(*) FROM form_answers a WHERE a.form_id = f.id) n FROM forms f ORDER BY f.id""")]
 
 
+def forget(con) -> None:
+    con.execute("DELETE FROM form_answers WHERE form_id IN (SELECT id FROM forms WHERE closed_at <= ?)", (core.now() - KEEP,))
+
+
 def export(con, slug: str) -> str:
     """The answers as CSV: the time (UTC), then a column per question under its label; a multi's picks joined by "; "."""
-    f = one(con, "SELECT id, spec FROM forms WHERE slug = ?", slug)
+    f = one(con, "SELECT id, spec, closed_at FROM forms WHERE slug = ?", slug)
     if not f:
         raise ApiError("not_found")
     qs = _questions(json.loads(f["spec"]))
@@ -165,6 +170,8 @@ def export(con, slug: str) -> str:
     buf = io.StringIO()
     w = csv.writer(buf, lineterminator="\n")
     w.writerow(["at"] + [q["label"] for q in qs])
+    if f["closed_at"] is not None and f["closed_at"] <= core.now() - KEEP:
+        return buf.getvalue()
     for r in rows(con, "SELECT answers, created_at FROM form_answers WHERE form_id = ? ORDER BY id", f["id"]):
         a = json.loads(r["answers"])
         w.writerow([time.strftime("%Y-%m-%d %H:%M", time.gmtime(r["created_at"]))]

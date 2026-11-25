@@ -249,6 +249,8 @@ export const sheets = {
   chats: (_chats: Chat[]) => {},
   /** the AI page in Admin: the translator's state and work */
   adminAi: () => {},
+  /** the creator's private donation receipts */
+  adminDonations: () => {},
   /** the owner's audit log */
   adminAudit: () => {},
   /** suggest any chat for the catalog: paste @name or a link */

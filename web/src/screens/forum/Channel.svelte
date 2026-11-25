@@ -263,12 +263,15 @@
   <div class="pill">{#if waiting && !atTop}<span class="pin" transition:card>
     <Button kind="glass" size="s" onclick={seeNew}>{#snippet icon()}<ArrowUp size={16} strokeWidth={2.4} />{/snippet}{tn('fc.newSince', waiting)}</Button>
   </span>{/if}</div>
-  <!-- the way to write: a glass capsule, my face and a quiet prompt, the pen at the end; the whole capsule a tap -->
-  <button class="compose glass glass-pill" class:away={channel.writing > 0} data-compose onclick={write}>
-    {#if me}<Avatar person={me} size={36} tappable={false} />{:else}<span class="av" aria-hidden="true"><VenetianMask size={18} strokeWidth={2} /></span>{/if}
-    <span class="prompt ellipsis">{t('fc.share')}</span>
-    <span class="pen" aria-hidden="true"><SquarePen size={18} strokeWidth={2} /></span>
-  </button>
+  <!-- the way to write: a glass capsule, my face and a quiet prompt, the pen at the end; the whole capsule a tap
+       (the prompt's button reaches over all of it; the pen is a round button of its own, never one inside another) -->
+  <div class="compose glass glass-pill" class:away={channel.writing > 0} data-compose>
+    <button class="open" onclick={write}>
+      {#if me}<Avatar person={me} size={36} tappable={false} />{:else}<span class="av" aria-hidden="true"><VenetianMask size={18} strokeWidth={2} /></span>{/if}
+      <span class="prompt ellipsis">{t('fc.share')}</span>
+    </button>
+    <IconButton icon={SquarePen} size="s" label={t('fc.new')} onclick={write} />
+  </div>
   <!-- the tab's two side doors, small glass pills under the composer (two full cards here crowded the feed's head):
        the subjects' cards (SUBJECTS_FILE) and the other way to speak up (APPEALS: to the Student Government alone) -->
   {#if me?.subjects || me?.appeals}
@@ -382,6 +385,8 @@
   .compose { position: relative; display: flex; align-items: center; gap: var(--s-3); padding: var(--s-3); border-radius: var(--r-full); text-align: left;
     transition: transform 450ms var(--ease-bounce); }
   .compose:active { transform: scale(0.985); transition-duration: 80ms; }
+  .open { flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--s-3); text-align: left; }
+  .open::before { content: ''; position: absolute; inset: 0; border-radius: inherit; } /* the whole capsule is the tap */
   /* it is the writing window meanwhile (ChannelCompose grows out of it and folds back). It stays under the window's
      ends: gone once the window has faded in over it (its 90 ms), back at once when the fold starts, for the window
      to thin out over */
@@ -395,9 +400,6 @@
   .pill { position: sticky; top: calc(var(--head-bottom) + var(--s-2) - var(--page-top)); z-index: var(--z-sticky); height: 0; display: flex; justify-content: center; }
   .pin { display: flex; height: max-content; }
   .prompt { flex: 1; min-width: 0; font: 450 var(--fs-body)/1.3 var(--font-text); color: var(--text-3); }
-  /* the pen: a quiet lens in the capsule, not an accent blob (a saturated blue circle read as childish); the whole capsule is the tap */
-  .pen { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--fill); color: var(--text);
-    box-shadow: inset 0 1px 0.5px var(--lg-rim-lo), inset 0 0 0 0.5px var(--line-2); }
 
   .order { margin-top: var(--s-3); }
   .feed { display: flex; flex-direction: column; gap: var(--s-3); margin-top: var(--s-3); }

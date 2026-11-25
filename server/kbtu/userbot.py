@@ -142,7 +142,17 @@ class Mirror:
             return
         msg = await self.read(channel, m)
         new = not logic.one(self.con, "SELECT 1 FROM tg_post_msgs WHERE channel = ? AND msg_id = ?", channel, m.id)
-        pid = mirror.take(self.con, channel, msg)
+        album_empty = False
+        if msg.grouped and not msg.text.strip() and getattr(m, "edit_date", None) is not None:
+            siblings = mirror.legacy_album_siblings(self.con, channel, msg)
+            if siblings is not None:
+                got = await self.client.get_messages(m.peer_id, ids=siblings) if siblings else []
+                caption = next((x for x in got if x and (x.message or "").strip()), None)
+                if caption is not None:
+                    await self.post(caption)
+                else:
+                    album_empty = True
+        pid = mirror.take(self.con, channel, msg, album_empty=album_empty)
         if msg.photo and logic.photo_free(self.con, msg.photo["path"]):  # an album's second photo, an edit's same one
             self.drop(msg.photo["path"])
         if new and pid and logic.autoev.worth(msg.text):  # a new post that reads like an announcement: the model looks once

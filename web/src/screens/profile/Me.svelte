@@ -45,6 +45,7 @@
   import Invite from './Invite.svelte';
   import AppCard from './AppCard.svelte';
   import Button from '../../ui/Button.svelte';
+  import IconButton from '../../ui/IconButton.svelte';
   import KbtuMark from '../../ui/KbtuMark.svelte';
   import Group from '../../ui/Group.svelte';
   import Row from '../../ui/Row.svelte';
@@ -106,7 +107,7 @@
   // settings' (etok), so Back returns to the list; the check saves and leaves the settings
   let edit = $state(false), etok = 0;
   let list = $state<{ photoMenu: (at: Element) => void }>();
-  let lift = $state<HTMLDivElement>(), gear = $state<HTMLButtonElement>(), shield = $state<HTMLSpanElement>();
+  let lift = $state<HTMLDivElement>(), gear = $state<HTMLSpanElement>(), shield = $state<HTMLSpanElement>();
   let tok = 0, run = 0, pending = false, liftA: Animation | undefined, fades: Animation[] = [];
   const SPRING = 'cubic-bezier(.32,.72,0,1)', EASE = 'cubic-bezier(.2,.9,.22,1)', IN = 'cubic-bezier(.4,0,1,1)', BOUNCE = 'cubic-bezier(.34,1.45,.5,1)';
   const all = (q: string) => [...(page?.querySelectorAll<HTMLElement>(q) ?? [])];
@@ -117,7 +118,7 @@
 
   // the gear's circle: the gear turns away and the check springs in, or back (their rest is CSS: .gear.done)
   function icons(check: boolean, q: boolean) {
-    const [g, c] = gear ? [...gear.children] : [];
+    const [g, c] = gear ? [...gear.querySelectorAll('.gi')] : [];
     if (!g || !c) return;
     if (q) { fade(check ? g : c, false, { duration: 150 }); fade(check ? c : g, true, { duration: 150 }); return; }
     if (check) {
@@ -241,7 +242,7 @@
     if (shield) fade(shield, true, { duration: q ? 150 : 200 });
     removeOverlay(tok); tok = 0;
     phase = 'idle'; hold = false;
-    gear?.focus({ preventScroll: true });
+    gear?.querySelector('button')?.focus({ preventScroll: true });
   }
   // at once, no motion: another tab took the screen (only code can: the nav is hidden), or the chunk failed
   function reset() {
@@ -261,20 +262,23 @@
 </script>
 
 <div class="page scroll stagger" class:set class:mode={phase !== 'idle'} class:hold bind:this={page}>
-  <div class="gears" class:out={!me?.student && !set}>
+  <div class="gears" class:out={!me?.student && !set} class:theme-dark={!me?.student && !set}>
     {#if me?.student && (staff || sg || hd)}
       <!-- the panels (the only staff things on a normal tab), each with what waits for it: the admin's (a moderator's
         is the content part) and the Student Government's (its queue of appeals) -->
       <span class="shield" bind:this={shield}>
-        {#if staff}<button class="gear" onclick={() => { haptic.tap(); sheets.admin(); }} aria-label={t('me.admin')}><ShieldCheck size={19} />{#if asks}<b class="cnt num">{asks}</b>{/if}</button>{/if}
-        {#if sg}<button class="gear" onclick={() => { haptic.tap(); sheets.sgQueue(); }} aria-label={t('apl.sg')}><Landmark size={19} />{#if sgNew}<b class="cnt num">{sgNew}</b>{/if}</button>{/if}
-        {#if hd}<button class="gear" onclick={() => { haptic.tap(); sheets.helpQueue(); }} aria-label={t('ask.queue')}><MessageCircleQuestion size={19} />{#if hdNew}<b class="cnt num">{hdNew}</b>{/if}</button>{/if}
+        {#if staff}<IconButton icon={ShieldCheck} size="s" label={t('me.admin')} badge={asks} onclick={() => sheets.admin()} />{/if}
+        {#if sg}<IconButton icon={Landmark} size="s" label={t('apl.sg')} badge={sgNew} onclick={() => sheets.sgQueue()} />{/if}
+        {#if hd}<IconButton icon={MessageCircleQuestion} size="s" label={t('ask.queue')} badge={hdNew} onclick={() => sheets.helpQueue()} />{/if}
       </span>
     {/if}
-    <!-- settings in place; in them, the check that ends them (a tap while the motion runs is ignored) -->
-    <button class="gear" class:done={phase === 'entering' || phase === 'on'} bind:this={gear} aria-label={t(phase === 'entering' || phase === 'on' ? 'me.done' : 'me.settings')}
-      onclick={() => { if (phase === 'idle') enter(); else if (phase === 'on') { if (edit) save(); else close(tok, true); } }}>
-      <span class="gi"><SettingsIcon size={19} /></span><span class="gi c"><Check size={20} strokeWidth={2.4} /></span></button>
+    <!-- settings in place; in them, the check that ends them (a tap while the motion runs is ignored). The round
+      Button itself (IconButton draws one icon; this one crossfades two); a guest's sits on the sign-in card: glass -->
+    <span class="gear" class:done={phase === 'entering' || phase === 'on'} bind:this={gear}>
+      <Button kind={!me?.student && !set ? 'glass' : 'gray'} size="s" round label={t(phase === 'entering' || phase === 'on' ? 'me.done' : 'me.settings')}
+        onclick={() => { if (phase === 'idle') enter(); else if (phase === 'on') { if (edit) save(); else close(tok, true); } }}>
+        {#snippet icon()}<span class="gi"><SettingsIcon size={18} strokeWidth={2} /></span><span class="gi c"><Check size={18} strokeWidth={2.4} /></span>{/snippet}
+      </Button></span>
   </div>
   {#if me?.student}
     <!-- my photo: settings, or in them the photo's menu at it -->
@@ -429,16 +433,11 @@
   /* 320 px with all three (shield, SG, gear): clear of the strap */
   @media (max-width: 340px) { .gears, .shield { gap: 6px; } }
   .gears.out { top: calc(var(--page-top) + 12px); right: calc(var(--gutter) + 12px); }
-  .gears.out .gear { background: rgba(255, 255, 255, 0.14); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2); color: #fff; }
-  .gear { position: relative; width: 36px; height: 36px; border-radius: 50%;
-    display: flex; align-items: center; justify-content: center; background: var(--surface); box-shadow: var(--shadow-card); color: var(--text-2); }
-  .gear::after { content: ''; position: absolute; inset: -4px; border-radius: 50%; } /* a 44 px target, the circle stays 36 */
-  .gear:active { transform: scale(0.92); }
+  .gear { display: flex; }
   /* the gear and the check stacked in one circle, crossfading (icons()) */
   .gi { position: absolute; inset: 0; display: grid; place-items: center; }
   .gi.c, .done .gi:not(.c) { opacity: 0; }
   .done .gi.c { opacity: 1; color: var(--accent-text); }
-  .cnt { position: absolute; top: -4px; right: -6px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--danger); color: #fff; font: 700 11px/18px var(--font-text); text-align: center; }
 
   /* the term's strip of weeks, the first block of its group */
   .sem { display: flex; flex-direction: column; gap: 12px; padding: 16px 16px 14px; text-align: left; }
