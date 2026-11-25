@@ -368,10 +368,10 @@ def test_amount_is_a_second_opt_in_shown_only_beside_the_name(support, monkeypat
     assert consent(support, False).status_code == 200 and board(support) == [(1, 2500)]
     assert consent(support, True).status_code == 200
     assert mine(support)["showAmount"] is False and board(support) == [(2, None), (1, 2500)]
-    # a new name version hides the amount with the name
+    # a new name version hides the amount with the name (everyone's: both agreed to sp1)
     assert shown(support, True).status_code == 200
     monkeypatch.setattr(donations, "CONSENT", "sp2")
-    assert mine(support)["showAmount"] is False and board(support) == [(1, 2500)]
+    assert mine(support)["showAmount"] is False and board(support) == []
     monkeypatch.undo()
     con.execute("UPDATE users SET tg_id = 800 WHERE id = ?", (ids[8],))
     assert board(support) == [(2, 5107)]
