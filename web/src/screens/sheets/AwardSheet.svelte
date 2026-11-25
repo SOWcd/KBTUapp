@@ -65,6 +65,7 @@
   const tiers = $derived(!!a && a.levels.length > 1);
   const next = $derived(a?.levels.find((l) => !l.reached));
   const activist = $derived(a?.code === 'activist');
+  const sponsor = $derived(a?.code === 'sponsor');
   const barTier = $derived(peek || (a && next ? a.levels.indexOf(next) + 1 : a?.levels.length ?? 0));
   const bars = $derived(a && barTier ? activistBars(a, a.levels[barTier - 1]) : []);
   const pct = $derived(a && next ? Math.min(100, Math.max(3, (a.count / next.need) * 100)) : 100); // as the words say: 6 of 15
@@ -264,23 +265,23 @@
         <!-- earned, one level: the day and how rare, one quiet line (the boxed card looked clunky) -->
         <!-- Fuel: no share of students (the server counts no givers) -->
         <p class="meta up">{a.at ? dayMonth(a.at) : t('aw.have')}{#if a.code !== 'supporter'} · {t('person.rarity', { p: share(Math.max(a.levels[0].rarity, 0.001)) })}{/if}</p>
-      {:else if next}
+      {:else if next && !sponsor}
         <div class="prog up">
           <div class="row"><b>{t('ach.progress', { count: a.count, need: next.need })}</b>{#if tiers}<span>{t('aw.toLevel', { tier: tierOf(a.levels.indexOf(next)) })}</span>{/if}</div>
           <div class="bar"><span style="width:{pct}%"></span></div>
         </div>
-      {:else}
+      {:else if !sponsor}
         <p class="top">{t('aw.topCount', { count: a.count })}</p>
       {/if}
       {#if tiers}
         <div class="steps up" role="group">
           {#each a.levels as l, i (i)}
             <button class="step" class:fut={!l.reached} class:on={(peek || a.level) === i + 1} aria-label={tierOf(i)} onclick={() => look(i + 1)}>
-              <MedalArt a={{ ...a, level: i + 1 }} size={32} /><span>{activist ? tierOf(i) : l.need}</span>
+              <MedalArt a={{ ...a, level: i + 1 }} size={32} /><span>{activist || sponsor ? tierOf(i) : l.need}</span>
             </button>
           {/each}
         </div>
-        <div class={['ladder up', { levelsOnly: activist }]}>
+        {#if !sponsor}<div class={['ladder up', { levelsOnly: activist }]}>
           <div class="lh t-cap"><span>{t('aw.levels')}</span>{#if !activist}<span>{t('aw.need')}</span>{/if}<span>{t('aw.students')}</span></div>
           {#each ladder as l (l.i)}
             <div class="lv" class:got={l.reached}>
@@ -289,7 +290,7 @@
             </div>
           {/each}
           {#if ladder.length < a.levels.length}<button class="lv more" onclick={() => { haptic.select(); all = true; }}>{t('aw.allLevels')}</button>{/if}
-        </div>
+        </div>{/if}
       {:else if !a.level}
         <p class="t-foot rar">{t('person.rarity', { p: share(a.levels[0].rarity) })}</p>
       {/if}
@@ -301,10 +302,10 @@
   {/if}
 
   <!-- small glass pills in the medal's metal, right under it, not a wide button at the bottom -->
-  {#if ref || (mine && a && a.level > 0 && a.code !== 'supporter' && !activist)}<!-- Fuel: not shared ("can you get one too?" would ask for money); Chief activist: its tier can out an anonymous writer -->
+  {#if ref || (mine && a && a.level > 0 && a.code !== 'supporter' && !activist && !sponsor)}<!-- Donation awards stay private; Chief activist's tier can out an anonymous writer. -->
     <div class="acts up" style:--glow={glow || GLOW[0]}>
       {#if ref}<button class="pill glass glass-pill main" use:glass disabled={inviting} onclick={invite}><Megaphone size={17} />{t('ref.invite')}</button>{/if}
-      {#if mine && a && a.level > 0 && a.code !== 'supporter' && !activist}
+      {#if mine && a && a.level > 0 && a.code !== 'supporter' && !activist && !sponsor}
         <button class="pill glass glass-pill" class:main={!ref} use:glass disabled={sharing} onclick={shareIt}><Share size={17} />{t('aw.share')}</button>
       {/if}
     </div>

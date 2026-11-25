@@ -265,6 +265,8 @@ BOT = {
         "join_no": ("💙 <b>{org}</b> пока не может тебя принять. Загляни в другие клубы — их много.", None),
         "team_ask": ("🙋 {name} из команды просит разрешения прийти гостем на <b>{title}</b>", "Ответить"),
         "team_ask_yes": ("✅ Разрешили — можно записаться на <b>{title}</b>\n🗓 {when} · {place}", "Записаться"),
+        "donation_confirmed": ('💙 Поддержка подтверждена. Спасибо! Медаль SPONSOR — в приложении.', 'Открыть поддержку'),
+        "donation_rejected": ('🧾 Чек поддержки отклонён. Проверь его и при необходимости прикрепи другой.', 'Открыть поддержку'),
         "credit_ask": ("💡 Твоя идея, находка или код уже в KBTU App.\nПоказать твоё имя на экране «Люди приложения»? Решаешь ты.", "Ответить"),
         "santa_news": ("🎅 Тайный Санта уже в KBTU App\n🎁 Запусти для <b>{org}</b> одной кнопкой", "🎄 Запустить"),
         "app_home": ("📱 <b>KBTU App почти как отдельное приложение!</b>", "🎬 Смотреть"),
@@ -310,6 +312,7 @@ BOT = {
         "rate": ("💬 Как прошло <b>{title}</b>? Оцени в одно касание — клуб увидит только среднюю оценку.", "Оценить"),
         "anon_feedback": ("📝 Новый анонимный отзыв о приложении", "Открыть отзывы"),
         "helper_offer": ("🤝 Кто-то хочет помочь приложению", "Открыть"),
+        "research_launch": ("📊 В KBTU App появились исследования: пройди первый опрос и предложи свой", "Исследования"),
         "club_application": ("🆕 Заявка на новый клуб: <b>{name}</b>", "Открыть заявки"),
         "club_path": ("✅ <b>{name}</b> на вершине и просит официальный статус", "Открыть заявки"),
         "event_reported": ("🚨 На событие пожаловались 3 человека. Открой и реши: оставить его или снять.", "Открыть жалобы"),
@@ -387,11 +390,16 @@ BOT = {
         "prefill_other_id": ("⚠️ Список посвящения: пользователь #{user} вошёл через Microsoft с почтой из списка, но номер студенческого у него другой, чем в списке. Данные из списка всё равно подставлены: проверь, тот ли это человек.", None),
         "prefill_id_held": ("⚠️ Список посвящения: пользователь #{user} вошёл через Microsoft с почтой из списка, а номер студенческого из списка уже у пользователя #{holder}. Данные из списка подставлены: проверь, кто из них кто.", None),
         "auto_event": ("🗓 В канале <b>{org}</b> нашлось событие. Мы сделали черновик в Студии: проверь дату и место и опубликуй.", "Проверить"),
+        "event_review": ("📝 В <b>{org}</b> участник предложил событие. Посмотри и одобри или верни.", "Посмотреть"),
+        "event_approved": ("✅ Твоё событие в <b>{org}</b> одобрено и опубликовано.", "Открыть"),
+        "event_returned": ("↩️ Событие в <b>{org}</b> вернули на доработку. Причина в Студии.", "Открыть"),
         "channel_ask": ("📢 У <b>{name}</b> есть публичный Telegram-канал? Подключи его в профиле клуба, и его посты будут появляться в новостях приложения сами, без повторной публикации.", "📢 Подключить канал"),
         "sid_free": ("🪪 Номер студенческого <b>{sid}</b> освободился. Открой приложение и введи его снова.", "Открыть"),
         "sid_check": ("🪪 Твой номер студенческого <b>{sid}</b> указал ещё один студент.\n\nПроверь его в профиле → Мои данные. Если там опечатка, исправь: номер освободится.", "Проверить"),
         "id_clash": ("🪪 Номер студенческого <b>{sid}</b> указали двое:\n1. {aname}, {amail}, <a href=\"tg://user?id={aid}\">{atg}</a> — вошёл сейчас\n2. {bname}, {bmail}, <a href=\"tg://user?id={bid}\">{btg}</a> — был раньше\nСпроси обоих. Отдать номер: unlink у второго, первый вводит номер заново.", None),
         "probation_passed": ("🎉 Испытательный срок в <b>{org}</b> пройден — ты полноправный участник!", "Открыть клуб"),
+        "meetup_review": ("🧐 На собрашке отдела {dept} отметились люди не из отдела. Открой и разберись.", "Открыть Студию"),
+        "meetup_ask": ("🧐 На собрашке отдела {dept} отметился участник без отдела. Это твой человек? Остальные отметки тоже в Студии.", "Открыть Студию"),
         "removal_ask": ("🙋 {by} просит убрать <b>{name}</b> из {org}{ban}. Реши в приложении.", "Открыть команду"),
         # Use the formal form of address for commenters unfamiliar with the app.
         "tgc_warn": ("🎓 Комментировать могут только студенты, зарегистрированные в KBTU App. Твой комментарий сохранён на 1 час — зарегистрируйся, и он будет ждать тебя в приложении.", "Зарегистрироваться"),
@@ -485,6 +493,8 @@ BOT = {
         "join_no": ("💙 <b>{org}</b> әзірге сені қабылдай алмайды. Басқа клубтарды қарап шық — таңдау көп.", None),
         "team_ask": ("🙋 Командадан {name} <b>{title}</b> іс-шарасына қонақ ретінде баруға рұқсат сұрайды", "Жауап беру"),
         "team_ask_yes": ("✅ Рұқсат берілді — <b>{title}</b> іс-шарасына жазылуға болады\n🗓 {when} · {place}", "Жазылу"),
+        "donation_confirmed": ('💙 Қолдауың расталды. Рақмет! SPONSOR медалі қосымшада.', 'Қолдауды ашу'),
+        "donation_rejected": ('🧾 Қолдау чегі қабылданбады. Тексеріп, қажет болса басқа чек тірке.', 'Қолдауды ашу'),
         "credit_ask": ("💡 Сенің идеяң, тапқаның немесе кодың енді KBTU App-та.\n«Қосымша адамдары» бетінде атыңды көрсетейік пе? Өзің шешесің.", "Жауап беру"),
         "santa_news": ("🎅 Құпия Санта енді KBTU App-та\n🎁 <b>{org}</b> үшін бір батырмамен баста", "🎄 Бастау"),
         "app_home": ("📱 <b>KBTU App енді жеке қолданбаға ұқсас!</b>", "🎬 Көру"),
@@ -530,6 +540,7 @@ BOT = {
         "rate": ("💬 <b>{title}</b> қалай өтті? Бір түртумен бағала — клуб тек орташа бағаны көреді.", "Бағалау"),
         "anon_feedback": ("📝 Қолданба туралы жаңа анонимді пікір", "Пікірлерді ашу"),
         "helper_offer": ("🤝 Біреу қолданбаға көмектескісі келеді", "Ашу"),
+        "research_launch": ("📊 KBTU App-та зерттеулер пайда болды: алғашқы сауалнамаға қатысып, өз зерттеуіңді ұсын", "Зерттеулер"),
         "club_application": ("🆕 Жаңа клубқа өтінім: <b>{name}</b>", "Өтінімдерді ашу"),
         "club_path": ("✅ <b>{name}</b> шыңда, ресми мәртебе сұрайды", "Өтінімдерді ашу"),
         "event_reported": ("🚨 Іс-шараға 3 адам шағымданды. Ашып, шеш: қалдыру керек пе, әлде алып тастау керек пе.", "Шағымдарды ашу"),
@@ -606,11 +617,16 @@ BOT = {
         "prefill_other_id": ("⚠️ Бағыштау тізімі: #{user} пайдаланушы тізімдегі поштамен Microsoft арқылы кірді, бірақ оның студенттік билет нөмірі тізімдегіден басқа. Тізімдегі деректер бәрібір енгізілді: сол адам ба, тексер.", None),
         "prefill_id_held": ("⚠️ Бағыштау тізімі: #{user} пайдаланушы тізімдегі поштамен Microsoft арқылы кірді, ал тізімдегі студенттік билет нөмірі #{holder} пайдаланушыда тұр. Тізімдегі деректер енгізілді: кім кім екенін тексер.", None),
         "auto_event": ("🗓 <b>{org}</b> арнасынан іс-шара табылды. Студияда нобайын жасадық: күні мен орнын тексеріп, жарияла.", "Тексеру"),
+        "event_review": ("📝 <b>{org}</b> клубында мүше іс-шара ұсынды. Қарап, мақұлда немесе қайтар.", "Қарау"),
+        "event_approved": ("✅ <b>{org}</b> клубындағы іс-шараң мақұлданып, жарияланды.", "Ашу"),
+        "event_returned": ("↩️ <b>{org}</b> клубындағы іс-шараң түзетуге қайтарылды. Себебі Студияда.", "Ашу"),
         "channel_ask": ("📢 <b>{name}</b> клубының ашық Telegram-арнасы бар ма? Оны клуб профилінде қос, сонда оның посттары қосымшаның жаңалықтарында өздігінен шығады, қайта жариялаудың қажеті жоқ.", "📢 Арнаны қосу"),
         "sid_free": ("🪪 <b>{sid}</b> студент нөмірі босады. Қосымшаны ашып, оны қайта енгіз.", "Ашу"),
         "sid_check": ("🪪 Сенің <b>{sid}</b> студент нөміріңді тағы бір студент көрсетті.\n\nОны профильде → Менің деректерім бөлімінде тексер. Қате болса, түзет: нөмір босайды.", "Тексеру"),
         "id_clash": ("🪪 <b>{sid}</b> студент нөмірін екі адам көрсетті:\n1. {aname}, {amail}, <a href=\"tg://user?id={aid}\">{atg}</a> — қазір кірді\n2. {bname}, {bmail}, <a href=\"tg://user?id={bid}\">{btg}</a> — бұрын болған\nЕкеуінен де сұра. Нөмірді беру: екіншісіне unlink, біріншісі нөмірді қайта енгізеді.", None),
         "probation_passed": ("🎉 <b>{org}</b> клубындағы сынақ мерзімі аяқталды — сен толыққанды мүшесің!", "Клубты ашу"),
+        "meetup_review": ("🧐 {dept} бөлімінің жиынында басқа адамдар белгіленді. Қосымшада қарап шық.", "Студияны ашу"),
+        "meetup_ask": ("🧐 {dept} бөлімінің жиынында бөлімі жоқ мүше белгіленді. Бұл сенің адамың ба? Қалған белгілер де Студияда.", "Студияны ашу"),
         "removal_ask": ("🙋 {by} <b>{name}</b> мүшесін {org} клубынан шығаруды сұрайды{ban}. Қосымшада шеш.", "Команданы ашу"),
         "tgc_warn": ("🎓 Пікірді тек KBTU App-та тіркелген студенттер жаза алады. Пікірің 1 сағатқа сақталды — тіркел, ол сені қосымшада күтеді.", "Тіркелу"),
         "tgc_warn_plain": ("🎓 Пікірді тек KBTU App-та тіркелген студенттер жаза алады.", "Тіркелу"),
@@ -699,6 +715,8 @@ BOT = {
         "join_no": ("💙 <b>{org}</b> can't take you in right now. Have a look at the other clubs — there are plenty.", None),
         "team_ask": ("🙋 {name} from the team asks to come to <b>{title}</b> as a guest", "Answer"),
         "team_ask_yes": ("✅ You're allowed — you can sign up for <b>{title}</b>\n🗓 {when} · {place}", "Sign up"),
+        "donation_confirmed": ('💙 Your support is confirmed. Thank you! Your SPONSOR medal is in the app.', 'Open support'),
+        "donation_rejected": ('🧾 Your support receipt was rejected. Check it and attach another if needed.', 'Open support'),
         "credit_ask": ("💡 Your idea, find or code is now in KBTU App.\nShow your name on the “People of the app” screen? It's your call.", "Answer"),
         "santa_news": ("🎅 Secret Santa is now in KBTU App\n🎁 Start it for <b>{org}</b> with one button", "🎄 Start"),
         "app_home": ("📱 <b>KBTU App is now almost a real app!</b>", "🎬 Watch"),
@@ -744,6 +762,7 @@ BOT = {
         "rate": ("💬 How was <b>{title}</b>? Rate it in one tap — the club only sees the average.", "Rate"),
         "anon_feedback": ("📝 New anonymous feedback about the app", "Open feedback"),
         "helper_offer": ("🤝 Someone wants to help the app", "Open"),
+        "research_launch": ("📊 Research is now in KBTU App: take the first survey and propose your own", "Research"),
         "club_application": ("🆕 An application for a new club: <b>{name}</b>", "Open applications"),
         "club_path": ("✅ <b>{name}</b> is at the top and is asking for official status", "Open applications"),
         "event_reported": ("🚨 3 people reported an event. Open it and decide: keep it or take it down.", "Open reports"),
@@ -820,11 +839,16 @@ BOT = {
         "prefill_other_id": ("⚠️ Initiation list: user #{user} signed in with Microsoft using an email address from the list, but their student ID differs from the list's. The list's data was filled in anyway: check it's the same person.", None),
         "prefill_id_held": ("⚠️ Initiation list: user #{user} signed in with Microsoft using an email address from the list, and the list's student ID is held by user #{holder}. The list's data was filled in: check who is who.", None),
         "auto_event": ("🗓 We found an event in <b>{org}</b>'s channel and made a draft in Studio: check the date and place, then publish.", "Check"),
+        "event_review": ("📝 A member proposed an event in <b>{org}</b>. Have a look, then approve or return it.", "Review"),
+        "event_approved": ("✅ Your event in <b>{org}</b> is approved and published.", "Open"),
+        "event_returned": ("↩️ Your event in <b>{org}</b> was returned for changes. The reason is in Studio.", "Open"),
         "channel_ask": ("📢 Does <b>{name}</b> have a public Telegram channel? Link it in the club profile and its posts will show up in the app's news by themselves, no reposting needed.", "📢 Link the channel"),
         "sid_free": ("🪪 Student ID <b>{sid}</b> is free now. Open the app and enter it again.", "Open"),
         "sid_check": ("🪪 Another student gave your student ID <b>{sid}</b>.\n\nCheck it in your profile → My data. If it has a typo, fix it: the ID frees up.", "Check"),
         "id_clash": ("🪪 Two people gave student ID <b>{sid}</b>:\n1. {aname}, {amail}, <a href=\"tg://user?id={aid}\">{atg}</a> — signing in now\n2. {bname}, {bmail}, <a href=\"tg://user?id={bid}\">{btg}</a> — had it before\nAsk both. To move the ID: unlink the second, the first types it again.", None),
         "probation_passed": ("🎉 You passed probation in <b>{org}</b>: you're a full member now!", "Open the club"),
+        "meetup_review": ("🧐 People outside {dept} checked in at its meetup. Open Studio to review.", "Open Studio"),
+        "meetup_ask": ("🧐 A member with no department checked in at the {dept} meetup. Are they yours? Other scans are in Studio too.", "Open Studio"),
         "removal_ask": ("🙋 {by} asks to remove <b>{name}</b> from {org}{ban}. Decide in the app.", "Open the team"),
         "tgc_warn": ("🎓 Only students registered in KBTU App can comment here. Your comment is saved for 1 hour: register, and it will be waiting for you in the app.", "Register"),
         "tgc_warn_plain": ("🎓 Only students registered in KBTU App can comment here.", "Register"),
@@ -859,9 +883,9 @@ BOT = {
 # why a receipt looks wrong, as the student reads it (the flags of logic._receipt_flags)
 # "Support the app" in Telegram Stars (logic/stars.py): the invoice's title (32 characters at most) and description (255)
 STARS_INVOICE = {
-    "ru": ("Поддержка KBTU App", "Добровольная поддержка приложения. Это не покупка: взамен ничего не выдаётся."),
-    "kk": ("KBTU App-ті қолдау", "Қосымшаны ерікті қолдау. Бұл сатып алу емес: орнына ештеңе берілмейді."),
-    "en": ("Support KBTU App", "Voluntary support for the app. This is not a purchase: nothing is given in return."),
+    "ru": ("Поддержка KBTU App", "Добровольная поддержка. Сумма и платёж сохраняются в твоём личном итоге для медали SPONSOR. Публикация имени — только с твоего согласия."),
+    "kk": ("KBTU App-ті қолдау", "Ерікті қолдау. Сома мен төлем SPONSOR медалі үшін жеке қорытындыңда сақталады. Атың тек келісіміңмен жарияланады."),
+    "en": ("Support KBTU App", "Voluntary support. Your payment and amount are saved in your private total for the SPONSOR medal. Your name is published only with your consent."),
 }
 # shown by Telegram when a pre-checkout is refused (bot._checkouts)
 STARS_REFUSED = {"ru": "Не получилось. Попробуй ещё раз.", "kk": "Болмады. Қайта көр.", "en": "That didn't work. Please try again."}
@@ -1109,6 +1133,32 @@ def attendees_csv(lang: str, title: str, people) -> tuple[str, bytes, str]:
                                        p["phone"], st[p["status"]], stamp(p["created_at"]), stamp(p["checked_in_at"]), st["yes"] if p["walk_in"] else "",
                                        st["yes"] if p["checkin_manual"] else "", *(a.get(q, "") for q in asked))])
     return "attendees.csv", ("\ufeff" + out.getvalue()).encode(), CSV_CAPTION[lang].format(title=title)[:1000]
+
+
+GUEST_LIST_HEAD = {
+    "ru": ("Имя", "Команда", "Пришёл", "Время", "Откуда"),
+    "kk": ("Аты", "Команда", "Келді", "Уақыты", "Қайдан"),
+    "en": ("Name", "Team", "Came", "Time", "From"),
+}
+GUEST_LIST_FROM = {
+    "ru": {"list": "список", "app": "приложение", "walk": "добавлен на входе", "yes": "да", "no": "нет"},
+    "kk": {"list": "тізім", "app": "қосымша", "walk": "кіреберісте қосылды", "yes": "иә", "no": "жоқ"},
+    "en": {"list": "list", "app": "app", "walk": "added at the door", "yes": "yes", "no": "no"},
+}
+GUEST_LIST_CAPTION = {"ru": "Список гостей: {title}", "kk": "Қонақтар тізімі: {title}", "en": "Guest list: {title}"}
+
+
+def guest_list_csv(lang: str, title: str, people) -> tuple[str, bytes, str]:
+    """The door's list after the event (organizing.guest_list_export): as attendees_csv, UTF-8 with a BOM and ';'."""
+    lang = lang if lang in GUEST_LIST_HEAD else "ru"
+    out, f = io.StringIO(), GUEST_LIST_FROM[lang]
+    w = csv.writer(out, delimiter=";")
+    w.writerow(GUEST_LIST_HEAD[lang])
+    stamp = lambda ts: time.strftime("%Y-%m-%d %H:%M", time.gmtime(ts + 5 * 3600)) if ts else ""  # noqa: E731
+    for p in people:
+        w.writerow([_cell(x) for x in (p["name"], p["team"], f["yes"] if p["at"] else f["no"], stamp(p["at"]),
+                                       f["walk"] if p["walkIn"] else f["app"] if p["app"] else f["list"])])
+    return "guests.csv", ("\ufeff" + out.getvalue()).encode(), GUEST_LIST_CAPTION[lang].format(title=title)[:1000]
 
 
 TEAM_LOG_HEAD = {
@@ -1446,19 +1496,22 @@ def place_or_tba(place: str, lang: str, online: bool = False) -> str:
 # /f/<slug>, a public form (logic/forms.py): the page's own words; the form's are its spec's. A browser outside
 # Telegram, no account; the spec's "lang" picks the set.
 FORM_PAGE = {
-    "ru": {"anon": "Анонимно", "other": "Другое", "otherHint": "Свой вариант", "many": "Можно выбрать несколько",
+    "ru": {"openApp": "Открыть в KBTU App", "research": "Это исследование для подтверждённых студентов. Ответить один раз можно в приложении, в разделе «Исследования» Форума.",
+           "anon": "Анонимно", "other": "Другое", "otherHint": "Свой вариант", "many": "Можно выбрать несколько",
            "required": "Ответьте на этот вопрос", "send": "Отправить", "thanks": "Спасибо!", "made": "Сделано в KBTU App",
            "fail": "Не отправилось. Проверьте интернет и попробуйте ещё раз.", "full": "Сегодня ответов слишком много. Попробуйте завтра.",
            "shut": "Форма уже закрыта.", "empty": "Ответьте хотя бы на один вопрос.",
            "closed": ("Форма закрыта", "Ответы больше не принимаются. Спасибо за интерес!"),
            "none": ("Такой формы нет", "Проверьте ссылку: возможно, в ней опечатка.")},
-    "kk": {"anon": "Анонимді", "other": "Басқа", "otherHint": "Өз нұсқаңыз", "many": "Бірнешеуін таңдауға болады",
+    "kk": {"openApp": "KBTU App-та ашу", "research": "Бұл зерттеу расталған студенттерге арналған. Қосымшадағы Форумның «Зерттеулер» бөлімінде бір рет жауап беруге болады.",
+           "anon": "Анонимді", "other": "Басқа", "otherHint": "Өз нұсқаңыз", "many": "Бірнешеуін таңдауға болады",
            "required": "Осы сұраққа жауап беріңіз", "send": "Жіберу", "thanks": "Рақмет!", "made": "KBTU App-та жасалған",
            "fail": "Жіберілмеді. Интернетті тексеріп, қайталап көріңіз.", "full": "Бүгін жауап тым көп. Ертең қайталап көріңіз.",
            "shut": "Форма жабылған.", "empty": "Кемінде бір сұраққа жауап беріңіз.",
            "closed": ("Форма жабық", "Жауаптар енді қабылданбайды. Қызығушылығыңызға рақмет!"),
            "none": ("Мұндай форма жоқ", "Сілтемені тексеріңіз: қате кеткен болуы мүмкін.")},
-    "en": {"anon": "Anonymous", "other": "Other", "otherHint": "Your own answer", "many": "Choose any that apply",
+    "en": {"openApp": "Open in KBTU App", "research": "This research is for verified students. Answer once in the Research section of the Forum in the app.",
+           "anon": "Anonymous", "other": "Other", "otherHint": "Your own answer", "many": "Choose any that apply",
            "required": "Please answer this question", "send": "Submit", "thanks": "Thank you!", "made": "Made in KBTU App",
            "fail": "It didn't send. Check your connection and try again.", "full": "Too many answers today. Please try tomorrow.",
            "shut": "This form is already closed.", "empty": "Please answer at least one question.",

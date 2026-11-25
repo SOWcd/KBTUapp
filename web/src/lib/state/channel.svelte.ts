@@ -51,6 +51,13 @@ export function removeChannelPost(id: number) {
   };
 }
 
+/** Every live post both feeds hold, once (the global search reads them before asking the server). */
+export function channelPosts(): ChannelFeedPost[] {
+  const all = new Map<number, ChannelFeedPost>();
+  for (const order of orders) for (const p of pages[order].posts ?? []) if (p.status === 'live') all.set(p.id, p);
+  return [...all.values()];
+}
+
 export function warmChannelFeeds() {
   for (const order of orders) void loadChannel(order);
 }

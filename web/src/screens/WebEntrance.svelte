@@ -22,6 +22,7 @@
   import { bootOut, bootOver, bootUnder } from '../lib/boot';
   import { APPLE_CONSENT, TG_LINK, appleToken, native, nonce, pushToken, telegramProof, tgAuthResult } from '../lib/native';
   import { say } from '../lib/state/ui.svelte';
+  import { dropTickets, keptTickets, type OfflineTicket } from '../lib/offlineTickets';
 
   const installed = matchMedia('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone;
   let view = $state<'checking' | 'signin' | 'offline'>('checking');
@@ -86,8 +87,14 @@
     view = 'checking';
     bootOver();
     try { await enter(8000); }
-    catch (e) { view = e instanceof ApiErr && e.code === 'unauthorized' ? 'signin' : 'offline'; }
+    catch (e) {
+      view = e instanceof ApiErr && e.code === 'unauthorized' ? 'signin' : 'offline';
+      if (view === 'signin') dropTickets(); // signed out elsewhere: this browser keeps no one's tickets
+      kept = view === 'offline' ? keptTickets() : [];
+    }
   }
+  // the last signed-in account's own upcoming tickets, for the door without the network (lib/offlineTickets)
+  let kept = $state<OfflineTicket[]>([]);
 
   // the iPhone app: Telegram's page in the system's sign-in sheet (its popup inside the web view loses window.opener on
   // iOS 17.5+), its proof checked against this tap's state (native.ts telegramProof); closed: nothing happens
@@ -187,6 +194,7 @@
         {#if view === 'offline'}
           <p class="fs-body dim in" style:--i={1}>{t('common.offline')}</p>
           <div class="retry in" style:--i={2}><Button kind="primary" onclick={check}>{t('common.retry')}</Button></div>
+          {#if kept.length}{#await import('../ui/OfflineTickets.svelte') then m}<div class="kept in" style:--i={3}><m.default tickets={kept} /></div>{/await}{/if}
         {:else}
           <h1 class="fs-title in" style:--i={1}>{t('web.hello')}</h1>
           <p class="about fs-body dim in" style:--i={2}>{t('web.about')}</p>
@@ -253,6 +261,7 @@
 
   .about { max-width: 28ch; margin-top: var(--s-3); text-wrap: balance; }
   .retry { margin-top: var(--s-6); }
+  .kept { width: 100%; margin-top: var(--s-8); }
 
   /* the sign-in as a timeline: a numeral in a small disc, a hairline rail running through them */
   .steps { width: 100%; margin-top: var(--s-8); list-style: none; text-align: start; color: var(--text-2); }

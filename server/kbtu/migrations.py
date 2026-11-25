@@ -2347,10 +2347,164 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE UNIQUE INDEX one_contact ON contacts(from_id, to_id, COALESCE(ask_id, 0)) WHERE withdrawn_at IS NULL;
     CREATE INDEX contacts_by_sender ON contacts(from_id, created_at);
     CREATE INDEX withdrawn_offer_messages ON contacts(id) WHERE withdrawn_at IS NOT NULL AND offer_message IS NOT NULL;"""),
+    (233, """CREATE TABLE IF NOT EXISTS donations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      source TEXT NOT NULL CHECK (source IN ('stars', 'receipt')),
+      status TEXT NOT NULL CHECK (status IN ('pending', 'confirmed', 'rejected')),
+      amount INTEGER CHECK (amount > 0),
+      stars INTEGER CHECK (stars > 0),
+      star_rate INTEGER CHECK (star_rate > 0),
+      charge_id TEXT UNIQUE,
+      file_id INTEGER REFERENCES files(id),
+      sha256 TEXT,
+      receipt_no TEXT,
+      read_amount INTEGER,
+      recipient_name TEXT,
+      sender_name TEXT,
+      paid_at INTEGER,
+      flags TEXT NOT NULL DEFAULT '',
+      auto INTEGER NOT NULL DEFAULT 0 CHECK (auto IN (0, 1)),
+      consent TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      reviewed_at INTEGER,
+      reviewed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      purge_at INTEGER,
+      revision INTEGER NOT NULL DEFAULT 0,
+      undo TEXT,
+      CHECK (status != 'confirmed' OR amount IS NOT NULL)
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS donations_by_user ON donations(user_id, created_at);
+    CREATE INDEX IF NOT EXISTS donations_by_status ON donations(source, status, created_at);
+    CREATE INDEX IF NOT EXISTS donations_by_sha ON donations(sha256) WHERE sha256 IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS donations_by_no ON donations(receipt_no) WHERE receipt_no IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS donations_by_payment ON donations(paid_at, read_amount, recipient_name);
+    CREATE TABLE IF NOT EXISTS sponsor_consents (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      version TEXT NOT NULL,
+      show INTEGER NOT NULL CHECK (show IN (0, 1)),
+      at INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS sponsor_consents_by_user ON sponsor_consents(user_id, id);
+    CREATE TRIGGER IF NOT EXISTS sponsor_moved AFTER UPDATE OF tg_id ON users
+      WHEN old.tg_id != new.tg_id BEGIN
+        INSERT INTO sponsor_consents (user_id, version, show, at)
+          SELECT user_id, version, 0, unixepoch() FROM sponsor_consents
+          WHERE user_id = old.id ORDER BY id DESC LIMIT 1;
+    END;"""),
+    # A signed comment written in the app under a channel post (fchannel.comment_*) is a row of fchan_replies that this
+    # table names a commenter for: the bot sends it under the person's short name. An anonymous author's reply has no row
+    # here, and fchan_replies itself never gets a user id (its post is the only way to that author)
+    (234, """CREATE TABLE IF NOT EXISTS fchan_signed (
+      reply_id INTEGER PRIMARY KEY REFERENCES fchan_replies(id) ON DELETE CASCADE,
+      user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE
+    ) STRICT;"""),
+    # Meetup scans keep each attempt, apart from attendance's one row.
+    (235, """ALTER TABLE qr_sessions ADD COLUMN meetup INTEGER NOT NULL DEFAULT 0 CHECK (meetup IN (0, 1));
+    ALTER TABLE qr_sessions ADD COLUMN department_id INTEGER REFERENCES org_tags(id) ON DELETE SET NULL;
+    ALTER TABLE qr_sessions ADD COLUMN department_name TEXT;
+    ALTER TABLE qr_marks ADD COLUMN meetup_review TEXT CHECK (meetup_review IN ('added', 'declined'));
+    CREATE TABLE IF NOT EXISTS qr_meet_scans (
+      id INTEGER PRIMARY KEY,
+      session_id INTEGER NOT NULL REFERENCES qr_sessions(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      scanned_at INTEGER NOT NULL,
+      phase TEXT NOT NULL CHECK (phase IN ('in', 'out')),
+      flag TEXT CHECK (flag IN ('outsider', 'department', 'unassigned'))
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS qr_meet_scans_session ON qr_meet_scans(session_id, id);
+    CREATE INDEX IF NOT EXISTS qr_meet_scans_user ON qr_meet_scans(user_id);
+    UPDATE qr_sessions SET meetup = 1 WHERE crew_event_id IS NOT NULL OR (org_id IS NOT NULL AND event_id IS NULL);
+    """),
+    # Forum research: native student surveys and signed proposals; approval never creates a form.
+    (236, """CREATE TABLE IF NOT EXISTS research_forms (
+      form_id INTEGER PRIMARY KEY REFERENCES forms(id) ON DELETE CASCADE,
+      about TEXT NOT NULL CHECK (length(about) BETWEEN 1 AND 200)
+    ) STRICT;
+    INSERT OR IGNORE INTO research_forms (form_id, about)
+      SELECT id, substr(COALESCE(NULLIF(trim(replace(json_extract(spec, '$.intro'), char(10), ' ')), ''),
+        json_extract(spec, '$.title')), 1, 200) FROM forms WHERE slug = 'library';
+    CREATE TABLE IF NOT EXISTS research_requests (
+      id INTEGER PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title TEXT NOT NULL CHECK (length(title) BETWEEN 1 AND 120),
+      goal TEXT NOT NULL CHECK (length(goal) BETWEEN 1 AND 1200),
+      questions TEXT NOT NULL CHECK (length(questions) BETWEEN 1 AND 4000),
+      organizer TEXT NOT NULL CHECK (length(organizer) BETWEEN 1 AND 200),
+      consent TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      approved_at INTEGER
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS research_requests_by_user ON research_requests(user_id, created_at);
+    CREATE TABLE IF NOT EXISTS research_answers (
+      id TEXT PRIMARY KEY NOT NULL,
+      form_id INTEGER NOT NULL REFERENCES forms(id) ON DELETE CASCADE,
+      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      answers TEXT NOT NULL,
+      consent TEXT NOT NULL,
+      day INTEGER CHECK ((day IS NULL) = (user_id IS NULL))
+    ) STRICT, WITHOUT ROWID;
+    CREATE INDEX IF NOT EXISTS research_answers_by_form ON research_answers(form_id);
+    CREATE INDEX IF NOT EXISTS research_answers_by_user ON research_answers(user_id);
+    -- No timestamp, answer key or insertion sequence: participation cannot identify an anonymous answer.
+    CREATE TABLE IF NOT EXISTS research_participants (
+      form_id INTEGER NOT NULL REFERENCES forms(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (form_id, user_id)
+    ) STRICT, WITHOUT ROWID;
+    CREATE INDEX IF NOT EXISTS research_participants_by_user ON research_participants(user_id);"""),
+    # a cover per format (the Feed's tall slide, the event's card, a list's thumbnail): its own crop (focus) or its own
+    # photo over the event's one cover; and a member's draft waiting for the club's President or a Vice (organizing.py)
+    (237, """CREATE TABLE IF NOT EXISTS event_covers (
+      event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      format TEXT NOT NULL CHECK (format IN ('feed', 'card', 'list')),
+      file_id INTEGER REFERENCES files(id),
+      focus TEXT,
+      PRIMARY KEY (event_id, format)
+    ) STRICT;
+    CREATE TABLE IF NOT EXISTS event_reviews (
+      event_id INTEGER PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE,
+      asked_at INTEGER,
+      reason TEXT CHECK (reason IN ('details', 'when', 'cover', 'repeat', 'later')),
+      returned_at INTEGER
+    ) STRICT;"""),
+    # kbtu.admin dmp: DMP's staff, put in by the creator before they open the app: a one-time "Hi, DMP" leading to
+    # Microsoft (account.me dmpHi), and staff_ok's no-student-ID sign-in. Only tg_id grants anything; a row added by
+    # username alone is an invitation that binds to the Telegram whose own signed data first shows it (account.dmp_bind).
+    # No users link: no FK
+    (238, """CREATE TABLE IF NOT EXISTS dmp_list (  -- IF NOT EXISTS: tests rewind user_version
+      id INTEGER PRIMARY KEY,
+      tg_id INTEGER UNIQUE,
+      tg_username TEXT UNIQUE COLLATE NOCASE,
+      added_at INTEGER NOT NULL,
+      greeted_at INTEGER,
+      CHECK (tg_id IS NOT NULL OR tg_username IS NOT NULL)) STRICT;"""),
+    # a guest added at the door, not on the organizers' list (guests.walk_in): a corrected list never removes it
+    (239, "ALTER TABLE event_guests ADD COLUMN walk_in INTEGER NOT NULL DEFAULT 0 CHECK (walk_in IN (0, 1));"),
+    # a club's Instagram posts in its news (instagram.py): each linked handle with its account id (NULL: no business or
+    # creator account there, asked again a day later) and how far it was taken; each post brought once (its media id),
+    # with the app post it became. Only the club's own media: nothing about people
+    (240, """CREATE TABLE IF NOT EXISTS ig_accounts (
+      org_id     INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      handle     TEXT NOT NULL,
+      ig_id      TEXT,
+      seen_until INTEGER,
+      checked_at INTEGER NOT NULL,
+      PRIMARY KEY (org_id, handle)
+    ) STRICT;
+    CREATE TABLE IF NOT EXISTS ig_media (
+      media_id     TEXT PRIMARY KEY,
+      org_id       INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      handle       TEXT NOT NULL,
+      post_id      INTEGER REFERENCES posts(id) ON DELETE SET NULL,
+      published_at INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS ig_media_by_org ON ig_media(org_id, handle);"""),
     # the iPhone app (logic/apple.py): one account, many sign-ins. Telegram stays users.tg_id; identities holds the
     # others (provider 'apple': Apple's "sub" for this app), each with its own consent (apple.CONSENT). push_devices: an
     # APNs token per signed-in web session, gone with the session (sign-out, expiry, a changed tg_id) or the account
-    (233, """CREATE TABLE IF NOT EXISTS identities (
+    (241, """CREATE TABLE IF NOT EXISTS identities (
       provider TEXT NOT NULL,
       subject TEXT NOT NULL,
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -2371,7 +2525,7 @@ MIGRATIONS: list[tuple[int, str]] = [
     # notifications on one channel per person (push.py): the app's push while a token is live, else the bot. provider:
     # who carries the token (apns now, fcm for the Android app); dead_at: its last push failed (the app's next launch
     # registers it again); users.notify_via: the person's pick in Settings, the app by default
-    (234, """ALTER TABLE push_devices ADD COLUMN provider TEXT NOT NULL DEFAULT 'apns' CHECK (provider IN ('apns', 'fcm'));
+    (242, """ALTER TABLE push_devices ADD COLUMN provider TEXT NOT NULL DEFAULT 'apns' CHECK (provider IN ('apns', 'fcm'));
     ALTER TABLE push_devices ADD COLUMN dead_at INTEGER;
     ALTER TABLE users ADD COLUMN notify_via TEXT NOT NULL DEFAULT 'app' CHECK (notify_via IN ('app', 'telegram'));"""),
 ]

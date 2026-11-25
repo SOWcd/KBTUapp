@@ -55,9 +55,11 @@ class Config:
     gemini_key: str = field(default="", repr=False)  # GEMINI_API_KEY: Google (llm.GOOGLE)
     assist_lead: str = ""       # ASSIST_LEAD: unset or google, Google answers first for who said yes (assistant.GOOGLE_YES); off: never
     ai_chain: str = ""          # "provider:model,..." over llm.CHAIN
-    # DONATE_PHONE: the creator's Kaspi number for the voluntary "Support the app" page (Settings); empty: no row.
+    # DONATE_PHONE: the creator's Kaspi number for "Support the app" (Settings); empty: Stars only.
     # Never in the repo, the bundle or the logs (repr=False)
     donate_phone: str = field(default="", repr=False)
+    # The name + initial printed by Kaspi for that phone's owner. Empty: every donation needs the creator's review.
+    donate_recipient: str = field(default="", repr=False)
     # VOLUNTEERS=<club slug>: that club's volunteers ledger (logic/vol.py); empty: off
     volunteers: str = ""
     # APPEALS=1: appeals to the Student Government for everyone (logic/appeals.py); staff: admins, moderators and SG's people
@@ -76,6 +78,10 @@ class Config:
     # TIKTOK=1: answer supported group links with the video (tiktok.py). INSTAGRAM_COOKIES (Instagram stories) is
     # deliberately not here: tiktok.py reads it from the environment at each call, so its path is in no Config, no repr
     tiktok: bool = False
+    # IG_USER_ID + IG_TOKEN: the app's own Instagram professional account and its long-lived token; the clubs' Instagram
+    # posts come into their news through Business Discovery (instagram.py, README "Clubs' Instagram posts"); either empty: off
+    ig_user_id: str = ""
+    ig_token: str = field(default="", repr=False)
     # REPORTS=1: clubs' event reports and personal attendance logs (logic/evreports.py, privacy policy section 3)
     reports: bool = False
     # ROOMS_FILE: the map's "free now", the timetable's busy rooms (tools/rooms.py), next to the database by default; no file: off
@@ -186,6 +192,7 @@ def load() -> Config:
         assist_lead=env.get("ASSIST_LEAD", "").strip().lower(),
         ai_chain=env.get("AI_CHAIN", "").strip(),
         donate_phone=_kz_phone(env.get("DONATE_PHONE", "").strip()),
+        donate_recipient=env.get("DONATE_RECIPIENT", "").strip()[:120],
         volunteers=env.get("VOLUNTEERS", "").strip().lower(),
         appeals={"1": "all", "staff": "staff"}.get(env.get("APPEALS", "").strip(), ""),
         ask={"1": "all", "staff": "staff"}.get(env.get("ASK", "").strip(), ""),
@@ -195,6 +202,8 @@ def load() -> Config:
         docs_db=env.get("DOCS_DB") or str(Path(db_path).parent / "docs.db"),
         reports=env.get("REPORTS", "").strip() == "1",
         tiktok=env.get("TIKTOK", "").strip() == "1",
+        ig_user_id=uid if (uid := env.get("IG_USER_ID", "").strip()).isdigit() else "",  # a typo: off, never a call with it
+        ig_token=env.get("IG_TOKEN", "").strip(),
         rooms_file=env.get("ROOMS_FILE") or str(Path(db_path).parent / "rooms.json"),
         subjects_file=env.get("SUBJECTS_FILE") or str(Path(db_path).parent / "subjects.json"),
         ios_bundle=env.get("IOS_BUNDLE_ID", "").strip(),

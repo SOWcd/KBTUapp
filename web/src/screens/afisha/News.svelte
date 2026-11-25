@@ -89,8 +89,14 @@
     addEventListener('message', on);
     return { destroy: () => removeEventListener('message', on) };
   }
-  const bareVideo = (body: string) => { const v = videoLinks(body); return v.length === 1 && body.trim() === v[0].url; };
-  const long = (p: Post) => p.body.length > 220 || p.body.split('\n').length > 4;
+  const long = (body: string) => body.length > 220 || body.split('\n').length > 4;
+  // a last line that is only a link with its button below shows as the button alone: a club's YouTube video (its body
+  // is only that link, server youtube.py) or Instagram post (the caption, then its link, server instagram.py)
+  function shown(body: string) {
+    const lines = body.trimEnd().split('\n');
+    const last = lines.at(-1)!.trim();
+    return videoLinks(body).some((l) => l.url === last) ? lines.slice(0, -1).join('\n').trimEnd() : body;
+  }
 
   async function react(p: Post, kind: 'fire' | 'heart') {
     const on = !p.mine[kind];
@@ -133,6 +139,7 @@
 
 {#snippet card(p: Post, cast: boolean)}
   {@const rich = p.titleFmt || p.fmt}
+  {@const body = rich ? p.body : shown(p.body)}
   <article class="post" class:cast class:unread={cast && !p.read}>
     <header class="ph">
       <OrgLogo org={p.org} size={36} />
@@ -146,10 +153,9 @@
     {#if p.photo}{@const ph = p.photo}<button class="pic" aria-label={p.title} onclick={() => sheets.photos([{ ...ph, id: ph.id ?? -p.id, by: null, mine: true, canDelete: false }], 0)}>
       <img src={ph.url} alt="" loading="lazy" decoding="async" style:object-position={focusPos(ph)} /></button>{/if}
     <h3 class="tt">{#if rich}<RichText text={p.title} entities={p.titleFmt} />{:else}{p.title}{/if}</h3>
-    <!-- a body that is only its video's link (a club's YouTube video, server youtube.py) shows as the button below, not the address -->
-    {#if p.body && (rich || !bareVideo(p.body))}
-      <p class="bd" class:fold={long(p) && !open.has(p.id)}>{#if rich}<RichText text={p.body} entities={p.fmt} />{:else}<Linked text={p.body} />{/if}</p>
-      {#if long(p) && !open.has(p.id)}<span class="unfold"><Button kind="plain" size="s" onclick={() => (open = new Set([...open, p.id]))}>{t('news.more')}</Button></span>{/if}
+    {#if body}
+      <p class="bd" class:fold={long(body) && !open.has(p.id)}>{#if rich}<RichText text={body} entities={p.fmt} />{:else}<Linked text={body} />{/if}</p>
+      {#if long(body) && !open.has(p.id)}<span class="unfold"><Button kind="plain" size="s" onclick={() => (open = new Set([...open, p.id]))}>{t('news.more')}</Button></span>{/if}
     {/if}
     {#if !rich}<div class="vl">{#each videoLinks(p.body) as l (l.url)}<Button kind="tinted" size="s" onclick={() => openLink(l.url)}>{#snippet icon()}<SocialIcon kind={l.kind} size={16} />{/snippet}{l.label}</Button>{/each}</div>{/if}
     {#if p.tg}

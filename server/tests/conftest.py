@@ -122,6 +122,12 @@ def before_notification_migration():
         con.executescript("""ALTER TABLE users DROP COLUMN notify_via;
             ALTER TABLE push_devices DROP COLUMN dead_at;
             ALTER TABLE push_devices DROP COLUMN provider;
+            ALTER TABLE event_guests DROP COLUMN walk_in;
+            DROP TABLE qr_meet_scans;
+            ALTER TABLE qr_marks DROP COLUMN meetup_review;
+            ALTER TABLE qr_sessions DROP COLUMN department_name;
+            ALTER TABLE qr_sessions DROP COLUMN department_id;
+            ALTER TABLE qr_sessions DROP COLUMN meetup;
             DROP INDEX one_contact;
             DROP INDEX contacts_by_sender;
             DROP INDEX withdrawn_offer_messages;

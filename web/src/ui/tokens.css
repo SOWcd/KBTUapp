@@ -72,14 +72,14 @@
      or our own capsule outside Telegram; one value for every page, so no screen grows its own gap (owner, Oct 24) */
   --head-bottom: max(46px, calc(var(--safe-top) + var(--tg-head) / 2 + 19px)); /* the capsule's lower edge (Capsule.svelte .cap) */
   --page-top: calc(var(--head-bottom) + 14px);
-  /* the scroll edge under the top bar, one on every screen (App .topfade, full sheets, Pane, Lab): content stays crisp
+  /* the scroll edge under the top bar, one on every screen (App's .tab mask, full sheets, Pane, Lab): content stays crisp
      until it reaches the bar and goes in a short soft edge around the bar's lower edge, as on iOS (owner, Nov 25: it
      ran down to --page-top, a dark band under the bar) */
   --edge-from: calc(var(--head-bottom) - 10px);
   --edge-to: calc(var(--head-bottom) + 4px);
   --nav-h: 64px;
   --bottom: calc(var(--safe-bottom) + var(--nav-h) + 12px);
-  /* a full-screen overlay's band for its round × (CloseX: 16 px up, 52 px tall, 12 px clear above it) */
+  /* a full-screen overlay's band for its round × (CloseX: 16 px up, --ctl-l 50 px tall, 14 px clear above it) */
   --close-room: calc(var(--safe-bottom) + 80px);
 }
 
@@ -114,10 +114,9 @@
   --line: rgba(255, 255, 255, 0.08);
   --line-2: rgba(255, 255, 255, 0.13);
   --separator: rgba(255, 255, 255, 0.1); /* 0.5 px between rows */
-  /* gray controls: buttons, chips, inputs, the segmented track (iOS's secondary fill); -2 pressed; the segmented thumb */
+  /* gray controls: buttons, chips, inputs, the segmented track (iOS's secondary fill); -2 pressed */
   --fill: rgba(235, 235, 245, 0.12);
   --fill-2: rgba(235, 235, 245, 0.2);
-  --thumb: rgba(235, 235, 245, 0.24);
   /* the tab bar (Opal's): a smoky body; the active tab on a raised, lighter glass pill with its
      icon in the accent (Nov 1: the darker pill merged into the bar, you couldn't tell which tab was on) */
   --dock: rgba(28, 28, 30, 0.45);
@@ -189,7 +188,6 @@
   --separator: rgba(60, 60, 67, 0.16);
   --fill: rgba(11, 20, 51, 0.075);
   --fill-2: rgba(11, 20, 51, 0.13);
-  --thumb: #FFFFFF;
   --dock: rgba(250, 251, 255, 0.62);
   --lens: rgba(255, 255, 255, 0.92);
   --lens-top: rgba(255, 255, 255, 0);

@@ -28,7 +28,7 @@ from pathlib import Path
 import anyio.to_thread
 import httpx
 
-from . import ai, casting, db, download, llm, logic, media, mirror, mtbot, offsite, portal, push, receipt, swear, texts, tgc, tiktok, userbot, video, youtube
+from . import ai, casting, checkin, db, download, instagram, llm, logic, media, mirror, mtbot, offsite, portal, push, receipt, swear, texts, tgc, tiktok, userbot, video, youtube
 from .config import Config
 from .logic import notifications, now, one, rows
 from .logic.account import _Taken
@@ -277,6 +277,17 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
             JOIN org_members m ON m.org_id = o.id AND m.user_id = ? AND m.role = 'president'
             WHERE e.id = ? AND e.status = 'draft' AND e.hidden_at IS NULL""", m["user_id"], int(ref[1]))
         return (*texts.bot_message(lang, kind, org=e["name"]), f"st_{e['org_id']}") if e else None
+    if kind == "event_review":  # er:<event>:<day>, to the club's President and Vices: a member's draft waits for their yes; quiet once answered or gone
+        e = one(con, """SELECT e.org_id, o.name FROM events e JOIN orgs o ON o.id = e.org_id AND o.status = 'active'
+            JOIN event_reviews r ON r.event_id = e.id AND r.asked_at IS NOT NULL
+            JOIN org_members m ON m.org_id = o.id AND m.user_id = ? AND m.role IN ('president', 'vice')
+            WHERE e.id = ? AND e.status = 'draft' AND e.hidden_at IS NULL""", m["user_id"], int(ref[1]))
+        return (*texts.bot_message(lang, kind, org=e["name"]), f"st_{e['org_id']}") if e else None
+    if kind in ("event_approved", "event_returned"):  # ea:<event>, eb:<event>:<day>, to the member who made it; quiet if it changed since
+        back = "" if kind == "event_approved" else "AND EXISTS (SELECT 1 FROM event_reviews r WHERE r.event_id = e.id AND r.asked_at IS NULL AND r.reason IS NOT NULL)"
+        e = one(con, f"""SELECT e.id, e.org_id, o.name FROM events e JOIN orgs o ON o.id = e.org_id AND o.status = 'active'
+            WHERE e.id = ? AND e.created_by = ? AND e.hidden_at IS NULL AND e.status = ? {back}""", int(ref[1]), m["user_id"], "draft" if back else "published")
+        return (*texts.bot_message(lang, kind, org=e["name"]), f"st_{e['org_id']}" if back else f"ev_{e['id']}") if e else None
     if kind == "delete_soon":  # del:<when>, to me; gone if I changed my mind
         at = one(con, "SELECT delete_at FROM users WHERE id = ?", m["user_id"])["delete_at"]
         return (*texts.bot_message(lang, kind, when=texts.when(at, lang).split(",")[0]), "me") if at else None
@@ -535,8 +546,16 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         b = one(con, logic.PERSON + " WHERE u.id = ?", q["by_id"])
         return (*texts.bot_message(lang, kind, by=logic.short_name(b) if b else "?", name=logic.short_name(p), org=q["org"],
                                    ban=texts.pick(texts.BAN, lang) if q["ban"] else ""), f"tm_{q['org_id']}")
+    if kind == "meetup_review":
+        notice = checkin.meetup_notice(con, int(ref[1]), m["user_id"])
+        return (*texts.bot_message(lang, notice["kind"], dept=notice["dept"]), f"meet_{ref[1]}") if notice else None
     if kind in SANTA_KINDS:
         return _santa(con, m, lang)
+    if kind in ("donation_confirmed", "donation_rejected"):
+        d = one(con, "SELECT status, revision FROM donations WHERE id = ? AND user_id = ?", int(ref[1]), m["user_id"])
+        if not d or d["status"] != kind.removeprefix("donation_") or d["revision"] != int(ref[2]):
+            return None
+        return (*texts.bot_message(lang, kind), "donate")
     if kind == "credit_ask":  # cra, kbtu.admin credit ask: "shall we name you?", once; quiet once answered or nothing shipped is theirs
         return (*texts.bot_message(lang, kind), "people") if logic.credits.asking(con, m["user_id"]) else None  # (send_due reads where to again)
     if kind == "santa_news":  # sn:<org>, to its President or Vice (kbtu.admin santa-news), opens the Santa welcome over Studio: quiet once they aren't
@@ -1070,6 +1089,8 @@ async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
         await _userpics(cfg, http, con)  # Telegram photos copied to /media: t.me takes ~1 s on every open
         if await anyio.to_thread.run_sync(logic._once, con, "yt_hour", str(now() // 3600)):
             await youtube.sweep(cfg, http, con)  # hourly: the clubs' YouTube channels' new videos as their posts
+        if cfg.ig_user_id and cfg.ig_token and await anyio.to_thread.run_sync(logic._once, con, "ig_half", str(now() // 1800)):
+            await instagram.sweep(cfg, http, con)  # every half hour: the clubs' Instagram posts as their posts
         if await anyio.to_thread.run_sync(logic._once, con, "chats_day", str(now() // 86400)):
             await refresh_chats(cfg, http, con)  # daily: the chats' avatars and members from their t.me pages
         for m in await anyio.to_thread.run_sync(_due, con):
@@ -2260,7 +2281,7 @@ def _wanted(cfg: Config) -> str:
 
 async def _answer_checkout(cfg: Config, http: httpx.AsyncClient, q: dict) -> bool:
     """One try. True when there is no use in another: answered, or refused for good (a query too old, 400)."""
-    good = logic.stars.checkout_ok(q)
+    good = logic.stars.checkout_ok(cfg.bot_token, q, (q.get("from") or {}).get("id"))
     why = {} if good else {"error_message": texts.pick(texts.STARS_REFUSED, str((q.get("from") or {}).get("language_code") or ""))}
     try:
         r = await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/answerPreCheckoutQuery", timeout=CHECKOUT_HTTP,
@@ -2521,7 +2542,7 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
                 msg = upd.get("message") or {}
                 if payment := msg.get("successful_payment"):  # before the ban skip: the Stars have arrived; no answer but Telegram's own receipt
                     try:
-                        await asyncio.to_thread(logic.stars.paid, con, payment, (msg.get("from") or {}).get("id"))
+                        await asyncio.to_thread(logic.stars.paid, con, payment, (msg.get("from") or {}).get("id"), cfg.bot_token)
                     except sqlite3.Error as exc:  # paid but unrecorded: this update again next round (paid is idempotent by the charge id)
                         log.warning("stars paid: %s", type(exc).__name__)
                         await asyncio.sleep(1)

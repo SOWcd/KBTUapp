@@ -121,7 +121,7 @@
           <span class="md"><Medal {a} size={62} /></span>
           <b class="nm">{achName(a)}</b>
           <i class="tr">{a.level ? (a.levels.length > 1 ? t('aw.level', { tier: tierName(a) }) : t('aw.have')) : t('ach.locked')}</i>
-          {#if !hidden(a)}
+          {#if !hidden(a) && a.code !== 'sponsor'}
             {#if n && a.levels.length > 1}
               <span class="prog"><span class="bar"><span style="width:{pct(a)}%"></span></span><span class="cnt num">{bar?.count ?? a.count}/{bar?.need ?? n.need}</span></span>
             {:else if a.levels.length > 1}

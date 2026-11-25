@@ -215,6 +215,11 @@
     </div>
   {:else}
     <div class="spacer"></div>
+    {#if me && (data.support?.total || data.support?.receipts.length || data.support?.rev != null)}
+      <div data-unit class="first">
+        <Group><Row icon={Lock} title={t('set.privacy')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('privacy'); }} /></Group>
+      </div>
+    {/if}
   {/if}
 
   <div data-unit class={['sec', { first: !me?.student }]}>
@@ -237,9 +242,8 @@
   <div data-unit class="sec">
     <Group>
       <Row icon={Info} title={t('set.about')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('about'); }} />
-      <!-- the voluntary support page: this row is its only way in, no banners or reminders anywhere (donate-review.md) -->
       <!-- never in the iPhone app: a gift to the app outside Apple's in-app purchase breaks App Store rule 3.1.1 -->
-      {#if session.donate && !inApp}<Row icon={HandHeart} title={t('set.donate')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('donate'); }} />{/if}
+      {#if me && !inApp}<Row icon={HandHeart} title={t('set.donate')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('donate'); }} />{/if}
     </Group>
   </div>
   {#if !inTelegram}

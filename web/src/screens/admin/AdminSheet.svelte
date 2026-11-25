@@ -14,8 +14,10 @@
   import TelegramMark from '../../ui/TelegramMark.svelte';
   import Users from '@lucide/svelte/icons/users';
   import Bell from '@lucide/svelte/icons/bell';
+  import HandHeart from '@lucide/svelte/icons/hand-heart';
   import Gift from '@lucide/svelte/icons/gift';
   import MapPinned from '@lucide/svelte/icons/map-pinned';
+  import ChartNoAxesColumn from '@lucide/svelte/icons/chart-no-axes-column';
   import MessageSquareHeart from '@lucide/svelte/icons/message-square-heart';
   import { untrack, type Component } from 'svelte';
   import { api, staffEvents, type AdminOrg, type EventCard, type OrgRef, type StaffRow } from '../../lib/api';
@@ -168,7 +170,9 @@
       {/if}
       {@render place(TelegramMark, t('adm.chats'), () => sheets.adminChats())}
       {@render place(MessagesSquare, t('adm.forumChannel'), () => sheets.adminForum())}
+      {@render place(ChartNoAxesColumn, t('research.requests'), () => sheets.adminResearch(), data.researchRequests?.filter((r) => !r.approved).length ?? 0)}
       {#if admin}{@render place(Users, t('adm.team'), () => open(AdminPeople, {}))}{/if}
+      {#if owner}{@render place(HandHeart, t('sp.queue'), () => sheets.adminDonations(), data.donations?.filter((d) => d.status === 'pending').length ?? 0)}{/if}
       {#if owner}{@render place(ScrollText, t('audit.title'), () => sheets.adminAudit())}{/if}
       {@render place(Bell, t('adm.notify'), () => open(AdminNotify, {}))}
       {#if data.inbox?.santa}{@render place(Gift, t('santa.repTitle'), () => sheets.santaReports(), data.inbox.santa)}{/if}

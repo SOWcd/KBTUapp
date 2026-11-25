@@ -130,6 +130,8 @@ export const sheets = {
   attendees: (_id: Id) => {},
   /** the Mark screen's «People»: the team by department and the guests, came / not came, marked by hand; onchange after a mark */
   doorPeople: (_id: Id, _onchange?: () => void, _guestsOnly?: boolean) => {},
+  /** Studio's «Guest list»: the organizers' file, its preview and save, the door's list as a CSV */
+  guestList: (_id: Id) => {},
   assistant: (_ctx?: AskCtx) => {},      // the students' assistant (with the forum's switch); ctx: asked from that card
   /** Secret Santa's chat: one thread of my pair ('to': I am the Santa of `name`; 'from': with my own Santa) */
   santaChat: (_event: Id, _side: 'to' | 'from', _name?: string) => {},
@@ -165,6 +167,10 @@ export const sheets = {
   helpUs: () => {},
   feedback: () => {},
   adminVoices: () => {},
+  research: () => {},
+  researchForm: (_survey: import('../api').ResearchSurvey) => {},
+  researchPropose: () => {},
+  adminResearch: () => {},
   /** Secret Santa's welcome over Studio (the bot's sn_, Studio's row): how it works and the one start */
   santaHi: (_org: Id) => {},
   // a club's applications (Vice+) and its "taking applications" switch
@@ -242,11 +248,15 @@ export const sheets = {
   /** a new post to the forum channel (the Forum tab's plus); draft: the words back after a refused send */
   /** my anonymous post: a reply in its comments through the bot, and how my replies stand */
   channelReply: (_post: { id: Id; body: string }) => {},
+  /** a channel post's comments, written and read in the app; link: the same thread in Telegram, for the rest */
+  channelThread: (_post: { id: Id; body: string; mine: boolean; anon: boolean; link: string }) => {},
   askPeople: (_ask: Id, _title: string) => {},
   /** every chat of the directory */
   chats: (_chats: Chat[]) => {},
   /** the AI page in Admin: the translator's state and work */
   adminAi: () => {},
+  /** the creator's private donation receipts */
+  adminDonations: () => {},
   /** the owner's audit log */
   adminAudit: () => {},
   /** suggest any chat for the catalog: paste @name or a link */
