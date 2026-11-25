@@ -35,7 +35,7 @@ def test_assetlinks(demo):
     c, _ = demo
     r = c.get("/.well-known/assetlinks.json")
     assert r.json() == [{"relation": ["delegate_permission/common.handle_all_urls"],
-                         "target": {"namespace": "android_app", "package_name": "kz.kbtuapp", "sha256_cert_fingerprints": [CERT]}}]
+                         "target": {"namespace": "android_app", "package_name": "kz.sow.kbtu", "sha256_cert_fingerprints": [CERT]}}]
 
 
 def test_cert_env_checked():

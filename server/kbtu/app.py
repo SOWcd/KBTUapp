@@ -60,7 +60,7 @@ async def _picture(fn, *args):
 
 THREADS = 16               # see lifespan
 SEEN_EVERY = 600            # refresh users.seen_at and Telegram names at most every 10 min
-ANDROID_PACKAGE = "kz.kbtuapp"  # the Play app (android/twa-manifest.json): fixed for good once published
+ANDROID_PACKAGE = "kz.sow.kbtu"  # the Play app (android/twa-manifest.json): fixed for good once published
 NAME, STUDENT_ID = logic.NAME, logic.STUDENT_ID  # typed in by the student (no KBTU-password sign-in)
 
 

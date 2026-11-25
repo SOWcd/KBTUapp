@@ -7,8 +7,8 @@ repository: Bubblewrap generates the project from [`twa-manifest.json`](twa-mani
 release reaches the Android app at once; a new `.aab` is needed only when `twa-manifest.json` changes (name, icon,
 colours) or Play asks for a newer target SDK.
 
-- Package id: `kz.kbtuapp`, fixed for good after the first upload. (Reverse-domain style would be `kz.sow.kbtu`, from
-  kbtu.sow.kz; `kz.kbtuapp` is kept as the owner chose it. Play needs no proof of the domain.)
+- Package id: `kz.sow.kbtu` (reverse-domain, from kbtu.sow.kz; the same as the iPhone app's bundle ID), fixed for good
+  after the first upload. It must match `ANDROID_PACKAGE` in `server/kbtu/app.py` (assetlinks.json).
 - Icon: `web/public/icon-512.png`, also as the maskable (adaptive) icon (the launcher's only; never on the splash).
 - Colours: each theme's ground, the `#boot` colours in `web/index.html` (`#F2F2F7` light, `#000000` dark; change them
   together). The splash is that bare ground, no logo (owner, Nov 25): the workflow swaps Bubblewrap's icon picture for
