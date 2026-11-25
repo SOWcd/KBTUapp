@@ -38,6 +38,8 @@
   --ink: #0B1433;
   /* the ground under media (a hero cover, its lit mark): black in both themes */
   --media: #000;
+  /* a small tag's smoked glass over a cover or art (the Clubs grid's "open"): dark in both themes, white text reads */
+  --media-tag: rgba(0, 0, 0, 0.36);
 
   /* motion: transform and opacity only */
   --ease: cubic-bezier(.2, .9, .22, 1);          /* morphs, slides */
