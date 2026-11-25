@@ -6,7 +6,7 @@ import time
 
 import pytest
 
-from kbtu import bot, db, logic
+from kbtu import db, logic, outbox
 from kbtu.logic import helpus
 from kbtu.logic.core import ApiError, Viewer
 from test_core import delete_now, env, login, set_clock, tma  # noqa: F401  (env is a fixture)
@@ -42,7 +42,7 @@ def test_anonymous_line_keeps_no_author(env, monkeypatch):
     assert len(told) == 1 and told[0]["user_id"] == ids[BOSS] and told[0]["payload"] == "{}"
     assert told[0]["ref"] == f"afb:{row['day']}" and str(ids[A]) not in told[0]["ref"].split(":")
     assert told[0]["send_after"] == (row["day"] + 1) * 86400 + 4 * 3600 > t0
-    text, button, start = bot._render(con, told[0])
+    text, button, start = outbox._render(con, told[0])
     assert text.startswith("\U0001f4dd") and "map" not in text and button and start == "voices"
     # nobody's audit line either
     assert not con.execute("SELECT 1 FROM audit_log WHERE actor_id = ? OR data LIKE '%map is slow%'", (ids[A],)).fetchone()
@@ -120,10 +120,10 @@ def test_offer_list_and_unread(env, monkeypatch):
     told = [dict(r) for r in con.execute("SELECT b.*, 'ru' AS lang FROM bot_outbox b WHERE kind = 'helper_offer' ORDER BY id")]
     day = (int(time.time()) + 5 * 3600) // 86400  # the two offers came on two days (the clock moved one)
     assert [r["ref"] for r in told] == [f"ho:{day}", f"ho:{day + 1}"] and {r["user_id"] for r in told} == {ids[BOSS]} and told[0]["payload"] == "{}"
-    text, button, start = bot._render(con, told[0])
+    text, button, start = outbox._render(con, told[0])
     assert text.startswith("\U0001f91d") and "subscription" not in text and button and start == "voices"
     con.execute("UPDATE users SET is_founder = 0 WHERE id = ?", (ids[BOSS],))
-    assert bot._render(con, told[0]) is None
+    assert outbox._render(con, told[0]) is None
     con.execute("UPDATE users SET is_founder = 1 WHERE id = ?", (ids[BOSS],))
     assert offer(A, kinds=["code"] * 7).status_code == 400
     # three a day

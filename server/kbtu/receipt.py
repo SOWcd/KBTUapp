@@ -26,6 +26,7 @@ log = logging.getLogger("kbtu.receipt")
 
 ASTANA = timezone(timedelta(hours=5))   # Kaspi prints "date and time in Astana"
 SIDE = 3000                             # a PDF page is rendered at ~300 dpi, at most this many pixels long
+DONATION_DIR = "donations"
 _pdfium = threading.Lock()              # PDFium isn't thread-safe; rendering takes ~0.1 s
 _ocr = threading.BoundedSemaphore(2)    # ponytail: two OCRs at a time; a rush of receipts waits its turn (~0.5 s each)
 
@@ -61,16 +62,20 @@ class NotReceipt(Exception):
     """OCR ran and found neither a sum nor a receipt number: not a Kaspi receipt (people sent selfies)."""
 
 
-def take(data: bytes, root: Path) -> tuple[dict, dict | None]:
-    """Reads the picture and, if it is a receipt, stores it privately under root (like a photo): (saved, fields).
-    Anything else is refused before it is written (NotReceipt); without OCR the organizer must check the saved picture."""
+def take(data: bytes, root: Path, donation_key: bytes | None = None) -> tuple[dict, dict | None]:
+    """Read and store the receipt privately. Donations keep partial readings for review and use independent files."""
     im = picture(data)
     got = read(im)
-    if got is not None and not got.get("amount") and not got.get("no"):
+    if donation_key is None and got is not None and not got.get("amount") and not got.get("no"):
         raise NotReceipt
     # Each upload owns its files: delayed cleanup can never unlink another upload of the same bytes.
-    saved = media.store(im, os.urandom(32), root)
-    return {**saved, "sha256": hashlib.sha256(data).hexdigest()}, got
+    if donation_key is None:
+        saved = media.store(im, os.urandom(32), root)
+        return {**saved, "sha256": hashlib.sha256(data).hexdigest()}, got
+    saved = media.store(im, donation_key, root / DONATION_DIR)
+    saved["path"] = f"{DONATION_DIR}/{saved['path']}"
+    saved["sha256"] = hashlib.sha256(data).hexdigest()  # match reuploads even though each file has its own path
+    return saved, got
 
 
 def read(im: Image.Image) -> dict | None:
@@ -87,6 +92,7 @@ def read(im: Image.Image) -> dict | None:
     got = _ocr_pass(g)
     if got is not None and not ("amount" in got and "no" in got):
         again = _ocr_pass(g.resize((g.width * 2 // 3, g.height * 2 // 3), Image.Resampling.LANCZOS)) or {}
+        again.pop("bank", None)  # a dropped heading can make the destination look like the issuer
         got = {**again, **got}
     return got
 
@@ -109,7 +115,7 @@ def _ocr_pass(g: Image.Image) -> dict | None:
 
 
 # "4 680 <tenge sign>", often read as "4680" and a Latin T or a Cyrillic capital te (U+0422) or small te (U+0442)
-AMOUNT = re.compile(r"([-+\u2212\u2013]?)\s*(\d{1,3}(?:[ \u00a0\u202f]?\d{3})*)(?:[.,]\d{2})?\s*[\u20b8T\u0422\u0442]")
+AMOUNT = re.compile(r"([-+\u2212\u2013]?)\s*(\d{1,3}(?:[ \u00a0\u202f]?\d{3}){0,5})(?:[.,]\d{2})?\s*[\u20b8T\u0422\u0442]")
 WHEN = re.compile(r"(\d{2})[.,](\d{2})[.,](\d{4})\D{0,3}(\d{1,2})[:.](\d{2})")
 NAME = re.compile(r"[^\W\d_]{2,}(?:-[^\W\d_]+)?\s+[^\W\d_]\.\s?(?:[^\W\d_]\.)?$")       # "Surname I.O." at a line's end
 TO = re.compile(r"[^\W\d_]{2,}(?:-[^\W\d_]+)?\s+[^\W\d_]\.?")                          # the recipient's line: "Name S."
@@ -121,6 +127,10 @@ def parse(text: str) -> dict:
     wraps the 18 digits) the receipt number, dd.mm.yyyy hh:mm the time, "Surname I.O." ending a line the sender."""
     lines = [x.strip() for x in text.splitlines() if x.strip()]
     out: dict = {}
+    # Only an issuer heading: another bank may name Kaspi as the destination further down.
+    heading = next((x for x in lines if any(c.isalpha() for c in x)), "")
+    if re.fullmatch(r"kaspi\s*(?:\.\s*kz|bank)", heading, re.I):
+        out["bank"] = "kaspi"
     if m := next((m for x in lines if (m := AMOUNT.fullmatch(x)) and int(re.sub(r"\D", "", m[2])) > 0), None):
         out["amount"] = int(re.sub(r"\D", "", m[2]))
         if m[1]:

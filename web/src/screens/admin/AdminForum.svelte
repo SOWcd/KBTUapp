@@ -33,12 +33,15 @@
   async function decide(p: ChannelModPost, ok: boolean, held: boolean) {
     if (!ok && !(await sheets.ask({ title: t(held ? 'fc.removeAsk' : 'fc.takeDownAsk'), text: t(held ? 'fc.removeText' : 'fc.takeDownText'),
       ok: t('fc.takeDown'), cancel: t('common.cancel'), danger: true }))) return;
+    // a lost send may be in the channel already (the bot can't tell): sent again only after a look there
+    const again = ok && held && p.why === 'lost';
+    if (again && !(await sheets.ask({ title: t('fc.againAsk'), text: t('fc.againText'), ok: t('fcr.again'), cancel: t('common.cancel') }))) return;
     const before = mod;
     // a live one keeps its channel message for the server's minute: Undo till then, Bring back after (a reload then)
     if (mod) mod = { ...mod, held: mod.held.filter((x) => x.id !== p.id), live: ok ? [p, ...mod.live] : mod.live.filter((x) => x.id !== p.id),
       removed: ok ? mod.removed : [{ ...p, undo: !held }, ...mod.removed] };
     haptic.ok();
-    try { await api.channelModDecide(p.id, ok); void load(); void loadChannel(); if (!ok && !held) setTimeout(load, 61_000); }
+    try { await api.channelModDecide(p.id, ok, again); void load(); void loadChannel(); if (!ok && !held) setTimeout(load, 61_000); }
     catch { mod = before; fail(); }
   }
 

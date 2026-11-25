@@ -6,7 +6,7 @@ import json
 
 import httpx
 
-from kbtu import bot, db, logic, texts
+from kbtu import bot_dm, db, logic, outbox, texts
 from kbtu.logic import notifications
 from test_core import env, login, tma  # noqa: F401  (env: the fixture)
 
@@ -23,7 +23,7 @@ def test_feedback_from_delivery_to_admin(env, monkeypatch):
     con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, emoji, color, created_at, updated_at)
         VALUES (5, 1, 'published', 'Demo', '305', ?, 'laptop_3d', '#3B6BFF', 0, 0)""", (sent_at + 86400,))
     con.execute("INSERT INTO registrations (event_id, user_id, status, ticket_code, created_at, updated_at) VALUES (5, ?, 'going', 'T-DEMO', 0, 0)", (uid,))
-    monkeypatch.setattr(bot, "_chores", lambda *_: None)
+    monkeypatch.setattr(outbox, "_chores", lambda *_: None)
 
     messages, edits = [], []
     def telegram(request):
@@ -39,12 +39,12 @@ def test_feedback_from_delivery_to_admin(env, monkeypatch):
 
     async def send():
         async with httpx.AsyncClient(transport=httpx.MockTransport(telegram)) as http:
-            await bot.send_due(cfg, http)
+            await outbox.send_due(cfg, http)
 
     def tap(message, data, who=10):
         async def go():
             async with httpx.AsyncClient(transport=httpx.MockTransport(telegram)) as http:
-                await bot._tapped(cfg, http, con, {"id": "tap", "from": {"id": who}, "message": message, "data": data})
+                await bot_dm._tapped(cfg, http, con, {"id": "tap", "from": {"id": who}, "message": message, "data": data})
         asyncio.run(go())
 
     key = "nBroadcasts"
@@ -85,7 +85,7 @@ def test_feedback_from_delivery_to_admin(env, monkeypatch):
     assert settings()[key]
     assert edits[-1][1]["text"].endswith(texts.bot_message("kk", "feedback_enabled")[0])
     # A restart can replay older callbacks with their original keyboards; an old card's "Useful" does nothing.
-    bot._feedback_edits.clear()
+    bot_dm._feedback_edits.clear()
     count = len(edits)
     tap(card, off.replace("nf:off:", "nf:useful:"))
     assert len(edits) == count

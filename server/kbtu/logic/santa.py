@@ -293,7 +293,7 @@ def _remind_at(con, e: sqlite3.Row) -> int | None:
 
 
 def tick(con) -> None:
-    """The postman's round (bot._chores), the game's clock: one read of the running games whose next step is due (a
+    """The postman's round (chores._chores), the game's clock: one read of the running games whose next step is due (a
     handful of rows; a step done is marked in santa_games, so a game is read again only when its next step comes, and
     a round with nothing due writes nothing). At the deadline: the draw; too few: the President and Vices hear it once
     per deadline (a moved deadline re-arms it); a seat being paid for: the next round looks again, read-only (a hold

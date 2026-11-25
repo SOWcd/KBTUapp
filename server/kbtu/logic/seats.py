@@ -160,7 +160,7 @@ def guard_token(key: bytes, chat_id: int, tg_id: int, qid: str) -> str:
 def guard_read(key: bytes, token: str) -> tuple[int, int, str]:
     """(chat, Telegram id, query) from guard_token's link; forbidden when it's forged, gone when it's old."""
     body, _, sig = (token or "").partition(".")
-    if not body or not hmac.compare_digest(sig, hmac.new(key, body.encode(), hashlib.sha256).hexdigest()[:24]):
+    if not body or not hmac.compare_digest(sig.encode(), hmac.new(key, body.encode(), hashlib.sha256).hexdigest()[:24].encode()):  # bytes: a forged é is a 403, not a 500
         raise ApiError("forbidden")
     chat_id, tg_id, qid, at = json.loads(base64.urlsafe_b64decode(body + "=" * (-len(body) % 4)))
     if at < time.time() - GUARD_TTL:
@@ -245,7 +245,7 @@ def channel_gone(con) -> list[tuple[int, str]]:
 
 def channel_discussion(con, post: int) -> sqlite3.Row | None:
     """The channel's post reached its discussion group (Telegram forwards it there by itself): the event whose post it is
-    and that has no first comment yet, else None. The bot then writes the rules under it (bot._discussion)."""
+    and that has no first comment yet, else None. The bot then writes the rules under it (bot_groups._discussion)."""
     return one(con, "SELECT * FROM events WHERE channel_msg = ? AND channel_link IS NULL", post)
 
 
@@ -328,9 +328,9 @@ def cal_token(con, v: Viewer) -> str:
     """My calendar feed's secret: made once and kept, so a subscribed calendar stays subscribed."""
     need_student(v)
     t = one(con, "SELECT cal_token FROM users WHERE id = ?", v.id)[0]
-    if not t:
-        t = secrets.token_urlsafe(18)
-        con.execute("UPDATE users SET cal_token = ? WHERE id = ?", (t, v.id))
+    if not t:  # two first taps at once: only an empty one is set, both answer with the one kept
+        con.execute("UPDATE users SET cal_token = ? WHERE id = ? AND cal_token IS NULL", (secrets.token_urlsafe(18), v.id))
+        t = one(con, "SELECT cal_token FROM users WHERE id = ?", v.id)[0]
     return t
 
 
@@ -440,8 +440,10 @@ def sweep_holds(con) -> None:
             promote(con, one(con, "SELECT * FROM events WHERE id = ?", r[0]))
 
 
-def events(con, v: Viewer, frm: int | None = None, to: int | None = None, org: int | None = None) -> list[dict]:
-    sweep_holds(con)
+def events(con, v: Viewer, frm: int | None = None, to: int | None = None, org: int | None = None, *,
+           sweep: bool = True) -> list[dict]:
+    if sweep:  # off for the read-only demo (app.is_demo): the worker sweeps anyway
+        sweep_holds(con)
     hide_first = v.student and one(con, "SELECT hide_first_year FROM users WHERE id = ?", v.id)[0]
     # Bound starts_at to use an index range. The lookback covers even stored events longer than the
     # 31-day cap in organizing.clean_event, so they stay visible while they run.
@@ -522,8 +524,9 @@ def _event(con, v: Viewer, eid: int) -> sqlite3.Row:
     return e
 
 
-def event(con, v: Viewer, eid: int) -> dict:
-    sweep_holds(con)
+def event(con, v: Viewer, eid: int, *, sweep: bool = True) -> dict:
+    if sweep:
+        sweep_holds(con)
     return full(con, v, _event(con, v, eid))
 
 
@@ -879,7 +882,8 @@ def _receipt_flags(con, e: sqlite3.Row, sha: str, read: dict | None, rid: int = 
     got = read or {}
     out = []
     # a receipt someone else replaced counts too, or replacing it would wash a reused one clean
-    if one(con, "SELECT 1 FROM files WHERE sha256 = ? AND kind = 'receipt'", sha) or \
+    if one(con, "SELECT 1 FROM donations WHERE sha256 = ? OR receipt_no = ?", sha, got.get("no")) or \
+            one(con, "SELECT 1 FROM files WHERE sha256 = ? AND kind = 'receipt'", sha) or \
             one(con, "SELECT 1 FROM receipt_replaced WHERE sha256 = ? AND registration_id != ?", sha, rid) or \
             got.get("no") and (one(con, "SELECT 1 FROM receipts WHERE receipt_no = ?", got["no"])
                                or one(con, "SELECT 1 FROM receipt_replaced WHERE receipt_no = ? AND registration_id != ?", got["no"], rid)) or \
@@ -915,7 +919,9 @@ def _same_minute(con, got: dict) -> list[sqlite3.Row]:
     """Receipts with this one's minute, sum and payee (Kaspi prints the minute)."""
     if not (got.get("paid_at") and got.get("amount") and got.get("recipient")):
         return []
-    return rows(con, "SELECT sender_name FROM receipts WHERE paid_at = ? AND amount = ? AND recipient_name = ?", got["paid_at"], got["amount"], got["recipient"])
+    return rows(con, """SELECT sender_name FROM receipts WHERE paid_at = ? AND amount = ? AND recipient_name = ?
+        UNION ALL SELECT sender_name FROM donations WHERE paid_at = ? AND read_amount = ? AND recipient_name = ?""",
+                *([got["paid_at"], got["amount"], got["recipient"]] * 2))
 
 
 def _receipt_clean(con, e: sqlite3.Row, sha: str, read: dict | None, flags: str) -> bool:
@@ -1082,6 +1088,4 @@ def set_saved(con, v: Viewer, eid: int, on: bool) -> None:
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
 from . import core, evteams, santa  # noqa: E402
-from .clubs import org  # noqa: E402
 from .organizing import _staff_event, kz_phone  # noqa: E402
-from .teams import team  # noqa: E402

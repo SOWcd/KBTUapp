@@ -2,7 +2,7 @@
 seats.team_ask): ask, withdraw, yes lets them sign up (and keeps the seat from joined()), no says so; nobody else decides."""
 from __future__ import annotations
 
-from kbtu import bot, logic
+from kbtu import logic, outbox
 from test_core import env, login, tma  # noqa: F401  (env is a fixture)
 from test_team_guests import PAID, _club, _event, _go, _reg, _uid
 
@@ -22,7 +22,7 @@ def _decide(c, eid, uid, tg, yes):
 def _rendered(con, kind, tg):
     """What the bot would send now: its startapp, or None when quiet."""
     m = con.execute("SELECT *, 'ru' AS lang FROM bot_outbox WHERE kind = ? AND user_id = ?", (kind, _uid(con, tg))).fetchone()
-    r = bot._render(con, m)
+    r = outbox._render(con, m)
     return r and r[2]
 
 

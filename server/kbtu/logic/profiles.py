@@ -107,6 +107,7 @@ ACHIEVEMENTS = [  # code, emoji, needs, secret (§4.11)
     ("anthem", "headphone_3d", (1,), False),  # listened to KBTU's anthem start to finish without skipping (the anthem sheet: anthem_heard)
     ("supporter", "fire_3d", (1,), False),  # "Fuel": a new Stars gift (stars.paid), or the creator by hand; others see it only on the showcase
     ("honor", "puzzle_piece_3d", (1,), False),
+    ("sponsor", "blue_heart_3d", (1, 2, 3), False),  # counts are tiers, never donation amounts
     ("club_founder", "rocket_3d", (1,), False),  # founded a club (official or at the Ascent's top): by hand in Admin, the club on the grant's note
 ]
 # Couch critic: the forum channel's posts I commented under, each once (critic()). Off until the
@@ -166,7 +167,7 @@ def brought(con, uid: int) -> int:
 
 def _levels(con, uid: int) -> dict[str, int]:
     c = _counts(con, uid)
-    return {code: sum(1 for n in needs if c[code] >= n) for code, _, needs, _ in ACHIEVEMENTS}
+    return {code: sum(1 for n in needs if c[code] >= n) for code, _, needs, _ in ACHIEVEMENTS if code != "sponsor"}
 
 
 def _came(con, e: sqlite3.Row, uid: int, write) -> None:
@@ -248,11 +249,11 @@ BADGE_OF = {c: b for b, vs in BADGES.items() for c in vs}
 GRANTABLE = ("bugs", "dmp", "creator_laugh", "creator_found", "init26", "init26f", "init26p", "supporter", "club_founder", "honor")  # the manual ones (§4.11); "First 500" is given at verification
 ADDS_UP = ("bugs", "dmp")  # one grant is +1, not "held": Bug hunter per bug, Attendance per meeting (a day, _grant)
 CREATOR_ONLY = ("creator_laugh", "creator_found", "supporter", "honor")
-PRIVATE = ("supporter",)  # who gave money: no bot card, no rarity, in no admin list but the creator's, on a profile only if showcased
+PRIVATE = ("supporter", "sponsor")  # who gave money: no bot card, no rarity, in no admin list but the creator's, on a profile only if showcased
 ONE_BY_ONE = ("supporter", "club_founder", "honor")  # never by a card scan, a link, a shown QR or a check-in session: Fuel is for Stars, a founder names the club
 # art being redone; delete the tuple to bring them back. Out of the catalogs only (Admin -> Awards' rows, the
 # locked medal on a profile): a holder keeps it on the shelf, Admin's person page still gives both, Stars still give Fuel
-CATALOG_HIDDEN = ("supporter", "club_founder", "honor")  # Honor is awarded from the person and shown once earned
+CATALOG_HIDDEN = ("supporter", "club_founder", "honor", "sponsor")  # Honor is awarded from the person and shown once earned
 BATCH = re.compile(r"[A-Za-z0-9_-]{1,40}")
 LINK_DAYS = (1, 3, 7, 14)
 CARD_WAIT = 45  # a manual award's bot card waits this long, so an Undo stops it before it goes
@@ -667,15 +668,20 @@ def achievements(con, uid: int, *, own: bool = True) -> list[dict]:
     out = []
     reached = {r["code"]: r for r in rows(con, "SELECT code, level, reached_at FROM achievement_levels WHERE user_id = ?", uid)}
     for code, emoji, needs, secret in ACHIEVEMENTS:
+        if code == "sponsor" and not own and (code not in reached or not donations.public(con, uid)):
+            continue
         if code == "activist" and not own:
             # A public upgrade after the 24-hour wait could identify the writer of an anonymous post.
             continue
         have = lambda level: sum(n for (c, lv), n in at_level.items() if c == code and lv >= level) / total  # noqa: E731
-        level = sum(n <= mine[code] for n in needs)
-        item = {"code": code, "emoji": emoji, "secret": secret, "count": mine[code], "level": level,
+        count = (reached[code]["level"] if code in reached else 0) if code == "sponsor" else mine[code]
+        level = sum(n <= count for n in needs)
+        item = {"code": code, "emoji": emoji, "secret": secret, "count": count, "level": level,
                 "levels": [{"need": n, "reached": i < level, "rarity": have(i + 1)} for i, n in enumerate(needs)], "rarity": have(1),
                 "at": reached[code]["reached_at"] if code in reached else None,
                 **({"now": mine["streak_now"]} if code == "streak" else {})}
+        if code in PRIVATE:
+            item["at"] = None  # no payment timestamp on a medal (Fuel's grant is the Stars payment's second)
         if code == "activist":
             stored = reached.get(code)
             item["at"] = stored["reached_at"] if stored and stored["level"] == level else _unlock_activist(con, uid, stored["level"] if stored else 0, level)
@@ -756,7 +762,7 @@ def person(con, v: Viewer, uid: int) -> dict:
     picked = list(dict.fromkeys(BADGE_OF.get(k, k) for k in u["showcase"].split(",")))  # a variant picked on its own ("init26f") shows as its badge
     # Fuel (PRIVATE): not even locked on my own (no nudge to pay); on someone else's only if they showcase it (minors, pressure)
     ach = [a if close else {**a, "at": None} for a in achievements(con, uid, own=uid == v.id)
-           if (a["code"] not in PRIVATE or a["level"] and (uid == v.id or a["code"] in picked)) and (a["code"] not in CATALOG_HIDDEN or a["level"])]
+           if (a["code"] not in PRIVATE or a["level"] and (uid == v.id or a["code"] in picked or a["code"] == "sponsor")) and (a["code"] not in CATALOG_HIDDEN or a["level"])]
     for a in ach:  # the club a founder founded, to those who see someone's clubs
         if a["code"] == "honor" and a["level"]:
             g = one(con, "SELECT note FROM achievement_grants WHERE user_id = ? AND code = 'honor'", uid)
@@ -1025,3 +1031,5 @@ from .organizing import _ask_rating  # noqa: E402
 from .oversight import _admin, _owner  # noqa: E402
 from .seats import _hidden_orgs, _visible, notify  # noqa: E402
 from .teams import team  # noqa: E402
+
+from . import donations  # noqa: E402

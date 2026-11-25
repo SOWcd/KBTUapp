@@ -10,7 +10,7 @@ from pathlib import Path
 from .. import media
 from ..db import tx
 
-from .core import (ApiError, PERSON_COLS, RANK, Viewer, _by_id, _may, _org, _qs, _rights_from, _roles, can, log_action,
+from .core import (ApiError, PERSON_COLS, RANK, Viewer, _by_id, _may, _org, _qs, _roles, can, log_action,
     _once, need_student, one, org_ref, overseer, person_ref, role_in, rows, short_name)
 
 
@@ -178,12 +178,14 @@ def orgs(con, v: Viewer) -> list[dict]:
     return sorted(found, key=lambda o: (not o.get("gov"), not o["subscribed"], -o["subscribers"]))
 
 
-def org(con, v: Viewer, oid: int) -> dict:
+def org(con, v: Viewer, oid: int, *, demo: bool = False) -> dict:
     o = one(con, "SELECT * FROM orgs WHERE id = ? AND (status = 'active' OR status = 'hidden' AND ?)", oid, v.role == "admin")
     if not o:
         raise ApiError("not_found")
     from ..casting import group_link  # imports logic: here, not at the top
-    return {**org_shape(con, v, o), "leaders": _people(con, oid, "AND m.role IN ('president', 'vice')"), "chats": org_chats(con, oid),
+    # Google Play's reviewer (app.is_demo) sees the club, never its people
+    leaders = [] if demo else _people(con, oid, "AND m.role IN ('president', 'vice')")
+    return {**org_shape(con, v, o), "leaders": leaders, "chats": org_chats(con, oid),
             "contact": _contact(con, oid) if v.student else None, "groupLink": group_link(con, v, oid)}
 
 
@@ -217,6 +219,8 @@ def people(con, v: Viewer, oid: int) -> list[dict]:
 
 def subscribe(con, v: Viewer, oid: int, on: bool) -> dict:
     need_student(v)
+    if on and not one(con, "SELECT 1 FROM orgs WHERE id = ? AND status = 'active'", oid):
+        raise ApiError("not_found")  # before the row: none kept for a hidden club, no 500 for a gone one
     if on:
         con.execute("INSERT OR IGNORE INTO subscriptions (user_id, org_id, created_at) VALUES (?, ?, ?)", (v.id, oid, core.now()))
     else:
@@ -1053,6 +1057,6 @@ def seed_schools(con, root: Path) -> None:
 # when a function runs
 from . import core, oversight  # noqa: E402
 from .chatlist import org_chats  # noqa: E402
-from .oversight import DMP_COLS, _admin, staff  # noqa: E402
+from .oversight import DMP_COLS, _admin  # noqa: E402
 from .seats import joined, notify, notify_staff  # noqa: E402
 from .teams import _ordered, banned  # noqa: E402

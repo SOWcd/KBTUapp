@@ -106,11 +106,16 @@ export interface ChannelMod { held: ChannelModPost[]; live: ChannelModPost[]; re
 /** My reply, as the anonymous author, in my post's comments (server fchannel.reply_*): comment, the comment answered
  *  (its message id; null: the thread); state where it stands. Only I see these as mine. */
 export interface ChannelReply { id: Id; body: string; comment: number | null; state: 'checking' | 'held' | 'maybe' | 'soon' | 'sent' | 'removed' | 'missing'; at: Ts; ai?: boolean }
+/** A comment written in the app under a channel post (server fchannel.thread): signed with a name, or an anonymous
+ *  author's mark (anon, nick); mine: only for my own signed ones, with state (where it stands; others' are all 'sent'). */
+export interface ChannelComment { id: Id; body: string; at: Ts; state: ChannelReply['state']; mine: boolean; anon: boolean; nick: [number, number] | null; name: string | null }
 /** A reply in the moderators' list: the words and the post they answer, never whose; reports: /report in the group */
 export interface ChannelModReply { id: Id; body: string; post: Id; postBody: string; why: string | null; aiWhy?: string | null; reports: number; at: Ts; undo: boolean; anon: boolean; nick: Nick }
 /** A check-in session I run (/show, server checkin.py): the screen's numbers plus how many screens show it. */
-export interface ScreenSession { session: Id; event: Id | null; crew?: Id | null /* an event's team marked (not its guests) */; phase: 'in' | 'out'; departed: number; title: string; started: Ts | null; ended: Ts | null; done: number; pending: number; expected: number; came?: number /* of the expected, who counted */; param: string | null; next: number; created?: Ts; screens: number; paired: number; vol?: boolean /* the volunteers ledger's session: its door (VolDoor) */; helpers?: number; last?: { name: string; at: Ts; team?: boolean /* marked on the event's team list (server checkin._team) */ } | null /* show: the last one counted */ }
+export interface ScreenSession { session: Id; org?: Id | null; meetup?: boolean; department?: string | null; flagged?: number; scans?: number; reviewOnly?: boolean; event: Id | null; crew?: Id | null /* an event's team marked (not its guests) */; phase: 'in' | 'out'; departed: number; title: string; started: Ts | null; ended: Ts | null; done: number; pending: number; expected: number; came?: number /* of the expected, who counted */; param: string | null; next: number; created?: Ts; screens: number; paired: number; vol?: boolean /* the volunteers ledger's session: its door (VolDoor) */; helpers?: number; last?: { name: string; at: Ts; team?: boolean /* marked on the event's team list (server checkin._team) */ } | null /* show: the last one counted */ }
 /** The check-in the capsule shows (/api/me): one I run (ScreenSheet's numbers, for its first frame), or one I help at (my QR). until: when its event is over */
+export interface MeetupScan { id: Id; user: Id; name: string; at: Ts; phase: 'in' | 'out'; flag: 'outsider' | 'department' | 'unassigned' | null; review: 'added' | 'declined' | null; ask: boolean }
+export interface MeetupScans { rows: MeetupScan[]; next: Id | null }
 export type MyCheckin = (ScreenSession & { helper: false; until: Ts }) | { helper: true; session: Id; event: Id | null; title: string; scanner: boolean; until: Ts };
 /** A scan of an organizer's helper QR (server checkin.py): `joined` already in; `scanner` the event's door scanner is open to me */
 export interface ScreenHelper { session: Id; event: Id | null; title: string; joined: boolean; scanner: boolean }
@@ -177,7 +182,15 @@ export interface Video { id: Id; status: 'uploading' | 'queued' | 'working' | 'r
 export interface Media {
   id?: Id; url: string; thumb: string; w: number; h: number; blur: string; color?: string | null /* a photo's average colour */;
   focus?: [number, number] | null; // an event cover's point that every frame keeps in view, 0..1; null = the middle
+  /** An event cover's formats that have their own crop ({focus}) or their own photo (a whole Media) over it; read
+   *  through lib/photo coverFor, never by hand. */
+  formats?: Partial<Record<CoverFormat, Partial<Media>>>;
 }
+/** Where an event's cover shows: the Feed's tall slide and its story, the event's card (the Afisha's hero, its own page,
+ *  a share card), a list's square thumbnail. */
+export type CoverFormat = 'feed' | 'card' | 'list';
+/** Why a member's draft came back from the club's President or a Vice (server organizing.REVIEW_REASONS). */
+export type ReviewReason = 'details' | 'when' | 'cover' | 'repeat' | 'later';
 
 /** `logo`: the club's uploaded mark (a thumbnail URL); without one it is its emoji on its cover. */
 export interface OrgRef { id: Id; slug: string; name: string; short: string; emoji: string; cover: number; kind: OrgKind; official: boolean; logo?: string | null;
@@ -353,6 +366,7 @@ export interface Me {
   settings: Settings;
   memberships: Membership[];
   office?: OrgRef | null;       // an office I'm in, before my KBTU sign-in (no memberships yet): for its one greeting
+  dmpHi?: OrgRef | null;        // on DMP's list (server kbtu.admin dmp), not signed in, not greeted yet: its hello, then Microsoft
   counters: { tickets: number; unreadBroadcasts: number; friendRequests: number; inbox: number /* staff: everything waiting in Admin → Inbox (server logic/inbox.py) */ };
   /** The badge I show: a club's (an official club I'm in), 'sower' (the creator's own), null: the KBTU one.
    *  Badges as skins; never picked, a new club's comes by itself. */
@@ -459,6 +473,9 @@ export interface EventCard {
   volunteersAsked?: number;     // Studio, the organizers: applications waiting for an answer
   teamAsks?: number;            // Studio, the club's President and Vices: members asking to come as guests (server seats.team_ask)
   fromPost?: string;            // Studio, the club's Head+: a draft found in the club's channel (server autoev.py), its post's link
+  /** A draft, in Studio and its editor: mine (I made it: a member's own stays theirs to edit until approved), askedAt:
+   *  sent to the club's President and Vices and waiting, reason: why it came back. */
+  review?: { mine: boolean; askedAt: number | null; reason: ReviewReason | null };
   teamMin?: number;             // a team event (server evteams.py): its teams' size; left out: not one
   teamMax?: number;
   teamCap?: number | null;      // at most this many teams; null: no cap
@@ -652,6 +669,9 @@ export interface EventInput {
   slideIds?: Id[];
   /** The cover's focus, [x, y] from 0 to 1; null = the middle; left out keeps it. */
   coverFocus?: [number, number] | null;
+  /** A format's own crop ({focus}) or its own photo ({id, focus}) over the cover; a format's null: back to the cover;
+   *  left out keeps them. */
+  coverFormats?: Partial<Record<CoverFormat, { id?: Id | null; focus?: [number, number] | null } | null>>;
   /** Paid (§4.3): tenge, null = free; with the name on the Kaspi receipt and the Kaspi phone. Only an official club's
    *  Vice+ send these, and they are fixed once someone has paid; left out keeps them. */
   price?: number | null;
@@ -677,6 +697,11 @@ export interface AttendeeReceipt {
 }
 /** The door list for check-in by name (Member+, short names only, §3): going people, the ones still to come first.
  *  `manual` = checked in by hand (no QR). */
+/** a row of the organizers' list at the door (server guests.door_list): by name, not in the app; walkIn: added at the door */
+export interface ListGuest { key: string; name: string; adult: boolean | null; came: boolean; at?: Ts | null; team?: string | null; walkIn?: boolean }
+/** what a guest list does (server guests.load), the same for its preview: rows kept, in the app already, by name on the list,
+ *  repeated rows skipped, bad rows (1-based, why), app seats the first list ends, old list rows a corrected file drops */
+export interface GuestListResult { rows: number; inApp: number; onList: number; dupes: number; bad: { row: number; why: 'name' | 'student_id' | 'adult' | 'username' | 'long' }[]; badCount: number; dropped: number; removed: number }
 export interface DoorPerson { person: DoorRef; checkedInAt: Ts | null; walkIn: boolean; manual: boolean; adult?: boolean | null; team?: string | null }
 /** An application to join, as the club's Vice+ see it (§4.5): enough to write to the person first. */
 /** Someone in a club, as its own team sees them (§3: full names and @usernames inside the team). */
@@ -846,6 +871,9 @@ export interface Friends { friends: FriendRow[]; incoming: FriendRow[]; outgoing
 export type Friendship = PersonCard['friendship'];
 /** A student found by @username, and where the two of us stand. */
 export interface FoundStudent { person: PersonRef; course: number | null; school: string | null; friendship: Friendship; me: boolean; closed?: boolean }
+/** The global search's server half (GET /api/search/more, server logic/search.more): people who made themselves
+ *  findable (an exact @username; "open to projects" where the find-people forum is open to me), the channel's live posts. */
+export interface SearchMore { people: { person: PersonRef; course: number | null }[]; posts: ChannelFeedPost[] }
 /** Opening someone's one-time friend link: friends at once, or why not. */
 /** someone's invite link r_<code> opened: whose it is, and where we stand ('self': my own) */
 export interface LinkCard { person: PersonRef; friendship: Friendship | 'self'; registered: boolean }
@@ -927,3 +955,33 @@ export interface SantaThread { closed: boolean; msgs: SantaMsg[] } // closed: on
 export interface SantaReport { id: Id; at: Ts; title: string; giver: PersonRef | null; to: PersonRef | null; byGiver: boolean; msgs: { id: Id; fromGiver: boolean; text: string; at: Ts }[] }
 /** to: where I write as my person's Santa; from: with my own Santa (null: no such pair) */
 export interface SantaChats { to: SantaThread | null; from: SantaThread | null }
+
+/** Native surveys; answer content and identities are never returned to the student list. */
+export interface ResearchQuestion {
+  id: string; type: 'text' | 'long' | 'choice' | 'multi' | 'scale'; label: string;
+  hint?: string; required?: boolean; options?: string[]; other?: boolean; low?: string; high?: string;
+}
+export interface ResearchSpec {
+  title: string; intro: string; thanks: string; lang: 'ru' | 'kk' | 'en';
+  sections: { title: string; questions: ResearchQuestion[] }[];
+}
+export type ResearchAnswers = Record<string, string | string[]>;
+export interface ResearchSurvey { slug: string; title: string; about: string; answers: number; answered: boolean; spec: ResearchSpec }
+export interface ResearchInput { title: string; goal: string; questions: string; organizer: string; consent: string }
+export interface ResearchRequest extends Omit<ResearchInput, 'consent'> {
+  id: Id; person: PersonRef; username: string | null; at: Ts; approved: boolean;
+}
+
+/** Private support data; never embedded in another person's card. */
+export interface Support {
+  total: number; tier: number; thresholds: number[]; starRate: number;
+  version: string; amountVersion: string; receiptConsent: string; show: boolean; showAmount: boolean; rev: number | null;
+  receipts: { id: Id; status: 'pending' | 'confirmed' | 'rejected'; amount: number | null; at: Ts }[];
+}
+/** amount: the confirmed total, only when they agreed to show it (sa1) */
+export interface Sponsor { name: string; tier: number; amount?: number }
+export interface DonationReview {
+  id: Id; name: string; status: 'pending' | 'confirmed' | 'rejected'; amount: number | null;
+  readAmount: number | null; recipient: string | null; sender: string | null; no: string | null; paidAt: Ts | null;
+  flags: string[]; auto: boolean; image: boolean; at: Ts; revision: number; undo: boolean;
+}

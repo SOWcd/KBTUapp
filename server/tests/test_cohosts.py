@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import time
 
-from kbtu import bot, db, logic
+from kbtu import db, logic, outbox
 from test_core import delete_now, env, login, set_clock, tma  # noqa: F401  (env is a fixture)
 
 EV = {"place": "Atrium", "emoji": "crown_3d", "color": "#3B6BFF", "seats": 50}
@@ -47,7 +47,7 @@ def test_invite_accept_decline_leave(env):
     told = con.execute("SELECT u.tg_id FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE b.kind = 'cohost_invite'").fetchall()
     assert [t[0] for t in told] == [CO]  # its President (and Vices), not the Head or a Member
     row = dict(con.execute("SELECT * FROM bot_outbox WHERE kind = 'cohost_invite'").fetchone()) | {"lang": "en"}
-    text, _, start = bot._render(con, row)
+    text, _, start = outbox._render(con, row)
     assert "Crystal" in text and "JCC" in text and "Anime Quiz" not in text and "Atrium" not in text and start == f"st_{co}"  # no words of the host's draft
     # the co-host's Head can't answer; its President sees it in Studio and declines
     assert c.get(f"/api/orgs/{co}/cohosts", headers=tma(CO_HEAD)).status_code == 403
@@ -236,9 +236,9 @@ def test_left_cohost_followers_hear_nothing(env):
     c.post(f"/api/events/{eid}/cohost/answer", headers=tma(CO), json={"yes": True})
     q = "SELECT b.* FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE b.kind = 'new_event' AND u.tg_id = ?"
     row = lambda: dict(con.execute(q, (FAN,)).fetchone()) | {"lang": "en"}  # noqa: E731
-    assert "JCC" in bot._render(con, row())[0]
+    assert "JCC" in outbox._render(con, row())[0]
     c.delete(f"/api/events/{eid}/cohost", headers=tma(CO))
-    assert bot._render(con, row()) is None
+    assert outbox._render(con, row()) is None
 
 
 def test_invites_rate_limited_and_closed(env):

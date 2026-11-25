@@ -419,9 +419,9 @@ def drop_slot(con, v: Viewer, sid: int) -> list[dict]:
     if not s:
         raise ApiError("not_found")
     _may(con, v, s["org_id"], "casting")
-    if one(con, "SELECT 1 FROM round_apps WHERE slot_id = ? AND stage != 'withdrawn'", sid):
-        raise ApiError("conflict")
     with tx(con):  # its waiting place notices go with it: SQLite may hand the id to the next slot made
+        if one(con, "SELECT 1 FROM round_apps WHERE slot_id = ? AND stage != 'withdrawn'", sid):  # under the lock: a booking a moment ago stands
+            raise ApiError("conflict")
         con.execute("DELETE FROM round_slots WHERE id = ?", (sid,))
         con.execute("DELETE FROM bot_outbox WHERE kind = 'round_place' AND sent_at IS NULL AND ref LIKE ?", (f"ivp:%:{sid}:%",))
         con.execute("DELETE FROM bot_outbox WHERE kind = 'round_call' AND sent_at IS NULL AND ref LIKE ?", (f"ivc:%:{sid}:%",))
@@ -498,7 +498,7 @@ def set_place(con, v: Viewer, sid: int, body: dict) -> dict:
                 limited = True
             else:
                 n = one(con, "SELECT COUNT(*) FROM bot_outbox WHERE kind = 'round_place' AND ref LIKE ?", mine)[0]
-                # the place before it: edited back to that before it goes, the row says nothing (bot._render)
+                # the place before it: edited back to that before it goes, the row says nothing (outbox._render)
                 notify(con, a["user_id"], "round_place", f"ivp:{a['id']}:{sid}:{n}", json.dumps({"was": s["place"]}, ensure_ascii=False), after=now() + 120)
                 told = True
         log_action(con, v.id, "round_place", f"round:{rid}", json.dumps({"slot": sid, "old": s["place"], "new": place, "told": int(told)}, ensure_ascii=False))

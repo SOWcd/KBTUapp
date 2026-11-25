@@ -47,3 +47,9 @@ void loadLang(i18n.lang).catch(() => {}).then(async () => {
   else mount((await import('./screens/WebEntrance.svelte')).default, { target: app });
   window.__kbStarted = true; // (the other languages load with Settings: profile/SettingsList.svelte)
 });
+
+// The service worker (sw.ts): the app opens without the network, with my tickets. Production only, and 2 s after the page
+// has loaded: never in the way of the first paint. (Telegram on iOS has no service workers: there it's the network, as before.)
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  addEventListener('load', () => setTimeout(() => void navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).catch(() => {}), 2000));
+}

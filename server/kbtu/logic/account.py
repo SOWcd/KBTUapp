@@ -397,11 +397,47 @@ def staff_row(con, uid: int, first: str, last: str, school: str | None = None, c
 
 def staff_ok(con, uid: int, who: dict | None) -> bool:
     """The creator said this account is KBTU staff (kbtu.admin staff-ok), and Microsoft doesn't call it a student: its
-    sign-in asks no student ID. Office membership, roles, audit lines: never a reason."""
-    if not one(con, "SELECT 1 FROM staff_ok WHERE user_id = ?", uid):
+    sign-in asks no student ID; DMP's list (kbtu.admin dmp) is the same word given ahead. Office membership, roles,
+    audit lines: never a reason."""
+    if not one(con, "SELECT 1 FROM staff_ok WHERE user_id = ?", uid) and not dmp_listed(con, uid):
         return False
     # ponytail: KBTU's directory field read as is; "student" anywhere in it wins (exact values unmeasured)
     return "student" not in str(((who or {}).get("profile") or {}).get("companyName") or "").lower()
+
+
+_DMP_MINE = "FROM dmp_list d JOIN users u ON u.id = ? AND d.tg_id = u.tg_id"  # the id alone: a stored username can be stale
+
+
+def dmp_listed(con, uid: int):
+    """This Telegram on DMP's list (kbtu.admin dmp), by its id (a username row binds to one first: dmp_bind)."""
+    return one(con, "SELECT d.* " + _DMP_MINE, uid)
+
+
+def dmp_bind(con, tg: dict) -> None:
+    """A username on DMP's list binds to the Telegram whose own signed data (a Mini App open, never a browser session's
+    stored name) shows it first; from then on only that id counts, whoever holds the name next. The same person listed
+    by id too: one row."""
+    name = tg.get("username")
+    if not isinstance(name, str) or not name or not one(con, "SELECT 1 FROM dmp_list WHERE tg_username = ? AND tg_id IS NULL", name):
+        return  # the usual open: one indexed read
+    # ponytail: a handle given away before its owner's first open binds to its new holder; `dmp list` shows whom
+    with tx(con):
+        if one(con, "SELECT 1 FROM dmp_list WHERE tg_id = ?", tg["id"]):
+            con.execute("DELETE FROM dmp_list WHERE tg_username = ? AND tg_id IS NULL", (name,))
+            con.execute("UPDATE dmp_list SET tg_username = ? WHERE tg_id = ? AND tg_username IS NULL", (name, tg["id"]))
+        else:
+            con.execute("UPDATE dmp_list SET tg_id = ? WHERE tg_username = ? AND tg_id IS NULL", (tg["id"], name))
+
+
+def dmp_greeted(con, v: Viewer) -> None:
+    """The one-time "Hi, DMP" left for Microsoft: never shown again to this Telegram."""
+    with tx(con):
+        con.execute(f"UPDATE dmp_list SET greeted_at = ? WHERE greeted_at IS NULL AND id IN (SELECT d.id {_DMP_MINE})", (core.now(), v.id))
+
+
+def dmp_ids(row) -> list[str]:
+    """A grant's names in the deletion journal: a restored copy can hold it by id, or still as the invitation's username."""
+    return ([f"dmp:{row['tg_id']}"] if row["tg_id"] else []) + ([f"dmp:@{row['tg_username'].lower()}"] if row["tg_username"] else [])
 
 
 def ms_apply(con, uid: int, who: dict) -> bool:
@@ -477,14 +513,29 @@ def lent_studio(con, v: Viewer, oid: int) -> dict:
                 "rights": lent(r["level"], r["rights"])} for r in sorted(own, key=lambda r: -RANK[r["level"]])]}
 
 
+PLATFORMS = ("android", "ios", "desktop", "web")  # the coarse device kinds kept (user_platforms); the web app picks one
+
+
+def seen_platform(con, uid: int, kind: str | None) -> None:
+    """The device kind someone opened the app on, from /api/me: a read first, then a write (never waited for) at most
+    once a day per kind, so the creator can write to the people of one platform (admin broadcast --platform)."""
+    if kind not in PLATFORMS:
+        return
+    at = one(con, "SELECT seen_at FROM user_platforms WHERE user_id = ? AND kind = ?", uid, kind)
+    if at is None or at[0] <= core.now() - 86400:
+        db.maybe(con, con.execute, """INSERT INTO user_platforms (user_id, kind, seen_at) VALUES (?, ?, ?)
+            ON CONFLICT (user_id, kind) DO UPDATE SET seen_at = excluded.seen_at""", (uid, kind, core.now()))
+
+
 def me(con, v: Viewer) -> dict:
     from .. import checkin, roster
-    if v.student and roster._mine(con, v.id)[1]:  # a read first: the write lock only when a row may be mine
+    if v.student and roster.due(con, v.id):  # a read first: the write lock only when a row would join
         db.maybe(con, roster.match, con, v.id)  # A matching club roster row can add a membership. Skip the match if the database is busy.
     u = one(con, "SELECT * FROM users WHERE id = ?", v.id)
     s = one(con, "SELECT * FROM students WHERE user_id = ?", v.id)
     relink = bool(s and s["manual"])  # typed in before Microsoft only: signed out until Microsoft confirms
     s = None if relink else s
+    dmp = dmp_listed(con, v.id) if not s and not relink else None
     members = rows(con, f"""SELECT m.role, {core.TITLES}, t.rights, o.* FROM org_members m JOIN orgs o ON o.id = m.org_id
         LEFT JOIN org_roles t ON t.id = m.role_id WHERE m.user_id = ? AND o.status = 'active'""", v.id) if s else []
     # Studio's "Channel → news" tile (Vice+, who link chats): each org's main chat, one read for all of them
@@ -538,8 +589,12 @@ def me(con, v: Viewer) -> dict:
         # oversee: this org is DMP and I lead in it: Studio shows the registry with it picked
         "memberships": [_membership(con, m, mains, logos) for m in members],
         # an office's own person before the KBTU sign-in: the app greets them as the team once (web App teamHi); no rights in it
+        # (DMP's own hello already left on another phone: not again as the office's)
         "office": org_ref(con, o) if not s and (o := one(con, """SELECT o.* FROM org_members m JOIN orgs o ON o.id = m.org_id
-            WHERE m.user_id = ? AND o.kind = 'office' AND o.status = 'active'""", v.id)) else None,
+            WHERE m.user_id = ? AND o.kind = 'office' AND o.status = 'active'""", v.id)) and not (o["slug"] == "dmp" and dmp and dmp["greeted_at"]) else None,
+        # on DMP's list, not signed in, not greeted yet: the office's one-time hello, then Microsoft (web App teamHi)
+        "dmpHi": org_ref(con, d) if dmp and dmp["greeted_at"] is None
+                 and (d := one(con, "SELECT * FROM orgs WHERE slug = 'dmp' AND status = 'active'")) else None,
         "counters": {"tickets": tickets, "unreadBroadcasts": unread_broadcasts(con, v),
                      "friendRequests": one(con, "SELECT COUNT(*) FROM friend_requests WHERE to_id = ? AND status = 'pending'", v.id)[0] if v.student else 0,
                      "inbox": inbox.count(con, v)},  # Admin's shield: everything waiting for the staff (logic/inbox.py)
@@ -722,7 +777,7 @@ class _Taken(ApiError):
 
 
 def sid_tries(con, uid: int) -> int:
-    """Student IDs tried on this account in a day, from Settings or a schedule page (bot._page_sid): one count of 5, or
+    """Student IDs tried on this account in a day, from Settings or a schedule page (bot_dm._page_sid): one count of 5, or
     "taken" would tell anyone which IDs are registered. Read it and add to it under one write lock."""
     return one(con, """SELECT COUNT(*) FROM audit_log WHERE target = ? AND at > ? AND (action IN ('sid_try', 'sid_page_taken', 'sid_page_year', 'sid_page_fixed')
         OR action = 'identity_fix' AND json_extract(data, '$.field') = 'student_id')""", f"user:{uid}", core.now() - 86400)[0]
@@ -938,18 +993,19 @@ def _update_me(con, v: Viewer, patch: dict) -> None:
 def _drop_photo(con, fid: int | None) -> list[str]:
     """A photo of mine nobody shows any more: its row goes, and its files on disk (returned) unless another row has
     the same picture (files are named by their content)."""
-    f = one(con, "SELECT id, path FROM files WHERE id = ?", fid) if fid else None
+    f = one(con, "SELECT id, path, kind FROM files WHERE id = ?", fid) if fid else None
     if not f:
         return []
     con.execute("DELETE FROM files WHERE id = ?", (f["id"],))
     # its reports go with it: the next file may get this id (a plain INTEGER PRIMARY KEY), and must not inherit them
     con.execute("DELETE FROM reports WHERE target = 'photo' AND target_id = ?", (f["id"],))
-    return [] if one(con, "SELECT 1 FROM files WHERE path = ?", f["path"]) else [f["path"]]
+    # Private receipts and public photos live in different directories, even with the same digest.
+    return [] if one(con, "SELECT 1 FROM files WHERE path = ? AND (kind = 'receipt') = ?", f["path"], f["kind"] == "receipt") else [f["path"]]
 
 
 _FILE_REFS = (("users", "avatar_file_id"), ("orgs", "logo_file_id"), ("events", "cover_file_id"),
-              ("receipts", "file_id"), ("event_photos", "file_id"), ("posts", "photo_file_id"),
-              ("event_slides", "file_id"), ("takedowns", "file_id"), ("gallery_photos", "file_id"))
+              ("donations", "file_id"), ("receipts", "file_id"), ("event_photos", "file_id"), ("posts", "photo_file_id"),
+              ("event_slides", "file_id"), ("takedowns", "file_id"), ("gallery_photos", "file_id"), ("event_covers", "file_id"))
 _FILE_USED = " UNION ALL ".join(f"SELECT 1 FROM {table} WHERE {col} = {{fid}}" for table, col in _FILE_REFS)
 UNUSED_COVERS = 20  # room for an editor's unsaved cover and slides
 
@@ -979,7 +1035,7 @@ def set_photo(con, v: Viewer, saved: dict) -> list[str]:
         VALUES (?, 'avatar', 'image/webp', ?, ?, ?, ?, ?, ?, ?)""", (saved["sha256"], saved["bytes"], saved["width"], saved["height"],
                                                                 saved["path"], v.id, core.now(), saved["color"])).lastrowid
     con.execute("UPDATE users SET avatar_file_id = ?, avatar_tg = 0 WHERE id = ?", (fid, v.id))
-    return _drop_photo(con, old) if old and old != fid else []
+    return _drop_unused(con, old) if old and old != fid else []  # a take-down's undo may still hold it
 
 
 def drop_my_photo(con, v: Viewer) -> list[str]:
@@ -988,7 +1044,7 @@ def drop_my_photo(con, v: Viewer) -> list[str]:
     need_student(v)
     old = one(con, "SELECT avatar_file_id FROM users WHERE id = ?", v.id)[0]
     con.execute("UPDATE users SET avatar_file_id = NULL, avatar_tg = 1 WHERE id = ?", (v.id,))
-    return _drop_photo(con, old) if old else []
+    return _drop_unused(con, old) if old else []  # a take-down's undo may still hold it
 
 
 DELETE_WAIT = 7 * 86400
@@ -1002,12 +1058,18 @@ def _paid_ahead(con, uid: int) -> bool:
                uid, NO_END, core.now()) is not None
 
 
+def _may_delete(con, v: Viewer) -> None:
+    # Telegram-only donors also need a way to erase their linked payment data.
+    if not v.student and not one(con, "SELECT 1 FROM donations WHERE user_id = ? UNION ALL SELECT 1 FROM sponsor_consents WHERE user_id = ?", v.id, v.id):
+        need_student(v)
+
+
 def ask_delete(con, v: Viewer, photos: bool = False) -> dict:
     """"Delete my account" (§4.8) waits a week, then `delete_due` runs it (a change of heart, or someone
     holding my phone, shouldn't cost the awards; asking the KBTU password would shut out whoever no longer has it).
     The bot says so at once, with the way back; nothing is hidden meanwhile. `photos`: the album photos I added go
     too (by default they stay, without my name). A President's club passes on at the deletion (delete_due)."""
-    need_student(v)
+    _may_delete(con, v)
     at = core.now() + DELETE_WAIT
     if con.execute("UPDATE users SET delete_at = ? WHERE id = ? AND delete_at IS NULL", (at, v.id)).rowcount:
         notify(con, v.id, "delete_soon", f"del:{at}")
@@ -1020,7 +1082,7 @@ def ask_delete(con, v: Viewer, photos: bool = False) -> dict:
 def delete_info(con, v: Viewer) -> dict:
     """What the delete sheet tells before: the album photos I added (they stay without my name unless I say so), and
     whether a paid ticket ahead makes the deletion wait."""
-    need_student(v)
+    _may_delete(con, v)
     return {"photos": one(con, "SELECT COUNT(*) FROM event_photos WHERE added_by = ?", v.id)[0], "paid": _paid_ahead(con, v.id)}
 
 
@@ -1104,9 +1166,10 @@ def delete_due(con) -> tuple[list[str], list[str]]:
                 if not u or _paid_ahead(con, uid):
                     continue
                 photos_too = one(con, "SELECT 1 FROM meta WHERE key = ?", f"delphotos:{uid}") is not None
+                dmp = dmp_listed(con, uid)  # a copy from before the first open holds the grant with no account
                 receipts, photos = delete_me(con, Viewer(uid, u["role"], True))
                 # The journal must survive a crash before SQLite can commit the matching checkpoint.
-                _deletion_log(con, uid, photos_too)
+                _deletion_log(con, uid, photos_too, dmp_ids(dmp) if dmp else [])
         except Exception:
             log.exception("deleting account %s failed", uid)
             continue
@@ -1165,7 +1228,7 @@ def _deletion_hash(salt: str, identity: str) -> str:
     return hashlib.sha256(f"{salt}:{identity}".encode()).hexdigest()[:32]
 
 
-def _deletion_log(con, uid: int, photos: bool = False, *, reports: bool = False) -> None:
+def _deletion_log(con, uid: int, photos: bool = False, dmp: list[str] | tuple = (), *, reports: bool = False) -> None:
     path = _journal(con)
     if not path.exists() and one(con, "SELECT 1 FROM meta WHERE key GLOB 'delreplay:*'"):
         raise RuntimeError("restore deletions.log before deleting accounts")
@@ -1173,15 +1236,17 @@ def _deletion_log(con, uid: int, photos: bool = False, *, reports: bool = False)
     created = one(con, "SELECT created_at FROM users WHERE id = ?", uid)[0]
     # Moving an account swaps its Telegram identity but preserves the database row.
     kind = "reports" if reports else "user"
-    h = _deletion_hash(salt, f"{kind}:{uid}:{created}")
-    previous = one(con, "SELECT value FROM meta WHERE key = ?", f"delreplay:{h}")
     day = core.now() // 86400 * 86400
-    # The first new-format generation follows any day-only record. Two deletions in a day still differ.
-    generation = max(day + 1, int(previous[0]) + 1 if previous else 0)
-    old = path.read_text() if path.exists() else ""
     scope = " reports" if reports else " photos" if photos else ""
-    _durable_text(path, old + f"{day} {h}{scope} v2:{generation}:{hashlib.sha256(salt.encode()).hexdigest()[:16]}\n")
-    con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (f"delreplay:{h}", str(generation)))
+    tag = hashlib.sha256(salt.encode()).hexdigest()[:16]
+    lines = []  # the account's own record, then its DMP grant's (dmp_ids), each with its own generation
+    for h, sc in [(_deletion_hash(salt, f"{kind}:{uid}:{created}"), scope), *((_deletion_hash(salt, x), " dmp") for x in dmp)]:
+        previous = one(con, "SELECT value FROM meta WHERE key = ?", f"delreplay:{h}")
+        # The first new-format generation follows any day-only record. Two deletions in a day still differ.
+        lines.append((h, sc, max(day + 1, int(previous[0]) + 1 if previous else 0)))
+    old = path.read_text() if path.exists() else ""
+    _durable_text(path, old + "".join(f"{day} {h}{sc} v2:{g}:{tag}\n" for h, sc, g in lines))
+    con.executemany("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", ((f"delreplay:{h}", str(g)) for h, _, g in lines))
 
 
 def _prune_deletion_log(con) -> None:
@@ -1213,11 +1278,11 @@ def replay_deletions(con) -> tuple[int, int]:
         latest = {}
         salt_tag = hashlib.sha256(salt.encode()).hexdigest()[:16]
         for line in path.read_text().splitlines():
-            m = re.fullmatch(r"([0-9]+) ([0-9a-f]{32})(?: (photos|reports))?(?: v2:([0-9]+):([0-9a-f]{16}))?", line)
+            m = re.fullmatch(r"([0-9]+) ([0-9a-f]{32})(?: (photos|reports|dmp))?(?: v2:([0-9]+):([0-9a-f]{16}))?", line)
             if not m:
                 raise RuntimeError("invalid deletions.log record")
             day, h, scope, version, tag = m.groups()
-            if scope == "reports" and version is None:
+            if scope in ("reports", "dmp") and version is None:
                 raise RuntimeError("invalid report withdrawal in deletions.log")
             if tag and tag != salt_tag:
                 raise RuntimeError("deletions.salt does not match deletions.log")
@@ -1241,7 +1306,7 @@ def replay_deletions(con) -> tuple[int, int]:
             legacy_key = _deletion_hash(salt, str(u["tg_id"]))
             row_key = _deletion_hash(salt, f"user:{u['id']}:{u['created_at']}")
             for generation, scope, legacy in sorted(records.get(legacy_key, []) + records.get(row_key, [])):
-                if scope == "reports":
+                if scope in ("reports", "dmp"):
                     continue
                 if legacy:
                     verified = u["verified_at"]
@@ -1255,6 +1320,10 @@ def replay_deletions(con) -> tuple[int, int]:
                     con.execute("INSERT INTO meta (key, value) VALUES (?, '1')", (f"delphotos:{u['id']}",))
                 files.append(delete_me(con, Viewer(u["id"], u["role"], True)))
                 break
+        # an erased person's DMP grant, also in a copy from before their first open (no account in it to match)
+        for d in rows(con, "SELECT * FROM dmp_list"):
+            if any(scope == "dmp" for x in dmp_ids(d) for _, scope, _ in records.get(_deletion_hash(salt, x), [])):
+                con.execute("DELETE FROM dmp_list WHERE id = ?", (d["id"],))
         con.executemany("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
                         ((f"delreplay:{h}", str(latest[h])) for h in records))
         # All account decisions and SQL succeeded. An unlink failure rolls the checkpoints back for retry.
@@ -1267,7 +1336,8 @@ def replay_deletions(con) -> tuple[int, int]:
 # (tests/test_core.py checks the lists cover the schema). The nullable rest just lose the link.
 _DEL_KEEP = {("org_bans", "user_id")}  # a club's ban stays on the Telegram account
 _DEL_GONE = {
-    ("fchan_feed_pages", "user_id"), ("broadcast_votes", "user_id"),
+    ("donations", "user_id"), ("sponsor_consents", "user_id"),
+    ("fchan_feed_pages", "user_id"), ("broadcast_votes", "user_id"), ("user_platforms", "user_id"),
     ("web_sessions", "user_id"),
     ("students", "user_id"), ("staff_ok", "user_id"), ("santa_people", "user_id"), ("santa_msgs", "giver_id"), ("santa_msgs", "to_id"), ("santa_sends", "user_id"), ("schedule_classes", "user_id"), ("org_members", "user_id"), ("join_requests", "user_id"),
     ("club_applications", "user_id"), ("subscriptions", "user_id"), ("registrations", "user_id"), ("saved_events", "user_id"),
@@ -1285,10 +1355,15 @@ _DEL_GONE = {
     ("chat_asks", "user_id"),  # the chats I suggested, waiting to tell me
     ("event_crew", "user_id"),  # my door-helper rights (crew.py)
     ("qr_helpers", "user_id"),  # my right to help run a check-in (checkin.py)
+    ("qr_meet_scans", "user_id"),  # every scan of a team meetup, including membership exceptions
     ("fchan_hearts", "user_id"),
+    ("fchan_signed", "user_id"),  # who my signed comments under channel posts are (the comments are deleted above, with their messages in the group)
     ("fchan_comments", "user_id"),  # my face under channel posts (the comments stay in Telegram, Telegram's own)
     ("fchan_reply_reports", "user_id"),  # my /report on an anonymous author's reply
     ("staff_mutes", "user_id"),  # the staff notifications I muted
+    ("research_requests", "user_id"),  # signed research proposals
+    ("research_answers", "user_id"),  # delete signed answer contents; anonymous answers have no account link
+    ("research_participants", "user_id"),  # only the fact that I answered, never a link to an answer
     ("helper_offers", "user_id"),  # my offers to help the app (helpus.py)
     ("team_asks", "user_id"),  # my asks to come to my club's event as a guest
     ("credit_team", "user_id"),  # my place in People of the app's Team
@@ -1340,6 +1415,7 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
     me_, ended = {"u": v.id}, "SELECT id FROM events WHERE COALESCE(ends_at, starts_at + :end) <= :now"
     with tx(con):
         _hand_over(con, v.id)
+        con.execute("DELETE FROM donations WHERE user_id = ?", (v.id,))
         # money: the receipts go, theirs is personal (the club saw them); the paid seat it was for, if over, moves on
         paid = [r[0] for r in rows(con, """SELECT c.file_id FROM receipts c JOIN registrations r ON r.id = c.registration_id
             WHERE r.user_id = ?""", v.id)]
@@ -1378,6 +1454,10 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         con.execute("""INSERT OR REPLACE INTO meta (key, value) SELECT 'fchdrop:' || r.tg_msg, ? FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id
             WHERE p.user_id = ? AND p.status != 'live' AND r.tg_msg > 0""", (core.now(), v.id))
         con.execute("DELETE FROM fchan_replies WHERE tg_msg IS NULL AND post_id IN (SELECT id FROM fchan_posts WHERE user_id = ?)", (v.id,))
+        # my signed comments (fchan_signed, signed with my name): out of the group in the same round, then the rows go
+        signed = "FROM fchan_replies r JOIN fchan_signed s ON s.reply_id = r.id WHERE s.user_id = ?"
+        con.execute("INSERT OR REPLACE INTO meta (key, value) SELECT 'tgcdel:' || r.tg_msg, ? " + signed + " AND r.tg_msg > 0", (core.now(), v.id))
+        con.execute("DELETE FROM fchan_replies WHERE id IN (SELECT r.id " + signed + ")", (v.id,))
         con.execute("DELETE FROM comments WHERE user_id = :u AND deleted_at IS NOT NULL", me_)  # deleted or taken down: gone for good
         con.execute("UPDATE comments SET user_id = :p WHERE user_id = :u", me_)
         for (msg,) in rows(con, "SELECT tg_msg FROM fchan_posts WHERE user_id = ? AND status = 'live' AND anon = 0 AND tg_msg > 0", v.id):
@@ -1399,14 +1479,16 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
             con.execute("DELETE FROM event_photos WHERE added_by = ?", (v.id,))
         uploads = [r[0] for r in rows(con, "SELECT id FROM files WHERE kind != 'receipt' AND owner_id = ?", v.id)]
         tgpic = one(con, "SELECT tg_photo_path FROM users WHERE id = ?", v.id)[0]  # our copy of the Telegram photo
+        con.execute(f"DELETE FROM dmp_list WHERE id IN (SELECT d.id {_DMP_MINE})", (v.id,))  # off DMP's list: its own row, by id
         con.execute("""UPDATE users SET bio = '', showcase = '', qr_code = NULL, link_code = NULL, cal_token = NULL, nick = NULL, avatar_tg = 1,
             avatar_file_id = NULL, tg_username = NULL, tg_first_name = '', tg_last_name = '', tg_photo_url = NULL, tg_photo_path = NULL, tg_photo_src = NULL, tg_photo_at = NULL, mark = NULL,
             skin_org = NULL, skin_pick = NULL, frame = NULL, card_no = NULL, delete_at = NULL, city = NULL, city_hidden = 0, referred_by = NULL, announce_ok = NULL,
             role = 'user', is_founder = 0, forum_seen_msg = 0, notification_undo = '{}' WHERE id = ?""", (v.id,))  # a burnt number isn't given again
-        # Delete a claimed roster row and prevent reimport only if its email is verified. Release an unverified
-        # claim so a typo in the roster cannot keep the row from its owner.
-        for (key,) in rows(con, """DELETE FROM roster_pending WHERE claimed_by = ? AND email IN (SELECT lower(email) FROM students WHERE user_id = ?)
-                RETURNING key""", v.id, v.id):
+        # A claimed row with my email or a verified email and name match goes, and a reimport skips it.
+        for (key,) in rows(con, """DELETE FROM roster_pending WHERE email = (SELECT lower(email) FROM students WHERE user_id = ?)
+                AND (claimed_by = ? OR EXISTS (SELECT 1 FROM students s WHERE s.user_id = ?
+                AND expected_name(full_name, s.ms_oid, s.ms_profile, s.manual, s.first_name, s.last_name)))
+                RETURNING key""", v.id, v.id, v.id):
             con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, ?)", (f"roster_done:{key}", str(core.now())))
         con.execute("UPDATE roster_pending SET claimed_by = NULL WHERE claimed_by = ?", (v.id,))
         con.execute("UPDATE roster_pending SET rejected_by = NULL WHERE rejected_by = ?", (v.id,))
@@ -1474,14 +1556,16 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         con.execute("DELETE FROM meta WHERE key LIKE 'rclaim:%' AND value = ?", (str(v.id),))  # a roster claim that let me in
         # the admins' "two people gave this student ID" messages carry my name and email
         con.execute("DELETE FROM bot_outbox WHERE kind = 'id_clash' AND (ref LIKE ? OR ref LIKE ?)", (f"ic:%:{v.id}:%", f"ic:%:%:{v.id}"))
-        con.execute("""DELETE FROM bot_outbox WHERE kind LIKE 'prefill_%' AND (ref IN (?, ?) OR ref LIKE ? OR ref LIKE ?)""",
-                    (f"pf:{v.id}", f"pn:{v.id}", f"ph:{v.id}:%", f"ph:%:{v.id}"))  # the owner's freshmen-list alerts name me by id
+        con.execute("""DELETE FROM bot_outbox WHERE kind LIKE 'prefill_%' AND (ref = ? OR ref LIKE ? OR ref LIKE ?)""",
+                    (f"pf:{v.id}", f"ph:{v.id}:%", f"ph:%:{v.id}"))  # the owner's freshmen-list alerts name me by id
         con.execute("DELETE FROM bot_outbox WHERE kind = 'sid_page_clash' AND ref LIKE ?", (f"sp:{v.id}:%",))  # so does his schedule-page alert
         # other people's queues that name me by id, sent or not; who he was in the role history
         for kind, ref in (("friend_invite", f"fi:%:{v.id}"), ("friend_new", f"fn:{v.id}:%"), ("friend_request", f"fq:{v.id}:%"), ("join_request", f"jr:%:{v.id}:%"),
                           ("team_ask", f"ta:%:{v.id}:%"), ("roster_claim", f"rq:%:{v.id}"), ("tgc_good", f"gr:{v.id}"), ("org_ask", f"oa:%:{v.id}")):
             con.execute("DELETE FROM bot_outbox WHERE kind = ? AND ref LIKE ?", (kind, ref))
         con.execute("UPDATE audit_log SET target = 'user', data = '{}' WHERE target IN (?, ?)", (f"user:{v.id}", f"tgreport:{v.id}"))
+        con.execute("""UPDATE audit_log SET data = json_remove(data, '$.who') WHERE action IN ('checkin_hand', 'checkin_unhand')
+            AND json_extract(data, '$.who') = ?""", (f"u{v.id}",))
         con.execute("UPDATE audit_log SET data = '{}' WHERE action = 'presidency_transfer' AND json_extract(data, '$.to') = ?", (v.id,))
         con.execute("""UPDATE audit_log SET data = '{}' WHERE action IN ('checkin_hand', 'checkin_unhand')
             AND json_extract(data, '$.who') = ?""", (f"u{v.id}",))
@@ -1643,9 +1727,8 @@ def drop_my_schedule(con, v: Viewer) -> None:
 
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
-from . import chatlist, core, credits, fchannel, guests, inbox, profiles, santa  # noqa: E402
-from .clubs import TRANSLIT, orgs, stories_open  # noqa: E402
-from .moderation import _about  # noqa: E402
+from . import chatlist, core, credits, guests, inbox, profiles, santa  # noqa: E402
+from .clubs import TRANSLIT, stories_open  # noqa: E402
 from .newsfeed import unread_broadcasts  # noqa: E402
 from .organizing import kz_phone, link_door_guests  # noqa: E402
 from .profiles import ACHIEVEMENTS, _celebrate, _levels, brought, first_fifty, unlocked  # noqa: E402

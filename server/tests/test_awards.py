@@ -10,7 +10,7 @@ import time
 import pytest
 from fastapi.testclient import TestClient
 
-from kbtu import bot, db, logic, app as server, texts
+from kbtu import bot, db, logic, outbox, app as server, texts
 from test_core import delete_now, env, login, set_clock, tma  # noqa: F401  (env: the fixture)
 
 
@@ -31,7 +31,7 @@ def test_unlock_moment(env):
     assert c.post("/api/events/1/checkin", headers=P, json={"userId": ali["id"]}).json()["result"] == "ok"
     assert c.get("/api/me", headers=A).json()["unlocked"] == [{"code": "first_in", "level": 1}]       # the first one in
     sent = con.execute("SELECT b.*, 'ru' AS lang FROM bot_outbox b WHERE kind = 'achievement'").fetchall()
-    assert [(r["user_id"], r["ref"]) for r in sent] == [(ali["id"], "ach:first_in:1")] and bot._render(con, sent[0])[2] == "aw_first_in"
+    assert [(r["user_id"], r["ref"]) for r in sent] == [(ali["id"], "ach:first_in:1")] and outbox._render(con, sent[0])[2] == "aw_first_in"
     first = next(a for a in c.get(f"/api/users/{ali['id']}", headers=A).json()["awards"]["achievements"] if a["code"] == "first_in")
     assert first["level"] == 1 and first["at"]                                                     # the earned date
     assert c.post("/api/me/unlocked", headers=A, json={"code": "first_in", "level": 1}).json()["unlocked"] == []

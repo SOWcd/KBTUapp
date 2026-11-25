@@ -7,7 +7,7 @@ import re
 
 from fastapi.testclient import TestClient
 
-from kbtu import bot, config, db, logic
+from kbtu import config, db, logic, outbox
 from test_core import env, login, tma  # noqa: F401  (env: the fixture)
 
 
@@ -44,13 +44,13 @@ def test_manual_sign_in(env, monkeypatch):
     out = {r["kind"]: r for r in con.execute("SELECT * FROM bot_outbox WHERE kind IN ('id_clash', 'sid_check', 'sid_free')")}
     assert set(out) == {"sid_check", "sid_free"}                                         # no admin; the typed-in row gave way quietly
     assert out["sid_check"]["user_id"] == ids[21] and out["sid_free"]["user_id"] == ids[22]
-    assert "24B031234" in bot._render(con, {**dict(out["sid_check"]), "lang": "ru"})[0]   # the holder: check yours
-    assert bot._render(con, {**dict(out["sid_free"]), "lang": "ru"}) is None              # still held: nothing to tell
+    assert "24B031234" in outbox._render(con, {**dict(out["sid_check"]), "lang": "ru"})[0]   # the holder: check yours
+    assert outbox._render(con, {**dict(out["sid_free"]), "lang": "ru"}) is None              # still held: nothing to tell
     assert out["sid_free"]["send_after"] > logic.now() + 86400                            # parked
     con.execute("UPDATE students SET student_id = '24B031299' WHERE user_id = ?", (ids[21],))  # the holder fixes a typo
     m = con.execute("SELECT * FROM bot_outbox WHERE kind = 'sid_free'").fetchone()
-    assert m["send_after"] == 0 and "24B031234" in bot._render(con, {**dict(m), "lang": "ru"})[0]  # woken: it's free
-    assert bot._render(con, {**dict(out["sid_check"]), "lang": "ru"}) is None             # the holder's ask is moot now
+    assert m["send_after"] == 0 and "24B031234" in outbox._render(con, {**dict(m), "lang": "ru"})[0]  # woken: it's free
+    assert outbox._render(con, {**dict(out["sid_check"]), "lang": "ru"}) is None             # the holder's ask is moot now
     con.execute("UPDATE students SET student_id = '24B031234' WHERE user_id = ?", (ids[21],))  # back, for the rest
     for i in range(5):                                                                     # three IDs per newcomer: no pinging every holder
         logic.id_clash(con, f"24B00000{i}", ids[24], ids[21])

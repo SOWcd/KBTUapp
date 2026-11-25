@@ -19,7 +19,7 @@ SOURCES = ("from.none", "from.event", "from.club", "from.friend", "from.qr", "fr
 # sending, deleted one; counts only, never a word (the draft stays on the phone)
 APPEALS = ("apl.open", "apl.typed", "apl.ai", "apl.sent", "apl.drop", "apl.del")
 # the Afisha's personal hero (web/src/lib/hero.ts KINDS, the same names): its cards shown and tapped, by kind only
-HERO_KINDS = ("ticket", "friends", "club", "news", "forum", "class", "next")
+HERO_KINDS = ("ticket", "friends", "club", "news", "forum", "class", "next", "today", "week")
 HERO = tuple(f"hero.{a}.{k}" for a in ("show", "tap") for k in HERO_KINDS)
 PLATFORMS = ("ios", "android", "desktop", "web")
 BUCKETS = ("≤1", "≤2", "≤3", "≤5", "≤8", "8+")  # seconds from navigation start to the first useful paint

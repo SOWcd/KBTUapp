@@ -5,7 +5,7 @@ import sqlite3
 import threading
 import time
 
-from kbtu import bot, db, logic
+from kbtu import chores, db, logic, outbox
 from test_core import env, login, tma  # noqa: F401  (env: the fixture)
 
 
@@ -15,7 +15,7 @@ def test_outbox_due_uses_its_index(env):
     con = db.connect(cfg.db_path)
     q = []
     con.set_trace_callback(q.append)
-    bot._due(con)  # the postman's own query (INDEXED BY fails loudly if it ever stops fitting the index)
+    outbox._due(con)  # the postman's own query (INDEXED BY fails loudly if it ever stops fitting the index)
     con.set_trace_callback(None)
     plan = " ".join(r[3] for r in con.execute("EXPLAIN QUERY PLAN " + q[-1]))
     assert "outbox_todo" in plan and "TEMP B-TREE" not in plan, plan
@@ -53,13 +53,17 @@ def test_best_effort_write_skips_a_busy_lock(env):
 
 
 def test_public_files_cache_and_304(env):
-    """4 and 9: emoji are kept a day and revalidate to a 304; the page is never cached; big JSON goes gzipped."""
+    """4 and 9: emoji are kept a day and revalidate to a 304; the page and the service worker are never cached (a deploy
+    reaches the next launch); big JSON goes gzipped."""
     c, _ = env
     r = c.get("/emoji/party_popper_3d.webp")
     assert r.headers["cache-control"] == "public, max-age=300, stale-while-revalidate=86400"
     assert c.get("/emoji/party_popper_3d.webp", headers={"If-None-Match": r.headers["etag"]}).status_code == 304
     assert c.get("/", headers={"If-None-Match": r.headers["etag"]}).headers["cache-control"] == "no-cache"
     assert c.get("/assets/a.js").headers["cache-control"].endswith("immutable")
+    assert c.get("/sw.js").headers["cache-control"] == "no-cache"
+    assert c.get("/assets/gone-Ab12.js").status_code == 404  # a past deploy's chunk: never the page under its name
+    assert c.get("/x/assets/gone.js").status_code == 200  # (a deep path still gets the page: the app routes itself)
     me = c.get("/api/me", headers={**tma(8), "Accept-Encoding": "gzip"})
     assert me.status_code == 200 and (me.headers.get("content-encoding") == "gzip") == (len(me.content) >= 1024)
 
@@ -93,8 +97,8 @@ def test_optimize_runs_once_a_night(env, monkeypatch):
     monkeypatch.setattr(time, "time", lambda: 86400 * 100 + 3600)  # 06:00 Almaty
     q: list[str] = []
     con.set_trace_callback(q.append)
-    bot.optimize_day(con)
-    bot.optimize_day(con)
+    chores.optimize_day(con)
+    chores.optimize_day(con)
     assert sum(s.startswith("PRAGMA optimize") for s in q) == 1
 
 

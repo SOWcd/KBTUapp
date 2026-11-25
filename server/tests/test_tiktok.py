@@ -1,4 +1,4 @@
-"""Group video links (tiktok.py, bot._tiktok; TIKTOK=1): which messages count, the sources' answers, and the bot's
+"""Group video links (tiktok.py, bot_groups._tiktok; TIKTOK=1): which messages count, the sources' answers, and the bot's
 flow: the video (or a slideshow's photos) under the link as a reply, off without the switch, nothing for a bot, a stale message, the app's
 banned, a swear-word message the filter deleted, or past a chat's cap a minute."""
 from __future__ import annotations
@@ -24,7 +24,7 @@ from types import SimpleNamespace
 import httpx
 import pytest
 
-from kbtu import bot, db, download, logic, tgc, tiktok
+from kbtu import bot, bot_groups, db, download, logic, tgc, tiktok
 from test_core import env, login  # noqa: F401  (env: the fixture)
 
 VIDEO = b"\0\0\0\x18ftypmp42" + b"x" * 100
@@ -47,8 +47,10 @@ def _fresh(monkeypatch):
     monkeypatch.setattr(tiktok, "_session_misses", OrderedDict())
     monkeypatch.setattr(tiktok, "_checked", None)
     monkeypatch.delenv(tiktok.COOKIES, raising=False)  # stories off unless a test sets its own made-up cookies
-    monkeypatch.setattr(bot, "_video_seen", set())
-    monkeypatch.setattr(bot, "_swore", {})
+    seen = set()  # one set: the update loop (bot) and the group videos (bot_groups) share it
+    monkeypatch.setattr(bot, "_video_seen", seen)
+    monkeypatch.setattr(bot_groups, "_video_seen", seen)
+    monkeypatch.setattr(bot_groups, "_swore", {})
     monkeypatch.setattr(logic.chatlist, "_unheld", {})
     logic.chatmod.stale()
     yield
@@ -250,7 +252,7 @@ def _source(monkeypatch, cfg, link, meta):
     monkeypatch.setattr(YoutubeDL, "extract_info", extract)
     http = _Http()
     msg = _msg(31, link + "?share=tracking")
-    asyncio.run(bot._tiktok(cfg, http, msg, tiktok.link(msg)))
+    asyncio.run(bot_groups._tiktok(cfg, http, msg, tiktok.link(msg)))
     return urls[0], http.said("sendVideo")
 
 
@@ -338,7 +340,7 @@ def test_tikwm_without_range_support_still_sends_by_url(env, monkeypatch, movies
 
     async def go():
         async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as http:
-            await bot._tiktok(cfg, http, _msg(31), URL)
+            await bot_groups._tiktok(cfg, http, _msg(31), URL)
 
     asyncio.run(go())
     assert [(b["video"], b["width"], b["height"]) for b in sent] == [("https://v1.tiktokcdn.com/sd", 32, 48)]
@@ -403,7 +405,7 @@ def test_swear_deleted_gets_none(env, monkeypatch):
     oid = logic.create_org(con, None, "Chess", "CH", "crown_3d", False)
     con.execute("""INSERT INTO chats (title, kind, url, tg_chat_id, created_at, status, org_id, swear)
         VALUES ('Chess', 'group', 'https://t.me/+c', -100, 0, 'org', ?, 1)""", (oid,))
-    monkeypatch.setattr(bot, "WARN_FOR", 0)
+    monkeypatch.setattr(bot_groups, "WARN_FOR", 0)
 
     class Rights(_Http):
         async def post(self, url, json=None, data=None, files=None, **_):
@@ -454,7 +456,7 @@ def test_send_once_then_reuse_across_chats(env, monkeypatch, cache_route, caplog
     http = Telegram()
     for mid, url in enumerate((URL, URL + "?tracking=1", "https://www.tiktok.com/@x/video/123"), start=10):
         msg = _msg(31, url, mid=mid, chat={"type": "group", "id": -mid})
-        asyncio.run(bot._tiktok(cfg, http, msg, url))
+        asyncio.run(bot_groups._tiktok(cfg, http, msg, url))
     assert resolved == [URL] and len(uploaded) == int(cache_route == "upload")
     if uploaded:
         body, files = attempts[1]
@@ -508,7 +510,7 @@ def test_timeout_does_not_duplicate_a_reply(env, monkeypatch):
     monkeypatch.setattr(tiktok, "fetch", fetch)
     monkeypatch.setattr(tiktok, "upload", lambda *args: pytest.fail("ambiguous Telegram result"))
     http = Telegram()
-    asyncio.run(bot._tiktok(cfg, http, _msg(31), URL))
+    asyncio.run(bot_groups._tiktok(cfg, http, _msg(31), URL))
     assert len(http.said("sendVideo")) == 1 and not tiktok.cached(tiktok.key(URL))
 
 
@@ -555,7 +557,7 @@ def test_links_start_while_earlier_updates_and_other_links_wait(env, monkeypatch
                 release.set()
 
         monkeypatch.setattr(tiktok, "fetch", fetch)
-        monkeypatch.setattr(bot, "_group", group)
+        monkeypatch.setattr(bot_groups, "_group", group)
         updates = [{"update_id": i, "message": _msg(31, url, mid=i)} for i, url in enumerate(("other", SHORT, REEL), 1)]
         http = _Http(updates)
         try:
@@ -593,7 +595,7 @@ def test_link_arriving_during_a_slow_batch(env, monkeypatch):
                 await asyncio.wait_for(sent.wait(), 3)
 
         monkeypatch.setattr(tiktok, "fetch", fetch)
-        monkeypatch.setattr(bot, "_group", group)
+        monkeypatch.setattr(bot_groups, "_group", group)
         http = Telegram()
         assert await bot.hear(cfg, http, 0) == 2 and sent.is_set()
         assert await bot.hear(cfg, http, 2) == 3
@@ -613,9 +615,9 @@ def test_stale_file_id_resolves_again_and_respects_short_host_limit(env, monkeyp
     monkeypatch.setattr(tiktok, "fetch", fetch)
     http = Telegram()
     tiktok.remember(tiktok.key(SHORT), "expired", 180)
-    asyncio.run(bot._tiktok(cfg, http, _msg(31, YT), YT))
+    asyncio.run(bot_groups._tiktok(cfg, http, _msg(31, YT), YT))
     assert not http.said("sendVideo")
-    asyncio.run(bot._tiktok(cfg, http, _msg(31, SHORT), SHORT))
+    asyncio.run(bot_groups._tiktok(cfg, http, _msg(31, SHORT), SHORT))
     assert [b["video"] for b, _ in http.said("sendVideo")] == ["expired", FORMAT["url"]]
     assert not tiktok.cached(tiktok.key(SHORT))
 
@@ -659,7 +661,7 @@ def test_same_video_at_once_is_fetched_once(monkeypatch, caplog):
         monkeypatch.setattr(tiktok, "fetch", fetch)
         http = _Telegram()
         msgs = [_msg(31 + i, url, mid=10 + i, chat={"type": "group", "id": -10 - i}) for i, url in enumerate((URL, URL, full))]
-        jobs = [asyncio.create_task(bot._tiktok(CFG, http, m, tiktok.link(m))) for m in msgs]
+        jobs = [asyncio.create_task(bot_groups._tiktok(CFG, http, m, tiktok.link(m))) for m in msgs]
         await asyncio.sleep(0.05)
         assert fetched == [URL, full] and len(tiktok._flights) == 2  # the second short link waits for the first
         gate.set()
@@ -687,7 +689,7 @@ def test_dedupe_shares_nothing_there_but_not_a_failure(monkeypatch):
             return answer
         monkeypatch.setattr(tiktok, "fetch", fetch)
         http = _Telegram()
-        jobs = [asyncio.create_task(bot._tiktok(CFG, http, _msg(31 + i, mid=10 + i, chat={"type": "group", "id": -i}), URL))
+        jobs = [asyncio.create_task(bot_groups._tiktok(CFG, http, _msg(31 + i, mid=10 + i, chat={"type": "group", "id": -i}), URL))
                 for i in range(3)]
         await asyncio.sleep(0.02)
         gate.set()
@@ -712,7 +714,7 @@ def test_dedupe_survives_a_cancelled_waiter_and_a_cancelled_first(monkeypatch):
             return CLIP
         monkeypatch.setattr(tiktok, "fetch", fetch)
         http = _Telegram()
-        start = lambda i: asyncio.create_task(bot._tiktok(CFG, http, _msg(31, mid=i, chat={"type": "group", "id": -i}), URL))  # noqa: E731
+        start = lambda i: asyncio.create_task(bot_groups._tiktok(CFG, http, _msg(31, mid=i, chat={"type": "group", "id": -i}), URL))  # noqa: E731
         first = start(1)
         await asyncio.sleep(0.01)
         waiter = start(2)
@@ -751,7 +753,7 @@ def test_a_slideshow_is_downloaded_once_for_every_chat(monkeypatch):
     monkeypatch.setattr(tiktok, "photos", photos)
     http = _Telegram()
     for i in (1, 2):
-        asyncio.run(bot._tiktok(CFG, http, _msg(31, mid=i, chat={"type": "group", "id": -i}), URL))
+        asyncio.run(bot_groups._tiktok(CFG, http, _msg(31, mid=i, chat={"type": "group", "id": -i}), URL))
     (first, files), (again, none) = http.said("sendMediaGroup")
     assert len(downloads) == 1 and set(files) == {"p0", "p1"} and none is None
     assert again["media"] == [{"type": "photo", "media": "ph0"}, {"type": "photo", "media": "ph1"}]
@@ -811,7 +813,7 @@ def test_a_hanging_source_and_a_hanging_reply_time_out(monkeypatch, caplog):
     monkeypatch.setattr(tiktok, "fetch", fetch)
     http = _Telegram()
     start = time.monotonic()
-    asyncio.run(bot._tiktok(CFG, http, _msg(31), URL))
+    asyncio.run(bot_groups._tiktok(CFG, http, _msg(31), URL))
     assert time.monotonic() - start < 2 and not http.said("sendVideo") and _routes(caplog) == ["TimeoutError"]
     assert tiktok._flights == {}
 
@@ -1211,7 +1213,7 @@ def test_breaker_per_source_and_silent(monkeypatch, caplog):
         asyncio.run(tiktok.fetch(None, REEL))
     assert len(calls) == tiktok.FAILURES + 1
     http = _Telegram()
-    asyncio.run(bot._tiktok(CFG, http, _msg(31, SHORT), SHORT))
+    asyncio.run(bot_groups._tiktok(CFG, http, _msg(31, SHORT), SHORT))
     assert [m for m, _, _ in http.calls] == ["sendChatAction"] and _routes(caplog) == ["Paused"]  # no words to anyone
 
 
@@ -1322,7 +1324,7 @@ def test_a_resting_source_still_lets_a_later_version_go_by_url(monkeypatch, capl
     monkeypatch.setattr(tiktok, "fetch", fetch)
     tiktok._health["youtube"] = (tiktok.FAILURES, time.monotonic() + 3600)
     http = _Telegram()
-    asyncio.run(bot._tiktok(CFG, http, _msg(31, SHORT), SHORT))
+    asyncio.run(bot_groups._tiktok(CFG, http, _msg(31, SHORT), SHORT))
     assert [b["video"] for b, _ in http.said("sendVideo")] == [small["url"]] and _routes(caplog) == ["url"]
 
 
@@ -1372,10 +1374,10 @@ def test_failures_log_no_link_and_no_ids(monkeypatch, caplog):
     monkeypatch.setattr(tiktok, "fetch", fetch)
     msg = _msg(7777123, secret, mid=4242, chat={"type": "group", "id": -100987654})
     for _ in range(3):
-        asyncio.run(bot._tiktok(CFG, _Telegram(), msg, secret))
+        asyncio.run(bot_groups._tiktok(CFG, _Telegram(), msg, secret))
     monkeypatch.setattr(tiktok, "REPLY_SECONDS", 0.05)
     monkeypatch.setattr(tiktok, "fetch", lambda http, url: asyncio.sleep(1))
-    asyncio.run(bot._tiktok(CFG, _Telegram(), msg, secret))
+    asyncio.run(bot_groups._tiktok(CFG, _Telegram(), msg, secret))
     for _ in range(tiktok.FAILURES):
         tiktok._report("tikwm", False)
     assert caplog.messages and all(x not in caplog.text for x in ("ZSecret9", "7777123", "100987654", "4242"))
@@ -1644,7 +1646,7 @@ def test_mixed_post_is_one_album_in_its_topic(monkeypatch, caplog):
     photo = _mixed(monkeypatch, f"{IG}/a.jpg", _ig_clip(_ig_format("v")), f"{IG}/b.jpg")
     http = _AlbumTelegram()
     msg = _msg(31, f"look {POST}", mid=17, is_topic_message=True, message_thread_id=6)
-    asyncio.run(bot._tiktok(CFG, http, msg, tiktok.link(msg)))
+    asyncio.run(bot_groups._tiktok(CFG, http, msg, tiktok.link(msg)))
     ((form, files),) = http.said("sendMediaGroup")
     assert form["chat_id"] == -100 and form["message_thread_id"] == 6 and json.loads(form["reply_parameters"])["message_id"] == 17
     assert "caption" not in form and all("caption" not in m for m in json.loads(form["media"]))
@@ -1659,7 +1661,7 @@ def test_mixed_post_is_one_album_in_its_topic(monkeypatch, caplog):
     assert _routes(caplog) == ["album"] and POST not in caplog.text
     # another chat: the same album by file ids, nothing downloaded again
     monkeypatch.setattr(tiktok, "fetch", lambda http, url: pytest.fail("fetched again"))
-    asyncio.run(bot._tiktok(CFG, http, _msg(32, POST, mid=18, chat={"type": "group", "id": -5}), POST))
+    asyncio.run(bot_groups._tiktok(CFG, http, _msg(32, POST, mid=18, chat={"type": "group", "id": -5}), POST))
     (again, none), = [c for c in http.said("sendMediaGroup") if c[0]["chat_id"] == -5]
     assert none is None and again["reply_parameters"]["message_id"] == 18 and "caption" not in again
     assert again["media"] == [{"type": "photo", "media": "ph-p0"},
@@ -1672,7 +1674,7 @@ def test_one_item_left_goes_alone_and_none_left_sends_nothing(monkeypatch):
     # a photo post: one photo
     _mixed(monkeypatch, f"{IG}/a.jpg")
     http = _AlbumTelegram()
-    asyncio.run(bot._tiktok(CFG, http, _msg(31, POST, mid=3), POST))
+    asyncio.run(bot_groups._tiktok(CFG, http, _msg(31, POST, mid=3), POST))
     ((form, files),) = http.said("sendPhoto")
     assert set(files) == {"photo"} and "caption" not in form and not http.said("sendMediaGroup")
     assert tiktok.cached("ig:Car_0-sel") == (({"type": "photo", "media": "ph-one"},), 0)
@@ -1680,10 +1682,10 @@ def test_one_item_left_goes_alone_and_none_left_sends_nothing(monkeypatch):
     tiktok._files.clear()
     _mixed(monkeypatch, f"{IG}/gone.jpg", _ig_clip(_ig_format("v")), photos={"none"})
     http = _AlbumTelegram()
-    asyncio.run(bot._tiktok(CFG, http, _msg(31, POST, mid=4), POST))
+    asyncio.run(bot_groups._tiktok(CFG, http, _msg(31, POST, mid=4), POST))
     ((form, files),) = http.said("sendVideo")
     assert set(files) == {"video", "thumbnail"} and form["thumbnail"] == "attach://thumbnail" and form["width"] == 720
-    asyncio.run(bot._tiktok(CFG, http, _msg(32, POST, mid=5, chat={"type": "group", "id": -7}), POST))
+    asyncio.run(bot_groups._tiktok(CFG, http, _msg(32, POST, mid=5, chat={"type": "group", "id": -7}), POST))
     body, none = http.said("sendVideo")[-1]
     assert none is None and body["video"] == "vid-one" and body["chat_id"] == -7 and body["height"] == 1280
     # every item failed: nothing at all, and nobody is told
@@ -1691,7 +1693,7 @@ def test_one_item_left_goes_alone_and_none_left_sends_nothing(monkeypatch):
     _mixed(monkeypatch, f"{IG}/gone.jpg", _ig_clip(_ig_format("hevc", vcodec="hevc")),
            photos={"none"})
     http = _AlbumTelegram()
-    asyncio.run(bot._tiktok(CFG, http, _msg(31, POST, mid=6), POST))
+    asyncio.run(bot_groups._tiktok(CFG, http, _msg(31, POST, mid=6), POST))
     assert [m for m, _, _ in http.calls] == ["sendChatAction"]
 
 
@@ -1705,7 +1707,7 @@ def test_telegram_refusing_one_item_sends_the_rest(monkeypatch):
         if method == "sendMediaGroup" and "attach://v1" in body["media"]:
             return {"error_code": 400, "description": 'Bad Request: failed to send message #2 with the error message "VIDEO_CONTENT_TYPE_INVALID"'}
     http = _AlbumTelegram(refuse)
-    asyncio.run(bot._tiktok(CFG, http, _msg(31, POST, mid=3), POST))
+    asyncio.run(bot_groups._tiktok(CFG, http, _msg(31, POST, mid=3), POST))
     first, second = http.said("sendMediaGroup")
     assert [m["media"] for m in json.loads(second[0]["media"])] == ["attach://p0", "attach://p1"] and set(second[1]) == {"p0", "p1"}
     assert [m["media"] for m in tiktok.cached("ig:Car_0-sel")[0]] == ["ph-p0", "ph-p1"]
@@ -1713,10 +1715,10 @@ def test_telegram_refusing_one_item_sends_the_rest(monkeypatch):
         tiktok._files.clear()
         tiktok._sent.clear()
         http = _AlbumTelegram(lambda method, body, d=description: {"error_code": 400, "description": d})
-        asyncio.run(bot._tiktok(CFG, http, _msg(31, POST, mid=3), POST))
+        asyncio.run(bot_groups._tiktok(CFG, http, _msg(31, POST, mid=3), POST))
         assert len(http.said("sendMediaGroup")) == 1 and not tiktok.cached("ig:Car_0-sel")
     http = _AlbumTelegram(lambda method, body: {"error_code": 400, "description": "failed to send message #1 with x"})
-    asyncio.run(bot._tiktok(CFG, http, _msg(31, POST, mid=3), POST))
+    asyncio.run(bot_groups._tiktok(CFG, http, _msg(31, POST, mid=3), POST))
     assert len(http.said("sendMediaGroup")) == 2 and not http.said("sendPhoto") and not tiktok.cached("ig:Car_0-sel")
 
 
@@ -1742,7 +1744,7 @@ def test_the_same_post_at_once_is_gathered_once(monkeypatch):
         http = _AlbumTelegram()
         links = (POST, "https://www.instagram.com/some.one/p/Car_0-sel/?img_index=2", POST)
         msgs = [_msg(31 + i, url, mid=10 + i, chat={"type": "group", "id": -10 - i}) for i, url in enumerate(links)]
-        jobs = [asyncio.create_task(bot._tiktok(CFG, http, m, tiktok.link(m))) for m in msgs]
+        jobs = [asyncio.create_task(bot_groups._tiktok(CFG, http, m, tiktok.link(m))) for m in msgs]
         await asyncio.sleep(0.05)
         assert list(tiktok._flights) == ["ig:Car_0-sel"]
         gate.set()
@@ -1974,7 +1976,7 @@ def test_a_story_through_the_session(jar, monkeypatch):
         return got
     monkeypatch.setattr(tiktok, "fetch", fetch)
     http = _Telegram()
-    asyncio.run(bot._tiktok(CFG, http, _msg(31, STORY), STORY))
+    asyncio.run(bot_groups._tiktok(CFG, http, _msg(31, STORY), STORY))
     ((body, files),) = http.said("sendVideo")
     assert asked == [("s", 0)] and set(files) == {"video", "thumbnail"} and "caption" not in body
     assert not any(isinstance(v, str) and "cdninstagram" in v for v in body.values()) and "cover" not in body
@@ -2213,7 +2215,7 @@ def test_story_failures_are_silent_and_show_no_path_or_cookie(env, jar, monkeypa
         http = _Telegram()
         msg = _msg(31, f"look {_another_story()}")
         if url := tiktok.link(msg):
-            asyncio.run(bot._tiktok(CFG, http, msg, url))
+            asyncio.run(bot_groups._tiktok(CFG, http, msg, url))
         replies.extend(c for c in http.calls if c[0] != "sendChatAction")
         return http
     for _ in errors:
@@ -2241,14 +2243,14 @@ def test_story_failures_are_silent_and_show_no_path_or_cookie(env, jar, monkeypa
         tiktok._told.clear()
         ask()
     jar.path.unlink()  # gone between the message and the extraction: the call-time check finds nothing
-    asyncio.run(bot._tiktok(CFG, _Telegram(), _msg(31, STORY), STORY))
+    asyncio.run(bot_groups._tiktok(CFG, _Telegram(), _msg(31, STORY), STORY))
     # gone, or a FIFO, between that check and the read itself: the read's own error (it names the path) is dropped
     monkeypatch.setattr(tiktok, "_cookie_path", lambda: str(jar.path))
     for make in (lambda: None, lambda: os.mkfifo(jar.path)):
         make()
         tiktok._told.clear()
         http = _Telegram()
-        asyncio.run(bot._tiktok(CFG, http, _msg(31, STORY), STORY))
+        asyncio.run(bot_groups._tiktok(CFG, http, _msg(31, STORY), STORY))
         assert any("can't be read" in m for m in tiktok._told) and [m for m, _, _ in http.calls] == ["sendChatAction"]
     assert len(extracted) == len(errors) and replies == []  # no reply, no words, ever
     out, err = capfd.readouterr()

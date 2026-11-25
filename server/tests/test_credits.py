@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from kbtu import admin, bot, db, logic, texts
+from kbtu import admin, db, logic, outbox, texts
 from kbtu.logic import credits
 from test_core import delete_now, env, login, tma  # noqa: F401  (env is a fixture)
 
@@ -296,10 +296,10 @@ def test_one_eligibility_rule(env):
     con.commit()
     assert credits.ask(con) == 1
     m = con.execute("SELECT b.*, 'en' AS lang FROM bot_outbox b WHERE b.kind = 'credit_ask'").fetchone()
-    assert bot._render(con, m) is not None
+    assert outbox._render(con, m) is not None
     con.execute("DELETE FROM students WHERE user_id = ?", (ids["later"],))  # unlinked
     con.commit()
-    assert bot._render(con, m) is None
+    assert outbox._render(con, m) is None
 
 
 def test_switch_stays_while_a_yes_stands(env):
@@ -344,10 +344,10 @@ def test_ask_once(env, capsys, monkeypatch):
     assert capsys.readouterr().out.strip() == "queued 0" and len(sent()) == 2
     # the template: no line of ours, no user's words, one button into the app
     m = con.execute("SELECT b.*, 'ru' AS lang FROM bot_outbox b WHERE b.kind = 'credit_ask' AND b.user_id = ?", (ids["two"],)).fetchone()
-    text, button, start = bot._render(con, m)
+    text, button, start = outbox._render(con, m)
     assert start == "people" and button and "ru w50" not in text and (text, button) == texts.bot_message("ru", "credit_ask")
     assert _yes(c, tg["two"]).status_code == 200
-    assert bot._render(con, m) is None  # answered before it went out: quiet
+    assert outbox._render(con, m) is None  # answered before it went out: quiet
     # a reworded sheet: those with a yes to the old text are asked once for the new one; the no stays unasked
     monkeypatch.setattr(credits, "CONSENT", "cr2")
     monkeypatch.setattr(credits, "_ASKABLE", credits._ASKABLE.replace("'cr1'", "'cr2'"))

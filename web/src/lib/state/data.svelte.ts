@@ -1,7 +1,7 @@
 // Shared data the screens read, kept in one place per entity so a change shows everywhere at once
 // (one home per thing). Actions update optimistically and roll back if the server says no.
-import { api, ApiErr, type AlbumPhoto, type GalleryAlbum, type GalleryPage, type AdminStats, type Inbox, type ClassItem, type Membership, type EventCard, type Chats, type Credits, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type ChatTree, type StaffMute, type TeamMember, type VolLedger, type Appeal, type SgQueue, type Solved, type TeamPick } from '../api';
-import type { MyRegistration, SantaChats } from '../api';
+import { api, ApiErr, type ResearchAnswers, type ResearchSurvey, type ResearchRequest, type Support, type Sponsor, type AlbumPhoto, type GalleryAlbum, type GalleryPage, type AdminStats, type Inbox, type ClassItem, type Membership, type EventCard, type Chats, type Credits, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type ChatTree, type StaffMute, type TeamMember, type VolLedger, type Appeal, type SgQueue, type Solved, type TeamPick } from '../api';
+import type { DonationReview, MyRegistration, SantaChats, ScreenSession, TeamSetup, MeetupScans } from '../api';
 import { joinClasses } from '../classes';
 import { teamError } from '../teams';
 import { teamConsentOk, TEAM_CONSENT } from '../teamConsent';
@@ -20,8 +20,12 @@ import { SvelteSet } from 'svelte/reactivity';
 import { dayNo, nowTs } from '../time';
 import { clearCache } from './cache';
 import { castingOn } from '../posts';
+import { unreachable } from '../offlineTickets';
 
 export const data = $state({
+  support: null as Support | null,
+  sponsors: null as Sponsor[] | null,
+  donations: null as DonationReview[] | null,
   events: [] as EventCard[],
   // events opened outside the afisha (a club's page, a link: an initiative's are only there, server seats.on_afisha),
   // kept for the session so their buttons work; never saved on the phone
@@ -29,6 +33,10 @@ export const data = $state({
   eventsReady: false,
   past: [] as EventCard[], // Afisha's "Past": every Afisha event of the last month, mine marked by `my`, newest first (with the Afisha)
   myPast: null as EventCard[] | null, // my recent check-ins, including events outside the Afisha
+  research: null as ResearchSurvey[] | null,
+  researchFailed: false,
+  researchRequests: null as ResearchRequest[] | null, // staff only, memory only
+  researchRequestsFailed: false,
   credits: null as Credits | null, // the people of the app (server credits.py): with the app, so its row and screen never wait
   chats: null as Chats | null, // KBTU's chats for Clubs: loaded with the Afisha, so the row is there before the page opens (B5)
   gallery: [] as AlbumPhoto[], // the Afisha's Gallery, newest first: the student's first page, with the app (loadGallery)
@@ -48,6 +56,9 @@ export const data = $state({
   news: null as { casts: Post[]; posts: Post[] } | null, // tab 2 → News for club members: broadcasts, then my clubs' posts
   studio: {} as Record<number, EventCard[]>,  // tab 2 → Studio: each of my clubs' events (the one in view comes with the app)
   team: {} as Record<number, TeamMember[]>,   // tab 2 → Team: each of my clubs' people
+  meetups: null as ScreenSession[] | null,
+  meetupSetup: {} as Record<number, TeamSetup>,
+  meetupScans: {} as Record<number, MeetupScans>,
   appeals: null as Appeal[] | null,           // my appeals to SG: with the app (APPEALS on), never kept on the phone
   solved: [] as Solved[],                     // "Solved by your appeals": with my appeals, one request
   sg: null as SgQueue | null,                 // SG's queue (its granted people): with the app, never kept on the phone
@@ -62,6 +73,9 @@ export const data = $state({
   staffMutesFailed: false,
   santaChat: {} as Record<number, SantaChats>, // Secret Santa's chat by game: read as its page or a thread opens, never kept on the phone
   error: false,
+  // no network, or the events' request never reached the server: the kept tickets show, with the offline note. The
+  // phone's own word first, so a launch without network draws them in its first frame (nothing jumps in after)
+  offline: typeof navigator !== 'undefined' && navigator.onLine === false,
   rev: 0,                  // bumps after a Studio change, so the Studio lists reload
   kept: 0,                 // bumps after a change inside a list (a tap), so the phone's copy is saved again (App)
 });
@@ -298,6 +312,19 @@ export async function loadTeam(org: Id): Promise<void> {
   try { data.team[org] = await api.team(org); } catch { data.team[org] ??= []; /* the last copy stays; never an endless placeholder */ }
 }
 
+export async function loadMeetupSetup(org: Id): Promise<void> {
+  try { data.meetupSetup[org] = await api.teamSetup(org); } catch { /* keep the last department list */ }
+}
+
+export async function loadMeetups(): Promise<void> {
+  try {
+    data.meetups = await api.screens();
+    for (const s of data.meetups) if (s.meetup && !data.meetupScans[s.session]) {
+      void api.meetupScans(s.session).then((p) => { data.meetupScans[s.session] ??= p; }).catch(() => {});
+    }
+  } catch { /* keep the last list */ }
+}
+
 /** DMP's registry for this month (the overseers' main page), in the background; false when the server said no. */
 /** The ledger is no longer mine to see (access taken back, unlinked, the switch off): the copy goes and every sheet of it closes. */
 export function volGone(e: unknown): boolean {
@@ -365,7 +392,8 @@ export async function loadAfisha(): Promise<void> {
   void loadMyPast();
   const at = taps, ratedAt = ratingTaps;
   await Promise.allSettled([
-    api.events().then((events) => { if (at === taps) data.events = events; data.error = false; }, () => { data.error = true; })
+    api.events().then((events) => { if (at === taps) data.events = events; data.error = false; data.offline = false; },
+      (e) => { data.error = true; data.offline = unreachable(e); })
       .finally(() => { data.eventsReady = true; }),
     api.orgs().then((orgs) => {
       if (at === taps) { data.orgs = orgs.filter((o) => !o.small); data.small = orgs.filter((o) => o.small); }
@@ -417,6 +445,7 @@ export async function cancelCasting(p: Post): Promise<void> {
 /** Admin → Inbox and Done, the staff's (one request); the shield's number catches up with it. withStats: the admin's
  *  numbers too (the app's start and Admin opening; not after each decision) */
 export async function loadInbox(withStats = false): Promise<void> {
+  void loadDonations();
   if (session.me?.role !== 'admin' && session.me?.role !== 'moderator') { data.inbox = null; return; }
   const admin = staffStill('admin'), staff = staffStill('staff'); // an answer after the role went is not kept
   if (withStats && session.me.role === 'admin') api.adminStats().then((s) => { if (admin()) data.adminStats = s; }).catch(() => {});
@@ -436,8 +465,8 @@ export const decisions = (i: Inbox | null): number => i?.items.filter((x) => x.k
 /** Admin → My notifications, staff only; a failure keeps what it had (the page offers a retry when it has nothing).
  *  An answer asked before a tap (mutedTap) is older than the switch: dropped. */
 onStaffLoss((has) => {
-  if (!has('admin')) data.adminStats = null;
-  if (!has('staff')) { data.inbox = null; data.staffMutes = null; }
+  if (!has('admin')) { data.adminStats = null; data.donations = null; }
+  if (!has('staff')) { data.inbox = null; data.staffMutes = null; data.researchRequests = null; }
   else if (!has('admin')) { data.inbox = null; void loadInbox(); } // a moderator's queue, without the admin's cards
 });
 let muteTaps = 0;
@@ -447,6 +476,33 @@ export function loadStaffMutes(): void {
   const at = muteTaps, staff = staffStill('staff');
   data.staffMutesFailed = false;
   api.staffMutes().then((l) => { if (muteTaps === at && staff()) data.staffMutes = l; }).catch(() => (data.staffMutesFailed = !data.staffMutes));
+}
+
+let donationSeq = 0;
+export async function loadDonations(): Promise<boolean> {
+  const uid = session.me?.id, n = ++donationSeq, staff = staffStill('admin');
+  if (!staff() || !session.me?.founder) { data.donations = null; return false; }
+  try {
+    const got = await api.donationQueue();
+    if (n === donationSeq && staff() && session.me?.founder && session.me.id === uid) data.donations = got;
+    return true;
+  } catch { return false; }
+}
+
+/** Private totals live only in memory. A write invalidates older reads and refreshes the medal too. */
+let supportSeq = 0, supportWrites = 0;
+export async function loadSupport(): Promise<void> {
+  const uid = session.me?.id, n = ++supportSeq;
+  if (!uid || session.banned || session.revoked) return;
+  const current = () => n === supportSeq && !supportWrites && session.me?.id === uid && !session.banned && !session.revoked;
+  await Promise.allSettled([
+    api.support().then((got) => { if (current()) data.support = got; }),
+    api.sponsors().then((got) => { if (current()) data.sponsors = got; }),
+  ]);
+}
+export function supportWrite(sending: boolean): void {
+  supportSeq++; supportWrites += sending ? 1 : -1;
+  if (!sending && !supportWrites) { void loadSupport(); void loadMyCard(); void loadMe(); }
 }
 
 /** The people of the app. One read in flight for everyone who asks (the app's start, the bot's link, the screen); who is
@@ -801,4 +857,62 @@ export async function dropSchedule(): Promise<void> {
     data.schedule = await api.schedule().then(joinClasses).catch(() => before);
     haptic.error(); say(t('common.error'), 'warning_3d');
   } finally { scheduleDeleting = false; }
+}
+
+// Specs and my participation arrive with the app, kept only in this account's memory.
+let researchFlight: Promise<void> | null = null, researchSeq = 0, researchSends = 0;
+export function resetResearch(): void {
+  researchSeq++; researchFlight = null;
+  researchRequestsSeq++;
+  data.research = null; data.researchFailed = false;
+  data.researchRequests = null; data.researchRequestsFailed = false;
+}
+export function loadResearch(): Promise<void> {
+  const uid = session.me?.id;
+  if (!uid || session.banned || session.revoked || researchSends) return Promise.resolve();
+  if (researchFlight) return researchFlight;
+  const seq = ++researchSeq;
+  const current = () => session.me?.id === uid && !session.banned && !session.revoked && seq === researchSeq;
+  data.researchFailed = false;
+  const flight = api.research().then((r) => { if (current()) data.research = r; })
+    .catch(() => { if (current()) data.researchFailed = true; })
+    .finally(() => { if (researchFlight === flight) researchFlight = null; });
+  researchFlight = flight;
+  return flight;
+}
+
+export async function answerResearch(survey: ResearchSurvey, answers: ResearchAnswers, anonymous: boolean, consent: string): Promise<void> {
+  const uid = session.me?.id;
+  researchSeq++; researchSends++; researchFlight = null;
+  survey.answered = true; survey.answers++;
+  try { await api.answerResearch(survey.slug, answers, anonymous, consent); }
+  catch (e) {
+    // A lost response may have committed already. A repeated send confirms that it was received.
+    if (!(e instanceof ApiErr && e.code === 'conflict' && e.message === 'answered')) {
+      if (session.me?.id === uid) { survey.answered = false; survey.answers--; }
+      throw e;
+    }
+  } finally { researchSends--; void loadResearch(); }
+}
+
+let researchRequestsSeq = 0, researchDecisions = 0;
+/** Invalidate reads before a decision; refresh only when all pending decisions have settled. */
+export function researchDecision(sending: boolean): void {
+  researchRequestsSeq++;
+  researchDecisions += sending ? 1 : -1;
+  if (!researchDecisions) void loadResearchRequests();
+}
+export async function loadResearchRequests(): Promise<void> {
+  const uid = session.me?.id, still = staffStill('staff');
+  if (!uid || session.banned || session.revoked || !still()) { data.researchRequests = null; return; }
+  if (researchDecisions) return;
+  const seq = ++researchRequestsSeq;
+  const current = () => session.me?.id === uid && !session.banned && !session.revoked && still() && seq === researchRequestsSeq;
+  data.researchRequestsFailed = false;
+  try { const r = await api.researchRequests(); if (current()) data.researchRequests = r; }
+  catch (e) {
+    if (!current()) return;
+    if (e instanceof ApiErr && e.code === 'forbidden') data.researchRequests = null;
+    data.researchRequestsFailed = true;
+  }
 }

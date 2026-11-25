@@ -129,20 +129,6 @@ def row_key(r: dict) -> str:
 COLS = ("sheet", "position", "title", "role", "dept", "full_name", "school", "year", "course", "city", "phone", "tg", "email")
 
 
-def _fill(con, r: dict) -> None:
-    """A joined row's owner, found the trusted way (their Telegram username or KBTU e-mail, as match() trusts): the
-    sheet's city, course and phone fill only what their profile lacks."""
-    u = one(con, """SELECT u.id FROM users u LEFT JOIN students s ON s.user_id = u.id
-        WHERE (? IS NOT NULL AND lower(u.tg_username) = ?) OR (? IS NOT NULL AND lower(s.email) = ?)""",
-            r.get("tg"), r.get("tg"), r.get("email"), r.get("email"))
-    if not u:
-        return
-    if r.get("city"):
-        con.execute("UPDATE users SET city = COALESCE(city, ?) WHERE id = ?", (r["city"][:60], u["id"]))
-    phone = kz_phone(r["phone"]) if r.get("phone") else None
-    con.execute("UPDATE students SET course = COALESCE(course, ?), phone = COALESCE(phone, ?) WHERE user_id = ?", (r.get("course"), phone, u["id"]))
-
-
 def load(con, items: list[dict], orgmap: dict) -> dict:
     """The converter's rows, each sheet into the org the map names (a slug, or {"new": {name, short, emoji}}: created
     official). Again with the same file: nothing more. Then everyone already in the app whose row it is joins."""
@@ -167,10 +153,12 @@ def load(con, items: list[dict], orgmap: dict) -> dict:
                 org[sheet] = o["id"] if o else create_org(con, None, new["name"], new["short"], new.get("emoji", "sparkles_3d"), True)
         for r in items:
             if one(con, "SELECT 1 FROM meta WHERE key = ?", f"roster_done:{row_key(r)}"):
-                _fill(con, r)  # joined already: a newer sheet may know their phone or city now (only what's empty)
                 continue
             v = {k: r.get(k) for k in COLS}
             v["phone"] = kz_phone(v["phone"]) if v["phone"] else None
+            if con.execute(f"""UPDATE roster_pending SET {', '.join(k + ' = ?' for k in COLS)} WHERE key = ?""",
+                           (*v.values(), row_key(r))).rowcount:
+                continue  # keep the claim, door key and hand marks while correcting the pending row
             added += con.execute(f"""INSERT OR IGNORE INTO roster_pending (key, org_id, {', '.join(COLS)}, created_at)
                 VALUES (?, ?, {', '.join('?' * len(COLS))}, ?)""", (row_key(r), org[r["sheet"]], *v.values(), now())).rowcount
     joined, as_vice = 0, 0
@@ -186,26 +174,38 @@ def load(con, items: list[dict], orgmap: dict) -> dict:
 
 def _mine(con, uid: int) -> tuple[sqlite3.Row | None, list[sqlite3.Row]]:
     """The student's KBTU account and the rows that may be theirs (their username or e-mail; none they said aren't)."""
-    s = one(con, """SELECT s.first_name, s.last_name, s.email, u.tg_username FROM users u JOIN students s ON s.user_id = u.id
+    s = one(con, """SELECT s.first_name, s.last_name, s.email, s.ms_oid, s.ms_profile, s.manual, u.tg_username FROM users u JOIN students s ON s.user_id = u.id
         WHERE u.id = ? AND s.manual = 0""", uid)
     if not s:
         return None, []
     found = rows(con, """SELECT * FROM roster_pending WHERE ((tg IS NOT NULL AND tg = lower(?)) OR (email IS NOT NULL AND email = lower(?)))
-        AND (rejected_by IS NULL OR rejected_by != ?) ORDER BY id""", s["tg_username"] or "", s["email"] or "", uid)
+        AND (rejected_by IS NULL OR rejected_by != ?)
+        AND NOT EXISTS (SELECT 1 FROM org_bans b WHERE b.org_id = roster_pending.org_id AND b.user_id = ?) ORDER BY id""",
+                 s["tg_username"] or "", s["email"] or "", uid, uid)  # a club's ban outranks the sheet (join): not theirs to match or claim
     return s, found
+
+
+def due(con, uid: int) -> bool:
+    """A row match would join (a read, so /api/me takes the write lock only then, never on every open for a row
+    that waits for a claim)."""
+    s, found = _mine(con, uid)
+    return any(_verified(r, s) for r in found)
 
 
 def _verified(r, s) -> bool:
     return bool(r["email"] and r["email"] == (s["email"] or "").lower()
-                and same_person(r["full_name"], s["first_name"], s["last_name"]))
+                and expected_name(r["full_name"], s["ms_oid"], s["ms_profile"], s["manual"], s["first_name"], s["last_name"]))
 
 
 def match(con, uid: int) -> list[tuple[int, bool]]:
-    """Every row naming the student (their Telegram username or KBTU e-mail) joins on its own, no question asked
-    (the owner: the sheet is the truth). A row's city, year and phone fill only what's empty."""
+    """Only a verified university email and directory name may grant the row's role and private fields."""
     with tx(con):
-        _, found = _mine(con, uid)
-        return [(r["org_id"], join(con, uid, r)) for r in found]
+        s, found = _mine(con, uid)
+        out = []
+        for r in found:
+            if _verified(r, s) and (vice := join(con, uid, r)) is not None:
+                out.append((r["org_id"], vice))
+        return out
 
 
 def asks(con, uid: int) -> list[sqlite3.Row]:
@@ -217,7 +217,7 @@ def _asks_from(uid: int, s: sqlite3.Row | None, found: list[sqlite3.Row]) -> lis
     return [r for r in found if r["claimed_by"] != uid and not _verified(r, s)]
 
 
-def join(con, uid: int, r: sqlite3.Row, trusted: bool = True, promote: bool = False) -> bool:
+def join(con, uid: int, r: sqlite3.Row, trusted: bool = True, promote: bool = False) -> bool | None:
     """The row made real; what the app already has wins: a membership held keeps its role, a missing one
     is added (a President on the sheet where the club already has another in the app: Vice), and the position as the
     club role's name, the department, the city, the year and the phone fill only what's empty. Then the row goes.
@@ -229,7 +229,7 @@ def join(con, uid: int, r: sqlite3.Row, trusted: bool = True, promote: bool = Fa
     with tx(con):
         m = one(con, "SELECT role, role_id FROM org_members WHERE org_id = ? AND user_id = ?", oid, uid)
         if not m and one(con, "SELECT 1 FROM org_bans WHERE org_id = ? AND user_id = ?", oid, uid):
-            return False  # the club's ban outranks the sheet (a match, a claim, a yes on one): the row stays
+            return None  # the club's ban outranks the sheet (a match, a claim, a yes on one): the row stays
         if m and promote and m["role"] == "member" and r["role"] != "member":
             m = None  # set below like a new one: a President's row where the club has one becomes Vice
         role = m["role"] if m else r["role"]
@@ -245,7 +245,6 @@ def join(con, uid: int, r: sqlite3.Row, trusted: bool = True, promote: bool = Fa
                 # a club's own role may carry rights: a claim without a verified match never takes one, nor anyone one of
                 # another level than the row's (else a member's row titled as the club's Vice-level "HR" gets its rights)
                 if t and (not trusted or t["level"] != role):
-                    t = None
                     tid = None
                 else:
                     tid = t["id"] if t else con.execute("""INSERT INTO org_roles (org_id, name, color, level, created_at) VALUES (?, ?, ?, ?, ?)""",
@@ -263,12 +262,15 @@ def join(con, uid: int, r: sqlite3.Row, trusted: bool = True, promote: bool = Fa
         if r["city"] and trusted:
             con.execute("UPDATE users SET city = COALESCE(city, ?) WHERE id = ?", (r["city"][:60], uid))
         if trusted:
-            con.execute("UPDATE students SET course = COALESCE(course, ?), phone = COALESCE(phone, ?) WHERE user_id = ?", (r["course"], r["phone"], uid))
+            con.execute("""UPDATE students SET course_year = CASE WHEN course IS NULL AND ? IS NOT NULL THEN ? ELSE course_year END,
+                course = COALESCE(course, ?), phone = COALESCE(phone, ?) WHERE user_id = ?""", (r["course"], academic_year(), r["course"], r["phone"], uid))
         con.execute("INSERT INTO roster_toasts (user_id, org_id, title, at) VALUES (?, ?, ?, ?)", (uid, oid, r["title"], now()))
         # marked by hand at a door before they had the app (checkin.team_mark): the mark is theirs now, still a hand one
-        con.execute("""INSERT OR IGNORE INTO qr_marks (session_id, user_id, scanned_at, done_at, marked_by, hand)
+        con.execute("""INSERT INTO qr_marks (session_id, user_id, scanned_at, done_at, marked_by, hand)
             SELECT h.session_id, ?, h.at, h.at, h.marked_by, 1 FROM qr_hand_marks h JOIN qr_sessions s ON s.id = h.session_id AND s.org_id = ?
-            WHERE h.who = ?""", (uid, oid, f"r{r['id']}"))
+            WHERE h.who = ?
+            ON CONFLICT (session_id, user_id) DO UPDATE SET done_at = excluded.done_at, marked_by = excluded.marked_by, hand = 2
+            WHERE qr_marks.done_at IS NULL""", (uid, oid, f"r{r['door_key']}"))
         con.execute("DELETE FROM roster_pending WHERE id = ?", (r["id"],))  # its hand marks with it (trigger qr_hand_roster_gone)
         con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, ?)", (f"roster_done:{r['key']}", str(now())))  # a reload skips it
     return vice
@@ -308,10 +310,12 @@ def requests(con, v, org: int | None = None) -> list[dict]:
     """The claims I confirm: the student's KBTU name beside the sheet's (the President knows their people), the
     position and department; for DMP, the clubs with no President. org: that club's alone (its Studio; an admin's
     DMP fallback lives in the Admin sheet, never in a club's Studio)."""
-    out = []
+    out, allowed = [], {}
     for r in rows(con, """SELECT r.*, s.first_name, s.last_name FROM roster_pending r JOIN students s ON s.user_id = r.claimed_by
             WHERE r.claimed_by IS NOT NULL AND (? IS NULL OR r.org_id = ?) ORDER BY r.id""", org, org):
-        if _approves(con, v, r["org_id"]):
+        if r["org_id"] not in allowed:
+            allowed[r["org_id"]] = _approves(con, v, r["org_id"])
+        if allowed[r["org_id"]]:
             out.append({"id": r["id"], "org": r["org_id"], "title": r["title"], "role": r["role"], "dept": r["dept"],
                         "sheetName": r["full_name"], "name": f"{r['first_name']} {r['last_name']}".strip(), "user": r["claimed_by"]})
     return out
