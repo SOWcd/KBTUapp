@@ -29,7 +29,7 @@ jobs:
       - uses: actions/checkout@v5
       # ponytail: unpinned brew formulae; pin them (or vendor xcodegen) if a release ever breaks the build
       - run: brew install xcodegen librsvg
-      - name: App icon from the web's (opaque: the App Store refuses an alpha channel)
+      - name: "App icon from the web's (opaque: the App Store refuses an alpha channel)"
         run: |
           rsvg-convert -w 1024 -h 1024 web/public/favicon.svg -o "$RUNNER_TEMP/icon.png"
           sips -s format jpeg "$RUNNER_TEMP/icon.png" --out "$RUNNER_TEMP/icon.jpg" >/dev/null
