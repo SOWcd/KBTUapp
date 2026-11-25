@@ -569,3 +569,18 @@ def test_telegram_and_github(env, capsys, monkeypatch):
 
     assert _no(c, 7000801).status_code == 200  # taken back: the login's card and the nameless row again
     assert cards(_get(c)) == before
+
+
+def test_contribution_medals(env):
+    """Idea generator counts my SHIPPED idea lines (by my Telegram id), unlocked in the app with no bot card."""
+    c, cfg = env
+    con = _con(cfg)
+    me = login(c, 7000851, "lamp")
+    for word in ("one", "two"):
+        _line(con, 7000851, "idea", word=word)
+    _line(con, 7000851, "idea", day=None, word="unshipped")  # a third would be level 2 (needs 3)
+    counts = logic.profiles._counts(con, me["id"])
+    assert (counts["ideas"], counts["coder"]) == (2, 0)
+    assert logic.profiles._levels(con, me["id"])["ideas"] == 1
+    assert {"code": "ideas", "level": 1} in c.get("/api/me", headers=tma(7000851)).json()["unlocked"]
+    assert not con.execute("SELECT 1 FROM bot_outbox WHERE user_id = ? AND kind = 'achievement'", (me["id"],)).fetchone()

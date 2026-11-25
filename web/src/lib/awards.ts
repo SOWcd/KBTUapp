@@ -103,7 +103,9 @@ export const METALS = ['bronze', 'silver', 'gold', 'legend'];
 // pin (one time, a moment: an enamel shield, ui/Pin). Every medal is drawn in layers (public/medals, made by
 // tools/medals.mjs; owner, Nov 3: crisp at any size, the art floating under a still rim with the tilt): Recruiter per
 // level (a constellation, one more friend lit each level), the rest one picture each under the rim of the level's metal
-const MEDAL_ART: Record<string, string> = { regular: 'rg', activist: 'ac', streak: 'st', first_in: 'fi', soul: 'so', team: 'tm', season: 'se', bugs: 'bg', dmp: 'dm', critic: 'cr', referral: 'rc', sponsor: 'sp' };
+const MEDAL_ART: Record<string, string> = { regular: 'rg', activist: 'ac', streak: 'st', first_in: 'fi', soul: 'so', team: 'tm', season: 'se', bugs: 'bg', dmp: 'dm', critic: 'cr', referral: 'rc', sponsor: 'sp',
+  // People of the app's medals: their 3D emoji on the activist's field and the level's rim (no drawn art yet)
+  ideas: 'ac', coder: 'ac' };
 /** a medal (levels; Bug hunter given by hand counts too), else a pin */
 export const isMedal = (a: Pick<Achievement, 'code' | 'levels'>): boolean => a.code === 'honor' || a.code in MEDAL_ART || a.levels.length > 1;
 /** the picture an achievement shows: a medal's layers at its level's metal (not earned: the first), else its emoji */
