@@ -24,7 +24,7 @@
   import { i18n, t, subjectOf } from './lib/i18n/index.svelte';
   import { classEmoji } from './lib/i18n/subjects';
   import { classesLeft } from './lib/classes';
-  import { backButton, haptic, inTelegram, on, onComputer, onIos, openLink, requestWriteAccess, tg, tgTry } from './lib/tg';
+  import { backButton, haptic, inTelegram, on, onAndroid, onComputer, onIos, openLink, requestWriteAccess, tg, tgTry } from './lib/tg';
   import { deskRegistry } from './lib/desk';
   import { api, ApiErr, localize, type Id, type MyCheckin } from './lib/api';
   import { dayNo, nowTs, time, at } from './lib/time';
@@ -1007,6 +1007,12 @@
         try { if (localStorage.getItem(k)) return; localStorage.setItem(k, '1'); } catch { return; }
         moment(() => sheets.creditAsk());
       });
+      // the owner: Android people are offered the Google Play closed test once, on entry (no broadcast)
+      if (onAndroid && inTelegram && !ui.gate) {
+        let seen = true;
+        try { seen = !!localStorage.getItem('andr.asked'); if (!seen) localStorage.setItem('andr.asked', '1'); } catch { /* blocked: never nag */ }
+        if (!seen) moment(() => void lazy(() => import('./screens/sheets/AndroidTestSheet.svelte'), {}));
+      }
       setTimeout(ticketView, 1500); setTimeout(warmPages, 3000); setTimeout(warmChannel, 1800); setTimeout(warmSubjects, 3500); setTimeout(prebuild, 2500);
       if (!inTelegram && session.me && !session.me.student?.ms) sheets.login();
       // the launch's own moments, in this order, one at a time once the screen is free; the roster's queue up as it comes
