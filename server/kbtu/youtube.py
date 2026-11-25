@@ -9,7 +9,9 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import random
 import re
+import time
 import xml.etree.ElementTree as ET
 from datetime import datetime
 from pathlib import Path
@@ -28,6 +30,8 @@ RETRY = 86400                         # a link that resolved to no channel is tr
 TITLE = 120                           # what an app post's title holds (logic.create_post)
 PAGE_BYTES, FEED_BYTES = 3 * 1024 * 1024, 1024 * 1024
 TIMEOUT = 10                          # seconds for a whole page, feed or thumbnail (the postman's round waits on it)
+BUDGET = 60                           # seconds a pass may start new channels in: a slow YouTube must not hold the bot's
+                                      # messages for minutes; the rest wait an hour (shuffled, so none always comes last)
 
 _LINK = re.compile(r"https://(?:www\.|m\.)?youtube\.com/(channel/UC[\w-]{22}|@[\w.-]{3,30}|c/[\w.-]{1,100}|user/[\w.-]{1,100})/?(?:[?#].*)?")
 _ID = re.compile(r"UC[\w-]{22}")
@@ -156,8 +160,12 @@ async def sweep(cfg, http: httpx.AsyncClient, con) -> int:
     A feed that fails is skipped till the next hour. The posts made."""
     root = Path(cfg.db_path).resolve().parent / "media"
     await asyncio.to_thread(forget, con, root)
-    made = 0
-    for w in await asyncio.to_thread(wanted, con):
+    made, end = 0, time.monotonic() + BUDGET
+    ws = await asyncio.to_thread(wanted, con)
+    random.shuffle(ws)
+    for w in ws:
+        if time.monotonic() >= end:
+            break
         try:
             if w["checked"] is None or (w["channel"] is None and now() - w["checked"] > RETRY):
                 w["channel"] = await _resolve(http, w["path"])

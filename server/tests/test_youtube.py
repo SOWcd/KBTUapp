@@ -125,6 +125,16 @@ def test_a_bad_feed_fails_nothing_else(env, monkeypatch):
     assert known == {"@nochannel": None, "channel/UC" + "b" * 22: "UC" + "b" * 22}  # no channel: tried again a day later
 
 
+def test_a_slow_youtube_never_holds_the_round_past_its_budget(env, monkeypatch):
+    c, cfg, con, oid = _club(env, [f"https://www.youtube.com/channel/{CHANNEL}"])
+    asked: list[str] = []
+    _web(monkeypatch, {"https://www.youtube.com/feeds/": _feed([("abcdefghijk", "Ours", int(time.time()) - 60)])}, asked)
+    monkeypatch.setattr(youtube, "BUDGET", -1)  # spent before the first channel: nothing fetched, the channel waits an hour
+    assert _sweep(cfg, con) == 0 and asked == []
+    monkeypatch.setattr(youtube, "BUDGET", 60)
+    assert _sweep(cfg, con) == 1
+
+
 def test_only_a_club_that_may_post_stories(env, monkeypatch):
     # a student initiative before the Ascent's collab step posts no stories (clubs.stories_open), mirrored ones neither
     c, cfg, con, oid = _club(env, [f"https://www.youtube.com/channel/{CHANNEL}"], official=False)
