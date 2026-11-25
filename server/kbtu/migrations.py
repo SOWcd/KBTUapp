@@ -2571,4 +2571,7 @@ MIGRATIONS: list[tuple[int, str]] = [
                                                          OR EXISTS (SELECT 1 FROM sponsor_consents WHERE user_id = old.id)) BEGIN
         INSERT INTO sponsor_consents (user_id, version, show, at) VALUES (old.id, 'sp1', 0, unixepoch());
     END;"""),
+    # the creator's archived lanyard (logic.ARCHIVE), with skin_pick 'sower' (its CHECK can't take a new value): NULL is
+    # his own SOWER
+    (248, "ALTER TABLE users ADD COLUMN skin_look TEXT;"),
 ]

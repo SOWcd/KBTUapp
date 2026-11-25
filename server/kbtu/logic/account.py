@@ -660,6 +660,9 @@ LANYARDS = ("studex", "kbtucheerleadingclub", "kbtuknights", "moments", "faceskb
             "diceanddestinykbtu",
             "thebayharborsociety",
             "qoloner")
+# the archive: looks made and not in use (owner, Nov 25), anyone's to try on in the picker (the web alone), the creator's
+# alone to wear; stored as skin_pick 'sower' with skin_look. The web's list is awards.ts ARCHIVE_LOOKS (test_lanyards)
+ARCHIVE = ("dota_ancient", "dota_clash", "dota_rune")
 _LIST = "(" + ", ".join(f"'{x}'" for x in LANYARDS) + ")"
 # by slug, or by the name without dots, spaces and dashes ("kbtu.mag" is kbtumag: made in the app under another slug),
 # as the web's awards.ts lookKey
@@ -710,11 +713,11 @@ def _skin(con, uid: int) -> int | str | None:
     My pick holds; a club picked holds while I'm in it. Never picked (or that club left): the creator's own for the
     creator; else the club I joined that has a badge (of several, where my role is highest, then the newest); else my
     school's; else KBTU's. A new club's badge or a school set comes by itself."""
-    u = one(con, "SELECT skin_pick, skin_org, is_founder FROM users WHERE id = ?", uid)
+    u = one(con, "SELECT skin_pick, skin_org, skin_look, is_founder FROM users WHERE id = ?", uid)
     if u["skin_pick"] == "kbtu":
         return None
     if u["is_founder"] and u["skin_pick"] in ("sower", None):
-        return "sower"
+        return creator_look(u)
     if u["skin_pick"] == "org" and _skin_ok(con, uid, u["skin_org"]):
         return u["skin_org"]
     r = one(con, f"""SELECT o.id FROM org_members m JOIN orgs o ON o.id = m.org_id WHERE m.user_id = ? AND {SKINNED}
@@ -726,6 +729,11 @@ def _skin(con, uid: int) -> int | str | None:
     slug = school_slug(s["school"]) if s else None
     o = slug and one(con, "SELECT id FROM orgs WHERE slug = ? AND status = 'active'", slug)
     return o[0] if o else None
+
+
+def creator_look(u) -> str:
+    """The creator's own lanyard: an archived look he picked (`skin_look`, read only for him), else SOWER."""
+    return u["skin_look"] if u["skin_look"] in ARCHIVE else "sower"
 
 
 def _one_off(w: str, ref: set[str]) -> bool:
@@ -916,15 +924,18 @@ def _update_me(con, v: Viewer, patch: dict) -> None:
         pymk.switch(con, v.id, patch["suggestMe"])
     if "nick" in patch:
         sets["nick"] = clean_nick(patch["nick"])
-    if "skin" in patch:  # my pick: a club with a lanyard (`_skin_ok`), "sower" for the creator, null = the KBTU one (`_skin`)
+    if "skin" in patch:  # my pick: a club with a lanyard (`_skin_ok`), "sower" or an archived look for the creator, null = the KBTU one (`_skin`)
         need_student(v)
         val = patch["skin"]
+        founder = one(con, "SELECT is_founder FROM users WHERE id = ?", v.id)[0]
         if val is None:
-            sets.update(skin_pick="kbtu", skin_org=None)
-        elif val == "sower" and one(con, "SELECT is_founder FROM users WHERE id = ?", v.id)[0]:
-            sets.update(skin_pick="sower", skin_org=None)
+            sets.update(skin_pick="kbtu", skin_org=None, skin_look=None)
+        elif val == "sower" and founder:
+            sets.update(skin_pick="sower", skin_org=None, skin_look=None)
+        elif val in ARCHIVE and founder:  # an archived look: anyone tries it on in the picker, the creator alone wears it
+            sets.update(skin_pick="sower", skin_org=None, skin_look=val)
         elif type(val) is int and _skin_ok(con, v.id, val):
-            sets.update(skin_pick="org", skin_org=val)
+            sets.update(skin_pick="org", skin_org=val, skin_look=None)
         else:
             raise ApiError("bad_input")
     if "frame" in patch:  # a frame over my photo (FRAMES), null for none; combined with any lanyard
@@ -1493,7 +1504,7 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         con.execute(f"DELETE FROM dmp_list WHERE id IN (SELECT d.id {_DMP_MINE})", (v.id,))  # off DMP's list: its own row, by id
         con.execute("""UPDATE users SET bio = '', showcase = '', qr_code = NULL, link_code = NULL, cal_token = NULL, nick = NULL, avatar_tg = 1,
             avatar_file_id = NULL, tg_username = NULL, tg_first_name = '', tg_last_name = '', tg_photo_url = NULL, tg_photo_path = NULL, tg_photo_src = NULL, tg_photo_at = NULL, mark = NULL,
-            skin_org = NULL, skin_pick = NULL, frame = NULL, card_no = NULL, delete_at = NULL, city = NULL, city_hidden = 0, referred_by = NULL, announce_ok = NULL,
+            skin_org = NULL, skin_pick = NULL, skin_look = NULL, frame = NULL, card_no = NULL, delete_at = NULL, city = NULL, city_hidden = 0, referred_by = NULL, announce_ok = NULL,
             role = 'user', is_founder = 0, forum_seen_msg = 0, notification_undo = '{}' WHERE id = ?""", (v.id,))  # a burnt number isn't given again
         # A claimed row with my email or a verified email and name match goes, and a reimport skips it.
         for (key,) in rows(con, """DELETE FROM roster_pending WHERE email = (SELECT lower(email) FROM students WHERE user_id = ?)

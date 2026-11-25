@@ -4,7 +4,7 @@ import { expect, it, vi } from 'vitest';
 
 // awards.ts reads the clubs for a lanyard (lookOf); the real state pulls in the DOM
 vi.mock('./state/data.svelte', () => ({ data: { orgs: [] } }));
-import { activistBars, artOf, awardRatio, awardTier, coinOf, isCoin, isMedal, layersOf, legendOf, hero, leftLine, weakestBar, splitVariants, ZNAKI, QR_LOOK, CLUB_LOOKS, SCHOOL_LOOKS, MANUAL, CATALOG, codesOf, sponsorMedal, closest } from './awards';
+import { activistBars, artOf, awardRatio, awardTier, coinOf, isCoin, isMedal, layersOf, legendOf, hero, leftLine, weakestBar, splitVariants, ZNAKI, QR_LOOK, CLUB_LOOKS, SCHOOL_LOOKS, ARCHIVE_LOOKS, MANUAL, CATALOG, codesOf, sponsorMedal, closest } from './awards';
 import type { Achievement, PersonCard } from './api';
 import { i18n, loadLang } from './i18n/index.svelte';
 
@@ -87,7 +87,7 @@ it("every club's and school's lanyard QR ink reads on the white plate (>= 7:1)",
     const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
     return 0.2126 * r + 0.7152 * g + 0.0722 * b;
   };
-  const low = [...Object.keys(CLUB_LOOKS), ...Object.keys(SCHOOL_LOOKS)].flatMap((k) => QR_LOOK[k as keyof typeof QR_LOOK]!.filter((c) => 1.05 / (lum(c) + 0.05) < 7).map((c) => `${k} ${c}`));
+  const low = [...Object.keys(CLUB_LOOKS), ...Object.keys(SCHOOL_LOOKS), ...Object.keys(ARCHIVE_LOOKS)].flatMap((k) => QR_LOOK[k as keyof typeof QR_LOOK]!.filter((c) => 1.05 / (lum(c) + 0.05) < 7).map((c) => `${k} ${c}`));
   expect(low).toEqual([]);
 });
 

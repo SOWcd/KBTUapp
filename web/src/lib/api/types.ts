@@ -1,6 +1,8 @@
 // The API contract (SPEC §6), as the server (server/kbtu) answers it: screens only ever see these shapes. JSON fields are camelCase; time is unix seconds (UTC).
 
 export type Id = number;
+/** an archived lanyard (web awards.ts ARCHIVE_LOOKS, server logic.ARCHIVE): the creator's alone to wear */
+export type Archived = 'dota_ancient' | 'dota_clash' | 'dota_rune';
 export type Ts = number;
 export type Lang = 'ru' | 'kk' | 'en';
 export type OrgRole = 'member' | 'head' | 'vice' | 'president';
@@ -370,9 +372,9 @@ export interface Me {
   office?: OrgRef | null;       // an office I'm in, before my KBTU sign-in (no memberships yet): for its one greeting
   dmpHi?: OrgRef | null;        // on DMP's list (server kbtu.admin dmp), not signed in, not greeted yet: its hello, then Microsoft
   counters: { tickets: number; unreadBroadcasts: number; friendRequests: number; inbox: number /* staff: everything waiting in Admin → Inbox (server logic/inbox.py) */ };
-  /** The badge I show: a club's (an official club I'm in), 'sower' (the creator's own), null: the KBTU one.
-   *  Badges as skins; never picked, a new club's comes by itself. */
-  skin: Id | 'sower' | null;
+  /** The badge I show: a club's (an official club I'm in), 'sower' (the creator's own), an archived look (the
+   *  creator's alone), null: the KBTU one. Badges as skins; never picked, a new club's comes by itself. */
+  skin: Id | 'sower' | Archived | null;
   /** The frame over my photo on the lanyard (public/frames/<id>.svg), apart from the lanyard; null: none. */
   frame: string | null;
   /** "Delete my account" asked: when it goes (a week later); null: not asked, or changed my mind. */
@@ -855,7 +857,7 @@ export interface PersonCard extends PersonRef {
   friendsSince: Ts | null;
   going: EventCard[];           // only when friends and they allow it
   invited?: Id[];               // upcoming events I already invited them to ("Bring a friend"), only when friends
-  skin?: Id | 'sower' | null;   // the badge they show (Me.skin)
+  skin?: Id | 'sower' | Archived | null;   // the badge they show (Me.skin)
   frame?: string | null;        // the frame over their photo (Me.frame)
   username?: string | null;     // their Telegram @username, only to their own club's team: "Message on Telegram"
   limited?: boolean;            // a stranger's view (audit M2): no clubs, past roles or event badges

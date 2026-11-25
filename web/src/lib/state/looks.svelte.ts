@@ -6,7 +6,8 @@ import { data } from './data.svelte';
 import { ui } from './ui.svelte';
 import { byRank } from '../perms';
 import { nameOf, schoolOf } from '../short';
-import { skinOf, skinned, STRAP, comingLooks } from '../awards';
+import { skinOf, skinned, STRAP, comingLooks, ARCHIVE_LOOKS } from '../awards';
+import type { Archived } from '../api/types';
 
 export function lookData() {
   const me = session.me;
@@ -26,17 +27,22 @@ export function lookData() {
     ...skins.map((o) => ({ id: o.id, kind: skinOf(o)!, name: nameOf(o), word: STRAP[skinOf(o)!], locked: o.id < 0 || !me?.founder && !own.some((x) => x.id === o.id) })),
     { id: null, kind: 'kbtu', name: 'KBTU', word: 'KBTU' }];
   type Sw = (typeof swatches)[number];
-  const kindOf = (k: Sw) => data.orgs.find((o) => o.id === k.id)?.kind;
+  const kindOf = (k: { id: unknown }) => data.orgs.find((o) => o.id === k.id)?.kind;
   // two rows (three pushed the card off the screen): organisations (SOWER, mine, KBTU, the rest locked),
   // then the schools (mine first)
   const isMine = (k: Sw) => typeof k.id !== 'number' || own.some((o) => o.id === k.id);
   const orgs = swatches.filter((k) => kindOf(k) !== 'school');
   const sorted = [...orgs.filter((k) => isMine(k) && k.id !== null), ...orgs.filter((k) => k.id === null), ...orgs.filter((k) => !isMine(k))];
-  const rows = ([['look.gClubs', sorted], ['look.gSchools', swatches.filter((k) => kindOf(k) === 'school')]] as const).filter(([, ks]) => ks.length);
+  // the archive (looks made and not in use) last: anyone opens one full size on the card, the creator alone wears it
+  const archive = (Object.keys(ARCHIVE_LOOKS) as Archived[]).map((id) => ({ id, kind: id, name: ARCHIVED[id], word: STRAP[id], locked: !me?.founder }));
+  const rows = ([['look.gClubs', sorted], ['look.gSchools', swatches.filter((k) => kindOf(k) === 'school')], ['look.gArchive', archive]] as const).filter(([, ks]) => ks.length);
   // a locked one can be tried on: the lanyard wears it, the check then says it isn't mine (Me) and turns it back
   const worn = skinNow();
-  return { skins, swatches, rows, kindOf, worn, wornName: swatches.find((k) => k.id === (worn ?? null))?.name ?? 'KBTU' };
+  return { skins, swatches, rows, kindOf, worn, wornName: [...swatches, ...archive].find((k) => k.id === (worn ?? null))?.name ?? 'KBTU' };
 }
+
+// the archive's swatches by name (proper names, the same in every language)
+const ARCHIVED: Record<Archived, string> = { dota_ancient: 'Dota \u00b7 Ancient', dota_clash: 'Dota \u00b7 Radiant', dota_rune: 'Dota \u00b7 Rune' };
 
 // the hero shows at once from what the app already knows; numbers and awards fill in when the card arrives
 export function myShown(): PersonCard | null {
