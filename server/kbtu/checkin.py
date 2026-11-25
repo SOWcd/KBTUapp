@@ -482,7 +482,7 @@ def sessions(con, key: bytes, v: Viewer) -> list[dict]:
     counts = _counts(con, [s["id"] for s in found])  # read once for all rows, never session by session
     out = []
     for s in found:
-        doors = _doors(con, v, s)  # a Head reading a meetup's review: no QR, no controls
+        doors = v.role == "admin" or s["org_id"] in run or _doors(con, v, s)  # else a Head reading a meetup's review: no QR, no controls
         out.append({**_row(con, key if doors else None, s, counts[s["id"]]), "reviewOnly": not doors})
     return out
 
