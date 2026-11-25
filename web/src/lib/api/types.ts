@@ -846,6 +846,9 @@ export interface Friends { friends: FriendRow[]; incoming: FriendRow[]; outgoing
 export type Friendship = PersonCard['friendship'];
 /** A student found by @username, and where the two of us stand. */
 export interface FoundStudent { person: PersonRef; course: number | null; school: string | null; friendship: Friendship; me: boolean; closed?: boolean }
+/** The global search's server half (GET /api/search/more, server logic/search.more): people who made themselves
+ *  findable (an exact @username; "open to projects" where the find-people forum is open to me), the channel's live posts. */
+export interface SearchMore { people: { person: PersonRef; course: number | null }[]; posts: ChannelFeedPost[] }
 /** Opening someone's one-time friend link: friends at once, or why not. */
 /** someone's invite link r_<code> opened: whose it is, and where we stand ('self': my own) */
 export interface LinkCard { person: PersonRef; friendship: Friendship | 'self'; registered: boolean }
