@@ -2,7 +2,7 @@
 // Its rules are lib/shell.ts. The API, media and other pages never pass through it: a student's data is never kept here.
 // ponytail: no kill switch in the app. To take the worker off phones, deploy a sw.js that only deletes the kb-shell-*
 // caches and calls self.registration.unregister() (a 404 for sw.js stops updates but leaves the installed worker running).
-import { DEADLINE, firstOf, keepsAsset, keepsPage, ofBuild, route, stale, type Shell } from './lib/shell';
+import { deadline, firstOf, keepsAsset, keepsPage, ofBuild, route, stale, type Shell } from './lib/shell';
 
 // this build's shell, written in by vite.config.ts
 const SHELL = '__KB_SHELL__' as unknown as Shell;
@@ -59,16 +59,21 @@ sw.addEventListener('fetch', (e) => {
 });
 
 // (no preloadResponse before Safari 15.4: the worker's own fetch, started before anything else)
+// a newer build's page came from the network (lib/shell deadline): kept as a mark in this build's cache, gone with it
+const newer = () => new URL('kb-newer-build', scope()).href;
 function page(e: Fetch): Promise<Response> {
   const net = Promise.resolve(e.preloadResponse).then((r) => r ?? fetch(e.request)).then((r) => {
     if (keepsPage(e.request.url, scope(), r)) {
       const copy = r.clone();
-      e.waitUntil(copy.clone().text().then((html) => ofBuild(html, SHELL.entry) ? caches.open(SHELL.cache).then((c) => c.put(scope(), copy)) : undefined));
+      e.waitUntil(copy.clone().text().then(async (html) => {
+        const c = await caches.open(SHELL.cache);
+        await (ofBuild(html, SHELL.entry) ? c.put(scope(), copy) : c.put(newer(), new Response('')));
+      }));
     }
     return r;
   });
   e.waitUntil(net.catch(() => {}));
-  return firstOf(net, () => caches.open(SHELL.cache).then((c) => c.match(scope())), DEADLINE);
+  return caches.open(SHELL.cache).then(async (c) => firstOf(net, () => c.match(scope()), deadline(!!(await c.match(newer())))));
 }
 
 async function asset(e: Fetch): Promise<Response> {

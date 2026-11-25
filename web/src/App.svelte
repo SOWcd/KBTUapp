@@ -764,10 +764,12 @@
     const seen = () => (document.hidden ? left() : back());
     document.addEventListener('visibilitychange', seen);
     const offs = [on('deactivated', left), on('activated', back)];
-    // opened offline: the network back, the lists and the account again (the offline note goes with the answer)
+    // the network gone: the kept tickets at once; back: the lists and the account again (the offline note goes with the answer)
+    const offline = () => { data.offline = true; };
     const online = () => { if (data.offline) { void loadMe(true); void loadAfisha(); } };
+    addEventListener('offline', offline);
     addEventListener('online', online);
-    return () => { document.removeEventListener('visibilitychange', away); document.removeEventListener('visibilitychange', seen); removeEventListener('online', online); offs.forEach((f) => f()); };
+    return () => { document.removeEventListener('visibilitychange', away); document.removeEventListener('visibilitychange', seen); removeEventListener('offline', offline); removeEventListener('online', online); offs.forEach((f) => f()); };
   });
 
   // The API and cache already translate the first load. Walk the reactive stores only when the language changes.

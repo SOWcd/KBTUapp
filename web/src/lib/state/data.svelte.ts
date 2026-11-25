@@ -61,7 +61,9 @@ export const data = $state({
   staffMutesFailed: false,
   santaChat: {} as Record<number, SantaChats>, // Secret Santa's chat by game: read as its page or a thread opens, never kept on the phone
   error: false,
-  offline: false,          // the events' request never reached the server: the kept tickets show, with the offline note
+  // no network, or the events' request never reached the server: the kept tickets show, with the offline note. The
+  // phone's own word first, so a launch without network draws them in its first frame (nothing jumps in after)
+  offline: typeof navigator !== 'undefined' && navigator.onLine === false,
   rev: 0,                  // bumps after a Studio change, so the Studio lists reload
   kept: 0,                 // bumps after a change inside a list (a tap), so the phone's copy is saved again (App)
 });

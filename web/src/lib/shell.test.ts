@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DEADLINE, FONTS, firstOf, hash, keepsAsset, keepsPage, LAZY, ofBuild, PREFIX, PUBLIC, route, shellOf, stale, type Chunk } from './shell';
+import { DEADLINE, deadline, FONTS, firstOf, hash, keepsAsset, keepsPage, LAZY, ofBuild, PREFIX, PUBLIC, route, shellOf, stale, type Chunk } from './shell';
 
 const SCOPE = 'https://kbtu.sow.kz/';
 const get = (url: string, mode = 'no-cors', extra: { method?: string; range?: boolean } = {}) => ({ url, mode, method: 'GET', ...extra });
@@ -52,6 +52,32 @@ describe('keepsPage', () => {
     expect(keepsPage(SCOPE, SCOPE, { ...ok, ok: false })).toBe(false);
     expect(keepsPage(SCOPE, SCOPE, { ...ok, redirected: true })).toBe(false);
     expect(keepsPage(SCOPE, SCOPE, { ...ok, type: 'opaqueredirect' })).toBe(false);
+  });
+});
+
+describe('deadline', () => {
+  it('falls back past DEADLINE only while no newer build has been seen', () => {
+    expect(deadline(false)).toBe(DEADLINE);
+    expect(deadline(true)).toBe(Infinity);
+  });
+});
+
+describe('Telegram, the home-screen app and the TWA launch URLs', () => {
+  it('any launch parameters land on the one kept page', () => {
+    const ok = { ok: true, type: 'basic', redirected: false };
+    for (const u of [
+      SCOPE + '#tgWebAppData=user%3D1&tgWebAppVersion=9.1&tgWebAppPlatform=android', // Telegram: in the hash, never sent
+      SCOPE + '?tgWebAppStartParam=ev_12#tgWebAppData=x', // a deep link
+      SCOPE + '?startapp=tk_5', SCOPE + '?utm_source=homescreen', // the PWA's or the TWA's start_url with a query
+    ]) {
+      expect(route(get(u, 'navigate'), SCOPE)).toBe('page');
+      expect(keepsPage(u, SCOPE, ok)).toBe(true);
+    }
+  });
+  it('the TWA\'s asset links and the server\'s own entry points stay on the network', () => {
+    expect(route(get(SCOPE + '.well-known/assetlinks.json'), SCOPE)).toBeNull();
+    expect(route(get(SCOPE + 'play-demo?k=x', 'navigate'), SCOPE)).toBeNull();
+    expect(route(get(SCOPE + 'sw.js'), SCOPE)).toBeNull(); // the worker's own update check is never served from a cache
   });
 });
 
@@ -178,6 +204,20 @@ describe('firstOf', () => {
     await vi.advanceTimersByTimeAsync(DEADLINE * 3);
     net.res('net');
     await expect(r).resolves.toBe('net');
+  });
+
+  it('a newer build seen (no deadline): waits for the network however slow, never the old page online', async () => {
+    vi.useFakeTimers();
+    const net = later<string>(), kept = vi.fn(async () => 'old page');
+    const r = firstOf(net.p, kept, deadline(true));
+    await vi.advanceTimersByTimeAsync(DEADLINE * 20);
+    expect(kept).not.toHaveBeenCalled();
+    net.res('new page');
+    await expect(r).resolves.toBe('new page');
+  });
+
+  it('a newer build seen and no network: the kept page still opens (offline beats stale)', async () => {
+    await expect(firstOf(Promise.reject(new TypeError('offline')), async () => 'old page', deadline(true))).resolves.toBe('old page');
   });
 
   it('offline: the kept copy at once, or the network\'s own failure when there is none', async () => {

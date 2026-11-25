@@ -31,7 +31,7 @@
   import { noClasses } from '../../lib/academic';
   import { floorOf, atDorm, DORM_2GIS, atBldg2, bldg2Room, BLDG2_2GIS, awayOf } from '../../lib/map';
   import { openLink, haptic, inTelegram, tg } from '../../lib/tg';
-  import { keptTickets } from '../../lib/offlineTickets';
+  import { endOf, keptTickets } from '../../lib/offlineTickets';
   import { castingOn, tagName } from '../../lib/posts';
   import CastingCard from '../../ui/CastingCard.svelte';
   import { nameOf, shortOf } from '../../lib/short';
@@ -82,7 +82,6 @@
   });
   const today = $derived(dayNo(now));
   const dayTs = (d: number) => d * 86400 - OFFSET; // start of local day d as a UTC timestamp
-  const endOf = (e: EventCard) => e.endsAt ?? e.startsAt + 3 * 3600;
 
   const featured = $derived(data.posts.find((p) => p.featured));
   const shown = $derived(data.events.filter((e) => e.status !== 'cancelled'));
@@ -235,7 +234,8 @@
   // no timetable: the one card that asks for it (after the first load: a returning student never sees it flash)
   const askSched = $derived(data.eventsReady && !!session.me?.student && !data.schedule.length);
   // opened without the network: my kept tickets first, their QR ready for the door (lib/offlineTickets)
-  const kept = $derived(data.offline ? keptTickets(inTelegram ? tg.user?.id : session.me?.tg.id) : []);
+  // (with the clock: a ticket whose event ends while the app stays open offline leaves within 30 s)
+  const kept = $derived(data.offline ? keptTickets(inTelegram ? tg.user?.id : session.me?.tg.id, now) : []);
 
   const past = $derived(data.past); // "Past": the last month's Afisha events, mine marked, newest first (the server's order)
   let allPast = $state(false), pastOpen = $state(false);

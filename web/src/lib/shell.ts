@@ -80,6 +80,11 @@ export const keepsPage = (url: string, scope: string, r: { ok: boolean; type: st
  *  ticket offline would fail); the newer worker keeps its own page as it installs. */
 export const ofBuild = (html: string, entry: string): boolean => html.includes(entry);
 
+/** How long a launch waits for the network before the kept page. Once the network has answered with a newer build (its
+ *  worker not installed yet: a slow line, the Mini App closed early), never past it: launches wait for the network, so
+ *  an old page opens online at most once. Offline the kept page still opens at once (firstOf: the network failed). */
+export const deadline = (newerSeen: boolean): number => (newerSeen ? Infinity : DEADLINE);
+
 /** A hashed file's answer worth keeping: never HTML (a missing file the server answered with its page). */
 export const keepsAsset = (r: { ok: boolean; headers: { get(k: string): string | null } }): boolean =>
   r.ok && !(r.headers.get('content-type') ?? '').startsWith('text/html');
@@ -87,13 +92,14 @@ export const keepsAsset = (r: { ok: boolean; headers: { get(k: string): string |
 /** The kept caches a new build's worker deletes as it takes over: other builds' shells, never anything not ours. */
 export const stale = (keys: string[], current: string): string[] => keys.filter((k) => k.startsWith(PREFIX) && k !== current);
 
-/** The network's answer; past `ms`, or when it fails, the kept copy if there is one (the network's still lands, for next
- *  time); neither: the network's own failure. */
+/** The network's answer; past `ms` (Infinity: never), or when it fails, the kept copy if there is one (the network's still
+ *  lands, for next time); neither: the network's own failure. */
 export function firstOf<T>(net: Promise<T>, kept: () => Promise<T | undefined>, ms: number): Promise<T> {
   return new Promise((resolve, reject) => {
     let done = false;
     const give = (r: T) => { if (!done) { done = true; clearTimeout(late); resolve(r); } };
-    const late = setTimeout(() => void kept().then((k) => { if (k) give(k); }, () => {}), ms);
+    // (a timer of Infinity fires at once)
+    const late = Number.isFinite(ms) ? setTimeout(() => void kept().then((k) => { if (k) give(k); }, () => {}), ms) : undefined;
     net.then(give, async (e) => {
       clearTimeout(late);
       const k = await kept().catch(() => undefined);
