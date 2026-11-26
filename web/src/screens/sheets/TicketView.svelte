@@ -9,7 +9,7 @@
   // in their colour on a security print. The stub tears off at notches and a perforation; its QR is a finer 33×33
   // (Qr minVersion), as dense as the badge's.
   import { onMount } from 'svelte';
-  import type { EventCard, Id } from '../../lib/api';
+  import type { Id } from '../../lib/api';
   import { close, removeOverlay, hideChrome, type Overlay } from '../../lib/state/ui.svelte';
   import { data, eventById, toggleGoing, goingPending, declineInvite, askDm } from '../../lib/state/data.svelte';
   import WifiOff from '@lucide/svelte/icons/wifi-off';
@@ -19,8 +19,7 @@
   import Ticket from '@lucide/svelte/icons/ticket';
   import { relDay, time, nowTs, multiDay, daySpan } from '../../lib/time';
   import { haptic, openLink } from '../../lib/tg';
-  import { appleCalendarUrl, googleCalendarUrl } from '../../lib/calendar';
-  import { menu } from '../../ui/menu';
+  import { calendarUrl } from '../../lib/calendar';
   import CalendarPlus from '@lucide/svelte/icons/calendar-plus';
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
   import Bell from '@lucide/svelte/icons/bell';
@@ -100,12 +99,6 @@
     if (!yes) return;
     toggleGoing(id);
   }
-  // Apple devices: Apple's Calendar or Google's (a student's Google account lives there too); elsewhere Google's at once
-  function toCalendar(at: Element, e: EventCard) {
-    const apple = appleCalendarUrl(e), google = googleCalendarUrl(e);
-    if (!apple) return openLink(google);
-    menu(at, [{ label: t('tk.calApple'), onselect: () => openLink(apple) }, { label: t('tk.calGoogle'), onselect: () => openLink(google) }]);
-  }
 </script>
 
 <div class="scrim" bind:this={scrim} style="--tint:{e?.tint ?? '#3B6BFF'}" onclick={() => close(overlay.id)} role="presentation"></div>
@@ -156,7 +149,7 @@
     {#if valid && !started && session.me && !session.me.canDm}<button class="pill glass glass-pill" use:glass onclick={() => askDm(id, true)}><Bell size={17} />{t('tk.dmOn')}</button>{/if}
     <div class="acts">
       {#if valid && !started}
-        <button class="pill glass glass-pill" use:glass onclick={(ev) => toCalendar(ev.currentTarget, e)}><CalendarPlus size={18} />{t('tk.calendar')}</button>
+        <button class="pill glass glass-pill round" use:glass aria-label={t('tk.calendar')} onclick={() => openLink(calendarUrl(e))}><CalendarPlus size={20} /></button>
         <button class="pill glass glass-pill danger" use:glass disabled={pending} onclick={cancelReg}>{t('event.cancelReg')}</button>
       {:else if valid && e?.lateSignup && !my?.checkedInAt && (e.endsAt ?? e.startsAt + 3 * 3600) > nowTs()}<!-- late sign-up: one may step out until the end -->
         <button class="pill glass glass-pill danger" use:glass disabled={pending} onclick={cancelReg}>{t('event.cancelReg')}</button>
@@ -285,10 +278,12 @@
   /* the code is the kept copy (no network): said quietly, before the hint, on the scrim's own dark in both themes */
   .off { display: inline-flex; align-items: center; gap: 4px; margin-inline-end: 8px; padding: 3px 9px; border-radius: var(--r-full);
     background: rgba(255, 255, 255, 0.12); color: white; vertical-align: 1px; }
-  .acts { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+  .acts { display: flex; justify-content: center; gap: 10px; }
   .pill { position: relative; display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 24px; border-radius: var(--r-full); color: #fff; font: 650 15px/1 var(--font-text); background-color: rgba(255, 255, 255, 0.1); }
   .pill:active { transform: scale(0.96); }
-  .acts .pill { padding: 0 16px; } /* the calendar and the cancel in one row at 375: a second row ended up half under the x */
+  /* one row at any width: the calendar is a round icon beside the cancel (the two as words wrapped, and the cancel's
+     row hid under the x, Nov 27) */
+  .acts .round { width: 44px; padding: 0; justify-content: center; }
   .danger { color: #FF8A80; background-color: rgba(255, 69, 58, 0.16); }
   .doubt { height: 40px; padding: 0 18px; color: #FFD27A; background-color: rgba(255, 176, 32, 0.18); font-size: 14px; }
 </style>

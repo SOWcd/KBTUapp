@@ -1039,8 +1039,6 @@ const en: Dict = {
   'tk.none': "No ticket",
   'tk.loading': "Getting your ticket…",
   'tk.calendar': "Add to calendar",
-  'tk.calApple': "Apple Calendar",
-  'tk.calGoogle': "Google Calendar",
   'tk.cancelAsk': "Cancel your registration?",
   'tk.cancelText': "Your seat will be freed for others.",
   'tk.cancelGo': "Yes, cancel",
