@@ -42,7 +42,7 @@ _checked: deque[str] = deque(maxlen=256)  # pre-checkouts already answered: the 
 WAIT = 25                   # getUpdates: Telegram holds the request this long while nobody writes
 FRESH = 300                 # an older message isn't answered: what piled up while nobody listened
 SYNC_GAP = 0.25             # a chat sync's getChatMember calls: about 4 a second, beside the postman (logic/chatsync.py)
-_sync_live = False          # a chat sync link exists (CHAT_SYNC): chat_member updates are asked for; _chat_sync keeps it
+_sync_live = False          # a chat sync link exists (CHAT_SYNC): other chats' chat_member updates are used; _chat_sync keeps it
 # A deploy stops the container (SIGTERM; Docker's grace is 10 s, then SIGKILL): stop() ends the long poll at once, a batch
 # at its next update, the postman at its next message; jobs spawned beside the ears get the rest of DRAIN, then go.
 # It starts only after uvicorn has closed its connections, and the lifespan waits DRAIN + 2 s before it cancels.
@@ -218,7 +218,8 @@ def _wanted(cfg: Config) -> str:
                        # the forum channel's reactions (sent only where the bot is the channel's admin, and only when asked for)
                        *(["message_reaction_count"] if cfg.forum_channel else []),
                        # someone joining or leaving a club's linked chat (logic/chatsync.py; sent only where the bot is an admin)
-                       *(["chat_member"] if _sync_live else [])])
+                       # and the app's own channel and group (logic/appchats.py), always
+                       "chat_member"])
 
 
 async def _answer_checkout(cfg: Config, http: httpx.AsyncClient, q: dict) -> bool:
@@ -469,6 +470,8 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
                     continue
                 if cm := upd.get("chat_member"):  # a linked chat's join or leave; recorded before the offset moves on
                     try:
+                        if logic.appchats.heard(con, cm) or not _sync_live:  # ours, or nobody else's asked for (no linked chat)
+                            continue
                         new, where = cm.get("new_chat_member") or {}, (cm.get("chat") or {}).get("id")
                         if where and logic.chatsync.in_chat(new):  # /all's memory of who is in a club's chat (logic/chatlist.py)
                             logic.chatlist.seen(con, where, new.get("user"))

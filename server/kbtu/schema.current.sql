@@ -19,6 +19,12 @@ CREATE TABLE anon_feedback (
       body TEXT NOT NULL CHECK (length(body) <= 1000),
       day INTEGER NOT NULL
     ) STRICT;
+CREATE TABLE app_chats (
+      user_id    INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      channel    INTEGER NOT NULL DEFAULT 0 CHECK (channel IN (0, 1)),
+      grp        INTEGER NOT NULL DEFAULT 0 CHECK (grp IN (0, 1)),
+      checked_at INTEGER NOT NULL DEFAULT 0
+    ) STRICT;
 CREATE TABLE appeal_ai_consents (
       user_id INTEGER PRIMARY KEY REFERENCES students(user_id) ON DELETE CASCADE,
       version TEXT NOT NULL, at INTEGER NOT NULL) STRICT;
