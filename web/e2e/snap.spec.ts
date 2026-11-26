@@ -53,8 +53,12 @@ async function shot(p: Phone, name: string, part?: Locator) {
     const decoded = (i: HTMLImageElement) => Promise.race([i.decode().catch(() => {}), new Promise((r) => setTimeout(r, 3000))]);
     return Promise.all([...document.images, ...css].map(decoded));
   });
-  // the light on the glass and the badge's sheen (glass.ts: --gx/--gy, the phone's tilt or a slow drift) held still
-  await expect(part ?? p.page).toHaveScreenshot(`${name}.png`, { style: '* { --gx: 0 !important; --gy: 0 !important; }' });
+  // the light on the glass and the badge's sheen (glass.ts: --gx/--gy, the phone's tilt or a slow drift) held still.
+  // The badge's hidden back (Hero.svelte) mounts when the page is idle, at no fixed moment, and the 3D card around it
+  // left the face's text and crest rasterised one of two ways (profile.png: 513 px, either theme, now and then): the
+  // picture takes the face alone, flat
+  const style = '* { --gx: 0 !important; --gy: 0 !important; } .card > .back { display: none !important; } .card { transform-style: flat !important; }';
+  await expect(part ?? p.page).toHaveScreenshot(`${name}.png`, { style });
 }
 
 const ali = async (open: (who: 'Ali') => Promise<Phone>) => settled(await open('Ali'));

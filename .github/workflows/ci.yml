@@ -91,7 +91,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        part: ["--project=chromium-375-dark --shard=1/2", "--project=chromium-375-dark --shard=2/2", "--project=snap-dark --project=snap-light"]
+        part: ["e2e/snap.spec.ts --project=snap-dark --project=snap-light --grep=badge --repeat-each=10 --retries=0"]  # TEMP experiment
     defaults:
       run:
         working-directory: web
