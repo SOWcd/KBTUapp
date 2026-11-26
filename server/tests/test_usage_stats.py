@@ -26,6 +26,24 @@ def test_needs_a_signed_user(env):
     assert c.post("/api/stats", json={"tab.afisha": 1}).status_code == 403
 
 
+def test_android_page_counts_signed_out(env, monkeypatch):
+    c, _ = env
+    stats._spent.clear()
+    con = db.connect(DB[0])
+    for k in ("page", "join", "join", "nope", "andr.go"):
+        assert c.post(f"/api/stats/andr?k={k}").status_code == 204
+    got = totals(con)
+    assert got.get("andr.page") == 1 and got.get("andr.join") == 2 and not any(k.endswith(("nope", "andr.go")) for k in got)
+    monkeypatch.setattr(stats, "PAGE_CAP", 3)
+    for _ in range(5):
+        c.post("/api/stats/andr?k=optin")
+    assert totals(con)["andr.optin"] == 3  # the day's ceiling
+    post(c, 11, {"andr.sheet": 1, "andr.go": 1, "andr.join": 9})  # the app sends only its own two; the page's need the page
+    got = totals(con)
+    assert got["andr.sheet"] == 1 and got["andr.go"] == 1 and got["andr.join"] == 2
+    assert "sheet 1 → go 1 → page 1 → join 2 → optin 3 → play 0" in stats.fields(con, 7)["android"]
+
+
 def test_allowlist_clamp_and_upsert(env):
     c, _ = env
     stats._spent.clear()

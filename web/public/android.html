@@ -9,8 +9,9 @@
 <title>KBTU App: Android</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <style>
-/* kbtu.sow.kz/android: an Android tester's way from a link to the app from Google Play (closed testing): three links,
-   in order. Self-contained like install.html; the colours are ui/tokens.css's. */
+/* kbtu.sow.kz/android: an Android tester's way from a link to the app from Google Play (closed testing).
+   One step on screen at a time, one big button; the page remembers where the person is and moves on by itself
+   when they come back from Google. Self-contained like install.html; the colours are ui/tokens.css's. */
 :root {
   --bg: #000000; --line: rgba(255,255,255,.13); --fill: rgba(235,238,255,.12); --text: #F4F6FF; --text-2: rgba(240,243,255,.68); --text-3: rgba(232,236,255,.52);
   --accent: #3B6BFF; --accent-text: #8FA8FF; --accent-soft: rgba(59,107,255,.18); --glass: rgba(36,36,38,.74); --hi: rgba(255,255,255,.16); --o1: .5; --o2: .42; --o3: .16;
@@ -32,50 +33,86 @@ body { min-height: 100vh; min-height: 100dvh; color: var(--text); font: 450 15px
 .lights b:nth-child(1) { --c: #3B6BFF; --o: var(--o1); --x: -45; --y: -70; }
 .lights b:nth-child(2) { --c: #7C4DFF; --o: var(--o2); --x: 50; --y: 80; }
 .lights b:nth-child(3) { --c: #30B0C7; --o: var(--o3); --x: 45; --y: -20; }
-main { position: relative; display: flex; flex-direction: column; align-items: center; gap: 20px; max-width: 420px; min-height: 100vh; min-height: 100dvh; margin: 0 auto;
-  padding: calc(env(safe-area-inset-top, 0px) + 36px) 20px calc(env(safe-area-inset-bottom, 0px) + 28px); text-align: center; animation: in .7s var(--ease) backwards; }
+main { position: relative; display: flex; flex-direction: column; align-items: center; gap: 18px; max-width: 420px; min-height: 100vh; min-height: 100dvh; margin: 0 auto;
+  padding: calc(env(safe-area-inset-top, 0px) + 28px) 16px calc(env(safe-area-inset-bottom, 0px) + 24px); text-align: center; animation: in .7s var(--ease) backwards; }
 @keyframes in { from { opacity: 0; transform: translate3d(0, 12px, 0); } }
-.mark { display: block; width: 80px; height: 80px; border-radius: 26%; box-shadow: 0 0 0 .5px var(--line), 0 14px 30px -12px rgba(59,107,255,.6); }
-h1 { font-size: 28px; font-weight: 700; line-height: 1.12; letter-spacing: -.025em; text-wrap: balance; }
-.sub { margin-top: 8px; color: var(--text-2); text-wrap: pretty; }
+.mark { display: block; width: 60px; height: 60px; border-radius: 26%; box-shadow: 0 0 0 .5px var(--line), 0 14px 30px -12px rgba(59,107,255,.6); }
+h1 { margin-top: 12px; font-size: 20px; font-weight: 700; line-height: 1.15; letter-spacing: -.02em; text-wrap: balance; }
 
-/* the three steps: each a glass button that opens its link; the next one to tap is the blue one */
-.steps { display: flex; flex-direction: column; gap: 10px; width: 100%; }
-.step { display: flex; align-items: center; gap: 14px; min-height: 72px; padding: 12px 16px 12px 14px; border-radius: 26px; color: var(--text); text-align: left; text-decoration: none;
-  background: var(--glass); -webkit-backdrop-filter: blur(18px) saturate(1.6); backdrop-filter: blur(18px) saturate(1.6);
-  box-shadow: inset 0 .5px 0 var(--hi), 0 0 0 .5px var(--line), 0 12px 28px -14px rgba(0,0,0,.45); transition: transform .12s ease, background-color .4s ease, color .4s ease; }
-.step:active { transform: scale(.975); }
-.step .n { flex: none; display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%; background: var(--fill); color: var(--text-2); font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.step .tx { flex: 1; min-width: 0; }
-.step b { display: block; font-size: 17px; font-weight: 600; line-height: 1.2; letter-spacing: -.01em; }
-.step small { display: block; margin-top: 2px; color: var(--text-2); font-size: 13px; line-height: 1.25; }
-.step svg { flex: none; width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.step .go { color: var(--text-3); }
-.step .n svg, .step.done .n i { display: none; }
-.step .n i { font-style: normal; }
-.step.done .n { background: var(--accent-soft); color: var(--accent-text); }
-.step.done .n svg { display: block; }
-.step.now { background: var(--accent); color: #fff; box-shadow: inset 0 1px 1px rgba(255,255,255,.22), inset 0 -8px 14px -8px rgba(0,0,0,.3), 0 12px 26px -12px rgba(59,107,255,.8); }
-.step.now .n { background: rgba(255,255,255,.2); color: #fff; }
-.step.now small, .step.now .go { color: rgba(255,255,255,.8); }
-.note { color: var(--text-3); font-size: 13px; line-height: 1.4; text-wrap: pretty; }
+/* where am I: three segments and "Step 1 of 3" */
+.prog { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%; }
+.segs { display: flex; gap: 6px; }
+.segs i { display: block; width: 36px; height: 5px; border-radius: 3px; background: var(--fill); transition: background-color .4s ease; }
+.segs i.on { background: var(--accent); }
+.segs i.now { background: var(--accent-text); opacity: .55; }
+.lbl { color: var(--text-2); font-size: 13px; font-weight: 600; letter-spacing: .01em; font-variant-numeric: tabular-nums; }
+
+/* the one card on screen */
+.stage { width: 100%; padding: 20px 18px 18px; border-radius: 28px; background: var(--glass); -webkit-backdrop-filter: blur(18px) saturate(1.6); backdrop-filter: blur(18px) saturate(1.6);
+  box-shadow: inset 0 .5px 0 var(--hi), 0 0 0 .5px var(--line), 0 12px 28px -14px rgba(0,0,0,.45); transition: opacity .2s ease, transform .2s ease; }
+.stage.out { opacity: 0; transform: translate3d(0, 8px, 0); }
+.stage.in { animation: in .5s var(--ease) backwards; }
+.view { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+h2 { font-size: 24px; font-weight: 700; line-height: 1.15; letter-spacing: -.022em; text-wrap: balance; }
+.how { color: var(--text-2); font-size: 17px; line-height: 1.35; text-wrap: pretty; }
+.how b { color: var(--text); font-weight: 700; }
+
+/* a sketch of Google's page with the one button to press, softly pulsing */
+.mock { display: flex; flex-direction: column; align-items: flex-start; gap: 9px; width: 100%; max-width: 250px; padding: 14px; border-radius: 18px; background: var(--fill); box-shadow: inset 0 0 0 .5px var(--line); }
+.mock u { display: block; width: 78%; height: 8px; border-radius: 4px; background: var(--line); text-decoration: none; }
+.mock u + u { width: 52%; }
+.pill { position: relative; margin: 3px; padding: 7px 14px; border-radius: 999px; background: #1A73E8; color: #fff; font-size: 13px; font-weight: 600; font-style: normal; line-height: 1.2; }
+.pill.g { background: #01875F; }
+.pill::after { content: ''; position: absolute; top: -5px; right: -5px; bottom: -5px; left: -5px; border-radius: 999px; border: 2px solid var(--accent-text); opacity: .7; animation: ping 2.2s ease-out infinite; }
+@keyframes ping { 0% { opacity: .8; transform: scale(.96); } 70%, 100% { opacity: 0; transform: scale(1.12); } }
+
+/* the same-account line: once, on step 1 */
+.acct { display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 12px 14px; border-radius: 18px; background: var(--accent-soft); color: var(--text); font-size: 14px; line-height: 1.35; text-align: left; text-wrap: pretty; }
+.acct svg { flex: none; width: 20px; height: 20px; margin-top: 1px; fill: none; stroke: var(--accent-text); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+.btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 56px; padding: 8px 20px; border: 0; border-radius: 999px; background: var(--accent); color: #fff; font: inherit; font-size: 17px; font-weight: 600; letter-spacing: -.01em; text-decoration: none; cursor: pointer;
+  box-shadow: inset 0 1px 1px rgba(255,255,255,.22), inset 0 -8px 14px -8px rgba(0,0,0,.3), 0 10px 22px -12px rgba(59,107,255,.8); transition: transform .12s ease; }
+.btn:active { transform: scale(.965); }
+.btn svg { flex: none; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; opacity: .85; }
+.btn.sec { min-height: 48px; background: var(--fill); color: var(--accent-text); font-size: 16px; box-shadow: none; }
+.hint { color: var(--text-3); font-size: 13px; line-height: 1.4; text-wrap: pretty; }
+.link { padding: 8px 10px; border: 0; background: none; color: var(--accent-text); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.link.quiet { color: var(--text-3); font-weight: 500; }
+.aside { display: flex; flex-direction: column; align-items: center; gap: 2px; margin-top: -4px; }
+
+/* waiting: a quiet ring that fills as Google catches up */
+.ring { position: relative; width: 136px; height: 136px; }
+.ring svg { display: block; width: 100%; height: 100%; transform: rotate(-90deg); }
+.ring circle { fill: none; stroke-width: 7; }
+.ring .tr { stroke: var(--fill); }
+.ring .ar { stroke: var(--accent); stroke-linecap: round; stroke-dasharray: 339.292; stroke-dashoffset: 339.292; transition: stroke-dashoffset 1s linear; }
+.ring div { position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.ring strong { font-size: 30px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.ring small { color: var(--text-3); font-size: 12px; }
+
+.ok { display: flex; align-items: center; justify-content: center; width: 68px; height: 68px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-text); }
+.ok svg { width: 32px; height: 32px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.sep { width: 100%; height: .5px; background: var(--line); }
 
 /* not an Android phone: a short note first */
 .other { width: 100%; padding: 16px; border-radius: 26px; background: var(--glass); -webkit-backdrop-filter: blur(18px) saturate(1.6); backdrop-filter: blur(18px) saturate(1.6);
   box-shadow: inset 0 .5px 0 var(--hi), 0 0 0 .5px var(--line), 0 12px 28px -14px rgba(0,0,0,.45); color: var(--text-2); text-wrap: pretty; }
-.btn { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 50px; margin-top: 14px; padding: 0 20px; border-radius: 999px; background: var(--accent); color: #fff; font-size: 17px; font-weight: 600; letter-spacing: -.01em; text-decoration: none;
-  box-shadow: inset 0 1px 1px rgba(255,255,255,.22), inset 0 -8px 14px -8px rgba(0,0,0,.3), 0 10px 22px -12px rgba(59,107,255,.8); transition: transform .12s ease; }
-.btn:active { transform: scale(.965); }
-@media (prefers-reduced-motion: reduce) { main { animation: none; } }
+.other .btn { margin-top: 14px; }
+
+@media (max-width: 340px) { h2 { font-size: 22px; } .how { font-size: 16px; } .stage { padding: 18px 14px 14px; } .segs i { width: 30px; } }
+@media (prefers-reduced-motion: reduce) {
+  main, .stage.in { animation: none; }
+  .stage, .ring .ar { transition: none; }
+  .pill::after { animation: none; opacity: .6; }
+}
 </style>
 </head>
 <body>
 <div class="lights" aria-hidden="true"><b></b><b></b><b></b></div>
 <main>
-  <img class="mark" src="/icon-512.png" alt="" width="80" height="80">
   <div>
+    <img class="mark" src="/icon-512.png" alt="" width="60" height="60" style="margin:0 auto">
     <h1 data-t="h"></h1>
-    <p class="sub" id="sub" data-t="sub"></p>
   </div>
 
   <div class="other" id="other" hidden>
@@ -83,12 +120,64 @@ h1 { font-size: 28px; font-weight: 700; line-height: 1.12; letter-spacing: -.025
     <a class="btn" id="ios" href="/install" data-t="ios.go" hidden></a>
   </div>
 
-  <div class="steps" id="steps">
-    <a class="step" target="_blank" rel="noopener"><span class="n"><i>1</i><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span class="tx"><b data-t="s1"></b><small data-t="s1.d"></small></span><svg class="go" viewBox="0 0 24 24"><path d="M8 16l8-8M9 8h7v7"/></svg></a>
-    <a class="step" target="_blank" rel="noopener"><span class="n"><i>2</i><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span class="tx"><b data-t="s2"></b><small data-t="s2.d"></small></span><svg class="go" viewBox="0 0 24 24"><path d="M8 16l8-8M9 8h7v7"/></svg></a>
-    <a class="step" target="_blank" rel="noopener"><span class="n"><i>3</i><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span class="tx"><b data-t="s3"></b><small data-t="s3.d"></small></span><svg class="go" viewBox="0 0 24 24"><path d="M8 16l8-8M9 8h7v7"/></svg></a>
+  <div class="prog" id="prog">
+    <div class="segs" aria-hidden="true"><i></i><i></i><i></i></div>
+    <span class="lbl" id="lbl"></span>
   </div>
-  <p class="note" id="note" data-t="note"></p>
+
+  <div class="stage" id="stage" aria-live="polite">
+    <!-- step 1: the testers group -->
+    <section class="view" data-v="join" hidden>
+      <div class="mock" aria-hidden="true"><i class="pill" data-t="j.k"></i><u></u><u></u></div>
+      <h2 data-t="j.h"></h2>
+      <p class="how" data-r="j.p"></p>
+      <p class="acct"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="10" r="3"/><path d="M6.5 18.2a6.5 6.5 0 0 1 11 0"/></svg><span data-t="acct"></span></p>
+      <a class="btn" id="b-join" target="_blank" rel="noopener"><span data-t="j.b"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 16l8-8M9 8h7v7"/></svg></a>
+    </section>
+
+    <!-- step 2: the opt-in -->
+    <section class="view" data-v="optin" hidden>
+      <div class="mock" aria-hidden="true"><u></u><u></u><i class="pill" data-t="o.k"></i></div>
+      <h2 data-t="o.h"></h2>
+      <p class="how" data-r="o.p"></p>
+      <a class="btn" id="b-optin" target="_blank" rel="noopener"><span data-t="o.b"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 16l8-8M9 8h7v7"/></svg></a>
+      <div class="aside">
+        <p class="hint" data-t="o.q"></p>
+        <button class="link" id="b-back" type="button" data-t="o.back"></button>
+      </div>
+    </section>
+
+    <!-- between 2 and 3: Google Play is letting the tester in -->
+    <section class="view" data-v="wait" hidden>
+      <div class="ring">
+        <svg viewBox="0 0 120 120" aria-hidden="true"><circle class="tr" cx="60" cy="60" r="54"/><circle class="ar" id="arc" cx="60" cy="60" r="54"/></svg>
+        <div><strong id="time" role="timer" aria-live="off">10:00</strong><small data-t="w.l"></small></div>
+      </div>
+      <h2 data-t="w.h"></h2>
+      <p class="how" data-t="w.p"></p>
+      <a class="btn sec" id="b-try" target="_blank" rel="noopener" data-t="w.b"></a>
+    </section>
+
+    <!-- step 3: the install -->
+    <section class="view" data-v="install" hidden>
+      <div class="mock" aria-hidden="true"><u></u><u></u><i class="pill g" data-t="i.k"></i></div>
+      <h2 data-t="i.h"></h2>
+      <p class="how" data-r="i.p"></p>
+      <a class="btn" id="b-play" target="_blank" rel="noopener"><span data-t="i.b"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 16l8-8M9 8h7v7"/></svg></a>
+    </section>
+
+    <!-- back from Google Play -->
+    <section class="view" data-v="after" hidden>
+      <div class="ok" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+      <h2 data-t="a.h"></h2>
+      <p class="how" data-t="a.p"></p>
+      <div class="sep"></div>
+      <p class="hint" data-t="a.q"></p>
+      <button class="btn sec" id="b-retry" type="button" data-t="a.b"></button>
+    </section>
+  </div>
+
+  <button class="link quiet" id="reset" type="button" data-t="reset" hidden></button>
 </main>
 <script>
 (function () {
@@ -96,34 +185,50 @@ h1 { font-size: 28px; font-weight: 700; line-height: 1.12; letter-spacing: -.025
   var GROUP = 'https://groups.google.com/g/kbtu-app-testers';
   var OPTIN = 'https://play.google.com/apps/testing/kz.sow.kbtu';
   var PLAY = 'https://play.google.com/store/apps/details?id=kz.sow.kbtu';
+  var WAIT = 10 * 60 * 1000;   // Google Play lets a new tester in within about this long after the opt-in
+  var RETRY = 5 * 60 * 1000;   // "still not found": this much more
+  var RING = 339.292;          // the ring's circumference (r = 54)
 
+  // **double asterisks** mark the exact label of the button on Google's page
   var T = {
     ru: {
-      h: 'KBTU App для Android', sub: 'Закрытый тест в Google Play. Три шага, пара минут.',
-      s1: 'Вступи в группу тестеров', 's1.d': 'С аккаунтом Google, который на телефоне',
-      s2: 'Стань тестером', 's2.d': 'Одна кнопка на странице Google Play',
-      s3: 'Установи из Google Play', 's3.d': 'Обычная установка, как у любого приложения',
-      note: 'После шага 2 Google Play может показать приложение не сразу: подожди пару минут и открой шаг 3 ещё раз. Во всех шагах нужен один и тот же аккаунт Google.',
+      h: 'KBTU App для Android', of: 'Шаг {n} из 3', lw: 'Ждём Google Play', ld: 'Готово',
+      'j.h': 'Вступи в группу', 'j.p': 'На открывшейся странице нажми синюю кнопку **Вступить в группу** вверху, потом вернись сюда.', 'j.k': 'Вступить в группу', 'j.b': 'Открыть Google Groups',
+      acct: 'Во всех шагах нужен один аккаунт Google: тот, что в Google Play на этом телефоне. Попросят войти, выбери его.',
+      'o.h': 'Стань тестером', 'o.p': 'Там нажми **Стать тестировщиком** и вернись сюда.', 'o.k': 'Стать тестировщиком', 'o.b': 'Открыть страницу теста',
+      'o.q': 'Нет такой кнопки? Скорее всего, ты ещё не в группе.', 'o.back': 'Вернуться к шагу 1',
+      'w.h': 'Google Play открывает доступ', 'w.p': 'Ему нужно около 10 минут, чтобы тебя впустить. Мы следим за временем: шаг 3 появится здесь сам. Страницу можно свернуть.', 'w.b': 'Попробовать сейчас', 'w.l': 'осталось',
+      'i.h': 'Установи приложение', 'i.p': 'В Google Play нажми **Установить**.', 'i.k': 'Установить', 'i.b': 'Открыть Google Play',
+      'a.h': 'Установилось?', 'a.p': 'Открой KBTU App с главного экрана.', 'a.q': 'Google Play пишет, что приложение не найдено? Он ещё не успел тебя впустить.', 'a.b': 'Подождать ещё 5 минут',
+      reset: 'Начать заново',
       ios: 'Эта страница для Android. На iPhone KBTU App ставится по-другому, и ещё быстрее.', 'ios.go': 'Установить на iPhone',
-      desk: 'Эта страница для Android. Открой kbtu.sow.kz/android на телефоне или пройди шаги здесь с тем же аккаунтом Google.'
+      desk: 'Эта страница для Android. Открой kbtu.sow.kz/android на телефоне или пройди шаги здесь с тем же аккаунтом Google, что в Google Play на телефоне.'
     },
     kk: {
-      h: 'Android-қа арналған KBTU App', sub: 'Google Play-дегі жабық тест. Үш қадам, бір-екі минут.',
-      s1: 'Тестерлер тобына қосыл', 's1.d': 'Телефондағы Google аккаунтымен',
-      s2: 'Тестер бол', 's2.d': 'Google Play бетіндегі бір батырма',
-      s3: 'Google Play-ден орнат', 's3.d': 'Кез келген қолданба сияқты орнатылады',
-      note: '2-қадамнан кейін Google Play қолданбаны бірден көрсетпеуі мүмкін: бір-екі минут күтіп, 3-қадамды қайта аш. Барлық қадамда бір Google аккаунты керек.',
+      h: 'Android-қа арналған KBTU App', of: '{n}-қадам, барлығы 3', lw: 'Google Play-ді күтіп тұрмыз', ld: 'Дайын',
+      'j.h': 'Топқа қосыл', 'j.p': 'Ашылған беттің жоғарғы жағындағы көк **Топқа қосылу** батырмасын бас (орысша: **Вступить в группу**), сосын осында орал.', 'j.k': 'Топқа қосылу', 'j.b': 'Google Groups-ты ашу',
+      acct: 'Барлық қадамда бір Google аккаунты керек: осы телефондағы Google Play-дегі аккаунт. Кіруді сұраса, соны таңда.',
+      'o.h': 'Тестілеуші бол', 'o.p': 'Сол жерде **Тестілеуші болу** батырмасын басып, осында орал.', 'o.k': 'Тестілеуші болу', 'o.b': 'Тест бетін ашу',
+      'o.q': 'Ондай батырма жоқ па? Сірә, сен әлі топқа қосылмағансың.', 'o.back': '1-қадамға оралу',
+      'w.h': 'Google Play рұқсат ашып жатыр', 'w.p': 'Сені кіргізу үшін оған шамамен 10 минут керек. Уақытты біз бақылап отырмыз: 3-қадам осында өзі шығады. Бетті жасырып қоюға болады.', 'w.b': 'Қазір байқап көру', 'w.l': 'қалды',
+      'i.h': 'Қолданбаны орнат', 'i.p': 'Google Play-де **Орнату** батырмасын бас.', 'i.k': 'Орнату', 'i.b': 'Google Play-ді ашу',
+      'a.h': 'Орнатылды ма?', 'a.p': 'KBTU App-ты негізгі экраннан аш.', 'a.q': 'Google Play қолданба табылмады дей ме? Ол сені әлі кіргізіп үлгермеді.', 'a.b': 'Тағы 5 минут күту',
+      reset: 'Басынан бастау',
       ios: 'Бұл бет Android-қа арналған. iPhone-да KBTU App басқаша орнатылады, одан да тез.', 'ios.go': 'iPhone-ға орнату',
-      desk: 'Бұл бет Android-қа арналған. kbtu.sow.kz/android бетін телефонда аш немесе қадамдарды осында сол Google аккаунтымен өт.'
+      desk: 'Бұл бет Android-қа арналған. kbtu.sow.kz/android бетін телефонда аш немесе қадамдарды осында телефондағы Google Play-дегі аккаунтпен өт.'
     },
     en: {
-      h: 'KBTU App for Android', sub: 'A closed test on Google Play. Three steps, a couple of minutes.',
-      s1: 'Join the testers group', 's1.d': 'With the Google account on your phone',
-      s2: 'Become a tester', 's2.d': 'One button on the Google Play page',
-      s3: 'Install from Google Play', 's3.d': 'A regular install, like any other app',
-      note: 'After step 2 Google Play may take a few minutes to show the app: wait a little and open step 3 again. Use the same Google account in every step.',
+      h: 'KBTU App for Android', of: 'Step {n} of 3', lw: 'Waiting for Google Play', ld: 'Done',
+      'j.h': 'Join the group', 'j.p': 'On the page that opens, tap the blue **Join group** button at the top, then come back here.', 'j.k': 'Join group', 'j.b': 'Open Google Groups',
+      acct: 'Use one Google account in all steps: the one in Google Play on this phone. If it asks you to sign in, pick that one.',
+      'o.h': 'Become a tester', 'o.p': 'Tap **Become a tester** there, then come back here.', 'o.k': 'Become a tester', 'o.b': 'Open the test page',
+      'o.q': 'No such button? You are probably not in the group yet.', 'o.back': 'Back to step 1',
+      'w.h': 'Google Play is letting you in', 'w.p': 'It needs about 10 minutes. We are keeping time: step 3 will show up here by itself. You can leave this page in the background.', 'w.b': 'Try now', 'w.l': 'left',
+      'i.h': 'Install the app', 'i.p': 'Tap **Install** in Google Play.', 'i.k': 'Install', 'i.b': 'Open Google Play',
+      'a.h': 'Installed?', 'a.p': 'Open KBTU App from your home screen.', 'a.q': 'Google Play says the item was not found? It is still catching up.', 'a.b': 'Wait 5 more minutes',
+      reset: 'Start over',
       ios: 'This page is for Android. On iPhone KBTU App installs another way, and even faster.', 'ios.go': 'Install on iPhone',
-      desk: 'This page is for Android. Open kbtu.sow.kz/android on your phone, or go through the steps here with the same Google account.'
+      desk: 'This page is for Android. Open kbtu.sow.kz/android on your phone, or go through the steps here with the Google account that is in Google Play on your phone.'
     }
   };
   // ?lang= first, then the browser's language; Russian otherwise
@@ -131,34 +236,122 @@ h1 { font-size: 28px; font-weight: 700; line-height: 1.12; letter-spacing: -.025
   var lang = q ? q[1] : nl.indexOf('kk') === 0 ? 'kk' : nl.indexOf('en') === 0 ? 'en' : 'ru', d = T[lang];
   document.documentElement.lang = lang;
   document.title = d.h;
-  document.querySelectorAll('[data-t]').forEach(function (el) { el.textContent = d[el.getAttribute('data-t')]; });
+
+  function $(id) { return document.getElementById(id); }
+  function each(sel, fn) { var l = document.querySelectorAll(sel); for (var i = 0; i < l.length; i++) fn(l[i], i); }
+  each('[data-t]', function (el) { el.textContent = d[el.getAttribute('data-t')]; });
+  each('[data-r]', function (el) {
+    var p = d[el.getAttribute('data-r')].split('**');
+    for (var i = 0; i < p.length; i++) {
+      if (!p[i]) continue;
+      if (i % 2) { var b = document.createElement('b'); b.textContent = p[i]; el.appendChild(b); }
+      else el.appendChild(document.createTextNode(p[i]));
+    }
+  });
+
+  // anonymous counters: no person in them
+  function hit(k) { try { navigator.sendBeacon('/api/stats/andr?k=' + k); } catch (e) {} }
 
   // the device, read as install.html reads it (an iPad says it is a Mac, with touch points)
   var ua = navigator.userAgent, ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
-  if (!/Android/.test(ua)) {
-    document.getElementById('other').hidden = false;
-    document.getElementById('other-t').textContent = ios ? d.ios : d.desk;
-    document.getElementById('ios').hidden = !ios;
+  if (/Android/.test(ua)) hit('page');
+  else {
+    $('other').hidden = false;
+    $('other-t').textContent = ios ? d.ios : d.desk;
+    $('ios').hidden = !ios;
     // an iPhone can't install it at all: the steps go; a computer can do them with the phone's account
-    document.getElementById('sub').hidden = document.getElementById('steps').hidden = document.getElementById('note').hidden = ios;
+    if (ios) { $('prog').hidden = true; $('stage').hidden = true; return; }
   }
 
-  // the tester leaves for Google and comes back: the page remembers how far they got and lights the next step
-  var steps = document.querySelectorAll('.step'), done = 0;
-  try { done = +localStorage.getItem('android.step') || 0; } catch (e) {}
-  function paint() {
-    steps.forEach(function (a, i) { a.classList.toggle('done', i < done); a.classList.toggle('now', i === Math.min(done, 2)); });
+  // what is remembered: how many of Google's pages have been opened (0..3) and when the opt-in was tapped
+  function get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function set(k, v) { try { localStorage.setItem(k, String(v)); } catch (e) {} }
+  function del(k) { try { localStorage.removeItem(k); } catch (e) {} }
+  var done = Math.floor(+get('android.step') || 0), optinAt = +get('android.optinAt') || 0;
+  if (done < 0) done = 0;
+  if (done > 3) done = 3;
+
+  var stage = $('stage'), arc = $('arc'), time = $('time'), lbl = $('lbl'), reset = $('reset');
+  var reduce = false;
+  try { reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
+  var cur = null, left = false, iv = 0, sw = 0;
+
+  function remaining() {
+    if (!optinAt) return 0;
+    var r = optinAt + WAIT - Date.now();
+    return r > WAIT ? WAIT : r < 0 ? 0 : r;
   }
-  [GROUP, OPTIN, PLAY].forEach(function (url, i) {
-    steps[i].href = url;
-    steps[i].addEventListener('click', function () {
-      if (i < done) return;
-      done = i + 1;
-      try { localStorage.setItem('android.step', done); } catch (e) {}
-      setTimeout(paint, 400);  // after the tap has left the page, not under the finger
-    });
+  function view() {
+    if (done <= 0) return 'join';
+    if (done === 1) return 'optin';
+    if (done === 2) return remaining() > 0 ? 'wait' : 'install';
+    return 'after';
+  }
+  function tick() {
+    var r = remaining(), s = Math.ceil(r / 1000), m = Math.floor(s / 60), ss = s % 60;
+    time.textContent = m + ':' + (ss < 10 ? '0' : '') + ss;
+    arc.style.strokeDashoffset = String(RING * (r / WAIT));
+  }
+  function paint(v) {
+    var n = v === 'join' ? 0 : v === 'optin' ? 1 : v === 'after' ? 3 : 2;
+    each('.view', function (s) { s.hidden = s.getAttribute('data-v') !== v; });
+    each('.segs i', function (s, i) { s.className = i < n ? 'on' : i === n ? 'now' : ''; });
+    lbl.textContent = v === 'wait' ? d.lw : v === 'after' ? d.ld : d.of.replace('{n}', n + 1);
+    reset.hidden = v === 'join';
+    if (v === 'wait') tick();
+  }
+  // the 1 s clock runs only while the wait is on screen and the page is visible
+  function clock() {
+    var need = cur === 'wait' && !document.hidden;
+    if (need && !iv) iv = setInterval(sync, 1000);
+    if (!need && iv) { clearInterval(iv); iv = 0; }
+  }
+  function sync() {
+    var v = view();
+    if (v !== cur) {
+      var first = cur === null;
+      cur = v;
+      if (first || reduce) paint(v);
+      else {
+        stage.className = 'stage out';
+        clearTimeout(sw);
+        sw = setTimeout(function () { paint(cur); stage.className = 'stage in'; }, 200);
+      }
+    } else if (v === 'wait') tick();
+    clock();
+  }
+  // back from Google: move on by itself
+  function back() { left = false; sync(); }
+
+  $('b-join').href = GROUP;
+  $('b-optin').href = OPTIN;
+  $('b-try').href = PLAY;
+  $('b-play').href = PLAY;
+
+  // the tap is what records the step (a reload keeps it); the card changes when the person comes back, not under the finger
+  $('b-join').addEventListener('click', function () { done = 1; set('android.step', done); hit('join'); left = true; });
+  $('b-optin').addEventListener('click', function () {
+    done = 2; optinAt = Date.now();
+    set('android.step', done); set('android.optinAt', optinAt);
+    hit('optin'); left = true;
   });
-  paint();
+  $('b-try').addEventListener('click', function () { hit('play'); });  // an early look: the wait goes on
+  $('b-play').addEventListener('click', function () { done = 3; set('android.step', done); hit('play'); left = true; });
+  $('b-retry').addEventListener('click', function () {
+    hit('retry');
+    done = 2; optinAt = Date.now() - (WAIT - RETRY);  // five minutes left
+    set('android.step', done); set('android.optinAt', optinAt);
+    sync();
+  });
+  function restart() { done = 0; optinAt = 0; left = false; del('android.step'); del('android.optinAt'); sync(); }
+  reset.addEventListener('click', restart);
+  $('b-back').addEventListener('click', restart);
+
+  document.addEventListener('visibilitychange', function () { if (document.hidden) clock(); else back(); });
+  window.addEventListener('pageshow', back);
+  window.addEventListener('focus', function () { if (left) back(); });
+
+  sync();
 })();
 </script>
 </body>
