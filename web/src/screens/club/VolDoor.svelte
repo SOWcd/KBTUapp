@@ -19,6 +19,7 @@
   import Group from '../../ui/Group.svelte';
   import Row from '../../ui/Row.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
+  import { screenful } from '../../lib/screenful.svelte';
 
   let { overlay, sid, title }: { overlay: Overlay; sid: Id; title: string } = $props();
   let d = $state<VolDoor | null>(null);
@@ -31,6 +32,8 @@
   type One = VolDoor['unmarked'][number];
   const todo = $derived((d?.unmarked ?? []).filter((x) => x.outAt === null || x.id === redo));
   const answered = $derived((d?.unmarked ?? []).filter((x) => x.outAt !== null && x.id !== redo));
+  // a big session: a screenful with the sheet, the rest after it paints (the answered after the ones to answer)
+  const draw = screenful(() => todo.length + answered.length);
 
   async function write(f: () => Promise<VolDoor>, next: VolDoor) {
     const was = d;
@@ -77,7 +80,7 @@
     <div class="body">
       {#if d.ended}
         <Group caption={t('ledg.doorTitle')} footnote={todo.length ? t('ledg.doorNote') : undefined}>
-          {#each todo as x (x.id)}
+          {#each todo.slice(0, draw.n) as x (x.id)}
             <Row dense title={x.name || '—'} subtitle={t('ledg.cameAt', { time: time(x.inAt) })}>
               {#snippet lead()}{#if x.person}<Avatar person={x.person} size={32} tappable={false} />{:else}<span class="blank" aria-hidden="true"></span>{/if}{/snippet}
             </Row>
@@ -98,9 +101,9 @@
             <EmptyState inline text={t('ledg.allDone')} />
           {/each}
         </Group>
-        {#if answered.length}
+        {#if answered.length && draw.n > todo.length}
           <Group>
-            {#each answered as x (x.id)}
+            {#each answered.slice(0, draw.n - todo.length) as x (x.id)}
               {#snippet change()}<Button kind="secondary" size="s" onclick={() => { haptic.tap(); pick = 0; redo = x.id; }}>{t('ledg.change')}</Button>{/snippet}
               <Row dense title={x.name || '—'} subtitle={time(x.inAt) + '–' + time(x.outAt ?? x.inAt)} trailing={d.lead && x.person?.id !== session.me?.id ? change : undefined} />
             {/each}

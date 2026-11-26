@@ -15,6 +15,7 @@
   import Avatar from '../../ui/Avatar.svelte';
   import Skeleton from '../../ui/Skeleton.svelte';
   import PersonPane from './PersonPane.svelte';
+  import { screenful } from '../../lib/screenful.svelte';
 
   let { overlay }: { overlay: Overlay } = $props();
   staffOnly(() => overlay);
@@ -28,6 +29,7 @@
     const want = k, id = setTimeout(() => api.staffSearch(want).then((l) => { if (k === want) found = l; }).catch(() => { if (k === want) found = []; }), 300);
     return () => clearTimeout(id);
   });
+  const draw = screenful(() => staff?.banned.length ?? 0); // hundreds banned: a screenful with the pane, the rest after it paints
   const person = (row: StaffRow) => { haptic.tap(); open(PersonPane, { row, onchange: (s: Staff) => (staff = s) }); };
 </script>
 
@@ -51,7 +53,7 @@
       </Group>
       {#if staff.banned.length}
         <Group caption={t('staff.bannedList')}>
-          {#each staff.banned as p (p.person.id)}{@render rowOf(p, p.banReason ?? (p.username ? '@' + p.username : undefined), undefined)}{/each}
+          {#each staff.banned.slice(0, draw.n) as p (p.person.id)}{@render rowOf(p, p.banReason ?? (p.username ? '@' + p.username : undefined), undefined)}{/each}
         </Group>
       {/if}
     </div>
