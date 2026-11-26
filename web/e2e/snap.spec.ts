@@ -53,7 +53,8 @@ async function shot(p: Phone, name: string, part?: Locator) {
     const decoded = (i: HTMLImageElement) => Promise.race([i.decode().catch(() => {}), new Promise((r) => setTimeout(r, 3000))]);
     return Promise.all([...document.images, ...css].map(decoded));
   });
-  await expect(part ?? p.page).toHaveScreenshot(`${name}.png`);
+  // the light on the glass and the badge's sheen (glass.ts: --gx/--gy, the phone's tilt or a slow drift) held still
+  await expect(part ?? p.page).toHaveScreenshot(`${name}.png`, { style: '* { --gx: 0 !important; --gy: 0 !important; }' });
 }
 
 /** Ali on the Afisha, after the launch's greeting (a toast: "Physics in 40 min", once the day's data is in) has come

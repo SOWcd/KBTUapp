@@ -36,13 +36,12 @@ async function studio(ph: Phone, club: string, listed = club) {
   return s;
 }
 
-/** Studio -> Create -> Event -> by hand: the editor's fields */
+/** Studio -> Create -> Event: the editor, one page (KRI's line on top, the fields under it) */
 async function newEvent(dana: Phone) {
   const p = dana.page;
   const s = await studio(dana, 'Open Mic Club');
   await s.getByRole('button', { name: tr('studio.create'), exact: true }).click();
   await p.getByRole('menu').getByRole('menuitem', { name: tr('studio.newShort') }).click();
-  await p.getByRole('button', { name: tr('ed.byHand') }).click();
   await expect(p.getByRole('textbox', { name: tr('ex.name') })).toBeVisible();
 }
 
@@ -56,11 +55,11 @@ async function publish(ph: Phone) {
   await anyway.click();
 }
 
-/** the editor's focused panel (one at a time): its Done */
-async function panelDone(p: Phone['page'], title: string) {
-  const header = p.locator('header').filter({ has: p.getByText(title, { exact: true }) });
-  await header.getByRole('button', { name: tr('ex.done'), exact: true }).click();
-  await expect(header).toBeHidden();
+/** the editor's focused panel (one at a time): its Done, under its fields */
+const doneOf = (p: Phone['page']) => p.getByRole('button', { name: tr('ex.done'), exact: true }).filter({ visible: true }).last();
+async function panelDone(p: Phone['page'], inside: ReturnType<Phone['page']['locator']>) {
+  await doneOf(p).click();
+  await expect(inside, 'the panel closed').toBeHidden(); // panels nest (More settings -> a co-host): its own Done
 }
 
 async function place(ph: Phone, where: string) {
@@ -68,7 +67,7 @@ async function place(ph: Phone, where: string) {
   await p.getByRole('button', { name: tr('ex.placeAdd') }).click();
   const field = p.getByRole('textbox', { name: tr('ed.place'), exact: true });
   await field.fill(where);
-  const done = p.locator('header').filter({ has: p.getByText(tr('ed.place'), { exact: true }) }).getByRole('button', { name: tr('ex.done'), exact: true });
+  const done = doneOf(p);
   // the keyboard's own Done first (the field blurred), as on a phone: with the field focused the sheet rides up over
   // the keyboard it expects, and an emulated press blurs the field and drops the sheet from under the pointer
   await keyboardDown(p);
@@ -86,8 +85,9 @@ test('Studio: a new event by hand, published, edited, on the Afisha for a studen
   await place(dana, 'Room 412');
   // the capacity is a choice, never a default (the editor asks for it)
   await p.getByRole('button', { name: new RegExp(`^${esc(tr('ed.seats'))}`) }).click();
-  await p.getByRole('radio', { name: tr('ex.unlimited'), exact: true }).click();
-  await panelDone(p, tr('ed.seats'));
+  const unlimited = p.getByRole('radio', { name: tr('ex.unlimited'), exact: true });
+  await unlimited.click();
+  await panelDone(p, unlimited);
   await dana.look('filled in');
   await publish(dana);
   // published: Studio lists it
@@ -127,15 +127,18 @@ test('Studio: a co-host club is invited from the editor and accepts in its own S
   await keyboardDown(p);
   await place(dana, 'Atrium');
   await p.getByRole('button', { name: new RegExp(`^${esc(tr('ed.seats'))}`) }).click();
-  await p.getByRole('radio', { name: tr('ex.unlimited'), exact: true }).click();
-  await panelDone(p, tr('ed.seats'));
+  const unlimited = p.getByRole('radio', { name: tr('ex.unlimited'), exact: true });
+  await unlimited.click();
+  await panelDone(p, unlimited);
+  await p.getByRole('button', { name: new RegExp(`^${esc(tr('ex.more'))}`) }).click(); // the co-host lives in More settings
   await p.getByRole('button', { name: new RegExp(`^${esc(tr('co.invite'))}`) }).click();
   await p.getByRole('textbox', { name: tr('co.search') }).or(p.getByPlaceholder(tr('co.search'))).first().fill('Debate');
   await keyboardDown(p);
   await p.getByRole('button', { name: 'DS', exact: true }).click(); // a school shows by its short name
   await expect(p.getByText(tr('co.afterSave'))).toBeVisible();
   await dana.look('co-host picked');
-  await panelDone(p, tr('co.invite'));
+  await panelDone(p, p.getByText(tr('co.afterSave')));
+  await panelDone(p, p.getByRole('button', { name: new RegExp(`^${esc(tr('co.invite'))}`) })); // and More settings
   await publish(dana);
   await expect(p.getByRole('region', { name: 'Open Mic Club' }).getByRole('button', { name: /Chess and jokes/ })).toBeVisible();
 
