@@ -89,10 +89,10 @@
 <div class="cap glass glass-pill" class:wide={wideClose} class:boot={booting} class:none={mode === 'none'} class:tinted={!!tint} class:flat={onAndroid} style:--chrome-tint={tint} use:glass={{ bloom: true }} use:chrome>
   <span class="tone-base" aria-hidden="true"></span><span class="tone-feed" aria-hidden="true"></span>
   <!-- live status -->
-  <button class="layer live" class:off={mode !== 'live'} onclick={() => live?.onopen?.()} aria-label={live?.title}>
+  <button class="layer live" class:off={mode !== 'live'} onclick={() => live?.onopen?.()} aria-label={live ? `${liveTop} ${live.title}` : undefined}>
     {#if live}
       <span class="lv" style="background:{live.tint}"><Emoji name={live.emoji} size={20} /></span>
-      <span class="lt"><b class="num">{liveTop}</b><i class="ellipsis">{live.title}</i></span>
+      <span class="lt"><b class="num">{liveTop}</b> <i class="ellipsis">{live.title}</i></span>
     {/if}
   </button>
   <!-- the title of the view on top, else the tab's -->
