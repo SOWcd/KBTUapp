@@ -168,3 +168,19 @@ def test_export_after_the_event(door_event):
     assert con.execute("SELECT COUNT(*) FROM audit_log WHERE action = 'guest_list_export'").fetchone()[0] == 1
     # nobody else gets it
     assert c.post(f"{URL}/export", headers=tma(1)).status_code == 403
+
+
+def test_export_names_as_the_door_list_does(door_event):
+    """A Member with the door right sees the sheet's short names at the door; the CSV must not hand them the whole ones."""
+    c, cfg, con = door_event
+    _list(c, _rows(["Testova Jane Middle", "", "", "", "Owls"]))
+    member = _student(c, con, 1, "24B030001")
+    org = con.execute("SELECT org_id FROM events WHERE id = 1").fetchone()[0]
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, 'member', 0)", (org, member))
+    assert [x["name"] for x in c.get(DOOR, headers=tma(1)).json()["list"]] == ["Jane T"]
+    _, people = logic.organizing.guest_list_export(con, logic.Viewer(member, "user", True), 1)
+    assert [p["name"] for p in people if not p["app"]] == ["Jane T"]
+    # who runs the events keeps the whole name, at the door and in the CSV
+    me = c.get("/api/me", headers=tma(9)).json()["id"]
+    _, people = logic.organizing.guest_list_export(con, logic.Viewer(me, "user", True), 1)
+    assert [p["name"] for p in people if not p["app"]] == ["Testova Jane Middle"]

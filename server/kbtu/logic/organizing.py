@@ -1646,7 +1646,8 @@ def guest_list_export(con, v: Viewer, eid: int) -> tuple[sqlite3.Row, list[dict]
     e = _door_ok(con, v, _staff_event(con, v, eid, "door", cohost=True, helper=("door",)))
     if not e["guest_list"]:
         raise ApiError("not_found")
-    out = [{**g, "app": False} for g in guests.export(con, eid)]
+    # the sheet's rows named as pending_count's door list names them: whole only with the "events" right
+    out = [{**g, "app": False} for g in guests.export(con, eid, can(con, v, e["org_id"], "events"))]
     out += [{"name": d["person"]["realName"] or d["person"]["name"], "team": d.get("team"), "at": d["checkedInAt"], "walkIn": d["walkIn"], "app": True}
             for d in door(con, v, eid)]
     log_action(con, v.id, "guest_list_export", f"event:{eid}", json.dumps({"rows": len(out)}))

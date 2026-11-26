@@ -367,9 +367,11 @@ def walk_in(con, eid: int, name: object, team: object, adult: int | None, t: int
             "walkIn": True, **pending_count(con, eid)}
 
 
-def export(con, eid: int) -> list[dict]:
-    """The list's rows for the CSV after the event: name, team, came at, a walk-in."""
-    return [{"name": r["name"], "team": r["team"], "at": r["came_at"], "walkIn": bool(r["walk_in"])}
+def export(con, eid: int, full: bool = True) -> list[dict]:
+    """The list's rows for the CSV after the event: name, team, came at, a walk-in. full: as door_list, the whole name
+    only for who runs the events (a Member, a co-host's team or a door helper gets the door's short name)."""
+    from ..checkin import _short
+    return [{"name": r["name"] if full else _short(r["name"]), "team": r["team"], "at": r["came_at"], "walkIn": bool(r["walk_in"])}
             for r in rows(con, "SELECT name, team, came_at, walk_in FROM event_guests WHERE event_id = ? AND name IS NOT NULL ORDER BY name", eid)]
 
 
