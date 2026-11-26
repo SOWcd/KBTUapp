@@ -65,6 +65,8 @@ def _share_start(cfg: Config, con, chat_id: int, secret: str, lang: str) -> dict
     m = card["input_message_content"]
     return {"chat_id": chat_id, "text": m["message_text"], "parse_mode": "HTML", "link_preview_options": m["link_preview_options"], "reply_markup": keys}
 
+
+def _lang(con, msg: dict) -> str:
     u = one(con, "SELECT lang FROM users WHERE tg_id = ?", (msg.get("chat") or {}).get("id"))
     return u["lang"] if u else str((msg.get("from") or {}).get("language_code") or "")[:2]
 

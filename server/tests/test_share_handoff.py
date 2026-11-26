@@ -3,7 +3,7 @@ bot (core.share_hold) and answers with the bot's start link; /start sh_<secret> 
 that made it, once, with a button that offers it in inline mode to that account alone; an hour, then gone."""
 from __future__ import annotations
 
-from kbtu import bot, bot_dm, db, logic
+from kbtu import bot, bot_dm, db, logic, texts
 from test_afisha import OFF, _event, _setup
 from test_core import env, login, set_clock, tma  # noqa: F401  (env is a fixture)
 
@@ -40,7 +40,8 @@ def test_share_handoff(env, monkeypatch):
     out = _start(con, cfg, 61, "sh_" + secret)
     assert "\U0001f3c5" in out["text"] and "photo" not in out
     [[button]] = out["reply_markup"]["inline_keyboard"]
-    assert button["text"] == "\U0001f4e4 Send to a chat" and button["switch_inline_query_chosen_chat"]["query"] == "sh_" + secret
+    # in the app's language the maker uses (Russian here), over Telegram's
+    assert button["text"] == texts.SHARE_SEND["ru"] and button["switch_inline_query_chosen_chat"]["query"] == "sh_" + secret
     assert "url" not in button  # not the card's own button: the giver never claims it by mistake
     # once: the same start again is refused
     assert _start(con, cfg, 61, "sh_" + secret)["text"].startswith("⏳")
