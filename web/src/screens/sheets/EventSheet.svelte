@@ -52,7 +52,7 @@
   import Emoji from '../../ui/Emoji.svelte';
   import OrgTag from '../../ui/OrgTag.svelte';
   import OrgLogo from '../../ui/OrgLogo.svelte';
-  import EventPlace from '../../ui/EventPlace.svelte';
+  import EventPlaceRow from '../../ui/EventPlaceRow.svelte';
   import { meetHost } from '../../lib/meet';
   import { eventLinks } from '../../lib/eventLinks';
   import { api, ApiErr, translated, type AlbumPhoto, type EventCard, type DoorAudience, type EventFull, type EventUpdate, type Id, type MeetingAnswer } from '../../lib/api';
@@ -491,7 +491,7 @@
         <!-- online: the meeting opens outside, the server checked the link (core.online_url) -->
         {#if meetUrl && meetAt}<Row icon={VideoCall} title={placeOf(e.place, true)} subtitle={meetAt} accessory="external" onclick={() => openLink(meetUrl, true)} />
         {:else}<Row icon={VideoCall} title={placeOf(e.place, true)} />{/if}
-      {:else}<EventPlace {e} row />
+      {:else}<EventPlaceRow {e} />
       {/if}
     </Group>
     {/if}
