@@ -387,6 +387,8 @@
                 {#if h.coming}<span class="cn">{tn('fc.comingN', h.coming)}</span>{/if}
               {/if}
             </div>
+            <!-- said before the tap: my name goes to the author (the count is all anyone else sees) -->
+            {#if !p.mine}<p class="cnote">{t('fc.comingNote')}</p>{/if}
           {/if}
           {#if live}
             {@const pick = pendingHearts[p.id] ?? p}
@@ -494,6 +496,7 @@
   .cn { min-width: 0; font: 500 var(--fs-sub)/1.35 var(--font-text); color: var(--text-2);
     display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .cn.quiet { color: var(--text-3); }
+  .cnote { margin-top: var(--s-1); font: 450 var(--fs-cap)/1.35 var(--font-text); color: var(--text-3); }
   .who-came { flex: none; display: flex; }
   .who-came .f + .f { margin-left: -8px; }
   .who-came :global(.av) { box-shadow: 0 0 0 2px var(--surface-solid); }

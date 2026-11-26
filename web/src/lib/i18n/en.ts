@@ -155,6 +155,7 @@ const en: Dict = {
   'fc.comingN': { one: "{n} coming", other: "{n} coming" },
   'fc.comingWho': "Coming: {who}",
   'fc.comingNone': "No one yet",
+  'fc.comingNote': "The author sees your name; others see only the count.",
   'fc.places': "Sections",
   'fc.whyNoise': "KRI: makes no sense",
   'fc.whyAd': "KRI: an ad",

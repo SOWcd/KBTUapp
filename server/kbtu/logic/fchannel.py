@@ -382,17 +382,24 @@ def set_coming(con, v: Viewer, pid: int, coming: object) -> dict:
         return {"coming": one(con, "SELECT COUNT(*) FROM fchan_coming WHERE post_id = ?", pid)[0], "me": coming}
 
 
+def _expired(p) -> bool:
+    return p["help_until"] is not None and p["help_until"] <= core.now()
+
+
 def expire_help(con) -> None:
     """Asks for help whose time is up: taken down as their author would (out of the channel, the words wiped), and
-    who came forgotten (a taken-down one keeps its row for the moderators, never the list). Every round: a read
-    first, so a quiet round takes no write lock."""
-    due = rows(con, "SELECT id FROM fchan_posts WHERE help_until <= ? AND (status IN ('held', 'live') OR id IN (SELECT post_id FROM fchan_coming))", core.now())
+    who came forgotten (a taken-down one keeps its row for the moderators, never the list; a 'lost' send too, which may
+    sit in the channel unmatched: found() needs its words, a moderator settles it). Every round: a read first, so a
+    quiet round takes no write lock."""
+    due = rows(con, """SELECT id FROM fchan_posts WHERE help_until <= ? AND (status IN ('held', 'live') AND COALESCE(why, '') != 'lost'
+        OR id IN (SELECT post_id FROM fchan_coming))""", core.now())
     if not due:
         return
     with tx(con):
         for (pid,) in due:
             con.execute("DELETE FROM fchan_coming WHERE post_id = ?", (pid,))
-            p = one(con, "SELECT * FROM fchan_posts WHERE id = ? AND status IN ('held', 'live') AND help_until <= ?", pid, core.now())
+            p = one(con, """SELECT * FROM fchan_posts WHERE id = ? AND status IN ('held', 'live') AND COALESCE(why, '') != 'lost'
+                AND help_until <= ?""", pid, core.now())
             if p:
                 _wipe(con, p)
 
@@ -1104,6 +1111,8 @@ def mod_decide(con, v: Viewer, pid: int, ok: object, again: object = False) -> N
             raise ApiError("forbidden")
         if ok and p["why"] == "lost" and again is not True:
             raise ApiError("conflict", "lost")
+        if ok and _expired(p):  # an ask for help past its time: out now, it would only vanish in the next round
+            raise ApiError("conflict", "expired")
         if ok:
             con.execute("UPDATE fchan_posts SET status = 'live', why = NULL WHERE id = ?", (pid,))
         else:
@@ -1127,11 +1136,13 @@ def mod_restore(con, v: Viewer, pid: int) -> None:
     deleted, or edited to the template). Same rules as mod_decide: not their own, audited."""
     _mod(v)
     with tx(con):
-        p = one(con, "SELECT user_id, tg_msg FROM fchan_posts WHERE id = ? AND status = 'hidden' AND why IN ('moderator', 'reports')", pid)
+        p = one(con, "SELECT user_id, tg_msg, help_until FROM fchan_posts WHERE id = ? AND status = 'hidden' AND why IN ('moderator', 'reports')", pid)
         if not p:
             raise ApiError("not_found")
         if p["user_id"] == v.id and not _owner(con, v):
             raise ApiError("forbidden")
+        if _expired(p):  # restored, it would be wiped next round, and the take-down's record with it
+            raise ApiError("conflict", "expired")
         # only a delete not yet due is dropped: one the bot already took is under way, so the post goes out anew
         kept = bool(p["tg_msg"]) and con.execute("DELETE FROM tg_unpost WHERE msg_id = ? AND at > ?", (p["tg_msg"], core.now())).rowcount > 0
         if kept:  # an album's other photos stay with it

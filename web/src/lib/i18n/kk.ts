@@ -155,6 +155,7 @@ const kk: Dict = {
   'fc.comingN': { one: "{n} адам келеді", other: "{n} адам келеді" },
   'fc.comingWho': "Келеді: {who}",
   'fc.comingNone': "Әзірге ешкім жоқ",
+  'fc.comingNote': "Автор атыңызды көреді, басқалар тек санын көреді.",
   'fc.places': "Бөлімдер",
   'fc.whyNoise': "KRI: мағынасыз",
   'fc.whyAd': "KRI: жарнама",

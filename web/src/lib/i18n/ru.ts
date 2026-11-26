@@ -155,6 +155,7 @@ const ru = {
   'fc.comingN': { one: "{n} идёт", few: "{n} идут", many: "{n} идут", other: "{n} идут" },
   'fc.comingWho': "Идут: {who}",
   'fc.comingNone': "Пока никто не откликнулся",
+  'fc.comingNote': "Автор увидит ваше имя, остальные — только число.",
   'fc.places': "Разделы",
   'fc.whyNoise': "KRI: нет смысла",
   'fc.whyAd': "KRI: реклама",

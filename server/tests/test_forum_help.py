@@ -59,6 +59,28 @@ def test_help_ask_coming_and_expiry(env, monkeypatch):
     con.close()
 
 
+def test_expired_ask_not_released_and_author_gone_ends_it(env, monkeypatch):
+    c, cfg, said, _ = setup(env, monkeypatch, verdict="flag")  # held for a moderator
+    login(c, 1, "ann"), login(c, 4, "mod")
+    con = db.connect(cfg.db_path)
+    con.execute("UPDATE users SET role = 'moderator' WHERE tg_id = 4")
+    pid = c.post("/api/forum-posts", headers=tma(1), json={"body": "Need hands to carry chairs to hall B", "help": 1}).json()["id"]
+    con.execute("UPDATE fchan_posts SET help_until = ? WHERE id = ?", (logic.core.now() - 1, pid))
+    r = c.post(f"/api/forum-posts/{pid}/mod", headers=tma(4), json={"ok": True})
+    assert r.status_code == 409 and con.execute("SELECT status FROM fchan_posts WHERE id = ?", (pid,)).fetchone()[0] == "held"
+    # a lost send past its time stays for the moderator (it may be in the channel, unmatched)
+    con.execute("UPDATE fchan_posts SET why = 'lost' WHERE id = ?", (pid,))
+    logic.fchannel.expire_help(con)
+    assert con.execute("SELECT status FROM fchan_posts WHERE id = ?", (pid,)).fetchone()[0] == "held"
+    # the author's account goes: their live ask ends at once
+    said["word"] = "ok"
+    live = c.post("/api/forum-posts", headers=tma(1), json={"body": "Anyone free to help sort the books now", "help": 6}).json()["id"]
+    con.execute("UPDATE fchan_posts SET tg_msg = 72 WHERE id = ?", (live,))
+    delete_now(c, cfg, tma(1))
+    assert con.execute("SELECT help_until <= ? FROM fchan_posts WHERE id = ?", (logic.core.now(), live)).fetchone()[0] == 1
+    con.close()
+
+
 def test_plain_post_has_no_help(env, monkeypatch):
     c, cfg, _, _ = setup(env, monkeypatch)
     login(c, 1, "ann"), login(c, 2, "bob")

@@ -1489,6 +1489,8 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
             con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, '1')", (f"fch_resign:{msg}",))
         # who came to my asks for help: a list for my eyes alone, nobody's once I'm gone
         con.execute("DELETE FROM fchan_coming WHERE post_id IN (SELECT id FROM fchan_posts WHERE user_id = ?)", (v.id,))
+        # and my asks for help end now (the next round takes them down): nobody is left to come to
+        con.execute("UPDATE fchan_posts SET help_until = ? WHERE user_id = ? AND help_until > ?", (core.now(), v.id, core.now()))
         con.execute("UPDATE fchan_posts SET user_id = :p, sign = :gone WHERE user_id = :u AND status = 'live' AND anon = 0", {**me_, "gone": core.GONE["ru"]})
         # the anonymous ones to one placeholder all deleted accounts share: never the named ones' (that would pair them)
         ghost = one(con, "SELECT CAST(value AS INTEGER) FROM meta WHERE key = 'anon_ghost'")
