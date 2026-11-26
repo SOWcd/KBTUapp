@@ -3046,6 +3046,7 @@ const en: Dict = {
   'casting.till': 'Until {when}',
   'casting.come': 'Come to the casting',
   'casting.offline': 'Offline casting',
+  'casting.inEventTill': 'Offline casting · until {time}',
   'casting.offlineNow': 'Offline casting, happening now',
   'casting.time': 'Time',
   'casting.place': 'Place',

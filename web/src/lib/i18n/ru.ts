@@ -3069,6 +3069,7 @@ const ru = {
   'casting.till': 'До {when}',
   'casting.come': 'Приходи на кастинг',
   'casting.offline': 'Офлайн-кастинг',
+  'casting.inEventTill': 'Офлайн-кастинг · до {time}',
   'casting.offlineNow': 'Сейчас идёт офлайн-кастинг',
   'casting.time': 'Время',
   'casting.place': 'Место',
