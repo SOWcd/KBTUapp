@@ -212,6 +212,35 @@ def test_event_chat(env):
     assert c.get(f"/api/events/{e['id']}", headers=tma(22)).json()["chat"] is None
 
 
+def test_event_chat_paste(env):
+    """"Paste the group's link": only the event's organizers, a t.me or invite link only, seen by those going and the
+    team; it unlinks a bot-linked group; replaced, removed; a cancelled event refuses it."""
+    c, cfg = env
+    for uid, name in ((20, "pres"), (21, "ali"), (22, "bota")):
+        login(c, uid, name)
+    con = db.connect(cfg.db_path)
+    oid = logic.create_org(con, None, "Chess", "CH", "crown_3d", False)
+    logic.set_role(con, None, con.execute("SELECT id FROM users WHERE tg_id = 20").fetchone()[0], oid, "president", "test")
+    ev = {"title": "Open day", "place": "Atrium", "startsAt": int(time.time()) + 7 * 86400, "emoji": "crown_3d", "color": "#3B6BFF", "seats": 50}
+    e = c.post(f"/api/orgs/{oid}/events", headers=tma(20), json=ev).json()
+    c.post(f"/api/events/{e['id']}/publish", headers=tma(20))
+    put = lambda tg, link: c.put(f"/api/events/{e['id']}/chat", headers=tma(tg), json={"link": link})  # noqa: E731
+    seen = lambda tg: c.get(f"/api/events/{e['id']}", headers=tma(tg)).json()["chat"]  # noqa: E731
+    assert put(21, "t.me/+AbCdEfGh123").status_code == 403                        # not an organizer
+    for bad in ("https://example.com/+AbCdEfGh123", "hello", "t.me/+short"):
+        assert put(20, bad).status_code == 400
+    con.execute("UPDATE events SET chat_id = -100, chat_token = 'tok' WHERE id = ?", (e["id"],))
+    assert put(20, "https://t.me/joinchat/AbCdEfGh123").json() == {"chat": "https://t.me/+AbCdEfGh123"}
+    assert tuple(con.execute("SELECT chat_id, chat_token FROM events WHERE id = ?", (e["id"],)).fetchone()) == (None, None)
+    assert seen(20) == "https://t.me/+AbCdEfGh123" and seen(21) is None           # the organizer; not yet going
+    assert c.post(f"/api/events/{e['id']}/registration", headers=tma(21)).status_code == 200
+    assert seen(21) == "https://t.me/+AbCdEfGh123" and seen(22) is None           # going; a stranger never
+    assert put(20, "@Chess_Club").json() == {"chat": "https://t.me/chess_club"} and seen(21) == "https://t.me/chess_club"
+    assert put(20, None).json() == {"chat": None} and seen(21) is None and seen(20) is None
+    assert c.post(f"/api/events/{e['id']}/cancel", headers=tma(20)).status_code == 200
+    assert put(20, "t.me/chess_club").status_code == 409
+
+
 def test_suggest_chat(env, monkeypatch):
     """Any student suggests a chat through the bot (PLAN item 45): picked in Telegram's picker or sent as @name; public
     only, a person or a bot refused, nothing twice, 3 a day; waiting it shows nowhere but the admin's list; approved,

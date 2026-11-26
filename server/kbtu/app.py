@@ -1872,6 +1872,11 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         token = logic.chat_start(con, v, eid)  # the bot comes in as an admin that may add people, pin and delete
         return {"url": f"https://t.me/{cfg.bot_username}?startgroup=ec_{token}&admin=invite_users+pin_messages+delete_messages+restrict_members"}
 
+    @app.put("/api/events/{eid}/chat")
+    def chat_set(eid: int, con: Con, v: Me, body: dict = Body(...)):
+        """The organizers' own group by its link (any t.me or invite link); null removes it. Errors: bad_input, closed."""
+        return {"chat": logic.chat_set(con, v, eid, str(body["link"]) if body.get("link") else None)}
+
     @app.post("/api/events/{eid}/publish")
     def publish(eid: int, con: Con, v: Me):
         return logic.publish_event(con, v, eid)

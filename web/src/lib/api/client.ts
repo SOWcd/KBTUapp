@@ -425,6 +425,8 @@ export const server = {
   /** volunteers: I apply (a short "why") or take it back; the organizers list them and say yes or no */
   /** "Create chat": Telegram's add-the-bot-to-a-group link for this event */
   chatStart: (id: Id): Promise<string> => call<{ url: string }>('POST', `/events/${id}/chat`).then((r) => r.url),
+  /** "Paste the group's link": any t.me or invite link (bad_input otherwise), null removes it; the link as saved */
+  chatSet: (id: Id, link: string | null): Promise<{ chat: string | null }> => call('PUT', `/events/${id}/chat`, { link }),
   volunteer: (id: Id, note: string): Promise<EventFull> => call('POST', `/events/${id}/volunteer`, { note }),
   volunteerLeave: (id: Id): Promise<EventFull> => call('DELETE', `/events/${id}/volunteer`),
   volunteers: (id: Id): Promise<VolunteerApp[]> => call('GET', `/events/${id}/volunteers`),
