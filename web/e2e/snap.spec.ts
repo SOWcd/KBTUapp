@@ -5,7 +5,7 @@
 // image (`npm run e2e:snap`: e2e/linux.sh sets PW_WS); without it a test still checks the layout (fixtures.ts `look`: nothing
 // wider than the screen, no text out of its button). Accepting a change: e2e/README.md.
 import type { Locator, Page } from '@playwright/test';
-import { test, expect, type Phone } from './fixtures';
+import { test, expect, settled, type Phone } from './fixtures';
 import ru from '../src/lib/i18n/ru';
 
 const tr = (k: keyof typeof ru) => ru[k] as string;
@@ -57,17 +57,7 @@ async function shot(p: Phone, name: string, part?: Locator) {
   await expect(part ?? p.page).toHaveScreenshot(`${name}.png`, { style: '* { --gx: 0 !important; --gy: 0 !important; }' });
 }
 
-/** Ali on the Afisha, after the launch's greeting (a toast: "Physics in 40 min", once the day's data is in) has come
- *  and gone: its moment depends on the server's speed, so it would land in some pictures and not others */
-async function ali(open: (who: 'Ali') => Promise<Phone>) {
-  const p = await open('Ali');
-  await expect(p.page.getByRole('button', { name: 'Board games night', exact: true }).first()).toBeVisible();
-  const hi = p.page.locator('.toast');
-  await hi.waitFor({ timeout: 5000 }).catch(() => { /* no greeting this time */ });
-  await p.page.clock.fastForward(10_000);
-  await expect(hi).toHaveCount(0);
-  return p;
-}
+const ali = async (open: (who: 'Ali') => Promise<Phone>) => settled(await open('Ali'));
 
 test('Afisha, the top', async ({ open }) => {
   await shot(await ali(open), 'afisha');

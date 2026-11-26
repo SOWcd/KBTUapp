@@ -11,12 +11,17 @@ export function fitTitle(el: HTMLElement, min = 24): { destroy: () => void } {
     if (busy) return;
     busy = true;
     const s = el.style;
+    // measured with no transition: Reduce Motion's 1 ms on every property (base.css) eased the reset font back in,
+    // so the measure saw the old size, fitted, and the next resize undid it: a loop every frame, the screen shaking
+    s.transition = 'none';
     s.fontSize = '';
     // measure the words whole: no break inside one, not even at a soft hyphen (shrinking comes first)
     s.overflowWrap = 'normal'; s.hyphens = 'none'; s.setProperty('-webkit-hyphens', 'none');
     const max = parseFloat(getComputedStyle(el).fontSize);
     if (el.scrollWidth > el.clientWidth + 1) s.fontSize = `${Math.max(Math.min(min, max), Math.floor((max * el.clientWidth) / el.scrollWidth))}px`;
     s.overflowWrap = ''; s.hyphens = ''; s.removeProperty('-webkit-hyphens');
+    void el.offsetWidth; // the new size laid out before the transition is back
+    s.transition = '';
     busy = false;
   };
   const ro = new ResizeObserver(run);

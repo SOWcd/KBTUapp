@@ -11,6 +11,7 @@
     "e2e:snap": "e2e/linux.sh --project=snap-dark --project=snap-light"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
     "@playwright/test": "1.65.1",
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
     "@types/three": "0.187.0",
