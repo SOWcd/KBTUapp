@@ -212,24 +212,6 @@ def pending_count(con, eid: int) -> dict:
     return {"pending": n, "pendingCame": came}
 
 
-def let_in(con, eid: int, sid: object, surname: object, t: int) -> dict:
-    """A buyer not in the app: the door types the student ID and the surname from their ID card; only a row whose
-    one-way surname code matches is let in (a guessed ID alone opens nothing). Their 18+ from the list, if any."""
-    if not isinstance(sid, str) or not isinstance(surname, str) or not 0 < len(sid) <= 20 or not 0 < len(surname) <= 80:
-        raise ApiError("bad_input")
-    sid = sid.strip().upper()
-    g = one(con, "SELECT * FROM event_guests WHERE event_id = ? AND student_id = ?", eid, sid)
-    if not g or not _proves_surname(g["surname_hash"], eid, sid, _name_words(surname)):
-        raise ApiError("not_found")
-    if not g["came_at"]:
-        con.execute("UPDATE event_guests SET came_at = ? WHERE event_id = ? AND student_id = ?", (t, eid, sid))
-    return {"already": bool(g["came_at"]), "adult": None if g["adult"] is None else bool(g["adult"]), **pending_count(con, eid)}
-
-
-def set_pending_age(con, eid: int, sid: str, adult: bool) -> None:
-    con.execute("UPDATE event_guests SET adult = ? WHERE event_id = ? AND student_id = ? AND came_at IS NOT NULL", (int(adult), eid, sid.strip().upper()))
-
-
 ADULT = {"1": 1, "\u0434\u0430": 1, "yes": 1, "0": 0, "\u043d\u0435\u0442": 0, "no": 0}
 
 

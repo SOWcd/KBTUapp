@@ -90,25 +90,6 @@ def test_bracket_drop_and_transitive_score_lock(club):
     assert matches[first["next_win"]]["away"] is None
 
 
-def test_bracket_swap_reprojects_byes_and_locks_after_score(club):
-    c, path, seeds, board = _launch(club, 10)
-    a, b = seeds[0], seeds[7]
-    opening = board["upper"][0]["matches"]
-    swap = f"{path}/swap"
-    assert c.put(swap, headers=VIEWER, json={"a": a, "b": b}).status_code == 403
-    assert c.put(swap, headers=ORGANIZER, json={"a": a, "b": b + 1000}).status_code == 400
-    result = c.put(swap, headers=ORGANIZER, json={"a": a, "b": b})
-    assert result.status_code == 200, result.text
-    swapped = result.json()
-    first, second = swapped["upper"][0]["matches"][:2]
-    assert first["id"] == opening[0]["id"] and first["winner"] == b
-    assert second["id"] == opening[1]["id"] and second["home"] == a
-    assert swapped["upper"][1]["matches"][0]["home"] == b
-    assert _score(c, second["id"]).status_code == 200
-    assert c.put(swap, headers=ORGANIZER, json={"a": a, "b": b}).status_code == 409
-    assert c.post(path, headers=ORGANIZER, json={"seed": "random"}).status_code == 409
-
-
 def test_bracket_stage_replacement_and_rights(club):
     c, con = club
     draft = _event(c, publish=False, **TEAMS)

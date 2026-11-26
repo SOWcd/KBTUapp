@@ -1425,10 +1425,6 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def draw_bracket(eid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.tournament.bracket_draw(con, v, eid, body)
 
-    @app.put("/api/events/{eid}/bracket/swap")
-    def swap_bracket_teams(eid: int, con: Con, v: Me, body: dict = Body(...)):
-        return logic.tournament.bracket_swap(con, v, eid, body)
-
     @app.get("/api/events/{eid}/people/{uid}/contact")
     def attendee_contact(eid: int, uid: int, con: Con, v: Me, response: Response):
         response.headers["Cache-Control"] = "private, no-store"  # a handle never kept after the right to it is gone
@@ -2017,10 +2013,6 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def door_pending(eid: int, con: Con, v: Me):
         return logic.organizing.pending_count(con, v, eid)
 
-    @app.post("/api/events/{eid}/door-pending")
-    def door_let_in(eid: int, con: Con, v: Me, body: dict = Body(...)):
-        return logic.organizing.let_in_pending(con, v, eid, body.get("studentId"), body.get("surname"), body.get("adult"))
-
     @app.post("/api/events/{eid}/door-pending/tick")
     def door_tick(eid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.organizing.tick_pending(con, v, eid, body.get("key"), body.get("adult"), body.get("came", True))
@@ -2047,14 +2039,6 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         e, people = await run_in_threadpool(logic.organizing.guest_list_export, con, v, eid)
         u = logic.one(con, "SELECT tg_id, lang FROM users WHERE id = ?", v.id)
         await send_file(u["tg_id"], *texts.guest_list_csv(u["lang"], e["title"], people))
-
-    @app.get("/api/events/{eid}/door-extra")
-    def door_extra(eid: int, con: Con, v: Me):
-        return logic.organizing.door_extra(con, v, eid)
-
-    @app.post("/api/events/{eid}/door-extra")
-    def door_extra_step(eid: int, con: Con, v: Me, body: dict = Body(...)):
-        return logic.organizing.door_extra(con, v, eid, body.get("step"))
 
     @app.post("/api/events/{eid}/age")
     def mark_age(eid: int, con: Con, v: Me, body: dict = Body(...)):

@@ -1550,39 +1550,6 @@ def _age_event(con, v: Viewer, eid: int, helper: tuple[str, ...]) -> sqlite3.Row
     return e
 
 
-def door_extra(con, v: Viewer, eid: int, step: object = None) -> dict:
-    """Guests let in without the app (outsiders, their ID checked by eye): one anonymous count per event, +1 or -1 at
-    the door; nobody is named or stored, so it asks no consent. Read by anyone at the door, changed while it is open."""
-    if step is not None and step not in (1, -1):
-        raise ApiError("bad_input")
-    with tx(con):
-        e = _door_ok(con, v, _staff_event(con, v, eid, "door", cohost=True, helper=("scan", "door")))
-        if step is not None:
-            if e["status"] != "published" or e["hidden_at"] or door_shut(e, core.now()):
-                raise ApiError("closed")
-            con.execute("UPDATE events SET door_extra = max(0, door_extra + ?) WHERE id = ?", (step, eid))
-        return {"extra": one(con, "SELECT door_extra FROM events WHERE id = ?", eid)[0]}
-
-
-def let_in_pending(con, v: Viewer, eid: int, sid: object, surname: object, adult: object = None) -> dict:
-    """The door lets in a ticket buyer from the organizers' list who isn't in the app (guests.let_in); with `adult`,
-    the 18+ the door saw on their ID. Their ticket comes checked in when they sign in later."""
-    if adult is not None and not isinstance(adult, bool):
-        raise ApiError("bad_input")
-    with tx(con):
-        e = _door_ok(con, v, _staff_event(con, v, eid, "door", cohost=True, helper=("door",)))
-        if not e["guest_list"]:
-            raise ApiError("not_found")
-        t = core.now()
-        if _admission_shut(con, e, t):
-            raise ApiError("closed")
-        out = guests.let_in(con, eid, sid, surname, t)
-        if adult is not None and e["age_check"]:
-            guests.set_pending_age(con, eid, str(sid), adult)
-            out["adult"] = adult
-        return out
-
-
 def pending_count(con, v: Viewer, eid: int) -> dict:
     e = _door_ok(con, v, _staff_event(con, v, eid, "door", cohost=True, helper=("door",)))
     return {**guests.pending_count(con, eid), "list": guests.door_list(con, eid, can(con, v, e["org_id"], "events"))}
