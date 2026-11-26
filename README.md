@@ -20,7 +20,8 @@ This is "source-available", not open source in the OSI sense. Third-party materi
 
 - `web/`: Svelte 5 + Vite + TypeScript, a static build.
 - `server/`: Python (FastAPI) with SQLite in WAL mode: the API, the Telegram bot and the background jobs in one process.
-  The schema is `server/kbtu/schema.sql` plus the migrations in `server/kbtu/migrations.py`.
+  Today's tables are in `server/kbtu/schema.current.sql` (generated from `schema.sql` plus the migrations in
+  `server/kbtu/migrations.py`; [AGENTS.md](AGENTS.md) says how to change them).
 - One Docker image (`Dockerfile`) serves both.
 
 What the app stores and who sees it: the privacy policy at [kbtu.sow.kz/privacy](https://kbtu.sow.kz/privacy)
@@ -35,8 +36,8 @@ server with the bot off and prints a link per person that opens the app as them.
 Node 22, Python 3.14 (as the `Dockerfile`).
 
 ```bash
-cd web && npm ci && npx vite build
-cd ../server && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+cd web && npm ci && npm run build
+cd ../server && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt pytest pytest-xdist
 .venv/bin/python tools/qa.py --port 8790
 ```
 
