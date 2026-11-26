@@ -71,7 +71,7 @@ test('a new post is held for a moderator and says so, with no error', async ({ p
   await expect(p.locator('article').first(), 'my post is at the top').toContainText(POST);
   // held: no heart, no comments, no Telegram link on it yet
   await expect(mine.getByRole('button', { name: new RegExp(`^${s('fc.appHearts')}`) })).toHaveCount(0);
-  await expect(mine.getByRole('button', { name: new RegExp(`^${s('fc.comments')}`) })).toHaveCount(0);
+  await expect(mine.getByRole('button', { name: new RegExp(`${s('fc.comments')}$`) })).toHaveCount(0);
   await ali.look('post held');
 
   const posts = await ali.api<{ body: string; status: string }[]>('/api/forum-posts');
@@ -95,7 +95,7 @@ test("a post's comments open in Telegram", async ({ page, qa, open }) => {
   const post = p.locator('article', { hasText: 'Who wants to team up for the hackathon' });
   // who commented (faces), Telegram's reactions read-only, then the one button to the talk with its count
   await expect(post.getByRole('img', { name: new RegExp(`^${s('fc.reactions')}: .*7`) })).toBeVisible();
-  const talk = post.getByRole('button', { name: `${s('fc.comments')}: 4` });
+  const talk = post.getByRole('button', { name: `${s('fc.discuss')} 4 · ${s('fc.comments')}` }); // what it shows, then what it is
   await talk.scrollIntoViewIfNeeded();
   await ali.look('post with comments');
   const url = p.url();

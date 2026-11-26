@@ -407,8 +407,8 @@
               <!-- the talk lives in Telegram: who replied (faces; no ids come: a face's colour by its letter), then one button -->
               {#if p.faces.length}<span class="faces" aria-hidden="true">{#each p.faces as f, i (i)}<span class="f" style:z-index={p.faces.length - i}><Avatar person={{ ...f, id: f.name.charCodeAt(0) }} size={20} tappable={false} /></span>{/each}</span>{/if}
               <span class="share"><IconButton kind="plain" size="s" icon={Share} label={t('event.share')} onclick={() => share(p)} /></span>
-              <span class="talk"><Button kind="gray" size="s" label="{t('fc.comments')}{p.comments ? `: ${p.comments}` : ''}" onclick={() => talk(p)}>
-                {#snippet icon()}<TelegramMark size={16} />{/snippet}<span class="go">{t('fc.discuss')}{#if p.comments}<span class="n">{compact(p.comments)}</span>{/if}<ArrowUpRight size={14} strokeWidth={2.4} aria-hidden="true" /></span>
+              <span class="talk"><Button kind="gray" size="s" label="{t('fc.discuss')}{p.comments ? ` ${compact(p.comments)}` : ''} · {t('fc.comments')}" onclick={() => talk(p)}>
+                {#snippet icon()}<TelegramMark size={16} />{/snippet}<span class="go">{t('fc.discuss')} {#if p.comments}<span class="n">{compact(p.comments)}</span>{/if}<ArrowUpRight size={14} strokeWidth={2.4} aria-hidden="true" /></span>
               </Button></span>
             </div>
           {/if}
