@@ -550,6 +550,9 @@ export const server = {
   channelPostWhy: (id: Id, body: string): Promise<{ explain: import('./types').ForumWhy | null }> => call('POST', `/forum-posts/${id}/why`, { body }), // the AI's reason for my refused or held post, once
   channelReplyWhy: (id: Id): Promise<{ explain: import('./types').ForumWhy | null }> => call('POST', `/forum-replies/${id}/why`), // the same for my held reply
   deleteChannelPost: (id: Id): Promise<void> => call('DELETE', `/forum-posts/${id}`), // mine: the bot takes it out of the channel
+  // mine, live: the same AI look as a new post; done: changed (the bot edits the channel message in place), held: a moderator first
+  editChannelPost: (id: Id, body: string, photos: Id[] = []): Promise<{ id: Id; post: Id; state: 'done' | 'held' | 'gone' }> => call('POST', `/forum-posts/${id}/edit`, { body, photos }),
+  channelEditDecide: (id: Id, ok: boolean): Promise<void> => call('POST', `/forum-edits/${id}/mod`, { ok }), // moderators: a waiting edit out, or declined (the post as it was)
   channelMod: (): Promise<import('./types').ChannelMod> => call('GET', '/forum-posts/mod'), // moderators: held, and this week's live
   channelModDecide: (id: Id, ok: boolean, again: boolean = false): Promise<void> => call('POST', `/forum-posts/${id}/mod`, { ok, again }), // held: out or removed; live: only removed; again: a lost send, re-sent
   channelModRestore: (id: Id): Promise<void> => call('POST', `/forum-posts/${id}/restore`), // a moderator's take-down undone: published anew

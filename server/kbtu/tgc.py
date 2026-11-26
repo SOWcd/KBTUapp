@@ -317,6 +317,36 @@ async def post_tick(cfg: Config, http: httpx.AsyncClient, con) -> None:
             F.resigned(con, msg)
         else:
             break  # the network, a flood wait: next round
+    for pid, mark, msg, body, sign, pics in F.edits_due(con):  # an edited post: its message changed in place, comments and all
+        text = f"{html.escape(body)}\n\n<i>— {html.escape(sign)}</i>"
+        done, lost, carried = [], False, False  # carried: the first photo's edit put the words in as its caption
+        for x, n, m, path, sync in pics:  # a new photo into its own album message (the caption rides on the first)
+            f = pics_dir / f"{path}.jpg"
+            if not sync or not m or not f.exists():  # nothing to put in (a lost message, a file gone): the words below still go
+                if sync:
+                    done.append(x)
+                continue
+            r = await _upload(cfg, http, "editMessageMedia", {"chat_id": cfg.forum_channel, "message_id": m, "media": json.dumps(
+                {"type": "photo", "media": "attach://x", **({"caption": text, "parse_mode": "HTML"} if n == 0 else {})})}, {"x": f.read_bytes()})
+            if not (r.get("ok") or "not modified" in str(r.get("description"))):
+                if r.get("error_code") != 400:
+                    lost = True
+                    break
+                log.warning("forum channel: photo edit of message %s refused: %s", m, str(r.get("description"))[:200])  # not tried forever
+            else:
+                carried = carried or n == 0
+            done.append(x)
+        if lost:
+            break  # the network, a flood wait: next round, from the start
+        if not carried:  # the words: the caption, or the message itself
+            r = await _call(cfg, http, "editMessageCaption", {"chat_id": cfg.forum_channel, "message_id": msg, "parse_mode": "HTML", "caption": text}) if pics else \
+                await _call(cfg, http, "editMessageText", {"chat_id": cfg.forum_channel, "message_id": msg, "parse_mode": "HTML",
+                                                           "text": text, "link_preview_options": {"is_disabled": True}})
+            if not (r.get("ok") or "not modified" in str(r.get("description"))):
+                if r.get("error_code") != 400:
+                    break
+                log.warning("forum channel: edit of message %s refused: %s", msg, str(r.get("description"))[:200])  # not tried forever
+        await asyncio.to_thread(F.edit_synced, con, pid, mark, done)
     for key, root in F.copies(con):
         if not cfg.tgc_chat:
             break

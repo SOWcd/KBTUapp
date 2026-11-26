@@ -3250,6 +3250,21 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             raise ApiError("bad_input", "ad" if verdict == "ad" else "noise", {"post": pid, "appeal": await run_in_threadpool(F.appeals_left, con, v.id) > 0})
         return p | {"ai": verdict in ("person", "flag")}  # held by the AI's word: the app asks why (/why)
 
+    @app.post("/api/forum-posts/{pid}/edit")
+    async def fchan_edit(pid: int, con: Con, v: FChanWrite, body: dict = Body(...)):
+        """My live post's new words (and photos): the same gates and AI look as a new post, the pace counting it; its
+        yes changes the post and the bot edits the channel message in place; a doubt waits for a moderator."""
+        eid, text = await run_in_threadpool(F.edit_reserve, con, v, pid, body)
+        verdict = await ai.screen_post(cfg, ai_http(), text, **_ai_eu())
+        e = await run_in_threadpool(F.edit_settle, con, v, eid, verdict)
+        if e["state"] == "refused":  # no message in it, or an ad: said, the post as it was (the app gives the words back)
+            raise ApiError("bad_input", "ad" if verdict == "ad" else "noise", {"edit": eid})
+        return e
+
+    @app.post("/api/forum-edits/{eid}/mod", status_code=204)
+    def fchan_edit_mod(eid: int, con: Con, v: FChan, body: dict = Body(...)):
+        F.edit_mod_decide(con, v, eid, body.get("ok"))
+
     @app.post("/api/forum-posts/photos")
     async def fchan_photo(request: Request, con: Con, v: FChanWrite):
         """A photo for my next post (the file itself is the body), re-encoded (no EXIF) under a random name, never the

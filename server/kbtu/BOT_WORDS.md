@@ -7,7 +7,9 @@ The rule (AGENTS.md): the bot sends templates with a button into the app, never 
 
 Two exceptions: a student's own post
 to the forum channel (`FORUM_CHANNEL`), published only after the AI's yes or a moderator's, as plain text without
-links or mentions, signed with the app's name or "Anonymous student"; the author can delete it, a moderator can
+links or mentions, signed with the app's name or "Anonymous student"; the author can edit it (`fchannel.edit_*`: the
+same gates and AI look, or a moderator's yes, before the bot edits the channel message in place, the signature
+unchanged) or delete it, a moderator can
 take it down, and only the creator can reveal an anonymous author (audit log). The author of an anonymous post may
 reply in its comments the same way (`fchan_replies`): plain text, its own AI check, signed
 with the mask mark (`texts.FCH_REPLY_SIGN`), no user id on the row (only through the post), deleted by the author,
