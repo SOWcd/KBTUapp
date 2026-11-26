@@ -93,7 +93,8 @@ def _unlock_activist(con, uid: int, have: int, level: int) -> int | None:
 
 
 ACHIEVEMENTS = [  # code, emoji, needs, secret (§4.11)
-    ("regular", "trophy_3d", (5, 15, 30, 50), False),  # "streak" (weeks in a row) is off the list (its counting stays, _streak)
+    ("regular", "trophy_3d", (5, 15, 30, 50), False),
+    ("streak", "fire_3d", (2, 4, 8, 16), False),  # weeks in a row with a check-in (_streak): the drawn medal (st), the flame on profiles
     ("first_in", "high_voltage_3d", (1, 3, 10), False), ("soul", "raising_hands_3d_default", (3, 10, 25, 50), False),
     ("team", "cloud_with_lightning_and_rain_3d", (3, 10, 25, 50), False),  # "Teambuilding thunder": a club's own events, meetings too
     ("season", "sparkles_3d", (3, 7, 12, 20), False),
@@ -157,12 +158,30 @@ def _counts(con, uid: int, *, with_activist: bool = True) -> dict[str, int]:
         "supporter": grants.get("supporter", 0), "club_founder": grants.get("club_founder", 0), "honor": grants.get("honor", 0),
         "critic": critic(con, uid) if CRITIC_ON else 0, "ideas": made.get("idea", 0), "coder": made.get("code", 0),
     }
-    if any(a[0] == "streak" for a in ACHIEVEMENTS):
-        # Only public event weeks since the first check-in can affect the streak.
-        busy = {_week(r[0]) for r in rows(con, """SELECT starts_at FROM events WHERE status = 'published' AND starts_at >= ?
-            AND visibility = 'public' AND guest_host IS NULL""", _week(times[0]) * 7 * 86400 - 3 * 86400 - TZ)} if times else set()
-        counts["streak"], counts["streak_now"] = _streak({_week(t) for t in times}, busy, _week(core.now()))
+    counts["streak"], counts["streak_now"] = _streak({_week(t) for t in times}, _busy(con, times[0]) if times else set(), _week(core.now()))
     return counts
+
+
+def _busy(con, since: int) -> set[int]:
+    """The weeks with a public event from `since`'s week on: only those can break a streak that started there."""
+    return {_week(r[0]) for r in rows(con, """SELECT starts_at FROM events WHERE status = 'published' AND starts_at >= ?
+        AND visibility = 'public' AND guest_host IS NULL""", _week(since) * 7 * 86400 - 3 * 86400 - TZ)}
+
+
+def streaks_now(con, uids: list[int]) -> dict[int, int]:
+    """Current weeks in a row for a list of people (the Friends page): two reads for the whole list, never two a person."""
+    weeks: dict[int, set[int]] = {}
+    first = None
+    for i in range(0, len(uids), 500):  # under SQLite's bound-parameter cap
+        part = uids[i:i + 500]
+        for uid, at in rows(con, f"""SELECT r.user_id, r.checked_in_at FROM registrations r JOIN events e ON e.id = r.event_id
+            WHERE r.user_id IN ({','.join('?' * len(part))}) AND r.checked_in_at IS NOT NULL AND e.status = 'published'""", *part):
+            weeks.setdefault(uid, set()).add(_week(at))
+            first = at if first is None else min(first, at)
+    if first is None:
+        return {}
+    busy, now = _busy(con, first), _week(core.now())
+    return {uid: n for uid, w in weeks.items() if (n := _streak(w, busy, now)[1])}
 
 
 def brought(con, uid: int) -> int:
@@ -255,7 +274,7 @@ BADGE_OF = {c: b for b, vs in BADGES.items() for c in vs}
 GRANTABLE = ("bugs", "dmp", "creator_laugh", "creator_found", "init26", "init26f", "init26p", "supporter", "club_founder", "honor")  # the manual ones (§4.11); "First 500" is given at verification
 ADDS_UP = ("bugs", "dmp")  # one grant is +1, not "held": Bug hunter per bug, Attendance per meeting (a day, _grant)
 CREATOR_ONLY = ("creator_laugh", "creator_found", "supporter", "honor")
-QUIET = ("activist", "ideas", "coder")  # no bot card: the app's unlock moment only
+QUIET = ("activist", "ideas", "coder", "streak")  # no bot card: the app's unlock moment only
 PRIVATE = ("supporter", "sponsor")  # who gave money: no bot card, no rarity, in no admin list but the creator's, on a profile only if showcased
 ONE_BY_ONE = ("supporter", "club_founder", "honor")  # never by a card scan, a link, a shown QR or a check-in session: Fuel is for Stars, a founder names the club
 # art being redone; delete the tuple to bring them back. Out of the catalogs only (Admin -> Awards' rows, the
@@ -773,6 +792,8 @@ def person(con, v: Viewer, uid: int) -> dict:
     ach = [a if close else {**a, "at": None} for a in achievements(con, uid, own=uid == v.id)
            if (a["code"] not in PRIVATE or a["level"] and (uid == v.id or a["code"] in picked or a["code"] == "sponsor")) and (a["code"] not in CATALOG_HIDDEN or a["level"])]
     for a in ach:  # the club a founder founded, to those who see someone's clubs
+        if a["code"] == "streak" and uid != v.id and not link:
+            a.pop("now", None)  # the current run (the flame) to me and my friends only; anyone else sees the medal alone
         if a["code"] == "honor" and a["level"]:
             g = one(con, "SELECT note FROM achievement_grants WHERE user_id = ? AND code = 'honor'", uid)
             if g and g["note"]:
@@ -896,6 +917,9 @@ def friends(con, v: Viewer) -> dict:
         WHERE r.status = 'going' AND u.show_going = 1 AND e.status = 'published' AND COALESCE(e.ends_at, e.starts_at + {NO_END}) > ?
         AND r.user_id IN (SELECT b FROM friendships WHERE a = ? UNION SELECT a FROM friendships WHERE b = ?)
         ORDER BY e.starts_at LIMIT 30""", core.now(), v.id, v.id) if _visible(con, v, e, roles, hidden)]
+    lit = streaks_now(con, [r["person"]["id"] for r in mine])  # friends only (§3): their flames by mine on Profile
+    for r in mine:
+        r["streak"] = lit.get(r["person"]["id"], 0)
     return {"friends": mine, "incoming": incoming, "outgoing": outgoing, "going": cards(con, v, going),
             "suggest": pymk.shown(con, v)}  # People you may know: with the page, never fetched on open
 

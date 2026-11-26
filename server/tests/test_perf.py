@@ -129,7 +129,7 @@ def test_hot_reads_use_indexes(env):
         assert f"SCAN {table}" not in found[-1] and f"SEARCH {table} USING" in found[-1] and "TEMP B-TREE" not in found[-1], found[-1]
 
 
-def test_streak_scans_only_my_weeks(env, monkeypatch):
+def test_streak_scans_only_my_weeks(env):
     """7: the streak reads public events from my first check-in's week on (an index range), and counts the same as
     reading every event ever: a busy week before my first check-in changes nothing, one after it breaks the run."""
     c, cfg = env
@@ -148,9 +148,6 @@ def test_streak_scans_only_my_weeks(env, monkeypatch):
                 VALUES (?, ?, 'going', ?, ?, 0, 0)""", (e, uid, f"tk{i}", s + 3600))
     every = {logic.profiles._week(r[0]) for r in con.execute("SELECT starts_at FROM events WHERE status = 'published' AND visibility = 'public' AND guest_host IS NULL")}
     want = logic.profiles._streak({logic.profiles._week(t) for t in logic.profiles.attended(con, uid)}, every, logic.profiles._week(logic.core.now()))
-    plans = _plans(con, lambda: logic.profiles._counts(con, uid))
-    assert not any("SELECT starts_at FROM events" in s for s, _ in plans)  # dormant award
-    monkeypatch.setattr(logic.profiles, "ACHIEVEMENTS", [*logic.profiles.ACHIEVEMENTS, ("streak", "", (1,), False)])
     plans = _plans(con, lambda: logic.profiles._counts(con, uid))
     got = logic.profiles._counts(con, uid)
     assert (got["streak"], got["streak_now"]) == want == (2, 2)  # weeks 3 and 6 broke it; the empty weeks since break nothing

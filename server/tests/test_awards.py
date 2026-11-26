@@ -301,6 +301,31 @@ def test_streak_pauses():
     assert logic.profiles._streak(set(), {1}, 6) == (0, 0)
 
 
+def test_streak_flame(env):
+    """The weeks-in-a-row medal is on the list (in the app only, no bot card); its current run, the flame, goes to the
+    person and their friends: on the Friends page (one read for the list) and on the page, never to a stranger."""
+    c, cfg = env
+    ali, bea, cat = login(c, 92, "ali"), login(c, 93, "bea"), login(c, 94, "cat")
+    con = db.connect(cfg.db_path)
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
+    con.execute("INSERT INTO friendships (a, b, created_at) VALUES (?, ?, 0)", (min(ali["id"], bea["id"]), max(ali["id"], bea["id"])))
+    now = int(time.time())
+    for i, at in enumerate((now - 7 * 86400, now - 600)):  # last week and this week
+        e = con.execute("""INSERT INTO events (org_id, status, title, starts_at, created_at, updated_at)
+            VALUES (1, 'published', 't', ?, 0, 0)""", (at,)).lastrowid
+        con.execute("""INSERT INTO registrations (event_id, user_id, status, ticket_code, checked_in_at, created_at, updated_at)
+            VALUES (?, ?, 'going', ?, ?, 0, 0)""", (e, bea["id"], f"TS{i}", at + 60))
+    assert ("streak", "fire_3d", (2, 4, 8, 16), False) in logic.profiles.ACHIEVEMENTS and "streak" in logic.profiles.QUIET
+    want = logic.profiles._streak({logic.profiles._week(t) for t in logic.profiles.attended(con, bea["id"])}, logic.profiles._busy(con, now - 7 * 86400), logic.profiles._week(now))[1]
+    assert want >= 1 and logic.profiles.streaks_now(con, [ali["id"], bea["id"]]) == {bea["id"]: want}
+    row = next(r for r in c.get("/api/friends", headers=tma(92, "Ali")).json()["friends"] if r["person"]["id"] == bea["id"])
+    assert row["streak"] == want
+    page = lambda who: next(a for a in c.get(f"/api/users/{bea['id']}", headers=who).json()["awards"]["achievements"] if a["code"] == "streak")  # noqa: E731
+    assert page(tma(93, "Bea"))["now"] == want and page(tma(92, "Ali"))["now"] == want
+    assert "now" not in page(tma(94, "Cat"))                                                         # a stranger: the medal alone
+    assert cat["id"] and not con.execute("SELECT 1 FROM bot_outbox WHERE ref LIKE 'ach:streak:%'").fetchone()
+
+
 def test_badge_skin(env):
     """Badge skins: I show the lanyard of a club I'm in (by slug, official or not), or the KBTU one; never picked, a club
     with a badge shows by itself; my pick holds, and others see it. A club's is its members' alone (Oct 31); the
