@@ -90,7 +90,7 @@ export function hideChrome(): () => void {
 export const moment = queue(() => ui.gate || overlays.some((o) => !o.closing));
 
 /** The screen in front, as the counters name it: the top overlay that has a name, else the tab. */
-export const here = (): Screen => untrack(() => [...overlays].reverse().find((o) => !o.closing && o.stat)?.stat ?? `tab.${ui.tab}`);
+export const here = (): Screen => untrack(() => [...overlays].reverse().find((o) => !o.closing && o.stat)?.stat ?? (`tab.${ui.tab}` as const));
 
 export function removeOverlay(id: number): void {
   const i = overlays.findIndex((x) => x.id === id);
