@@ -1,9 +1,7 @@
 <script lang="ts">
   // The app's own block, last on Profile (only these): its channel, the bugs-and-ideas group, GitHub and
-  // the people who made it (the creator and the idea's author; a tap: everyone, People.svelte; his contact is there). One group of rows like every other on the page: a label, a grey value, an arrow out.
-  // The voluntary support row stays and opens Settings' donate page, the Sponsors row its honour board; the main admin is not here, Admin knows him.
-  import HandHeart from '@lucide/svelte/icons/hand-heart';
-  import Award from '@lucide/svelte/icons/award';
+  // the people who made it (the creator and the idea's author; a tap: Made together, People.svelte; his contact is there). One group of rows like every other on the page: a label, a grey value, an arrow out.
+  // Helping (an offer) and supporting (the donate page) are one row, HelpSheet (the sponsors are on Made together); the main admin is not here, Admin knows him.
   import HeartHandshake from '@lucide/svelte/icons/heart-handshake';
   import MessageCircleWarning from '@lucide/svelte/icons/message-circle-warning';
   import Megaphone from '@lucide/svelte/icons/megaphone';
@@ -30,19 +28,19 @@
   const nameOf = (p: PersonRef) => p.realName ?? p.name;
   const names = $derived(creator && muse ? t('cr.two', { a: nameOf(creator), b: nameOf(muse) }) : creator ? nameOf(creator) : muse ? nameOf(muse) : undefined);
   const go = (url: string) => { haptic.tap(); openLink(url); };
+  const helpRow = () => { haptic.tap(); if (session.me?.student || !session.donate) sheets.helpUs(); else sheets.settings('donate'); };
 </script>
 
 <div class="appc" data-away><!-- data-away: it leaves while Me's settings are open -->
   <Group caption="KBTU App">
-    <Row icon={Megaphone} title={t('app.channel')} value={t('app.channelSub')} accessory="external" onclick={() => go(TG_NEWS)} />
-    <Row icon={MessagesSquare} title={t('app.group')} value={t('app.groupSub')} accessory="external" onclick={() => go(TALK)} />
+    <!-- the channel and the group only for who isn't in them yet (server logic/appchats.py: the bot hears joins and leaves) -->
+    {#if !session.me?.inChannel}<Row icon={Megaphone} title={t('app.channel')} value={t('app.channelSub')} accessory="external" onclick={() => go(TG_NEWS)} />{/if}
+    {#if !session.me?.inGroup}<Row icon={MessagesSquare} title={t('app.group')} value={t('app.groupSub')} accessory="external" onclick={() => go(TALK)} />{/if}
     <Row icon={GitHubMark} title="GitHub" value={t('app.codeSub')} accessory="external" onclick={() => go(CODE)} />
-    <!-- students make the app: how to join in (HelpSheet), and what is wrong with it, signed or not (FeedbackSheet) -->
-    <Row icon={HeartHandshake} title={t('help.row')} value={t('help.rowSub')} accessory="chevron" onclick={() => { haptic.tap(); sheets.helpUs(); }} />
+    <!-- students make the app: one row for every way to help (HelpSheet: an offer, and the donate page); a guest, who
+         can't send an offer, goes straight to the donate page -->
+    <Row icon={HeartHandshake} title={t('help.title')} value={t('help.rowSub')} accessory="chevron" onclick={helpRow} />
     <Row icon={MessageCircleWarning} title={t('fb.title')} value={t('fb.rowSub')} accessory="chevron" onclick={() => { haptic.tap(); sheets.feedback(); }} />
-    {#if session.donate}<Row icon={HandHeart} title={t('app.donateRow')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('donate'); }} />{/if}
-    <!-- the honour board, one tap from Profile once anyone is on it -->
-    {#if data.sponsors?.length}<Row icon={Award} title={t('sp.sponsors')} value={String(data.sponsors.length)} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('sponsors'); }} />{/if}
     <!-- who made it: the creator and the idea's author (named after her own yes), and the way to everyone else -->
     <Row title={t('cr.title')} subtitle={names} accessory="chevron" onclick={() => { haptic.tap(); sheets.credits(); }}>
       {#snippet lead()}<span class="two">{#if creator}<Avatar person={plain(creator)} size={36} tappable={false} />{/if}{#if muse}<span class="b"><Avatar person={plain(muse)} size={36} tappable={false} /></span>{/if}{#if !creator && !muse}<span class="none"><UsersRound size={20} /></span>{/if}</span>{/snippet}

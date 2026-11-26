@@ -264,7 +264,7 @@ def test_deleted_human_reviewer_does_not_become_app(paid, monkeypatch):
     row = _send(paid, monkeypatch, tg, _fields(now))
     assert c.post(f"/api/receipts/{row['id']}/review", headers=tma(21), json={"reject": False}).status_code == 204
     assert con.execute("SELECT COUNT(*) FROM receipt_auto_checks").fetchone()[0] == 0
-    logic.delete_me(con, logic.Viewer(reviewer["id"], "user", True))
+    logic.account.delete_me(con, logic.Viewer(reviewer["id"], "user", True))
     assert con.execute("SELECT reviewed_by FROM receipts WHERE id = ?", (row["id"],)).fetchone()[0] is None
     assert _attendee(paid, tg)["reviewed"] is True and _attendee(paid, tg)["auto"] is False
 
@@ -305,7 +305,7 @@ def test_account_deletion_cascades_app_marker(paid, monkeypatch):
     _go(c, eid, tg)
     _send(paid, monkeypatch, tg, _fields(now))
     assert con.execute("SELECT COUNT(*) FROM receipt_auto_checks").fetchone()[0] == 1
-    logic.delete_me(con, logic.Viewer(_uid(con, tg), "user", True))
+    logic.account.delete_me(con, logic.Viewer(_uid(con, tg), "user", True))
     assert con.execute("SELECT COUNT(*) FROM receipts").fetchone()[0] == 0
     assert con.execute("SELECT COUNT(*) FROM receipt_auto_checks").fetchone()[0] == 0
 

@@ -7,12 +7,14 @@ import asyncio
 import json
 import logging
 import secrets
+import sqlite3
 import time
+from collections.abc import Awaitable, Callable
 
 import anyio.to_thread
 import httpx
 
-from . import casting, checkin, db, instagram, logic, mirror, texts, tgc, youtube
+from . import casting, checkin, db, instagram, logic, mirror, push, texts, tgc, youtube
 from .bot import _send, _stopping, _tg
 from .bot_dm import MUTE_ROW, _feedback_buttons
 from .chores import _chores, _userpics, offsite_round, post_channel, refresh_chats
@@ -535,8 +537,21 @@ def _santa(con, m, lang: str) -> tuple[str, str | None, str] | None:
 
 def _due(con) -> list:
     # the partial index outbox_todo (migration 109), named: else the planner picks outbox_due, which walks every failed row
-    return rows(con, """SELECT b.*, u.tg_id, u.lang, u.can_dm, u.banned_at FROM bot_outbox b INDEXED BY outbox_todo JOIN users u ON u.id = b.user_id
-        WHERE b.sent_at IS NULL AND b.error IS NULL AND b.send_after <= ? ORDER BY b.send_after, b.id LIMIT ?""", now(), BATCH)
+    # pushable: this person's notifications go to the app (push.py): a live token, and the app picked in Settings (or
+    # no Telegram to write to)
+    t = now()
+    return rows(con, f"""SELECT b.*, u.tg_id, u.lang, u.can_dm, u.banned_at,
+        {push.LIVE.format("b.user_id")} AND (u.notify_via = 'app' OR u.can_dm = 0) AS pushable
+        FROM bot_outbox b INDEXED BY outbox_todo JOIN users u ON u.id = b.user_id
+        WHERE b.sent_at IS NULL AND b.error IS NULL AND b.send_after <= ? ORDER BY b.send_after, b.id LIMIT ?""",
+                *push.bounds(t), t, BATCH)
+
+
+def _pushes(cfg: Config, m, start) -> bool:
+    """This message goes to the app instead of Telegram (push.py): a template with one way into the app (never a
+    keyboard of votes or links, a forum comment's edits, or the credits' ask, which follow Telegram's own account)."""
+    return push.on(cfg) and bool(m["pushable"]) and isinstance(start, str) and not m["kind"].startswith("tgc_") \
+        and m["kind"] not in ("fch_comments", "credit_ask")
 
 
 def _mark(con, m, sent: bool, error: str | None = None) -> None:
@@ -545,8 +560,9 @@ def _mark(con, m, sent: bool, error: str | None = None) -> None:
                 (now() if sent else None, error, m["id"], m["user_id"], m["kind"], m["ref"]))
 
 
-def _take(con, m, forum_channel: bool):
-    """One queued message taken and rendered, or None (the other postman has it, or it can't go: marked why)."""
+def _take(con, m, forum_channel: bool, pushable: bool = False):
+    """One queued message taken and rendered, or None (the other postman has it, or it can't go: marked why).
+    pushable: the app may get it (push.on and a live device), so no Telegram is no reason to drop it yet."""
     # take it first: during a deploy the old and the new container run side by side for a few seconds, and
     # both postmen see the same queue; whoever moves send_after on gets the message (back after LEASE if lost)
     lease = logic.fchannel.COMMENT_GAP if m["kind"] == "fch_comments" else LEASE  # Telegram may receive a send whose answer is lost
@@ -554,7 +570,7 @@ def _take(con, m, forum_channel: bool):
                        AND send_after = ? AND sent_at IS NULL AND error IS NULL""",
                        (now() + lease, m["id"], m["user_id"], m["kind"], m["ref"], m["send_after"])).rowcount:
         return None
-    if not m["can_dm"]:
+    if not m["can_dm"] and not pushable:
         return _mark(con, m, False, "no_dm")
     if m["banned_at"]:  # banned: the bot stops writing
         return _mark(con, m, False, "banned")
@@ -562,10 +578,26 @@ def _take(con, m, forum_channel: bool):
         return _mark(con, m, False, "gone")
     if m["kind"] == "fch_comments" and not forum_channel:
         return _mark(con, m, False, "gone")
-    msg = _render(con, m)
+    try:
+        msg = _render(con, m)
+    except sqlite3.OperationalError as exc:  # busy or locked: passing, so it stays taken and goes again after its lease
+        log.warning("postman: row %s kind %s render: %s", m["id"], m["kind"], type(exc).__name__)
+        return None
+    except Exception as exc:  # one malformed row must not cancel messages already in flight
+        error = f"render: {type(exc).__name__}"
+        log.warning("postman: row %s kind %s %s", m["id"], m["kind"], error)
+        return _mark(con, m, False, error)
     if msg is None:
         _mark(con, m, False, "gone")
     return msg
+
+
+def _pushed(con, m) -> None:
+    """Delivered to the iPhone app: sent, as a Telegram message would be."""
+    with db.tx(con):
+        _mark(con, m, True)
+        if category := notifications.CATEGORY_OF.get(m["kind"]):
+            notifications.delivered(con, category, now())
 
 
 def _answered(con, m, status: int, answer: dict) -> None:
@@ -633,6 +665,7 @@ async def _batch(cfg: Config, http: httpx.AsyncClient, con, due: list) -> bool:
     the sends started GAP apart overall. False: stop the round (stop(), the network or a 429)."""
     lock, gate, halt = asyncio.Lock(), asyncio.Semaphore(SENDERS), asyncio.Event()
     nxt = time.monotonic()
+    telegram_gate, next_telegram = asyncio.Lock(), nxt
 
     async def turn() -> bool:  # this send's slot, GAP after the one before; False: the round is over
         nonlocal nxt
@@ -641,12 +674,23 @@ async def _batch(cfg: Config, http: httpx.AsyncClient, con, due: list) -> bool:
         await asyncio.sleep(at - time.monotonic())
         return not (halt.is_set() or _stopping())  # between messages: one cut mid-send would go again after its LEASE, maybe twice
 
+    async def send(body: dict) -> httpx.Response | None:
+        # Concurrent push failures can reach Telegram together, after their original slots.
+        nonlocal next_telegram
+        async with telegram_gate:
+            if (delay := next_telegram - time.monotonic()) > 0:
+                await asyncio.sleep(delay)
+            if halt.is_set():
+                return None  # no new Telegram sends after a 429 or transport failure
+            next_telegram = time.monotonic() + GAP
+        return await _send(cfg, http, body)
+
     async def chat(ms: list) -> None:
         async with gate:
             for m in ms:
                 if not await turn():
                     return
-                await _deliver(cfg, http, con, m, lock, halt)
+                await _deliver(cfg, http, con, m, lock, halt, send)
 
     chats: dict[int, list] = {}
     for m in due:
@@ -657,16 +701,26 @@ async def _batch(cfg: Config, http: httpx.AsyncClient, con, due: list) -> bool:
     return not (halt.is_set() or _stopping())
 
 
-async def _deliver(cfg: Config, http: httpx.AsyncClient, con, m, lock: asyncio.Lock, halt: asyncio.Event) -> None:
+async def _deliver(cfg: Config, http: httpx.AsyncClient, con, m, lock: asyncio.Lock, halt: asyncio.Event,
+                   send: Callable[[dict], Awaitable[httpx.Response | None]]) -> None:
     """One queued message taken, sent and marked. The connection serves one thread at a time (lock), the sends run
     side by side; the network down or a 429 sets halt."""
     async with lock:
         if halt.is_set():  # while this one waited its turn at the database
             return
-        msg = await anyio.to_thread.run_sync(_take, con, m, bool(cfg.forum_channel))
+        msg = await anyio.to_thread.run_sync(_take, con, m, bool(cfg.forum_channel), push.on(cfg) and bool(m["pushable"]))
         if msg is None:
             return
         text, button, start = msg
+    # Only database work takes the shared lock; Apple's network waits must not hold up other chats.
+    if _pushes(cfg, m, start) and await push.deliver(cfg, con, m["user_id"], text, start, now(), lock):
+        async with lock:
+            await anyio.to_thread.run_sync(_pushed, con, m)
+        return
+    async with lock:
+        if not m["can_dm"]:
+            await anyio.to_thread.run_sync(_mark, con, m, False, "no_dm")
+            return
         to = m["tg_id"]
         if m["kind"] == "credit_ask":  # the account may have moved since the queue was read: to its Telegram of now, or not at all
             to = logic.credits.asking(con, m["user_id"])
@@ -693,7 +747,9 @@ async def _deliver(cfg: Config, http: httpx.AsyncClient, con, m, lock: asyncio.L
         async with lock:  # it reads the connection first (and returns at once for any other kind)
             r = await tgc.edit_first(cfg, http, con, m, body)  # a comment's verdict: its first message edited
         if r is None:
-            r = await _send(cfg, http, body)
+            r = await send(body)
+        if r is None:
+            return
         answer = r.json()
     except (httpx.HTTPError, ValueError) as exc:
         log.warning("postman: %s", type(exc).__name__)

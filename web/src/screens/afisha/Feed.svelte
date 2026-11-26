@@ -87,7 +87,7 @@
   // our bot's card with a button, as from the event sheet (never a bare link)
   function share(id: number, title: string) {
     haptic.tap();
-    shareCard({ kind: 'ev', id: String(id) }, 'https://t.me/KBTUappBot?startapp=ev_' + id, title)
+    shareCard({ kind: 'ev', id: String(id) })
       .then((sent) => { if (sent) say(phrase('say.shared'), 'party_popper_3d'); })
       .catch(() => { haptic.error(); say(t('common.error'), 'warning_3d'); });
   }

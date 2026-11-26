@@ -20,7 +20,8 @@ This is "source-available", not open source in the OSI sense. Third-party materi
 
 - `web/`: Svelte 5 + Vite + TypeScript, a static build.
 - `server/`: Python (FastAPI) with SQLite in WAL mode: the API, the Telegram bot and the background jobs in one process.
-  The schema is `server/kbtu/schema.sql` plus the migrations in `server/kbtu/migrations.py`.
+  Today's tables are in `server/kbtu/schema.current.sql` (generated from `schema.sql` plus the migrations in
+  `server/kbtu/migrations.py`; [AGENTS.md](AGENTS.md) says how to change them).
 - One Docker image (`Dockerfile`) serves both.
 
 What the app stores and who sees it: the privacy policy at [kbtu.sow.kz/privacy](https://kbtu.sow.kz/privacy)
@@ -35,8 +36,8 @@ server with the bot off and prints a link per person that opens the app as them.
 Node 22, Python 3.14 (as the `Dockerfile`).
 
 ```bash
-cd web && npm ci && npx vite build
-cd ../server && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+cd web && npm ci && npm run build
+cd ../server && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt pytest pytest-xdist
 .venv/bin/python tools/qa.py --port 8790
 ```
 
@@ -178,12 +179,22 @@ Ideas and fixes are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Security is
 - `REPORTS=1`: clubs' event reports in Studio and the member's own log in their profile (`logic/evreports.py`). Off by default. Separate consent covers attendance marks and comments under section 3 of the privacy policy.
 - `ROOMS_FILE`: the map's "Free now", the timetable's busy rooms (`server/tools/rooms.py`, default `rooms.json` next to the database); no file: off.
 - `SUBJECTS_FILE`: the subjects' cards, "find people to study it with" (`server/tools/subjects.py` from the portal's course list scrape, default `subjects.json` next to the database; `logic/subjects.py`: a listing is a find-people request on a subject); no file: off.
+- `IOS_BUNDLE_ID`: the iPhone app's bundle ID, `kz.sow.kbtu` ([ios/README.md](ios/README.md)); set, Sign in with Apple and its push
+  tokens are on (`logic/apple.py`). `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_KEY` (the APNs .p8's text, `\n` allowed): push
+  through Apple instead of the bot's message for people with the app's notifications on (`kbtu/apns.py`); any empty: the bot alone.
 - `PLAY_DEMO=<32+ random characters>`: the store reviewers' code (Google Play and the App Store): typed in "Sign in with
   a code" on the sign-in page, or the link `admin play-demo` prints, it opens one made-up, read-only account that is
   never a student or staff (`android/README.md`); `admin play-demo seed <event id>...` gives it tickets. Unset: a 404
   and every demo session ends. Only while a review is due.
 - `ANDROID_CERT_SHA256=<AA:BB:...>[,...]`: the Android app's signing certificates for `/.well-known/assetlinks.json`
   (the upload key's and Play's app signing key's); unset: no file, the app shows a browser bar.
+- `WALLET_PASS_CERT` + `WALLET_PASS_KEY` + `WALLET_PASS_TYPE_ID` + `APPLE_TEAM_ID`: "Add to Apple Wallet" under My QR
+  on an iPhone or a Mac (`kbtu/wallet.py`): one pass per student, their badge QR, which every event's door already
+  takes; added once, never updated. The certificate is the Pass Type ID certificate followed by Apple's WWDR G4
+  intermediate, both PEM; the key is its unencrypted PEM. Each value is the PEM itself (`\n` escapes are fine), a
+  path to it, or its base64. Any one unset, or a key that isn't the certificate's: off (no button, `/wallet/…` is a
+  404). The download link is in `/api/me` only (Safari has no session), signed with `TOKEN_KEY` over the badge's
+  code: it gives what `/api/me` already gives, and dies with the code (a deleted account) or a ban. Never in the repo.
 - No switch changes the policy or the consent version.
 - `WEB_CONCURRENCY`: uvicorn workers (the app is multi-worker safe).
 

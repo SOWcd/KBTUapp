@@ -1,6 +1,6 @@
 // Awards as the profile shows them (SPEC §4.11): names, tiers, and the hero's data — one place for Me and the
 // person sheet.
-import type { Achievement, Badge, GrantItem, Id, OrgRef, PersonCard } from './api';
+import type { Achievement, Archived, Badge, GrantItem, Id, OrgRef, PersonCard } from './api';
 import { i18n, t, tn } from './i18n/index.svelte';
 import { cityName } from './i18n/cities';
 import { RANK, roleName, titleOf } from './perms';
@@ -42,6 +42,13 @@ import ddDragon from '../assets/lanyards/dd-dragon.webp';
 import bhDrop from '../assets/lanyards/bh-drop.webp';
 // Qoloner's frog face, redrawn from their logo (.claude/reports/lanyard-qoloner/gen.py's face_mark)
 import qolonerFrog from '../assets/lanyards/qoloner-mark.webp';
+// the archive's medallions (ARCHIVE_LOOKS), drawn with their scenes (KBTUapp-mocks/dota m1-m3)
+import dtAncient from '../assets/lanyards/dt-ancient-medal.svg?url';
+import dtClash from '../assets/lanyards/dt-clash-medal.svg?url';
+import dtRune from '../assets/lanyards/dt-rune-medal.svg?url';
+import panther from '../assets/lanyards/panther-mark.webp';
+import aperture from '../assets/lanyards/moments-aperture.svg?url';
+import facesMark from '../assets/lanyards/faces-mark.webp';
 
 /** a badge's variant by name ("Performer"); its meaning ("Performed on stage at ...") */
 export const variantName = (badge: string, code: string): string => t(`ach.${badge}.v.${code}` as 'ach.init26.v.init26');
@@ -103,7 +110,9 @@ export const METALS = ['bronze', 'silver', 'gold', 'legend'];
 // pin (one time, a moment: an enamel shield, ui/Pin). Every medal is drawn in layers (public/medals, made by
 // tools/medals.mjs; owner, Nov 3: crisp at any size, the art floating under a still rim with the tilt): Recruiter per
 // level (a constellation, one more friend lit each level), the rest one picture each under the rim of the level's metal
-const MEDAL_ART: Record<string, string> = { regular: 'rg', activist: 'ac', streak: 'st', first_in: 'fi', soul: 'so', team: 'tm', season: 'se', bugs: 'bg', dmp: 'dm', critic: 'cr', referral: 'rc', sponsor: 'sp' };
+const MEDAL_ART: Record<string, string> = { regular: 'rg', activist: 'ac', streak: 'st', first_in: 'fi', soul: 'so', team: 'tm', season: 'se', bugs: 'bg', dmp: 'dm', critic: 'cr', referral: 'rc', sponsor: 'sp',
+  // People of the app's medals: their 3D emoji on the activist's field and the level's rim (no drawn art yet)
+  ideas: 'ac', coder: 'ac' };
 /** a medal (levels; Bug hunter given by hand counts too), else a pin */
 export const isMedal = (a: Pick<Achievement, 'code' | 'levels'>): boolean => a.code === 'honor' || a.code in MEDAL_ART || a.levels.length > 1;
 /** the picture an achievement shows: a medal's layers at its level's metal (not earned: the first), else its emoji */
@@ -398,11 +407,31 @@ export const SCHOOL_LOOKS = {
   smsgt: { strap: 'SMSGT', strip: 'SMSGT', bg: ['#107A50', '#0B6542', '#053824'], straps: ['#08523A', '#14905E', '#FFFFFF'], holo: ['#E4F5EC', '#B4DEC6', '#0B6542'], role: '#BDF2D3', qr: ['#0B6542', '#053824'], plate: ['#0B6542', '#053824'], mark: shield('smsgt') },
   sss: { strap: 'SSS', strip: 'SSS', bg: ['#386052', '#2C4D42', '#182C26'], straps: ['#203A32', '#3E6A5A', '#FFFFFF'], holo: ['#E6F2EC', '#B9D6C8', '#2C4D42'], role: '#CDEBDD', qr: ['#2C4D42', '#182C26'], plate: ['#2C4D42', '#182C26'], mark: shield('sss') },
 } satisfies Record<string, ClubLook>;
-export type ClubSlug = keyof typeof CLUB_LOOKS | keyof typeof SCHOOL_LOOKS;
-const CLUBS: Record<string, ClubLook> = { ...CLUB_LOOKS, ...SCHOOL_LOOKS };
+/** The archive (owner, Nov 25): looks made and not in use, anyone's to try on in the picker, worn by the creator
+ *  alone (the server's logic.ARCHIVE holds both the list and the lock). Each a club look's frame round one scene
+ *  (ui/ClubScene, scenes/<prefix>-card.svg), art and colours only: the card's size, layout and photo are every look's.
+ *  The first three: Dota for card 126 (KBTUapp-mocks/dota), never picked */
+export const ARCHIVE_LOOKS = {
+  // obsidian and old gold, the Ancient's ember core under the medallion
+  dota_ancient: { strap: 'ANCIENT', strip: 'DEFEND THE ANCIENT', bg: ['#2A0909', '#120507', '#0A0304'], straps: ['#4A0A08', '#9C1C14', '#F4CE84'],
+    holo: ['#2A0C0B', '#120405', '#F4BE6A'], ring: 'linear-gradient(135deg, #FFE7B0, #C98A2E 45%, #7A1610)', role: '#F4BE6A', qr: ['#7A1610', '#2A0806'], plate: ['#2A0807', '#0C0203'], mark: dtAncient },
+  // the Radiant's jade and the Dire's ember split by a seam of light
+  dota_clash: { strap: 'GG', strip: 'RADIANT · DIRE', bg: ['#0C4238', '#062520', '#03100D'], straps: ['#0E5A48', '#13806A', '#FFF8EA'],
+    holo: ['#161A1A', '#070808', '#F4FFF9'], ring: 'linear-gradient(135deg, #B8FFE4, #2FAE86 45%, #E0451C 55%, #7A1410)', role: '#8EF5CF', qr: ['#0C4238', '#5A0E0A'], plate: ['#062520', '#160304'], mark: dtClash },
+  // the river at night, a rune over the water
+  dota_rune: { strap: 'RUNE', strip: 'GG · WP', bg: ['#121C4A', '#0B1236', '#04061A'], straps: ['#10164A', '#1A2266', '#CFF8FF'],
+    holo: ['#141C4A', '#05071A', '#9FE8FF'], ring: 'linear-gradient(135deg, #E8FDFF, #5FD8FF 40%, #4A5CFF 70%, #2A1A8A)', role: '#9FE8FF', qr: ['#1A2266', '#05061A'], plate: ['#10164A', '#04061A'], mark: dtRune },
+} satisfies Record<Archived, ClubLook>;
+export type ClubSlug = keyof typeof CLUB_LOOKS | keyof typeof SCHOOL_LOOKS | Archived;
+const CLUBS: Record<string, ClubLook> = { ...CLUB_LOOKS, ...SCHOOL_LOOKS, ...ARCHIVE_LOOKS };
+/** an archived look (ARCHIVE_LOOKS), not a club's */
+export const isArchived = (x: unknown): x is Archived => typeof x === 'string' && x in ARCHIVE_LOOKS;
 /** a school's lanyard (ui/SchoolScene), not a club's */
 export const isSchool = (look: Look) => look in SCHOOL_LOOKS;
 export const clubLook = (look: Look): ClubLook | undefined => CLUBS[look];
+const handMarks: Partial<Record<Look, string>> = { cheer: panther, moments: aperture, faces: facesMark };
+/** The QR's image, shared by LookMark and the offline ticket copy; the other marks are inline SVG. */
+export const lookArt = (look: Look): string | undefined => clubLook(look)?.mark ?? handMarks[look];
 
 export type Skin = Hand | ClubSlug;
 /** a club's drawn look: by its slug, or by its name in letters and digits alone ("kbtu.mag" is `kbtumag`: Nov 4, the
@@ -414,7 +443,7 @@ export const skinOf = (o?: OrgRef | null): Skin | null => (o && (o.kind === 'sch
   : (SKINS as Record<string, Hand>)[o.slug] ?? (lookKey(o) as ClubSlug | null))) || null;
 export const skinned = (o?: OrgRef | null) => !!skinOf(o);
 /** the look a person's badge wears: their pick may be a club they aren't in (anyone may try one on) */
-export const lookOf = (p: PersonCard): Look => p.skin === 'sower' ? 'sower'
+export const lookOf = (p: PersonCard): Look => p.skin === 'sower' || isArchived(p.skin) ? p.skin
   : skinOf(p.clubs.find((m) => m.org.id === p.skin)?.org ?? data.orgs.find((o) => o.id === p.skin) ?? comingLooks().find((o) => o.id === p.skin)) ?? 'kbtu';
 /** a drawn lanyard whose club isn't in the app yet (kbtu.mag, Nov 4): shown in the picker to try on, never worn; a
  *  negative id the server never sees (the try-on is local) */

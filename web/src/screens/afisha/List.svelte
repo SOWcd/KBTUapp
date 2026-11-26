@@ -29,7 +29,7 @@
   import { ui, toTickets, goTab } from '../../lib/state/ui.svelte';
   import { t, tn, money, placeOf, subjectOf, friendsLine } from '../../lib/i18n/index.svelte';
   import { lessonKind } from '../../lib/i18n/subjects';
-  import { dayNo, nowTs, parts, weekday, weekdayShort, dayMonth, OFFSET, soon, time, dateInput, multiDay, daySpan } from '../../lib/time';
+  import { dayNo, nowTs, parts, weekday, weekdayShort, dayMonth, dayMonthShort, OFFSET, soon, time, dateInput, multiDay, daySpan } from '../../lib/time';
   import { byStart, classesOn, classesLeft } from '../../lib/classes';
   import { noClasses } from '../../lib/academic';
   import { floorOf, atDorm, DORM_2GIS, atBldg2, bldg2Room, BLDG2_2GIS, awayOf } from '../../lib/map';
@@ -94,11 +94,31 @@
   // an event of several days that began earlier and still runs sits on today (a casting, 2-12 Nov). Its ids as one string:
   // the days below follow the date and this, not the 30 s clock (every tick rebuilt all the days and re-rendered every row)
   const running = $derived(data.events.filter((e) => dayNo(e.startsAt) < today && endOf(e) > now).map((e) => e.id).join());
+  // a club's offline casting while its own event is on is one thing (owner, Nov 26): a line inside that event's row
+  // (the soonest one it meets), no card of its own. A casting no event of its club meets keeps its card
+  const castIn = $derived.by(() => {
+    const by = new Map<number, Post>(), at = nowTs();
+    for (const p of data.castings) {
+      const c = p.casting;
+      if (!c || !castingOn(c, at)) continue;
+      const e = data.events.filter((x) => x.status !== 'cancelled' && !by.has(x.id) && (x.org.id === p.org.id || x.coHost?.id === p.org.id)
+        && x.startsAt < c.to && endOf(x) > Math.max(c.from, at)).sort((a, b) => a.startsAt - b.startsAt)[0];
+      if (e) by.set(e.id, p);
+    }
+    return by;
+  });
+  function castLine(p: Post, e: EventCard): string {
+    const c = p.casting!, until = dayNo(c.to) === dayNo(c.from) ? time(c.to) : `${dayMonthShort(c.to)}, ${time(c.to)}`;
+    // begins after the event does and not yet: its own hours; else what's left of it
+    const when = c.from > e.startsAt && c.from > nowTs() ? `${t('casting.offline')} · ${time(c.from)}–${until}` : t('casting.inEventTill', { time: until });
+    return c.place ? `${when} · ${c.place}` : when;
+  }
+  const openCast = (p: Post) => sheets.stories([{ org: p.org, items: [{ post: p }], unread: false, cast: false }], 0);
   const days = $derived.by(() => {
-    const by = new Map<number, Item[]>(), on = new Set(running.split(',').map(Number));
+    const by = new Map<number, Item[]>(), on = new Set(running.split(',').map(Number)), inside = new Set([...castIn.values()].map((p) => p.id));
     for (const e of filterEvents(data.events, afishaFilter)) { const d = Math.max(dayNo(e.startsAt), on.has(e.id) ? today : -1); if (d < today) continue; if (!by.has(d)) by.set(d, []); by.get(d)!.push({ key: 'e' + e.id, at: e.startsAt, e }); }
     // an offline casting isn't an event (no sign-up) but it has its hour: on its day, or on today while it runs
-    for (const p of data.castings) { if (filtering || !p.casting || !castingOn(p.casting, nowTs())) continue; const d = Math.max(dayNo(p.casting.from), today); if (!by.has(d)) by.set(d, []); by.get(d)!.push({ key: 'p' + p.id, at: p.casting.from, p }); }
+    for (const p of data.castings) { if (filtering || inside.has(p.id) || !p.casting || !castingOn(p.casting, nowTs())) continue; const d = Math.max(dayNo(p.casting.from), today); if (!by.has(d)) by.set(d, []); by.get(d)!.push({ key: 'p' + p.id, at: p.casting.from, p }); }
     // the coming week's class days too (so a class day isn't missed), later only event days; today's classes stay
     // here too: their rows are where "I won't go" is tapped (and taken back)
     const week = !showClasses ? [] : Array.from({ length: 7 }, (_, i) => today + i).filter((d) => d === today || data.schedule.some((c) => c.weekday === (parts(dayTs(d) + 12 * 3600).wd || 7)));
@@ -493,6 +513,7 @@
           {:else if 'p' in it}<CastingCard post={it.p} />
           {:else}
             {@const e = it.e}
+            {@const cast = castIn.get(e.id)}
             <!-- an event: Luma's row; a club's own event shows its team mark by the club -->
             <div class="row" class:cancelled={e.status === 'cancelled'}>
               <button class="hit" onpointerdown={(ev) => touchAhead(ev, () => prefetchEvent(e.id))} onclick={(ev) => sheets.event(e.id, ev.currentTarget.parentElement?.querySelector('.poster'))} aria-label={e.title}></button>
@@ -505,6 +526,7 @@
                   <span class="ellipsis">{#if e.online}<VideoCall size={14} strokeWidth={1.75} />{:else}<MapPin size={14} strokeWidth={1.75} />{/if}{placeOf(e.place, e.online)}</span>
                   {#if e.price}<span>{money(e.price)}</span>{/if}
                 </span>
+                {#if cast}<button class="cast ellipsis" onclick={() => openCast(cast)}>{castLine(cast, e)}</button>{/if}
                 <span class="sub">{@render status(e)}</span>
               </span>
             </div>
@@ -618,13 +640,14 @@
   .hero::before { content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none; opacity: var(--halo);
     box-shadow: 0 0 14px 0 var(--c, transparent), 0 16px 38px -10px var(--c, transparent); animation: bloom 2.2s var(--ease) 0.2s backwards; }
   /* the halo always shows against the theme (owner: a pale cover's light vanished on the light ground): the cover's hue,
-     but at least this much colour, lifted on black and deepened on light. Where relative colour isn't known (older
-     iOS) none of it applies and the cover's own colour stays */
+     lifted on black and deepened on light, its colour strengthened in proportion (owner: a cream cover glowed yellow
+     when a floor of colour was forced onto its near-grey). Where relative colour isn't known (older iOS) none of it
+     applies and the cover's own colour stays */
   :global(:root[data-theme='light']) .hero { --halo: 0.5; }
   @supports (color: oklch(from red l c h)) {
     .hero::before { box-shadow: 0 0 14px 0 var(--cg), 0 16px 38px -10px var(--cg); }
-    .hero { --cg: oklch(from var(--c, transparent) max(l, 0.66) max(c, 0.14) h); }
-    :global(:root[data-theme='light']) .hero { --halo: 0.62; --cg: oklch(from var(--c, transparent) min(l, 0.58) max(c, 0.16) h); }
+    .hero { --cg: oklch(from var(--c, transparent) max(l, 0.66) min(calc(c * 2.5), 0.2) h); }
+    :global(:root[data-theme='light']) .hero { --halo: 0.62; --cg: oklch(from var(--c, transparent) min(l, 0.58) min(calc(c * 2.5), 0.2) h); }
   }
   @keyframes bloom { from { opacity: 0; } 40% { opacity: calc(var(--halo) * 1.5); } }
   .art, .shade, .rim { position: absolute; inset: 0; }
@@ -725,6 +748,10 @@
   .meta span { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
   .meta.ellipsis { display: block; }
   .meta :global(svg) { flex: none; color: var(--text-3); }
+  /* the club's casting inside its event: one line in the casting's green, its own tap over the row's (taller to the
+     finger than it looks: padding, given back by the margin; the ellipsis clips, so no pseudo hit area) */
+  .cast { position: relative; z-index: 2; display: block; max-width: 100%; margin: -6px 0; padding: 6px 0; text-align: left; font: 600 var(--fs-sub)/1.3 var(--font-text); color: var(--success-text); }
+  .cast:active { opacity: 0.6; }
   .sub { display: flex; align-items: center; gap: 8px; min-width: 0; }
   .sub:empty { display: none; }
   .fr { display: flex; align-items: center; gap: 6px; min-width: 0; font: 500 var(--fs-cap)/1.2 var(--font-text); color: var(--text-3); }

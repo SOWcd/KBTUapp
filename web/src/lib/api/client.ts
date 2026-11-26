@@ -3,7 +3,7 @@ import type { ChatFill } from '../eventFill';
 // { error, message } and become ApiErr.
 import type { ResearchAnswers, ResearchSurvey, ResearchInput, ResearchRequest, Support, Sponsor, DonationReview, ApiError, Credits, ClubApplication, Id, OfficialPath, PersonCard, Video, AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, MemberPatch, Friends, Friendship, FoundStudent, LinkCard, PersonRef, Media, GalleryPage, AlbumPhoto, Attendee, DoorPerson, EventUpdate, PostInput, CheckinResult, ClassItem, JoinRequest, CohostInvite, CrewKind, CrewMember, EventReport, ReportPatch, EventCard, EventFull, EventInput, Me, Org, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, ChatSection, Chats, ClubApplicationInput, OfficialRequest, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, LentStudio, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp, TeamAsk, TeamPick, TeamInvite, TeamsBoard, ShortLink, StudioChat, ChatTree, WaitingChat, SwearRow, ChatRoles, RosterRequest, Skill, ForumMe, ForumCard, Ask, AskInput, Contact, ForumMod, AssistReply, Fixable, TgComment, TgcRule, VolLedger, VolPerson, VolDoor, Appeal, AppealHelp, AppealTopic, AppealStatus, SgQueue, Solved, Subjects, SubjectCard, RejectWhy } from './types';
 import type { BracketMatch, BracketSeed, EventBracket, EventGroups, EventMatch, MatchScore } from './types';
-import type { ReportLogEntry, ReportMarkPatch, ReviewReason, SantaChats, SantaMsg, SantaReport } from './types';
+import type { Archived, ReportLogEntry, ReportMarkPatch, ReviewReason, SantaChats, SantaMsg, SantaReport } from './types';
 import type { Graph } from '../route';
 import { splitVariants } from '../awards';
 import { ApiErr } from './errors';
@@ -17,10 +17,11 @@ const authHeaders = (webWrite = false): Record<string, string> => ({
   ...(!tg.initData || webWrite ? { 'X-KBTU': '1' } : {}),
 });
 export const WEB_SESSION_CHANGE = 'kb-web-session-change';
+type ApplePass = { token: string; nonce: string; consent: string; lang?: string };
 
-async function changeWebSession(path: '/web/login' | '/web/demo' | '/web/logout' | '/web/logout-all', body?: unknown): Promise<void> {
+async function changeWebSession(path: '/web/login' | '/web/demo' | '/web/apple' | '/web/logout' | '/web/logout-all' | '/me/logins/telegram', body?: unknown): Promise<void> {
   await call('POST', path, body);
-  if (!tg.initData && path !== '/web/login' && path !== '/web/demo') dispatchEvent(new Event('kb:signedOut'));
+  if (!tg.initData && (path === '/web/logout' || path === '/web/logout-all')) dispatchEvent(new Event('kb:signedOut'));
   try { localStorage.setItem(WEB_SESSION_CHANGE, crypto.randomUUID()); } catch { /* storage may be blocked */ }
 }
 
@@ -198,11 +199,21 @@ export const server = {
   webDemo: (code: string): Promise<void> => changeWebSession('/web/demo', { code }), // the stores' reviewers (android/README.md)
   webLogout: (): Promise<void> => changeWebSession('/web/logout'),
   webLogoutAll: (): Promise<void> => changeWebSession('/web/logout-all'),
+  // the iPhone app (logic/apple.py): Apple's identity token for this tap's nonce, with the consent of the policy's clause
+  appleLogin: (p: ApplePass): Promise<void> => changeWebSession('/web/apple', p),
+  linkApple: (p: ApplePass): Promise<void> => call('POST', '/me/logins/apple', p),
+  unlinkApple: (): Promise<void> => call('DELETE', '/me/logins/apple'),
+  // Telegram's sign-in page, back with #tgAuthResult (app: to the iPhone app's sign-in sheet through /tg-back)
+  telegramSignInStart: (state: string): Promise<{ url: string }> => call('GET', '/web/telegram' + query({ state })), // the iPhone app's entrance
+  telegramLinkStart: (state: string, app?: boolean): Promise<{ url: string }> => call('GET', '/me/logins/telegram' + query({ state, ios: app ? 1 : undefined })),
+  linkTelegram: (widget: unknown): Promise<void> => changeWebSession('/me/logins/telegram', widget), // a new session: the old one ends
+  pushDevice: (token: string, consent: string): Promise<void> => call('POST', '/me/devices', { token, consent }),
+  dropPushDevice: (): Promise<void> => call('DELETE', '/me/devices'), // notifications off in iOS Settings
   msStart: (): Promise<{ url: string }> => call('POST', '/ms/start'), // the KBTU Microsoft sign-in link, opened outside Telegram
   dmpHi: (): Promise<void> => call('POST', '/me/dmp-hi'), // DMP's one-time hello left (me.dmpHi): never again
   msClaim: (claim: string): Promise<{ ok: true }> => call('POST', '/ms/claim', { claim }), // back from /ms.html (startapp=ms_<claim>): only the Telegram that started it takes it
   manualLogin: (i: { firstName: string; lastName: string; studentId: string; course: number }, consentVersion: string): Promise<Me> => call('POST', '/kbtu/manual', { ...i, consentVersion }), // only while it isn't
-  updateMe: (patch: Partial<Settings> & { bio?: string; showcase?: string[]; nick?: string | null; avatarTg?: boolean; skin?: Id | 'sower' | null; frame?: string | null; phone?: string | null; school?: string | null; course?: number; city?: string | null; cityHidden?: boolean }
+  updateMe: (patch: Partial<Settings> & { bio?: string; showcase?: string[]; nick?: string | null; avatarTg?: boolean; skin?: Id | 'sower' | Archived | null; frame?: string | null; phone?: string | null; school?: string | null; course?: number; city?: string | null; cityHidden?: boolean; notifyVia?: 'app' | 'telegram' }
     & { [k in Exclude<Fixable, 'course' | 'school'>]?: string }): Promise<Me> => call('PATCH', '/me', patch), // phone, city: null deletes it; a Fixable: once each (the server says `fixed` after)
   uploadMyPhoto: (file: Blob): Promise<Me> => call('POST', '/me/photo', file), // my own photo: "Photo from Telegram" goes off
   deleteMyPhoto: (): Promise<Me> => call('DELETE', '/me/photo'), // gone from the server too; Telegram's is back
@@ -414,6 +425,8 @@ export const server = {
   /** volunteers: I apply (a short "why") or take it back; the organizers list them and say yes or no */
   /** "Create chat": Telegram's add-the-bot-to-a-group link for this event */
   chatStart: (id: Id): Promise<string> => call<{ url: string }>('POST', `/events/${id}/chat`).then((r) => r.url),
+  /** "Paste the group's link": any t.me or invite link (bad_input otherwise), null removes it; the link as saved */
+  chatSet: (id: Id, link: string | null): Promise<{ chat: string | null }> => call('PUT', `/events/${id}/chat`, { link }),
   volunteer: (id: Id, note: string): Promise<EventFull> => call('POST', `/events/${id}/volunteer`, { note }),
   volunteerLeave: (id: Id): Promise<EventFull> => call('DELETE', `/events/${id}/volunteer`),
   volunteers: (id: Id): Promise<VolunteerApp[]> => call('GET', `/events/${id}/volunteers`),
@@ -533,7 +546,8 @@ export const server = {
   channelVisit: (): Promise<import('./types').ChannelVisit> => call('GET', '/forum-posts/visit'),
   markChannelSeen: (msg: number): Promise<void> => call('PUT', '/forum-posts/visit', { msg }),
   setChannelHeart: (id: Id, hearted: boolean): Promise<import('./types').ChannelHeart> => call('PUT', `/forum-posts/${id}/heart`, { hearted }),
-  newChannelPost: (body: string, anon: boolean, photos: Id[] = []): Promise<import('./types').ChannelPost> => call('POST', '/forum-posts', { body, anon, photos }), // the AI first, live: the bot posts it; photos: uploadChannelPhoto's ids (anonymous with photos: a moderator first)
+  setChannelComing: (id: Id, coming: boolean): Promise<{ coming: number; me: boolean }> => call('PUT', `/forum-posts/${id}/coming`, { coming }), // an ask for help: "I'm coming"
+  newChannelPost: (body: string, anon: boolean, photos: Id[] = [], help: number | null = null): Promise<import('./types').ChannelPost> => call('POST', '/forum-posts', { body, anon, photos, ...(help ? { help } : {}) }), // help: an ask for help, up this many hours // the AI first, live: the bot posts it; photos: uploadChannelPhoto's ids (anonymous with photos: a moderator first)
   uploadChannelPhoto: (file: Blob): Promise<Media & { id: Id }> => call('POST', '/forum-posts/photos', file), // a photo for my next post, re-encoded (no EXIF); unposted ones go in an hour
   appealChannelPost: (id: Id, body: string, photos: Id[] = []): Promise<import('./types').ChannelPost> => call('POST', `/forum-posts/${id}/appeal`, { body, photos }), // refused by the AI: to a moderator (3 a day), the words given back
   channelPostWhy: (id: Id, body: string): Promise<{ explain: import('./types').ForumWhy | null }> => call('POST', `/forum-posts/${id}/why`, { body }), // the AI's reason for my refused or held post, once

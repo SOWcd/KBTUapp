@@ -23,6 +23,9 @@
  "scenes/dd-far-card.svg": "6f335c2510e9",
  "scenes/dd-mid-card.svg": "0525ee59032c",
  "scenes/dd-near-card.svg": "5e3ecc9b603e",
+ "scenes/dt-ancient-card.svg": "6b8e70b424c3",
+ "scenes/dt-clash-card.svg": "7047060cd0cc",
+ "scenes/dt-rune-card.svg": "cd3bf1b106fd",
  "scenes/en-far-card.svg": "6c32101d25e7",
  "scenes/en-mid-card.svg": "cc781dbf91e9",
  "scenes/en-near-card.svg": "389f848556fd",
@@ -95,5 +98,5 @@
  "schools/sss-theatre-card.svg": "1e00eff634d5",
  "kbtu-rosette.svg": "a74a62eb34a8",
  "kbtu-facade.svg": "77feae174867",
- "minis": "4aa2d09dc580"
+ "minis": "3f97e8e30eca"
 }

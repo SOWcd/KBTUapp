@@ -212,7 +212,7 @@
 
   function share() {
     haptic.tap();
-    shareCard({ kind: 'rc', id: String(org) }, 'https://t.me/KBTUappBot?startapp=rc_' + org, r?.title ?? '')
+    shareCard({ kind: 'rc', id: String(org) })
       .then((sent) => { if (sent) say(t('cast.shared'), 'party_popper_3d'); })
       .catch(() => { haptic.error(); say(t('common.error'), 'warning_3d'); });
   }

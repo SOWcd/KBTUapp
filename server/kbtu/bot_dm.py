@@ -38,12 +38,32 @@ def _welcome(con, cfg: Config, msg: dict) -> dict | None:
     arg = words[1] if len(words) == 2 and words[0] == "/start" and re.fullmatch(r"[A-Za-z0-9_-]{1,64}", words[1]) else ""
     if words[:1] == ["/exit"]:
         arg = "exit"
+    if arg.startswith("sh_"):  # a share card made outside the Mini App (core.share_hold)
+        return _share_start(cfg, con, chat["id"], arg[3:], u["lang"] if u else str((msg.get("from") or {}).get("language_code") or "")[:2])
     if [w.split("@")[0] for w in words[:1]] == ["/chat"] or arg == "chat":  # "Suggest a chat" uses Telegram's own chat picker.
         return _chat_picker(con, cfg, msg)
     # /exit or ?start=exit: "help me get out" as a message with its button, to forward to any chat
     text, button = texts.bot_message(u["lang"] if u else str((msg.get("from") or {}).get("language_code") or "")[:2], "exit" if arg == "exit" else "welcome")
     return {"chat_id": chat["id"], "text": text, "parse_mode": "HTML",
             "reply_markup": {"inline_keyboard": [[{"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp{'=' + arg if arg else ''}"}]]}}
+
+
+
+def _share_start(cfg: Config, con, chat_id: int, secret: str, lang: str) -> dict:
+    """t.me/<bot>?start=sh_<secret>, from the app outside Telegram (a browser, the phone apps: tg.ts shareVia): the card
+    as it will look, with one button that opens Telegram's chat picker and drops the same card there (inline_answer).
+    Not the card's own button: the giver's tap on "Claim" would use up a one-time link."""
+    card = logic.share_card(con, chat_id, secret, start=True)
+    if not card:  # expired, opened already, or another person's link: one answer
+        text, button = texts.bot_message(lang, "share_gone")
+        return {"chat_id": chat_id, "text": text, "parse_mode": "HTML",
+                "reply_markup": {"inline_keyboard": [[{"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp"}]]}}
+    keys = {"inline_keyboard": [[{"text": texts.pick(texts.SHARE_SEND, lang), "switch_inline_query_chosen_chat": {
+        "query": f"sh_{secret}", "allow_user_chats": True, "allow_group_chats": True, "allow_channel_chats": True}}]]}
+    if card["type"] == "photo":
+        return {"chat_id": chat_id, "photo": card["photo_url"], "caption": card["caption"], "parse_mode": "HTML", "reply_markup": keys}
+    m = card["input_message_content"]
+    return {"chat_id": chat_id, "text": m["message_text"], "parse_mode": "HTML", "link_preview_options": m["link_preview_options"], "reply_markup": keys}
 
 
 def _lang(con, msg: dict) -> str:

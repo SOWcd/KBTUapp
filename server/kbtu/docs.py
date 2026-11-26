@@ -23,6 +23,7 @@ import sys
 import threading
 import time
 import zipfile
+from contextlib import closing
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
@@ -392,8 +393,9 @@ def vectors(r: httpx.Response) -> np.ndarray:
     return v / np.maximum(np.linalg.norm(v, axis=1, keepdims=True), 1e-9)
 
 
-def embed(texts: list[str], account: str, token: str, timeout: float = 60, tries: int = 4) -> np.ndarray:
+def embed(texts: list[str], account: str, token: str) -> np.ndarray:
     """bge-m3's vectors for these texts; a refusal or a network error is tried again after 2, 4, 8 s."""
+    timeout, tries = 60, 4
     for i in range(tries):
         try:
             return vectors(httpx.post(**request(texts, account, token), timeout=timeout))
@@ -404,9 +406,10 @@ def embed(texts: list[str], account: str, token: str, timeout: float = 60, tries
     raise AssertionError  # not reached
 
 
-def embed_all(path: Path, account: str, token: str, batch: int = 20) -> int:
+def embed_all(path: Path, account: str, token: str) -> int:
     """Each chunk still without a vector gets one (its title with its text), in a copy swapped in at the end (a running
     server never reads a half-written file); resumable: what was done stays even when it stops."""
+    batch = 20
     work = path.with_suffix(".embedding")
     src, dst = sqlite3.connect(path), sqlite3.connect(work)
     src.backup(dst)
@@ -499,7 +502,7 @@ class Index:
 
     def ready(self) -> bool:
         try:
-            with self._con() as con:
+            with closing(self._con()) as con:
                 self._load(con)
             return True
         except (OSError, sqlite3.Error, TypeError):  # no file, or not a docs file
@@ -530,7 +533,7 @@ class Index:
         """The k best chunks for a question: bm25's list and, with a question's vector of the file's length, cosine's,
         fused by rank. One edition per handbook (the question's language when it has hits there): the three say the same.
         `intake`: the student's year of entry, its curricula first when the question names no year."""
-        with self._con() as con:
+        with closing(self._con()) as con:
             _, ids, vecs, n = self._load(con)
             lists = self._fts(con, q, n, intake)
             qv = None if qvec is None else np.asarray(qvec, dtype=np.float32).ravel()

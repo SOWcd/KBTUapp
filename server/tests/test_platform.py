@@ -45,6 +45,6 @@ def test_platform_swept_and_deleted(env, monkeypatch):
                     [(stu, "android", night - 91 * 86400), (stu, "ios", night - 89 * 86400), (bob, "android", night)])
     logic.stats_day(con)                                                          # the night's sweep: 90 days, as the policy says
     assert kinds(con, stu) == {"ios": night - 89 * 86400}
-    logic.delete_me(con, logic.Viewer(stu, "user", True))
+    logic.account.delete_me(con, logic.Viewer(stu, "user", True))
     assert kinds(con, stu) == {} and kinds(con, bob) == {"android": night}
-    assert ("user_platforms", "user_id") in logic._DEL_GONE
+    assert ("user_platforms", "user_id") in logic.account._DEL_GONE

@@ -1,8 +1,11 @@
 """Signing in: by hand and with Microsoft."""
 from __future__ import annotations
 
+import hashlib
 import json
 import re
+
+from fastapi.testclient import TestClient
 
 from kbtu import config, db, logic, outbox
 from test_core import env, login, tma  # noqa: F401  (env: the fixture)
@@ -31,7 +34,7 @@ def test_manual_sign_in(env, monkeypatch):
     assert c.get("/api/friends/joined", headers=tma(23)).json()["error"] == "need_student"
     who = lambda n: {"oid": f"oid-{n}", "email": f"s_{n}@kbtu.kz", "first": "Maga", "last": f"N{n}", "employeeId": "", "profile": {}}  # noqa: E731
     for tg in (21, 22, 24):
-        logic.ms_remember(con, ids[tg], who(tg))
+        logic.account.ms_remember(con, ids[tg], who(tg))
     me = manual(21).json()                                                                 # the ID held by a typed-in row: it gives way
     assert me["student"]["studentId"] == "24B031234" and me["student"]["ms"] and me["no"] is not None
     assert not con.execute("SELECT 1 FROM students WHERE user_id = ?", (ids[23],)).fetchone()
@@ -53,7 +56,7 @@ def test_manual_sign_in(env, monkeypatch):
         logic.id_clash(con, f"24B00000{i}", ids[24], ids[21])
     assert con.execute("SELECT COUNT(*) FROM bot_outbox WHERE kind = 'sid_check' AND ref LIKE 'sc:24B00000%'").fetchone()[0] == 3
     assert manual(22, {**body, "studentId": "24B031235", "firstName": "x1"}).json()["student"]["firstName"] == "Maga"  # Microsoft's names win
-    logic.delete_me(con, logic.Viewer(ids[24], "user", True))                            # an unfinished sign-in leaves with the account
+    logic.account.delete_me(con, logic.Viewer(ids[24], "user", True))                            # an unfinished sign-in leaves with the account
     assert not con.execute("SELECT 1 FROM meta WHERE key = ?", (f"ms:{ids[24]}",)).fetchone()
     con.execute("INSERT INTO meta (key, value) VALUES ('ms:999', ?), ('ms_used:abc', '1')", (json.dumps({"at": 1}),))
     logic.ms_sweep(con)
@@ -79,10 +82,21 @@ def test_ms_sign_in(env, monkeypatch):
     con.execute("""INSERT INTO students (user_id, student_id, first_name, last_name, course, consent_version, consent_at, verified_at,
         synced_at, manual) VALUES (?, '24B099001', 'Bek', 'Typed', 2, 'v2', 0, 0, 0, 1)""", (c.get("/api/me", headers=tma(21)).json()["id"],))
     url = c.post("/api/ms/start", headers=tma(21)).json()["url"]
+    assert "/ms/go?state=" in url and msauth.KBTU not in url  # our page first: it keeps the verifier in the browser
     state = re.search(r"state=([^&]+)", url).group(1).replace("%2E", ".").replace("%3D", "=")
-    assert msauth.KBTU in url and "code_challenge=" in url
-    v = c.get("/api/ms/verifier", params={"state": state}).json()
-    assert v == {"verifier": msauth.verifier(cfg.token_key, state), "name": "Test"}  # ms.html asks "link to Test?" first
+    # PKCE (Aldiyar's report): the verifier is random and only in the cookie of the browser that opened the link, so
+    # the state (in the address, beside the code) gives nobody else the verifier
+    browser, other = (TestClient(c.app, base_url="https://testserver") for _ in range(2))
+    assert other.get("/api/ms/verifier", params={"state": state}).status_code == 404
+    assert browser.get("/ms/go", params={"state": "1.2.3.x"}, follow_redirects=False).headers["location"] == "/ms.html"
+    go = browser.get("/ms/go", params={"state": state}, follow_redirects=False)
+    to = go.headers["location"]
+    assert go.status_code == 302 and msauth.KBTU in to and "code_challenge=" in to and "state=" in to
+    v = browser.get("/api/ms/verifier", params={"state": state}).json()
+    challenge = re.search(r"code_challenge=([^&]+)", to).group(1)
+    assert challenge == base64.urlsafe_b64encode(hashlib.sha256(v["verifier"].encode()).digest()).rstrip(b"=").decode()
+    assert v["name"] == "Test" and len(v["verifier"]) >= 43  # ms.html asks "link to Test?" first
+    assert other.get("/api/ms/verifier", params={"state": state}).status_code == 404  # the state alone: still nothing
     assert c.get("/api/ms/verifier", params={"state": "1.2.\u00e9"}).status_code == 404      # not a 500
     assert c.get("/api/ms/verifier", params={"state": state[:-2] + "xx"}).status_code == 404
 

@@ -74,8 +74,8 @@ def subjects(con, v: Viewer, path: str) -> dict:
     need_student(v)
     cat = catalogue(path)
     counts = {r[0]: r[1] for r in con.execute(f"SELECT a.subject, COUNT(*) FROM asks a WHERE {_SEEN} GROUP BY a.subject",
-                                              {"now": _now(), "me": v.id}) if r[0] in cat}
-    mine = [r[0] for r in con.execute("SELECT subject FROM asks WHERE user_id = ? AND subject IS NOT NULL AND expires_at > ?", (v.id, _now()))]
+                                              {"now": core.now(), "me": v.id}) if r[0] in cat}
+    mine = [r[0] for r in con.execute("SELECT subject FROM asks WHERE user_id = ? AND subject IS NOT NULL AND expires_at > ?", (v.id, core.now()))]
     return {"subjects": list(cat.values()), "counts": counts, "mine": [s for s in mine if s in cat]}
 
 
@@ -89,11 +89,11 @@ def card(con, v: Viewer, path: str, sid: str) -> dict:
     for p in con.execute(f"""SELECT {PERSON_COLS}, s.course, s.school, u.tg_id, u.tg_username, a.id AS ask, a.body, c.status AS offered, c.id AS offer_id
             FROM asks a JOIN users u ON u.id = a.user_id LEFT JOIN students s ON s.user_id = u.id
             LEFT JOIN contacts c ON c.ask_id = a.id AND c.from_id = :me AND c.to_id = a.user_id AND c.withdrawn_at IS NULL
-            WHERE a.subject = :sid AND {_SEEN} ORDER BY a.id DESC LIMIT 200""", {"now": _now(), "me": v.id, "sid": sid}).fetchall():
+            WHERE a.subject = :sid AND {_SEEN} ORDER BY a.id DESC LIMIT 200""", {"now": core.now(), "me": v.id, "sid": sid}).fetchall():
         people.append({"ask": p["ask"], "person": person_ref(p), "name": short_name(p), "course": p["course"], "school": p["school"],
                        "note": p["body"] or None, "offered": p["offered"], "offerId": p["offer_id"],
                        **({"telegram": _link(p)} if p["offered"] == "accepted" else {})})
-    a = one(con, "SELECT * FROM asks WHERE subject = ? AND user_id = ? AND expires_at > ?", sid, v.id, _now())
+    a = one(con, "SELECT * FROM asks WHERE subject = ? AND user_id = ? AND expires_at > ?", sid, v.id, core.now())
     held = _held(con, v.id, sid)
     mine = {"note": a["body"], "status": "hidden" if held else a["status"], "why": a["why"], "until": a["expires_at"]} if a else None
     return {**s, "people": people, "mine": mine, "restricted": held}
@@ -116,7 +116,7 @@ def reserve(con, v: Viewer, path: str, sid: str) -> dict:
     s = catalogue(path).get(sid)
     if not s:
         raise ApiError("not_found")
-    hour = _now() // 3600
+    hour = core.now() // 3600
     with tx(con):
         n = int((one(con, "SELECT value FROM meta WHERE key = ?", f"subj:{v.id}:{hour}") or [0])[0])
         if n >= WRITES_AN_HOUR:
@@ -130,7 +130,7 @@ def reserve(con, v: Viewer, path: str, sid: str) -> dict:
 def _may_list(con, uid: int, sid: str) -> None:
     """Room for one more listing (the cap, but changing one I have is fine) and no take-down standing on this subject."""
     if one(con, "SELECT COUNT(*) FROM asks WHERE user_id = ? AND subject IS NOT NULL AND subject != ? AND expires_at > ?",
-           uid, sid, _now())[0] >= LISTED_MAX:
+           uid, sid, core.now())[0] >= LISTED_MAX:
         raise ApiError("rate_limited", "subjects")
     if _held(con, uid, sid):
         raise ApiError("conflict", "restricted")
@@ -138,7 +138,7 @@ def _may_list(con, uid: int, sid: str) -> None:
 
 def _held(con, uid: int, sid: str) -> int | None:
     """Until when a moderator's take-down keeps me off this subject (None: it doesn't)."""
-    h = one(con, "SELECT until FROM subject_holds WHERE user_id = ? AND subject = ? AND until > ?", uid, sid, _now())
+    h = one(con, "SELECT until FROM subject_holds WHERE user_id = ? AND subject = ? AND until > ?", uid, sid, core.now())
     return h[0] if h else None
 
 
@@ -156,7 +156,7 @@ def join(con, v: Viewer, path: str, s: dict, note: str, verdict: bool | None) ->
             VALUES (?, ?, 'help', ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (subject, user_id) WHERE subject IS NOT NULL DO UPDATE SET title = excluded.title, body = excluded.body,
                 status = excluded.status, why = excluded.why, expires_at = excluded.expires_at, found = NULL""",
-                    (core.next_id(con, "asks"), v.id, s["names"]["ru"], note, status, why, _now(), term_end(_now()), sid))
+                    (core.next_id(con, "asks"), v.id, s["names"]["ru"], note, status, why, core.now(), term_end(core.now()), sid))
     return card(con, v, path, sid)
 
 
@@ -170,16 +170,16 @@ def leave(con, v: Viewer, sid: str) -> None:
 
 def hold(con, uid: int, sid: str, by: int | None, why: str, until: int) -> None:
     title = one(con, "SELECT title FROM asks WHERE user_id = ? AND subject = ?", uid, sid)
-    con.execute("DELETE FROM subject_holds WHERE user_id = ? AND subject = ? AND until <= ?", (uid, sid, _now()))  # a past term's
+    con.execute("DELETE FROM subject_holds WHERE user_id = ? AND subject = ? AND until <= ?", (uid, sid, core.now()))  # a past term's
     con.execute("INSERT OR IGNORE INTO subject_holds (user_id, subject, title, by_id, why, at, until) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (uid, sid, title[0] if title else sid, by, why, _now(), until))
+                (uid, sid, title[0] if title else sid, by, why, core.now(), until))
 
 
 def holds(con) -> list[dict]:
     """The take-downs standing, for Admin to lift, newest first."""
     return [{"id": h["hid"], "title": h["title"], "person": person_ref(h), "name": short_name(h), "why": h["why"], "at": h["at"], "until": h["until"]}
             for h in con.execute(f"""SELECT h.id AS hid, h.title, h.why, h.at, h.until, {PERSON_COLS} FROM subject_holds h JOIN users u ON u.id = h.user_id
-                LEFT JOIN students s ON s.user_id = u.id WHERE h.until > ? ORDER BY h.id DESC LIMIT 100""", (_now(),)).fetchall()]
+                LEFT JOIN students s ON s.user_id = u.id WHERE h.until > ? ORDER BY h.id DESC LIMIT 100""", (core.now(),)).fetchall()]
 
 
 def lift(con, v: Viewer, hid: int) -> None:
@@ -187,7 +187,7 @@ def lift(con, v: Viewer, hid: int) -> None:
     up again. Done's Undo makes the record again (unlift), from what this line keeps."""
     _mod(v)
     with tx(con):
-        h = one(con, "SELECT * FROM subject_holds WHERE id = ? AND until > ?", hid, _now())
+        h = one(con, "SELECT * FROM subject_holds WHERE id = ? AND until > ?", hid, core.now())
         if not h:
             raise ApiError("not_found")
         con.execute("DELETE FROM subject_holds WHERE id = ?", (hid,))
@@ -199,7 +199,7 @@ def unlift(con, v: Viewer, target: str, data: dict) -> None:
     """Done's Undo of a lift: the same take-down again, its deadline as it was (gone by now, or its author no longer a
     student: nothing to undo). Logged on the lift's own target, so that lift counts as decided."""
     with tx(con):
-        if data.get("until", 0) <= _now() or not con.execute("""INSERT OR IGNORE INTO subject_holds (user_id, subject, title, by_id, why, at, until)
+        if data.get("until", 0) <= core.now() or not con.execute("""INSERT OR IGNORE INTO subject_holds (user_id, subject, title, by_id, why, at, until)
                 SELECT ?, ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM students WHERE user_id = ?)""",
                 (data["user_id"], data["subject"], data["title"], data["by_id"], data["why"], data["at"], data["until"], data["user_id"])).rowcount:
             raise ApiError("not_found")
@@ -208,7 +208,7 @@ def unlift(con, v: Viewer, target: str, data: dict) -> None:
 
 def sweep_counters(con) -> None:
     """The hourly write counters past their hour (forum_sweep, nightly): nothing of who wrote when outlives the hour."""
-    hour = _now() // 3600
+    hour = core.now() // 3600
     for (k,) in con.execute("SELECT key FROM meta WHERE key LIKE 'subj:%' OR key LIKE 'fsearch:%' OR key LIKE 'flook:%'").fetchall():
         if not k.split(":")[-1].isdigit() or int(k.split(":")[-1]) < hour:
             con.execute("DELETE FROM meta WHERE key = ?", (k,))
@@ -226,7 +226,7 @@ def offer(con, v: Viewer, aid: object) -> dict:
 
 def withdraw(con, v: Viewer, cid: int) -> None:
     """Keep the offer's identity for the daily cap and old bot buttons."""
-    at = _now()
+    at = core.now()
     if not con.execute("""UPDATE contacts SET status = 'declined', withdrawn_at = ?, decided_at = ?
             WHERE id = ? AND from_id = ? AND status = 'pending'
             AND EXISTS (SELECT 1 FROM asks WHERE id = contacts.ask_id AND subject IS NOT NULL)""",
@@ -240,10 +240,6 @@ def offer_delivered(con, cid: int, uid: int, chat: int, mid: int) -> None:
     con.execute("""UPDATE contacts SET offer_message = ? WHERE id = ? AND to_id = ?
         AND (status = 'pending' OR withdrawn_at IS NOT NULL)
         AND EXISTS (SELECT 1 FROM asks WHERE id = contacts.ask_id AND subject IS NOT NULL)""", (payload, cid, uid))
-
-
-def _now() -> int:
-    return core.now()
 
 
 from . import core  # noqa: E402

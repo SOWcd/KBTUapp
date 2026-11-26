@@ -204,11 +204,6 @@ def _person_names(p) -> tuple:
     return (f"{p['first_name'] or ''} {p['last_name'] or ''}", f"{p['first_lat'] or ''} {p['last_lat'] or ''}", p["nick"])
 
 
-def person_hit(k: str, p) -> bool:
-    """A person (the students' name columns, the users' nick) by any of their names."""
-    return hit(k, _person_names(p))
-
-
 def people(found, q: str, n: int = 20) -> list:
     """Out of `found` (rows with u.id, u.tg_username, s.student_id and the name columns; the caller's query decides who
     may come back): the exact @username first, then by app id, exact student ID or any name (students only)."""

@@ -11,6 +11,7 @@ import pytest
 from kbtu import db, logic, xlsx
 from kbtu.logic import donations, fchannel, helpus, profiles
 from test_core import env, login, set_clock, tma  # noqa: F401  (env: the fixture)
+from test_vol import _xlsx
 
 M = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -96,7 +97,7 @@ def test_malformed_xlsx_is_bad():
     assert b"<!ENTITY" not in utf16
     with pytest.raises(xlsx.Bad, match="DTD"):
         xlsx.read(_zip({"xl/workbook.xml": utf16, "xl/_rels/workbook.xml.rels": RELS}))
-    assert xlsx.read(xlsx.write({"A": [["x", "y"], [], ["", "z"]]})) == ({"A": [["x", "y"], [], ["", "z"]]}, 0)
+    assert xlsx.read(_xlsx({"A": [["x", "y"], [], ["", "z"]]})) == ({"A": [["x", "y"], [], ["", "z"]]}, 0)
 
 
 def test_fuel_medal_shows_no_payment_time(env):

@@ -213,7 +213,11 @@ def test_bring_a_friend(env):
     assert c.post("/api/events/1/invites", headers=A, json={"userId": dana["id"]}).status_code == 403   # not a friend
     assert c.post("/api/events/1/invites", headers=A, json={"userId": zhan["id"]}).json()[0]["state"] == "invited"
     c.post("/api/events/1/invites", headers=A, json={"userId": zhan["id"]})                            # twice: one card
-    cards = con.execute("SELECT b.*, 'ru' AS lang FROM bot_outbox b WHERE kind = 'friend_invite' AND user_id = ?", (zhan["id"],)).fetchall()
+    # the friend's card remembers it (reopened, the Invite sheet showed "Invite" again: Amina); only mine, only to friends
+    assert c.get(f"/api/users/{zhan['id']}", headers=A).json()["invited"] == [1]
+    assert c.get(f"/api/users/{ali['id']}", headers=Z).json()["invited"] == []
+    assert c.get(f"/api/users/{zhan['id']}", headers=tma(93, "Dana")).json()["invited"] == []
+    cards =con.execute("SELECT b.*, 'ru' AS lang FROM bot_outbox b WHERE kind = 'friend_invite' AND user_id = ?", (zhan["id"],)).fetchall()
     assert len(cards) == 1 and outbox._render(con, cards[0])[2] == "ev_1"
     c.post("/api/events/1/registration", headers=Z)
     assert con.execute("SELECT invited_by FROM registrations WHERE user_id = ?", (zhan["id"],)).fetchone()[0] == ali["id"]
@@ -693,9 +697,9 @@ def test_door_guests(env):
     assert c.delete(f"/api/events/1/checkin/{ali['id']}", headers=M).status_code == 204
     assert [tuple(r) for r in came(ali["id"])] == [(1, 0, 1)]
     assert linked("Ali Testov") is None
-    logic.link_door_guests(con, ali["id"])
+    logic.organizing.link_door_guests(con, ali["id"])
     assert [tuple(r) for r in came(ali["id"])] == [(1, 0, 1)]
-    logic.delete_me(con, logic.Viewer(ali["id"], "user", True))
+    logic.account.delete_me(con, logic.Viewer(ali["id"], "user", True))
     assert not con.execute("SELECT 1 FROM door_guests WHERE event_id = 1 AND norm = 'ali testov'").fetchone()
 
 

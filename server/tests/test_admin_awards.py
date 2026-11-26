@@ -291,7 +291,7 @@ def test_honor_medal(env, monkeypatch, capsys):
         assert texts.ACH_NAMES[lang]["honor"] in text and reason not in text and button and link == "aw_honor"
 
     mine = c.get("/api/credits", headers=tma(62)).json()["mine"]
-    assert mine["honor"] and mine["items"] == [] and listed() == []
+    assert mine["honor"] and mine["items"] == [] and [(p["person"]["id"], p["honor"]) for p in listed()] == [(uid, True)]  # shown by default
     assert credits.asking(con, uid) == 62
     consent = {"show": True, "rev": mine["rev"], "consent": credits.CONSENT}
     assert c.put("/api/credits/consent", headers=tma(62), json=consent).status_code == 200
@@ -315,7 +315,7 @@ def test_honor_medal(env, monkeypatch, capsys):
     assert not con.execute("SELECT 1 FROM bot_outbox WHERE ref = 'ach:honor:1'").fetchone()
     admin.main(["honor", "--yes", str(uid), reason])
     assert medals()[0]["reason"] == reason
-    assert ("achievement_grants", "user_id") in logic._DEL_GONE
+    assert ("achievement_grants", "user_id") in logic.account._DEL_GONE
     delete_now(c, cfg, tma(62))
     assert not con.execute("SELECT 1 FROM achievement_grants WHERE code = 'honor'").fetchone()
     assert listed() == []

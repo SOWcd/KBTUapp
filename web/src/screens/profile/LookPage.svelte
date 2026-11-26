@@ -8,7 +8,8 @@
   import { lookData } from '../../lib/state/looks.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
-  import { banded, clubLook, lookVars, type Look } from '../../lib/awards';
+  import { banded, clubLook, isArchived, lookVars, type Look } from '../../lib/awards';
+  import type { Archived } from '../../lib/api';
   // each lanyard's card art at the swatch's size, one small picture (tools/scene-rasters.mjs draws them from LanyardBand)
   const MINI = import.meta.glob('../../assets/lanyards/minis/*.webp', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
 
@@ -17,7 +18,7 @@
   const frame = $derived(ui.look ? ui.look.frame : me?.frame ?? null);
   onDestroy(() => { ui.tryOn = null; });
 
-  const pickSkin = (id: number | 'sower' | null) => { if (ui.look) ui.look = { ...ui.look, skin: id }; };
+  const pickSkin = (id: number | 'sower' | Archived | null) => { if (ui.look) ui.look = { ...ui.look, skin: id }; };
   const pickFrame = (f: string | null) => { if (ui.look) ui.look = { ...ui.look, frame: f }; };
   const FRAMES = [null, 'flowers', 'space', 'hearts', 'sparkles', 'laurel', 'leaves', 'snow', 'notes', 'neon', 'blossom', 'gold'] as const;
 </script>
@@ -30,12 +31,13 @@
         <h3 class="sub" class:first={r === 0}>{t(label)}</h3>
         <div class="skins" role="radiogroup" aria-label={t(label)}>
           {#each ks as k (k.id ?? 'kbtu')}
-            <button class="ly {k.kind}" class:club={!!clubLook(k.kind as Look)} style={lookVars(k.kind as Look)} role="radio" aria-checked={L.worn === k.id} class:on={L.worn === k.id} class:locked={'locked' in k && k.locked}
-                    onclick={() => { haptic.select(); if ('locked' in k && k.locked) ui.tryOn = { id: k.id as number, name: k.name, school: L.kindOf(k) === 'school' }; else { ui.tryOn = null; pickSkin(k.id); } }}>
+            <button class="ly {k.kind}" class:club={!!clubLook(k.kind as Look)} style={lookVars(k.kind as Look)} role="radio" aria-checked={L.worn === k.id} class:on={L.worn === k.id} class:locked={'locked' in k && k.locked} class:arc={isArchived(k.id)}
+                    onclick={() => { haptic.select(); if ('locked' in k && k.locked) ui.tryOn = { id: k.id as number | Archived, name: k.name, school: L.kindOf(k) === 'school' }; else { ui.tryOn = null; pickSkin(k.id); } }}>
               <span class="st"><i>{k.word}</i></span><span class="cl"></span>
               <!-- a scene for mine only: every club's full scene at once (20+) left the whole list unpainted on iPhones;
-                   now a picture each (perf round 3), the locked ones keep their plain colours as before -->
-              <span class="cd">{#if banded(k.kind as Look) && !('locked' in k && k.locked)}<img class="mini" src={MINI[`../../assets/lanyards/minis/${k.kind}.webp`]} alt="" loading="lazy" decoding="async" />{/if}<span class="ph"></span><span class="ln"></span><span class="ln s"></span><span class="hl"></span></span>
+                   now a picture each (perf round 3), the locked ones keep their plain colours as before; the archive's
+                   three show theirs to everyone (seeing them is the point) -->
+              <span class="cd">{#if banded(k.kind as Look) && (!('locked' in k && k.locked) || isArchived(k.id))}<img class="mini" src={MINI[`../../assets/lanyards/minis/${k.kind}.webp`]} alt="" loading="lazy" decoding="async" />{/if}<span class="ph"></span><span class="ln"></span><span class="ln s"></span><span class="hl"></span></span>
               {#if 'locked' in k && k.locked}<span class="lk"><Lock size={12} strokeWidth={2.4} /></span>{/if}
               <b>{k.name}</b>
             </button>
@@ -78,6 +80,7 @@
   /* someone else's club: seen, not worn; a small lock on the card's corner */
   .ly { position: relative; }
   .ly.locked .st, .ly.locked .cl, .ly.locked .cd { opacity: 0.45; filter: saturate(0.4); }
+  .ly.locked.arc .st, .ly.locked.arc .cl, .ly.locked.arc .cd { opacity: 1; filter: none; } /* the archive: seen in full, the lock says whose */
   .ly .lk { position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--text); color: var(--bg); }
   .ly .st { width: 12px; height: 26px; display: flex; justify-content: center; overflow: hidden; background: linear-gradient(90deg, #1B36A0, #3B6BFF 50%, #1B36A0); }
   .ly .st i { writing-mode: vertical-rl; transform: rotate(180deg); font: 800 4.5px/12px var(--font-text); font-style: normal; letter-spacing: 0.2em; color: rgba(255, 255, 255, 0.85); white-space: nowrap; }

@@ -168,7 +168,7 @@ def test_invite_link_adds_friend(env):
     assert c.get(f"/api/users/{ann['id']}", headers=C).json()["friendship"] == "requested"
     # the day's limit: a stranger can't collect posted links for friends' full names
     now = int(time.time())
-    con.executemany("INSERT INTO users (tg_id, created_at, seen_at) VALUES (?, 0, 0)", [(900 + i,) for i in range(logic.FRIEND_ASKS_A_DAY)])
+    con.executemany("INSERT INTO users (tg_id, created_at, seen_at) VALUES (?, 0, 0)", [(900 + i,) for i in range(logic.profiles.FRIEND_ASKS_A_DAY)])
     con.execute("INSERT INTO friendships (a, b, created_at) SELECT ?, id, ? FROM users WHERE tg_id >= 900", (bob["id"], now))
     dan = login(c, 204, "dan")["referrals"]["code"]
     assert c.post(f"/api/invite/{dan}", headers=B).json()["error"] == "rate_limited"

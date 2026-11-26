@@ -1,9 +1,11 @@
 """The ground every rule stands on: the caller, errors, the clock, queries, rights; and the shapes the app gets (web/src/lib/api/types.ts)."""
 from __future__ import annotations
 
+import calendar
 import json
 import logging
 import re
+import secrets
 import sqlite3
 import time
 import unicodedata
@@ -127,8 +129,28 @@ def titled(r, key: str = "title") -> dict:
 TITLES = "t.name AS title, t.name_kk AS title_kk, t.name_en AS title_en"
 
 
+TZ = 5 * 3600  # Almaty is UTC+5 all year
+
+
 def now() -> int:
     return int(time.time())
+
+
+def day_of(ts: int) -> int:
+    """The Almaty day number of a moment."""
+    return (ts + TZ) // 86400
+
+
+def day_start(ts: int) -> int:
+    """The moment the Almaty day of `ts` began."""
+    return (ts + TZ) // 86400 * 86400 - TZ
+
+
+def at(date: str, hm: str) -> int:
+    """A form's 'YYYY-MM-DD' and 'HH:MM' in Almaty as a timestamp."""
+    y, m, d = (int(x) for x in date.split("-"))
+    h, mi = (int(x) for x in hm.split(":"))
+    return calendar.timegm((y, m, d, h, mi, 0)) - TZ
 
 
 def one(con: sqlite3.Connection, sql: str, *args) -> sqlite3.Row | None:
@@ -260,6 +282,38 @@ def _once(con, key: str, value: str) -> bool:
         return False
     con.execute("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value", (key, value))
     return True
+
+
+SHARE_TTL = 3600   # a card handed from the browser to the bot (share_hold): an hour to open Telegram and pick the chats
+SHARE_AN_HOUR = 30  # cards one person may hand over an hour (each may mint a link: an award's, a club's)
+
+
+def share_hold(con, uid: int, tg: int, card: dict) -> str:
+    """Outside the Mini App (a browser, the phone apps) there is no shareMessage: the card the server built waits here
+    for the bot under a one-time secret in its start link (t.me/<bot>?start=sh_<secret>). The secret carries nothing
+    itself; only the Telegram account signed in here gets the card, within SHARE_TTL (bot._share_start, inline_answer)."""
+    with tx(con):
+        if one(con, """SELECT COUNT(*) FROM meta WHERE key >= 'share:' AND key < 'share;'
+                AND json_extract(value, '$.uid') = ? AND json_extract(value, '$.at') >= ?""", uid, now() - SHARE_TTL)[0] >= SHARE_AN_HOUR:
+            raise ApiError("rate_limited", "share")
+        secret = secrets.token_urlsafe(16)
+        con.execute("INSERT INTO meta (key, value) VALUES (?, ?)", (f"share:{secret}", json.dumps({"uid": uid, "tg": tg, "at": now(), "card": card})))
+    return secret
+
+
+def share_card(con, tg: int, secret: str, start: bool = False) -> dict | None:
+    """The card held for this Telegram account, or None (unknown, expired, someone else's: one answer for all).
+    start: the bot's /start, once per secret; the Share button's inline query may ask again until SHARE_TTL."""
+    if not re.fullmatch(r"[\w-]{22}", secret):
+        return None
+    r = one(con, "SELECT value FROM meta WHERE key = ?", f"share:{secret}")
+    held = json.loads(r[0]) if r else None
+    if not held or held["tg"] != tg or held["at"] < now() - SHARE_TTL:
+        return None
+    if start and not con.execute("UPDATE meta SET value = json_set(value, '$.started', 1) WHERE key = ? AND json_extract(value, '$.started') IS NULL",
+                                 (f"share:{secret}",)).rowcount:
+        return None
+    return held["card"]
 
 
 
@@ -465,7 +519,7 @@ def course_cap(sid: str | None) -> int:
 
 def academic_year(t: int | None = None) -> int:
     """2026 from September 1, 2026 to August 31, 2027 (Almaty)."""
-    d = time.gmtime((now() if t is None else t) + 5 * 3600)
+    d = time.gmtime((now() if t is None else t) + TZ)
     return d.tm_year if d.tm_mon >= 9 else d.tm_year - 1
 
 
@@ -474,7 +528,7 @@ def course_day(con) -> None:
     stored year already past it, the portal's, is never lowered). A course was right for
     course_year, or else for the academic year it was written in (synced_at; an August ID of the coming intake: its own
     year). Moved on, not re-read from the ID: the portal's years stay (a repeater's ID is older than their year)."""
-    if not _once(con, "course_day", str((now() + 5 * 3600) // 86400)):
+    if not _once(con, "course_day", str(day_of(now()))):
         return
     ay = academic_year()
     for r in rows(con, "SELECT user_id, student_id, course, course_year, synced_at FROM students WHERE course IS NOT NULL"):
@@ -711,7 +765,7 @@ def _full(con, v: Viewer, e: sqlite3.Row, c: dict, head: bool, pay: bool) -> dic
                         for u in rows(con, "SELECT * FROM event_updates WHERE event_id = ? ORDER BY created_at DESC, id DESC LIMIT 10", e["id"])],
             **_rating_view(con, v, e, head), "volunteers": _volunteers_view(con, v, e, head), "teams": evteams.view(con, v, e, head),
             **santa.view(con, v, e, head),
-            "chat": e["chat_link"] if e["chat_link"] and _chat_ok(con, e, v.id) else None, "chatLinked": bool(e["chat_id"]) if head else None,
+            "chat": e["chat_link"] if e["chat_link"] and (head or _chat_ok(con, e, v.id)) else None, "chatLinked": bool(e["chat_id"]) if head else None,
             # no video, no query (most events): `id = NULL` matches nothing, yet it would still be asked on every sheet opened
             "wideVideo": video_shape(x) if e["wide_video_id"] and (x := one(con, "SELECT * FROM videos WHERE id = ?", e["wide_video_id"])) and (head or x["status"] == "ready") else None,
             # the editor sees its video while it is still being compressed (or why it failed)

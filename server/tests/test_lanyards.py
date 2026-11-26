@@ -1,4 +1,4 @@
-"""Lanyards: the clubs' (the server's logic.LANYARDS and the web's awards.ts SKINS + CLUB_LOOKS are one) and the schools'."""
+"""Lanyards: the clubs' (the server's logic.account.LANYARDS and the web's awards.ts SKINS + CLUB_LOOKS are one) and the schools'."""
 import re
 from pathlib import Path
 
@@ -13,9 +13,9 @@ def test_lanyards_match_the_web():
     hand = re.search(r"const SKINS = \{(.*?)\} as const", src, re.S).group(1)
     looks = re.search(r"export const CLUB_LOOKS = \{(.*?)\n\} satisfies", src, re.S).group(1)
     web = re.findall(r"(\w+): '\w+'", hand) + re.findall(r"^  (\w+): \{", looks, re.M)
-    assert len(web) == len(set(web)) and set(web) == set(logic.LANYARDS)
+    assert len(web) == len(set(web)) and set(web) == set(logic.account.LANYARDS)
     schools = re.search(r"export const SCHOOL_LOOKS = \{(.*?)\n\} satisfies", src, re.S).group(1)
-    assert set(re.findall(r"^  (\w+): \{", schools, re.M)) == set(logic.SCHOOL_LANYARDS)
+    assert set(re.findall(r"^  (\w+): \{", schools, re.M)) == set(logic.account.SCHOOL_LANYARDS)
 
 
 def test_school_slug():
@@ -25,8 +25,8 @@ def test_school_slug():
              "\u0428\u041c\u0438\u0417\u0422": "smsgt", "\u0428\u0413": "geology", "\u041a\u041c\u0410": "kma", "\u0428\u041f\u041c": "sam", "\u041c\u0428\u042d": "ise",
              "\u0428\u043a\u043e\u043b\u0430 \u043f\u0440\u0430\u0432\u0430": "law", "\u0428\u043a\u043e\u043b\u0430 \u0441\u043e\u0446\u0438\u0430\u043b\u044c\u043d\u044b\u0445 \u043d\u0430\u0443\u043a": "sss",
              " site ": "site", "\u0414\u0418\u0422": None, "": None, None: None}
-    assert {k: logic.school_slug(k) for k in cases} == cases
-    assert set(logic.SCHOOL_LANYARDS) == {s["slug"] for s in logic.SCHOOLS}
+    assert {k: logic.account.school_slug(k) for k in cases} == cases
+    assert set(logic.account.SCHOOL_LANYARDS) == {s["slug"] for s in logic.clubs.SCHOOLS}
 
 
 def test_school_lanyard(env):
@@ -64,3 +64,29 @@ def test_lanyard_by_name(env):
     uid = c.get("/api/me", headers=tma(1)).json()["id"]
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (90, ?, 'member', 0), (91, ?, 'member', 0), (92, ?, 'member', 0)", (uid, uid, uid))
     assert logic.account._skin_ok(con, uid, 90) and logic.account._skin_ok(con, uid, 92) and not logic.account._skin_ok(con, uid, 91)
+
+
+def test_archive(env):
+    """The archive (owner, Nov 25): the web's ARCHIVE_LOOKS are the server's; anyone tries one on in the picker (the web
+    alone), the creator alone wears one and others see it on his card; any other pick lets it go."""
+    looks = re.search(r"export const ARCHIVE_LOOKS = \{(.*?)\n\} satisfies", AWARDS.read_text(), re.S).group(1)
+    assert set(re.findall(r"^  (\w+): \{", looks, re.M)) == set(logic.ARCHIVE)
+    c, cfg = env
+    login(c, 82, "ann")
+    bob = login(c, 83, "bob")
+    A, B = tma(82, "Ann"), tma(83, "Bob")
+    assert c.patch("/api/me", headers=A, json={"skin": "dota_rune"}).status_code == 400   # not the creator
+    con = db.connect(cfg.db_path)
+    con.execute("UPDATE users SET is_founder = 1 WHERE id = ?", (bob["id"],))
+    con.commit()
+    assert c.patch("/api/me", headers=B, json={"skin": "dota_nope"}).status_code == 400    # not in the archive
+    assert c.patch("/api/me", headers=B, json={"skin": "dota_rune"}).json()["skin"] == "dota_rune"
+    assert c.get("/api/me", headers=B).json()["skin"] == "dota_rune"
+    assert c.get(f"/api/users/{bob['id']}", headers=A).json()["skin"] == "dota_rune"     # a stranger sees it too
+    assert c.patch("/api/me", headers=B, json={"skin": "sower"}).json()["skin"] == "sower"  # back to his own
+    c.patch("/api/me", headers=B, json={"skin": "dota_clash"})
+    assert c.patch("/api/me", headers=B, json={"skin": None}).json()["skin"] is None
+    assert con.execute("SELECT skin_look FROM users WHERE id = ?", (bob["id"],)).fetchone()[0] is None
+    con.execute("UPDATE users SET skin_pick = 'sower', skin_look = 'dota_clash', is_founder = 0 WHERE id = ?", (bob["id"],))
+    con.commit()
+    assert c.get("/api/me", headers=B).json()["skin"] != "dota_clash"                     # no longer the creator: not his

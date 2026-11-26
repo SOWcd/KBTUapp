@@ -7,6 +7,7 @@ import { count, type Screen } from '../stats';
 import { queue } from '../moments';
 import { switching } from './theme.svelte';
 import { returnToSheet, type SheetKey } from './sheets';
+import type { Archived } from '../api/types';
 
 export const TABS = ['afisha', 'forum', 'club', 'profile'] as const;
 export type Tab = typeof TABS[number];
@@ -14,8 +15,8 @@ export type Tab = typeof TABS[number];
 export const ui = $state({
   tab: 'afisha' as Tab,
   club: null as number | null,        // the Clubs tab: the club picked in My club, the same on Team (null = the top one)
-  tryOn: null as { id: number; name: string; school?: boolean } | null, // a club's lanyard I'm not in, tried on in the settings: shown, never saved
-  look: null as { skin: number | 'sower' | null; frame: string | null } | null, // my lanyard being edited in the settings (Me): shown, saved by the check
+  tryOn: null as { id: number | Archived; name: string; school?: boolean } | null, // a club's lanyard I'm not in (or an archived one, not the creator), tried on in the settings: shown, never saved
+  look: null as { skin: number | 'sower' | Archived | null; frame: string | null } | null, // my lanyard being edited in the settings (Me): shown, saved by the check
   busy: '',                // the capsule says this while a tap's work runs ("Making the link…"; no sign otherwise)
   gone: {} as Partial<Record<Tab, boolean>>, // a tab screen's large title has scrolled under the capsule (ui/title.ts)
   gate: false,             // the new policy's gate is up (App, ConsentGate): the app waits behind it
@@ -36,8 +37,9 @@ export function goTab(tab: Tab): void {
 /** holdBack: Telegram's Back button waits while the overlay comes in (the map's iris, PLAN 80) */
 /** feed: the Feed in a row, under it the nav and capsule take its dark tinted glass (chrome.ts) */
 /** quiet: it has a large title of its own still in view (a Pane): the capsule shows the live status or nothing, and not
- *  the overlay below. mark: its title is in its own header (a Sheet's heading): the capsule shows its icon alone. */
-export interface Overlay { id: number; component: Component<any>; props: Record<string, unknown>; closing: boolean; key?: SheetKey | null; byUser?: boolean; title?: string; theme?: 'light' | 'dark'; icon?: Component<any>; holdBack?: boolean; feed?: boolean; quiet?: boolean; mark?: boolean;
+ *  the overlay below. mark: its title is in its own header (a Sheet's heading): the capsule shows its icon alone.
+ *  bare: the whole screen is the overlay's (the map): our capsule steps aside while it is the top; Telegram's buttons stay. */
+export interface Overlay { id: number; component: Component<any>; props: Record<string, unknown>; closing: boolean; key?: SheetKey | null; byUser?: boolean; title?: string; theme?: 'light' | 'dark'; icon?: Component<any>; holdBack?: boolean; feed?: boolean; quiet?: boolean; mark?: boolean; bare?: boolean;
   /** a tinted page (the event editor): its colour, which the sheets opened over it take (Sheet), and the capsule */
   tint?: string | null;
   /** what the anonymous counters call it (lib/stats.ts); a generic error toast is counted against the top one that has it */

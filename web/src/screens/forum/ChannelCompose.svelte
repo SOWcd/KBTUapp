@@ -15,11 +15,16 @@
   export type Pic = Media & { id?: Id; file?: Blob; failed?: boolean };
   /** why: a refusal by the rules, said above the words until I change them; tip: the AI's reason and advice from a
    *  refusal (Edit), kept the same way */
-  export type Draft = { body: string; anon: boolean; photos?: Pic[]; why?: string; tip?: ForumWhy | null };
+  export type Draft = { body: string; anon: boolean; photos?: Pic[]; why?: string; tip?: ForumWhy | null; help?: number | null };
   // the words (and photos) not posted yet: closing the window keeps them, posting clears them. ponytail: in memory
   // only, as the feed (the posts' words stay out of storage): a relaunch starts empty; localStorage if students ask.
   // next: when the pace lets me post again (the server's word, from the last refusal or the window's open)
-  const kept: { body: string; anon: boolean; photos: Pic[]; next: number | null } = { body: '', anon: false, photos: [], next: null };
+  // asking/hours: an ask for help and how long it stays up (the last pick kept; 3 h first)
+  const kept: { body: string; anon: boolean; photos: Pic[]; next: number | null; asking: boolean; hours: number } =
+    { body: '', anon: false, photos: [], next: null, asking: false, hours: 3 };
+  // uploads outlive the window: closed mid-upload and opened again, the new window waits on the same one (it used to
+  // wait on nothing: "a photo is still uploading" for good)
+  const going = new Map<string, Promise<Media & { id: Id }>>();
 
   /** The writing window, out of the Forum tab's "Share with KBTU…" pill. Called in a tap: the field takes the focus in
    *  that same tap (flushSync mounts the window first), or iOS won't bring the keyboard up. */
@@ -39,10 +44,11 @@
   }
 
   /** A stand-in on top of the feed while the server answers (a tap answers in the same frame) */
-  export function stand(text: string, was: boolean, human = false, photos: Media[] = []): ChannelFeedPost {
+  export function stand(text: string, was: boolean, human = false, photos: Media[] = [], help: number | null = null): ChannelFeedPost {
     const me = session.me;
     const temp: ChannelFeedPost = { id: -Date.now(), body: text, status: 'held', human, at: nowTs(), msg: null, anon: was, nick: null, sign: was ? t('fc.nickSoon') : signOf(), mine: true,
-      person: !was && me ? { id: me.id, name: me.name, avatar: me.avatar, founder: false } : null, comments: 0, thread: null, faces: [], reactions: [], hearts: 0, hearted: false, hot: false, photos };
+      person: !was && me ? { id: me.id, name: me.name, avatar: me.avatar, founder: false } : null, comments: 0, thread: null, faces: [], reactions: [], hearts: 0, hearted: false, hot: false, photos,
+      ...(help ? { help: { until: nowTs() + help * 3600, coming: 0, me: false, who: [] } } : {}) };
     updateChannelPosts((posts) => [temp, ...posts]);
     return temp;
   }
@@ -74,7 +80,8 @@
   import Lightbulb from '@lucide/svelte/icons/lightbulb';
   import X from '@lucide/svelte/icons/x';
   import { shrink } from '../../lib/photo';
-  import { api, ApiErr } from '../../lib/api';
+  import { api, ApiErr, HELP_HOURS } from '../../lib/api';
+  import Chip from '../../ui/Chip.svelte';
   import { channel, updateChannelPosts as updatePosts } from '../../lib/state/channel.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { close, hideChrome, removeOverlay, say, type Overlay } from '../../lib/state/ui.svelte';
@@ -95,14 +102,17 @@
   let body = $state(untrack(() => draft?.body ?? kept.body)), anon = $state(untrack(() => draft?.anon ?? kept.anon));
   // the photos (up to 4): each uploads as it's picked, its preview at once (the phone's own) till the server's comes
   let pics = $state<Pic[]>(untrack(() => draft?.photos ?? kept.photos));
+  // an ask for help (the third mode): signed, with "I'm coming", gone from the feed after `hours`
+  let asking = $state(untrack(() => (draft ? !!draft.help : kept.asking))), hours = $state(untrack(() => draft?.help ?? kept.hours));
   const PICS = 4;
   let revealed = $state<number | null>(null), next = $state<number | null>(kept.next), clock = $state(nowTs());
   onMount(() => {
+    for (const p of pics) if (!p.id && !p.failed && p.file) void upload(p.url, p.file);  // left uploading when the window closed
     api.channelRevealed().then((r) => { revealed = r.revealed; next = kept.next = r.next; }).catch(() => {});
     const tick = setInterval(() => { clock = nowTs(); }, 10_000);
     return () => clearInterval(tick);
   });
-  $effect(() => { kept.body = body; kept.anon = anon; kept.photos = pics; });
+  $effect(() => { kept.body = body; kept.anon = anon; kept.photos = pics; kept.asking = asking; kept.hours = hours; });
   $effect(() => { overlay.title = t('fc.new'); overlay.icon = SquarePen; });
   const why = $derived(draft?.why && body === draft.body ? draft.why : null);  // gone once I change the words
   const tip = $derived(draft?.tip && body === draft.body ? draft.tip : null);
@@ -123,13 +133,19 @@
   let more = $state(false);  // the anonymity's details, a tap deeper
 
   async function upload(url: string, file: Blob) {
+    const job = going.get(url) ?? shrink(file).then((f) => api.uploadChannelPhoto(f));
+    going.set(url, job);
+    // kept too: this window may be closed by the time it lands
+    const swap = (to: (p: Pic) => Pic) => { const f = (ps: Pic[]) => ps.map((p) => (p.url === url ? to(p) : p)); pics = f(pics); kept.photos = f(kept.photos); };
     try {
-      const got = await api.uploadChannelPhoto(await shrink(file));
-      pics = pics.map((p) => (p.url === url ? got : p));
+      const got = await job;
+      swap(() => got);
       URL.revokeObjectURL(url);
     } catch {
       haptic.error();
-      pics = pics.map((p) => (p.url === url ? { ...p, failed: true } : p));  // stays, with a retry: the text and the others too
+      swap((p) => ({ ...p, failed: true }));  // stays, with a retry: the text and the others too
+    } finally {
+      going.delete(url);
     }
   }
   function pick(ev: Event) {
@@ -153,8 +169,8 @@
   // the mode switch keeps the caret where it was (a tap on it would take the keyboard away)
   let field = $state<HTMLTextAreaElement>(), caret: [number, number] | null = null;
   const keep = () => { caret = document.activeElement === field && field ? [field.selectionStart, field.selectionEnd] : null; };
-  function mode(v: 'name' | 'anon') {
-    anon = v === 'anon'; haptic.select();
+  function mode(v: 'name' | 'anon' | 'help') {
+    anon = v === 'anon'; asking = v === 'help'; haptic.select();
     if (caret && field) { field.focus({ preventScroll: true }); field.setSelectionRange(...caret); }
     caret = null;
   }
@@ -249,10 +265,10 @@
     if (!ready) { haptic.error(); tapped = hold ? { key: hold, body, n: pics.length } : null; return; }  // stays in place and says why (the wait is on the bar already)
     if (sent) return;  // once: a second tap while it closes sends nothing
     sent = true;
-    const text = body.trim(), was = anon, photos = $state.snapshot(pics) as Pic[];
-    const temp = stand(text, was, false, photos); haptic.select(); kept.body = ''; kept.photos = []; close(overlay.id);
+    const text = body.trim(), was = anon, photos = $state.snapshot(pics) as Pic[], help = asking ? hours : null;
+    const temp = stand(text, was, false, photos, help); haptic.select(); kept.body = ''; kept.photos = []; kept.asking = false; close(overlay.id);
     try {
-      const p = await api.newChannelPost(text, was, photos.map((x) => x.id!));
+      const p = await api.newChannelPost(text, was, photos.map((x) => x.id!), help);
       count('do.forum');
       const photo = p.status === 'held' && was && photos.length > 0;
       land(temp, p, p.status === 'held' && (!!p.ai || photo), photo ? { kind: 'photo', explain: null } : undefined);
@@ -267,12 +283,12 @@
         if (p.ai) api.channelPostWhy(p.id, text).then((x) => { if (x.explain) channel.why[p.id] = x.explain; }).catch(() => {});
       }
     } catch (e) {
-      unstand(temp); haptic.error(); kept.body = text; kept.anon = was; kept.photos = photos;  // not gone: the words wait in the window
+      unstand(temp); haptic.error(); kept.body = text; kept.anon = was; kept.photos = photos; kept.asking = !!help;  // not gone: the words wait in the window
       const d = e instanceof ApiErr ? e.data : {};
       if (e instanceof ApiErr && e.code === 'rate_limited' && typeof d.retry === 'number') kept.next = d.retry;
       if (e instanceof ApiErr && (e.message === 'noise' || e.message === 'ad') && typeof d.post === 'number')
         open(ChannelRefused, { body: text, anon: was, photos, refused: { post: d.post, kind: e.message === 'ad' ? 'ad' : 'noise', appeal: d.appeal === true } });
-      else compose({ body: text, anon: was, photos, why: e instanceof ApiErr && e.code === 'rate_limited' && kept.next ? undefined : reason(e) });
+      else compose({ body: text, anon: was, photos, help, why: e instanceof ApiErr && e.code === 'rate_limited' && kept.next ? undefined : reason(e) });
     }
   }
   // Ctrl/Cmd+Enter sends (a computer); a plain Enter is a new line
@@ -289,7 +305,7 @@
   <div class="top">
     {#key anon || !session.me}<span class="face">{#if anon || !session.me}<span class="av" aria-hidden="true"><VenetianMask size={18} strokeWidth={2} /></span>
     {:else}<Avatar person={session.me} size={36} tappable={false} />{/if}</span>{/key}
-    <span class="who" aria-live="polite"><b class="ellipsis">{anon ? t('fc.nickNew') : sign}</b><span class="sub">{t('fc.toChannel')}</span></span>
+    <span class="who" aria-live="polite"><b class="ellipsis">{anon ? t('fc.nickNew') : sign}</b><span class="sub" class:sos={asking}>{asking ? t('fc.help') : t('fc.toChannel')}</span></span>
     <span class="ghost ellipsis" aria-hidden="true">{t('fc.share')}</span>
     <!-- one round button: folded, the pill's pen (the same secondary IconButton); open, Send, primary once it can
          send. Never disabled: held, a tap says why (the hints are a live region) -->
@@ -302,9 +318,17 @@
   <div class="rest scroll" data-kb-own>
     <!-- who it goes out as, said outright; the tap keeps the keyboard and the caret -->
     <div class="mode" onpointerdown={keep} onmousedown={(e) => e.preventDefault()} role="presentation">
-      <Segmented label={t('fc.anon')} value={anon ? 'anon' : 'name'} onchange={mode}
-        items={[{ value: 'name', label: t('fc.named') }, { value: 'anon', label: t('fc.anon') }]} />
+      <Segmented label={t('fc.anon')} value={asking ? 'help' : anon ? 'anon' : 'name'} onchange={mode}
+        items={[{ value: 'name', label: t('fc.named') }, { value: 'anon', label: t('fc.anon') }, { value: 'help', label: t('fc.helpMode') }]} />
     </div>
+    <!-- an ask for help: how long it stays up (then it leaves the feed and the channel by itself) -->
+    {#if asking}
+      <div class="hours" onpointerdown={keep} onmousedown={(e) => e.preventDefault()} role="presentation">
+        <span class="hl">{t('fc.helpFor')}</span>
+        {#each HELP_HOURS as h (h)}<Chip selected={hours === h} onclick={() => { hours = h; mode('help'); }}>{t('fc.hours', { n: h })}</Chip>{/each}
+      </div>
+      <p class="note help-note">{t('fc.helpNote')}</p>
+    {/if}
     {#if why}<div class="why"><Notice tone="warning" text={why} /></div>{/if}
     <!-- the AI's reason and advice from a refusal (Edit), until I change the words -->
     {#if tip}<div class="tip"><p>{tip.reason}</p>{#if tip.fix}<p class="fix"><Lightbulb size={15} strokeWidth={2} aria-hidden="true" /><span>{tip.fix}</span></p>{/if}</div>{/if}
@@ -392,6 +416,12 @@
   .rest, .footer { transition: opacity var(--t-base) var(--ease); }
   .out .rest, .out .footer { opacity: 0; transition-duration: var(--t-fast); }
   .mode { padding: var(--s-1) var(--s-4) var(--s-2); }
+  /* an ask for help: the time row scrolls on a narrow phone (4 px above and below: the chips' hit areas and lift) */
+  .hours { display: flex; align-items: center; gap: var(--s-2); padding: 4px var(--s-4) var(--s-2); overflow-x: auto; scrollbar-width: none; }
+  .hours::-webkit-scrollbar { display: none; }
+  .hl { flex: none; font: 500 var(--fs-sub)/1.2 var(--font-text); color: var(--text-2); }
+  .rest > .help-note { padding: 0 var(--s-4) var(--s-1); }
+  .sub.sos { color: var(--warning-text); font-weight: 600; }
   .why { margin: var(--s-3) var(--s-4) 0; }
   .tip { margin: var(--s-3) var(--s-4) 0; display: flex; flex-direction: column; gap: var(--s-1); font: 450 var(--fs-sub)/1.4 var(--font-text); color: var(--text-2); }
   .tip .fix { display: flex; gap: var(--s-2); align-items: flex-start; color: var(--text); }

@@ -59,10 +59,11 @@
                                 @username or Telegram ID queues it for one person first; --platform: only people who
                                 opened the app on that kind of device in the last 90 days (a preview goes regardless)
   .venv/bin/python -m kbtu.admin team add|del <@username | telegram id>   People of the app's Team (core developers), audited
-  .venv/bin/python -m kbtu.admin credit add <telegram id | gh:login> <idea | find | code> "<ru>" "<kk>" "<en>" [--gh <login>]   "People of the app"
+  .venv/bin/python -m kbtu.admin credit add <telegram id | gh:login> <idea | find | code> "<ru>" "<kk>" "<en>" [--gh <login>] [--name "<name>"]   "People of the app"
                                 (logic/credits.py): a line in OUR words about what they gave (an account isn't needed;
                                 gh:login: a pull request's author, listed under the public login; --gh: the same person's
-                                login beside a Telegram id, shown on their named card only after their yes);
+                                login beside a Telegram id, on their named card; --name: what to call a Telegram id with
+                                no account yet, shown until they open the app; shown by default, a person can hide in Settings);
                                 credit gh <id> <login> puts a login on a line already written;
                                 gender-neutral, no name, handle, link or identifying detail: it is shown under "Student";
                                 credit ship <id> [YYYY-MM-DD] lists it (today), credit list, credit del <id>;
@@ -70,6 +71,13 @@
                                 moving back does not undo it (re-add the lines by hand);
                                 credit ask [--dry]: the bot's "shall we name you?" once per person (and consent text) with a
                                 shipped line and no answer; prints how many were queued; a no is never asked again
+  .venv/bin/python -m kbtu.admin donation add <telegram id> <amount KZT> [YYYY-MM-DD] [--again]   a Kaspi transfer the
+                                creator checked by hand (outside the app): a confirmed donation, the sponsor medal follows;
+                                the same amount on the same day again only with --again. Shown on the Sponsors list (name and
+                                total) unless the donor hid it on the Support page. A donor who also uploaded this transfer's
+                                receipt in the app would be counted twice: check `donation list` first.
+                                donation list: id, user id (internal), amount, source, date, public (no names, no
+                                Telegram ids); donation remove <id>: a manual row typed wrong goes, the medal follows
   .venv/bin/python -m kbtu.admin team-consent-ask [--dry]   the bot's "agree to teams" (a button to the event's consent
                                 sheet) to everyone signed up to a coming team event without the teams consent, once per
                                 person and event; --dry: the count only. By hand, never on deploy
@@ -166,7 +174,6 @@ A role counts once the person has signed in with KBTU or is staff (only students
 the audit log. Prints Telegram names only, never the KBTU profile."""
 from __future__ import annotations
 
-import hashlib
 import hmac
 import json
 import re
@@ -180,7 +187,7 @@ from pathlib import Path
 
 from .logic.account import _DEL_GONE, PLATFORMS, staff_row
 from .logic import credits, guests
-from .logic.core import is_staff, staff_sql
+from .logic.core import TZ, is_staff, staff_sql
 from .logic import RANK, STUDENT_ID, ApiError, Viewer, fix_identity, log_action, _slug_free, create_org, replay_deletions, find_user, notify, now, one, rows, set_role
 
 # names and notes are users' words: no control or bidi characters reach the admin's terminal (escape codes, a title,
@@ -434,7 +441,7 @@ def main(args: list[str]) -> None:
         db.init(cfg.db_path)  # the restored file can predate tables that erasure now covers
     con = db.connect(cfg.db_path)
     from .logic import vol
-    vol.ORG, vol.KEY = cfg.volunteers, hmac.new(cfg.token_key, b"kbtu-vol", hashlib.sha256).digest()  # as app.create: a deletion here hashes the same
+    vol.ORG, vol.KEY = cfg.volunteers, vol.key(cfg)  # as app.create: a deletion here hashes the same
     guests.KEY = hmac.digest(cfg.token_key, b"kbtu-guest-name", "sha256")
     cmd = args[0] if args else ""
     gz = _gz_arg(args)
@@ -465,12 +472,12 @@ def main(args: list[str]) -> None:
             sys.exit("guest CSV must be UTF-8")
         print(f"registered {registered}, pending {pending}, offline {offline}, bad rows {bad}")
     elif cmd == "groups-draw" and len(args) == 4 and all(re.fullmatch(r"[0-9]{1,4}", a) for a in args[1:]):
-        from .logic import evgroups
+        from .logic import tournament
         boss, e = one(con, "SELECT id FROM users WHERE is_founder = 1"), one(con, "SELECT org_id FROM events WHERE id = ?", int(args[1]))
         if not boss or not e:
             sys.exit("needs the creator (`founder`) and an existing event")
         try:
-            got = evgroups.draw(con, Viewer(boss[0], "admin", True, staff_org=e[0]), int(args[1]), {"size": int(args[2]), "advance": int(args[3])})
+            got = tournament.groups_draw(con, Viewer(boss[0], "admin", True, staff_org=e[0]), int(args[1]), {"size": int(args[2]), "advance": int(args[3])})
         except ApiError as exc:
             sys.exit(f"refused: {exc.code}")
         print("groups", " ".join(f"{g['name']}:{len(g['standings'])}" for g in got["groups"]))
@@ -578,8 +585,9 @@ def main(args: list[str]) -> None:
         _broadcast(con, *rest, platform=platform)
     elif cmd == "credit" and args[1:2] in (["add"], ["gh"], ["ship"], ["list"], ["del"], ["ask"]):  # the people of the app (logic/credits.py)
         try:
-            if args[1] == "add" and (len(args) == 7 or (len(args) == 9 and args[7] == "--gh")):
-                print(f"credit {credits.add(con, *args[2:7], *args[8:])} (suggested; `credit ship` lists it)")
+            if (args[1] == "add" and len(args) in (7, 9, 11) and len(opts := dict(zip(args[7::2], args[8::2]))) * 2 == len(args) - 7
+                    and opts.keys() <= {"--gh", "--name"}):
+                print(f"credit {credits.add(con, *args[2:7], gh=opts.get('--gh'), name=opts.get('--name'))} (suggested; `credit ship` lists it)")
                 print(f"check before shipping: {credits.REMIND}")
             elif args[1] == "gh" and len(args) == 4:
                 credits.set_gh(con, int(args[2]), args[3])
@@ -595,7 +603,7 @@ def main(args: list[str]) -> None:
                 for r in rows(con, f"""SELECT c.*, u.id AS uid, k.id AS rev, k.show, k.version FROM credits c
                         LEFT JOIN users u ON u.tg_id = c.tg_id AND u.tg_id > 0 {credits._LAST} ORDER BY c.id"""):
                     tg = None if r["tg_id"] is None else f"tg {r['tg_id']}" + ("" if r["uid"] else " (no account)")
-                    who = " + ".join(x for x in (tg, r["gh"] and f"gh {r['gh']}") if x) or "deleted account"
+                    who = " + ".join(x for x in (tg, r["gh"] and f"gh {r['gh']}", r["name"] and f"name {r['name']}") if x) or "deleted account"
                     said = {None: "no answer", True: "yes", False: "no"}[credits._said(r)]
                     print(f"#{r['id']}  {r['shipped_on'] or 'suggested'}  {r['kind']}  {who}, {said}  {r['ru']} | {r['kk']} | {r['en']}")
             else:
@@ -607,6 +615,34 @@ def main(args: list[str]) -> None:
         changed = credits.team(con, u["id"], args[1] == "add")
         print(f"@{u['tg_username'] or u['tg_id']}: " + ("on the Team (shown after their yes; `credit ask` asks)" if args[1] == "add" else "off the Team")
               + ("" if changed else " already"))
+    elif cmd == "donation" and args[1:2] == ["add"] and 4 <= len(args) - ("--again" in args) <= 5 and args[2].isdigit() and args[3].isdigit():
+        from .logic import donations
+        u = one(con, "SELECT id FROM users WHERE tg_id = ? AND tg_id > 0", int(args[2]))
+        if not u:
+            sys.exit(f"{args[2]}: not found — they must open the app once")
+        try:
+            did = donations.add_manual(con, u["id"], int(args[3]), *[a for a in args[4:] if a != "--again"], again="--again" in args)
+        except ValueError:
+            sys.exit("date: YYYY-MM-DD")
+        except ApiError as e:
+            sys.exit(f"{e.code} {e.message}".strip())
+        sum_ = donations.total(con, u["id"])
+        print(f"donation {did}: total {sum_} KZT, tier {donations.tier(sum_)}, "
+              + ("public" if donations.public(con, u["id"]) else "hidden (their own switch on the Support page)"))
+    elif cmd == "donation" and args[1:2] == ["remove"] and len(args) == 3 and args[2].isdigit():  # a manual row typed wrong
+        from .logic import donations
+        try:
+            uid = donations.remove_manual(con, int(args[2]))
+        except ApiError as e:
+            sys.exit(f"{e.code} {e.message}".strip())
+        sum_ = donations.total(con, uid)
+        print(f"donation {args[2]} removed: total {sum_} KZT, tier {donations.tier(sum_)}")
+    elif cmd == "donation" and args[1:] == ["list"]:  # internal ids and amounts only: no name, no Telegram id
+        from .logic import donations
+        for r in rows(con, "SELECT id, user_id, amount, source, flags, status, created_at FROM donations ORDER BY id"):
+            day = time.strftime("%Y-%m-%d", time.gmtime(r["created_at"] + 5 * 3600))
+            print(f"#{r['id']}  user {r['user_id']}  {r['amount'] or '-'}  {'manual' if r['flags'] == 'manual' else r['source']}  {r['status']}  {day}  "
+                  f"public {'yes' if donations.public(con, r['user_id']) else 'no'}")
     elif cmd == "team-consent-ask" and args[1:] in ([], ["--dry"]):  # signed up before the sign-up became the consent
         from .logic import evteams
         n = evteams.consent_ask(con, dry=bool(args[1:]))
@@ -683,7 +719,7 @@ def main(args: list[str]) -> None:
         got = assistant.places(con, Viewer(0, "admin", False))
         for f in got:
             names = " / ".join(x for x in (f["nameEn"], f["nameRu"], f["nameKk"]) if x) + (f" (also: {f['aliases']})" if f["aliases"] else "")
-            checked = time.strftime("%Y-%m-%d", time.gmtime(f["verifiedAt"] + 5 * 3600)) if f["verifiedAt"] else "never"
+            checked = time.strftime("%Y-%m-%d", time.gmtime(f["verifiedAt"] + TZ)) if f["verifiedAt"] else "never"
             print(f"{'STALE' if f['stale'] else '':<5}  {f['code']:<12} {f['kind']:<6} {f['school'] or '':<6} {assistant.where(f):<28} checked {checked:<10}  {names}")
         print(f"{len(got)} facts, {sum(f['stale'] for f in got)} stale")
     elif cmd == "users":
@@ -1046,7 +1082,7 @@ def main(args: list[str]) -> None:
         import calendar
         from .logic.profiles import claim_link
         try:  # the end of that day in Almaty (UTC+5)
-            token = claim_link(con, args[2], calendar.timegm(time.strptime(args[4], "%Y-%m-%d")) + 86400 - 5 * 3600)
+            token = claim_link(con, args[2], calendar.timegm(time.strptime(args[4], "%Y-%m-%d")) + 86400 - TZ)
         except (ValueError, ApiError):
             sys.exit("claim new <init26 | creator_laugh | creator_found> --until YYYY-MM-DD (today or later; the owner set: founder)")
         print(f"https://t.me/{config.load().bot_username}?startapp=gl_{token}")
@@ -1061,7 +1097,7 @@ def main(args: list[str]) -> None:
         org = one(con, "SELECT id FROM orgs WHERE slug = 'dmp'")
         if not boss or not org:
             sys.exit("needs the creator and the dmp office")
-        v, at = Viewer(boss[0], "admin", True, staff_org=org[0]), calendar.timegm(time.strptime(args[3], "%Y-%m-%d %H:%M")) - 5 * 3600
+        v, at = Viewer(boss[0], "admin", True, staff_org=org[0]), calendar.timegm(time.strptime(args[3], "%Y-%m-%d %H:%M")) - TZ
         e = create_event(con, v, org[0], {"title": args[2], "startsAt": at, "endsAt": at + int(args[4]) * 60, "place": args[5],
                                           "description": args[6], "emoji": "megaphone_3d", "color": "#2F5BEA", "visibility": "leaders", "leadersFrom": "head", "seats": None})
         publish_event(con, v, e["id"])
@@ -1102,7 +1138,7 @@ def main(args: list[str]) -> None:
         if not e or not e["place"]:
             sys.exit("no such event, or it has no place")
         boss = one(con, "SELECT user_id FROM org_members WHERE org_id = ? AND role = 'president'", e["org_id"]) or one(con, "SELECT id FROM users WHERE is_founder = 1")
-        start, end, place = _casting_input({"from": now(), "to": calendar.timegm(time.strptime(args[3], "%Y-%m-%d %H:%M")) - 5 * 3600, "place": e["place"]})
+        start, end, place = _casting_input({"from": now(), "to": calendar.timegm(time.strptime(args[3], "%Y-%m-%d %H:%M")) - TZ, "place": e["place"]})
         with db.tx(con):
             if one(con, "SELECT 1 FROM posts WHERE org_id = ? AND hidden_at IS NULL AND casting_cancelled_at IS NULL AND casting_to > ?", e["org_id"], now()):
                 sys.exit("this club already has a casting on")
@@ -1160,7 +1196,7 @@ def main(args: list[str]) -> None:
         print(f"linked {vol.autolink(con, org)}")
     elif cmd == "vol" and args[1:] == ["batches"]:
         for b in rows(con, "SELECT * FROM vol_batches ORDER BY id"):
-            print(b["id"], time.strftime("%Y-%m-%d %H:%M", time.gmtime(b["created_at"] + 5 * 3600)), "undone" if b["undone_at"] else "", b["source"], b["counts"])
+            print(b["id"], time.strftime("%Y-%m-%d %H:%M", time.gmtime(b["created_at"] + TZ)), "undone" if b["undone_at"] else "", b["source"], b["counts"])
     elif cmd == "vol" and len(args) == 3 and args[1] == "undo" and args[2].isdigit():
         from .logic import vol
         cfg = config.load()

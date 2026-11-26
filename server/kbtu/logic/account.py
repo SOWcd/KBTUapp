@@ -16,7 +16,7 @@ from .. import media, portal
 from .. import db
 from ..db import tx
 
-from . import notifications, pymk
+from . import appchats, notifications, pymk
 from .core import (_LAT, LATIN_NAME, NAME, STUDENT_ID, ApiError, NO_END, PERSON, RANK, Viewer, _rights_from, avatar_of, clean_nick, log, log_action,
     name_i18n, need_student, one, org_ref, person_ref, rows, shown_name)
 
@@ -451,8 +451,9 @@ def ms_apply(con, uid: int, who: dict) -> bool:
 
 
 def ms_sweep(con) -> None:
-    """Every 5 minutes (the bot's round): Microsoft sign-ins never finished (they hold the Graph profile) and the used-link
-    marks. Key ranges, not LIKE: LIKE (case-blind, `_` a wildcard) can't use meta's primary key."""
+    """Every 5 minutes (the bot's round): Microsoft sign-ins never finished (they hold the Graph profile), the used-link
+    marks, and share cards past their hour (core.share_hold). Key ranges, not LIKE: LIKE (case-blind, `_` a wildcard)
+    can't use meta's primary key."""
     if not core._once(con, "ms_sweep", str(core.now() // 300)):
         return
     con.execute("DELETE FROM meta WHERE key >= 'ms:' AND key < 'ms;' AND (NOT json_valid(value) OR json_extract(value, '$.at') < ?)", (core.now() - MS_KEEP,))
@@ -460,6 +461,7 @@ def ms_sweep(con) -> None:
     con.execute("DELETE FROM meta WHERE key >= 'ms_claim:' AND key < 'ms_claim;' AND json_extract(value, '$.at') < ?", (core.now() - MS_CLAIM_TTL,))
     con.execute("DELETE FROM meta WHERE key >= 'chpick:' AND key < 'chpick;' AND CAST(substr(value, instr(value, ':') + 1) AS INTEGER) < ?", (core.now(),))
     con.execute("DELETE FROM chat_waits WHERE until < ?", (core.now(),))
+    con.execute("DELETE FROM meta WHERE key >= 'share:' AND key < 'share;' AND json_extract(value, '$.at') < ?", (core.now() - core.SHARE_TTL,))
 
 
 SID_WAIT = 30 * 86400  # how long the one turned away waits to hear the ID is free (then the parked message lapses)
@@ -528,7 +530,7 @@ def seen_platform(con, uid: int, kind: str | None) -> None:
 
 
 def me(con, v: Viewer) -> dict:
-    from .. import checkin, roster
+    from .. import checkin, push, roster
     if v.student and roster.due(con, v.id):  # a read first: the write lock only when a row would join
         db.maybe(con, roster.match, con, v.id)  # A matching club roster row can add a membership. Skip the match if the database is busy.
     u = one(con, "SELECT * FROM users WHERE id = ?", v.id)
@@ -580,7 +582,10 @@ def me(con, v: Viewer) -> dict:
         # the creator's staff (staff_ok): Microsoft and the policy, no student ID (the welcome's sign-in, the form without it)
         **({"msOnly": True} if not s and not relink and staff_ok(con, v.id, ms_pending(con, v.id)) else {}),
         "referrals": {"count": brought(con, v.id), "code": _qr_code(con, v.id, "link_code")} if s else None,
-        "role": u["role"], "canDm": bool(u["can_dm"]), "founder": bool(u["is_founder"]), "mark": u["mark"], "qr": f"{v.id}_{_qr_code(con, v.id)}" if s else None,
+        "role": u["role"], "canDm": bool(u["can_dm"]),
+        # notifications on one channel (push.py): my pick, and app: a live app token of mine (Settings shows the pick then)
+        "notify": {"via": u["notify_via"], "app": bool(one(con, f"SELECT {push.LIVE.format('?')}", v.id, *push.bounds(core.now()))[0])},
+        "founder": bool(u["is_founder"]), "mark": u["mark"], "qr": f"{v.id}_{_qr_code(con, v.id)}" if s else None,
         "evRef": ev_ref(v.id) if s else None,  # "My link"'s code (seats.ev_ref): the plain t.me share carries it, never the badge's
         "no": (0 if u["is_founder"] else u["card_no"]) if s else None,
         "oversee": any(m["can_oversee"] and m["role"] != "member" for m in members),
@@ -599,9 +604,10 @@ def me(con, v: Viewer) -> dict:
                      "friendRequests": one(con, "SELECT COUNT(*) FROM friend_requests WHERE to_id = ? AND status = 'pending'", v.id)[0] if v.student else 0,
                      "inbox": inbox.count(con, v)},  # Admin's shield: everything waiting for the staff (logic/inbox.py)
         "unlocked": unlocked(con, v),
+        **appchats.mine(con, v.id),  # in the app's channel / group: Profile hides their rows
         "skin": _skin(con, v.id) if s else None,
         "frame": u["frame"] if s and u["frame"] in FRAMES else None,
-        "deleteAt": u["delete_at"] if s or relink else None,  # a relink account's week shows too
+        "deleteAt": u["delete_at"],  # my week to change my mind, whoever may ask it (a student, relink, an Apple account)
         "city": {"name": u["city"], "hidden": bool(u["city_hidden"])} if u["city"] else None,
         "roster": _roster_mine(con, v.id),
         # the capsule's running check-in, and the check-in page's way in: "pair" for who runs a club's events (Studio's
@@ -657,6 +663,9 @@ LANYARDS = ("studex", "kbtucheerleadingclub", "kbtuknights", "moments", "faceskb
             "diceanddestinykbtu",
             "thebayharborsociety",
             "qoloner")
+# the archive: looks made and not in use (owner, Nov 25), anyone's to try on in the picker (the web alone), the creator's
+# alone to wear; stored as skin_pick 'sower' with skin_look. The web's list is awards.ts ARCHIVE_LOOKS (test_lanyards)
+ARCHIVE = ("dota_ancient", "dota_clash", "dota_rune")
 _LIST = "(" + ", ".join(f"'{x}'" for x in LANYARDS) + ")"
 # by slug, or by the name without dots, spaces and dashes ("kbtu.mag" is kbtumag: made in the app under another slug),
 # as the web's awards.ts lookKey
@@ -707,11 +716,11 @@ def _skin(con, uid: int) -> int | str | None:
     My pick holds; a club picked holds while I'm in it. Never picked (or that club left): the creator's own for the
     creator; else the club I joined that has a badge (of several, where my role is highest, then the newest); else my
     school's; else KBTU's. A new club's badge or a school set comes by itself."""
-    u = one(con, "SELECT skin_pick, skin_org, is_founder FROM users WHERE id = ?", uid)
+    u = one(con, "SELECT skin_pick, skin_org, skin_look, is_founder FROM users WHERE id = ?", uid)
     if u["skin_pick"] == "kbtu":
         return None
     if u["is_founder"] and u["skin_pick"] in ("sower", None):
-        return "sower"
+        return creator_look(u)
     if u["skin_pick"] == "org" and _skin_ok(con, uid, u["skin_org"]):
         return u["skin_org"]
     r = one(con, f"""SELECT o.id FROM org_members m JOIN orgs o ON o.id = m.org_id WHERE m.user_id = ? AND {SKINNED}
@@ -723,6 +732,11 @@ def _skin(con, uid: int) -> int | str | None:
     slug = school_slug(s["school"]) if s else None
     o = slug and one(con, "SELECT id FROM orgs WHERE slug = ? AND status = 'active'", slug)
     return o[0] if o else None
+
+
+def creator_look(u) -> str:
+    """The creator's own lanyard: an archived look he picked (`skin_look`, read only for him), else SOWER."""
+    return u["skin_look"] if u["skin_look"] in ARCHIVE else "sower"
 
 
 def _one_off(w: str, ref: set[str]) -> bool:
@@ -913,15 +927,18 @@ def _update_me(con, v: Viewer, patch: dict) -> None:
         pymk.switch(con, v.id, patch["suggestMe"])
     if "nick" in patch:
         sets["nick"] = clean_nick(patch["nick"])
-    if "skin" in patch:  # my pick: a club with a lanyard (`_skin_ok`), "sower" for the creator, null = the KBTU one (`_skin`)
+    if "skin" in patch:  # my pick: a club with a lanyard (`_skin_ok`), "sower" or an archived look for the creator, null = the KBTU one (`_skin`)
         need_student(v)
         val = patch["skin"]
+        founder = one(con, "SELECT is_founder FROM users WHERE id = ?", v.id)[0]
         if val is None:
-            sets.update(skin_pick="kbtu", skin_org=None)
-        elif val == "sower" and one(con, "SELECT is_founder FROM users WHERE id = ?", v.id)[0]:
-            sets.update(skin_pick="sower", skin_org=None)
+            sets.update(skin_pick="kbtu", skin_org=None, skin_look=None)
+        elif val == "sower" and founder:
+            sets.update(skin_pick="sower", skin_org=None, skin_look=None)
+        elif val in ARCHIVE and founder:  # an archived look: anyone tries it on in the picker, the creator alone wears it
+            sets.update(skin_pick="sower", skin_org=None, skin_look=val)
         elif type(val) is int and _skin_ok(con, v.id, val):
-            sets.update(skin_pick="org", skin_org=val)
+            sets.update(skin_pick="org", skin_org=val, skin_look=None)
         else:
             raise ApiError("bad_input")
     if "frame" in patch:  # a frame over my photo (FRAMES), null for none; combined with any lanyard
@@ -982,6 +999,10 @@ def _update_me(con, v: Viewer, patch: dict) -> None:
         if city is not None and (not isinstance(city, str) or not CITY_RE.fullmatch(city := " ".join(city.split()))):
             raise ApiError("bad_input")
         sets["city"] = city
+    if "notifyVia" in patch:  # one channel for my notifications (push.py): the app's push or Telegram's bot
+        if patch["notifyVia"] not in ("app", "telegram"):
+            raise ApiError("bad_input")
+        sets["notify_via"] = patch["notifyVia"]
     if "cityHidden" in patch:  # off my profile, kept for me
         if not isinstance(patch["cityHidden"], bool):
             raise ApiError("bad_input")
@@ -1059,8 +1080,11 @@ def _paid_ahead(con, uid: int) -> bool:
 
 
 def _may_delete(con, v: Viewer) -> None:
-    # Telegram-only donors also need a way to erase their linked payment data.
-    if not v.student and not one(con, "SELECT 1 FROM donations WHERE user_id = ? UNION ALL SELECT 1 FROM sponsor_consents WHERE user_id = ?", v.id, v.id):
+    """A student's account, or one an Apple sign-in made or reaches (App Store 5.1.1(v): an account the app creates can
+    be deleted in it), or a Telegram-only donor's (their linked payment data must be erasable too); any other Telegram
+    guest has nothing of an account to delete."""
+    if not v.student and not one(con, """SELECT 1 FROM identities WHERE user_id = ? UNION ALL SELECT 1 FROM donations WHERE user_id = ?
+                                         UNION ALL SELECT 1 FROM sponsor_consents WHERE user_id = ?""", v.id, v.id, v.id):
         need_student(v)
 
 
@@ -1339,6 +1363,7 @@ _DEL_GONE = {
     ("donations", "user_id"), ("sponsor_consents", "user_id"),
     ("fchan_feed_pages", "user_id"), ("broadcast_votes", "user_id"), ("user_platforms", "user_id"),
     ("web_sessions", "user_id"),
+    ("identities", "user_id"), ("push_devices", "user_id"),  # my Apple sign-in and my iPhones' push tokens (logic/apple.py)
     ("students", "user_id"), ("staff_ok", "user_id"), ("santa_people", "user_id"), ("santa_msgs", "giver_id"), ("santa_msgs", "to_id"), ("santa_sends", "user_id"), ("schedule_classes", "user_id"), ("org_members", "user_id"), ("join_requests", "user_id"),
     ("club_applications", "user_id"), ("subscriptions", "user_id"), ("registrations", "user_id"), ("saved_events", "user_id"),
     ("post_reactions", "user_id"), ("post_reads", "user_id"), ("achievement_grants", "user_id"),
@@ -1357,6 +1382,7 @@ _DEL_GONE = {
     ("qr_helpers", "user_id"),  # my right to help run a check-in (checkin.py)
     ("qr_meet_scans", "user_id"),  # every scan of a team meetup, including membership exceptions
     ("fchan_hearts", "user_id"),
+    ("fchan_coming", "user_id"),  # my "I'm coming" under others' asks for help
     ("fchan_signed", "user_id"),  # who my signed comments under channel posts are (the comments are deleted above, with their messages in the group)
     ("fchan_comments", "user_id"),  # my face under channel posts (the comments stay in Telegram, Telegram's own)
     ("fchan_reply_reports", "user_id"),  # my /report on an anonymous author's reply
@@ -1364,6 +1390,7 @@ _DEL_GONE = {
     ("research_requests", "user_id"),  # signed research proposals
     ("research_answers", "user_id"),  # delete signed answer contents; anonymous answers have no account link
     ("research_participants", "user_id"),  # only the fact that I answered, never a link to an answer
+    ("app_chats", "user_id"),  # whether I am in the app's channel and group (logic/appchats.py)
     ("helper_offers", "user_id"),  # my offers to help the app (helpus.py)
     ("team_asks", "user_id"),  # my asks to come to my club's event as a guest
     ("credit_team", "user_id"),  # my place in People of the app's Team
@@ -1462,6 +1489,10 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         con.execute("UPDATE comments SET user_id = :p WHERE user_id = :u", me_)
         for (msg,) in rows(con, "SELECT tg_msg FROM fchan_posts WHERE user_id = ? AND status = 'live' AND anon = 0 AND tg_msg > 0", v.id):
             con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, '1')", (f"fch_resign:{msg}",))
+        # who came to my asks for help: a list for my eyes alone, nobody's once I'm gone
+        con.execute("DELETE FROM fchan_coming WHERE post_id IN (SELECT id FROM fchan_posts WHERE user_id = ?)", (v.id,))
+        # and my asks for help end now (the next round takes them down): nobody is left to come to
+        con.execute("UPDATE fchan_posts SET help_until = ? WHERE user_id = ? AND help_until > ?", (core.now(), v.id, core.now()))
         con.execute("UPDATE fchan_posts SET user_id = :p, sign = :gone WHERE user_id = :u AND status = 'live' AND anon = 0", {**me_, "gone": core.GONE["ru"]})
         # the anonymous ones to one placeholder all deleted accounts share: never the named ones' (that would pair them)
         ghost = one(con, "SELECT CAST(value AS INTEGER) FROM meta WHERE key = 'anon_ghost'")
@@ -1482,7 +1513,7 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         con.execute(f"DELETE FROM dmp_list WHERE id IN (SELECT d.id {_DMP_MINE})", (v.id,))  # off DMP's list: its own row, by id
         con.execute("""UPDATE users SET bio = '', showcase = '', qr_code = NULL, link_code = NULL, cal_token = NULL, nick = NULL, avatar_tg = 1,
             avatar_file_id = NULL, tg_username = NULL, tg_first_name = '', tg_last_name = '', tg_photo_url = NULL, tg_photo_path = NULL, tg_photo_src = NULL, tg_photo_at = NULL, mark = NULL,
-            skin_org = NULL, skin_pick = NULL, frame = NULL, card_no = NULL, delete_at = NULL, city = NULL, city_hidden = 0, referred_by = NULL, announce_ok = NULL,
+            skin_org = NULL, skin_pick = NULL, skin_look = NULL, frame = NULL, card_no = NULL, delete_at = NULL, city = NULL, city_hidden = 0, referred_by = NULL, announce_ok = NULL,
             role = 'user', is_founder = 0, forum_seen_msg = 0, notification_undo = '{}' WHERE id = ?""", (v.id,))  # a burnt number isn't given again
         # A claimed row with my email or a verified email and name match goes, and a reimport skips it.
         for (key,) in rows(con, """DELETE FROM roster_pending WHERE email = (SELECT lower(email) FROM students WHERE user_id = ?)
@@ -1547,6 +1578,8 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         con.execute("DELETE FROM meta WHERE key = ?", (f"ms:{v.id}",))  # an unfinished Microsoft sign-in: its profile too
         con.execute("""DELETE FROM meta WHERE key >= 'ms_claim:' AND key < 'ms_claim;'
             AND json_extract(value, '$.uid') = ?""", (v.id,))
+        con.execute("""DELETE FROM meta WHERE key >= 'share:' AND key < 'share;'
+            AND json_extract(value, '$.uid') = ?""", (v.id,))  # cards waiting for the bot (core.share_hold)
         con.execute("DELETE FROM meta WHERE key LIKE ?", (f"fsearch:{v.id}:%",))  # this hour's count of my searches for people
         con.execute("DELETE FROM meta WHERE key LIKE ?", (f"flook:{v.id}:%",))
         con.execute("DELETE FROM meta WHERE key = ?", (f"pymk_live:{v.id}",))  # today's own People you may know (pymk.switch)

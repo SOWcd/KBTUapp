@@ -1,6 +1,7 @@
 """People's pages, awards and friends: streaks, achievements, grants, the first 500, friend requests and links."""
 from __future__ import annotations
 
+import calendar
 import hashlib
 import hmac
 import json
@@ -12,8 +13,8 @@ from collections import Counter
 
 from ..db import maybe, tx
 
-from .core import (ApiError, NO_END, PERSON, PERSON_COLS, PROFILE_QR, SEASON_MONTHS, Viewer, _roles, cards,
-    log_action, need_student, one, org_ref, person_ref, rows, short_name)
+from .core import (TZ, ApiError, NO_END, PERSON, PERSON_COLS, PROFILE_QR, SEASON_MONTHS, Viewer, _roles, cards,
+    day_of, day_start, log_action, need_student, one, org_ref, person_ref, rows, short_name)
 
 
 # ---------------------------------------------------------------- people and awards
@@ -25,15 +26,15 @@ def attended(con, uid: int) -> list[int]:
 
 
 def _season_start(ts: int) -> int:
-    t = time.gmtime(ts + 5 * 3600)
+    t = time.gmtime(ts + TZ)
     y, m = t.tm_year, max((x for x in SEASON_MONTHS if x <= t.tm_mon), default=None)
     if m is None:
         y, m = y - 1, SEASON_MONTHS[-1]
-    return int(time.mktime((y, m, 1, 0, 0, 0, 0, 0, 0))) - time.timezone - 5 * 3600
+    return calendar.timegm((y, m, 1, 0, 0, 0)) - TZ
 
 
 def _week(t: int) -> int:
-    return (t + 5 * 3600 + 3 * 86400) // (7 * 86400)  # Almaty weeks, from Monday
+    return (t + TZ + 3 * 86400) // (7 * 86400)  # Almaty weeks, from Monday
 
 
 def _streak(mine: set[int], busy: set[int], this_week: int) -> tuple[int, int]:
@@ -57,7 +58,7 @@ ACTIVIST_EVENTS = (2, 6, 15, 30)
 
 def _activist_posts(con, uid: int) -> int:
     """Mature public channel posts, at most one per Almaty publication day."""
-    return one(con, """SELECT COUNT(DISTINCT (posted_at + 5 * 3600) / 86400) FROM fchan_posts
+    return one(con, f"""SELECT COUNT(DISTINCT (posted_at + {TZ}) / 86400) FROM fchan_posts
         WHERE user_id = ? AND status = 'live' AND tg_msg > 0 AND posted_at <= ?""", uid, core.now() - 86400)[0]
 
 
@@ -100,6 +101,8 @@ ACHIEVEMENTS = [  # code, emoji, needs, secret (§4.11)
     ("first50", "medal_first500", (1,), False),  # the drawn First 500 medal
     ("creator_laugh", "face_with_tears_of_joy_3d", (1,), True), ("creator_found", "waving_hand_3d_default", (1,), True),
     ("bugs", "lady_beetle_3d", (1, 5, 10, 25), False),  # a bug, literally (no emoji twice)
+    ("ideas", "light_bulb_3d", (1, 3, 7, 15), False),  # my shipped idea lines in People of the app (credits, kind idea)
+    ("coder", "laptop_3d", (1, 3, 7, 15), False),  # "Vibe coder": my shipped code lines there (kind code); finds stay Bug hunter's grants
     ("referral", "megaphone_3d", (1, 3, 5, 10, 15, 25, 50, 75, 100), False),  # students brought by my invite link who signed in with KBTU
     ("init26", "medal_init26_2", (1,), False),  # volunteered at the 2026 freshmen's initiation (given to a check-in session's people)
     ("init26f", "medal_init26f_2", (1,), False),  # was at the 2026 initiation as a freshman (the freshmen list's mark, at sign-in: account.ms_link)
@@ -142,6 +145,9 @@ def _counts(con, uid: int, *, with_activist: bool = True) -> dict[str, int]:
     team = one(con, """SELECT COUNT(*) FROM registrations r JOIN events e ON e.id = r.event_id
         WHERE r.user_id = ? AND r.checked_in_at IS NOT NULL AND e.status = 'published' AND e.visibility = 'members'""", uid)[0]
     posts = _activist_posts(con, uid) if with_activist else 0
+    # shipped People of the app lines by my Telegram id: a GitHub-only line is nobody's here
+    made = dict(rows(con, """SELECT c.kind, COUNT(*) FROM credits c JOIN users u ON u.tg_id = c.tg_id AND u.tg_id > 0
+        WHERE u.id = ? AND c.shipped_on IS NOT NULL GROUP BY c.kind""", uid))
     seasons = Counter(map(_season_start, times))  # the best semester counts
     counts = {
         "regular": len(times), "activist_posts": posts, "activist": _activist_count(posts, len(times)), "first_in": first_in, "soul": soul, "team": team,
@@ -149,12 +155,12 @@ def _counts(con, uid: int, *, with_activist: bool = True) -> dict[str, int]:
         "creator_laugh": grants.get("creator_laugh", 0), "creator_found": grants.get("creator_found", 0), "bugs": grants.get("bugs", 0), "dmp": grants.get("dmp", 0), "referral": referral,
         "init26": grants.get("init26", 0), "init26f": grants.get("init26f", 0), "init26p": grants.get("init26p", 0), "anthem": grants.get("anthem", 0),
         "supporter": grants.get("supporter", 0), "club_founder": grants.get("club_founder", 0), "honor": grants.get("honor", 0),
-        "critic": critic(con, uid) if CRITIC_ON else 0,
+        "critic": critic(con, uid) if CRITIC_ON else 0, "ideas": made.get("idea", 0), "coder": made.get("code", 0),
     }
     if any(a[0] == "streak" for a in ACHIEVEMENTS):
         # Only public event weeks since the first check-in can affect the streak.
         busy = {_week(r[0]) for r in rows(con, """SELECT starts_at FROM events WHERE status = 'published' AND starts_at >= ?
-            AND visibility = 'public' AND guest_host IS NULL""", _week(times[0]) * 7 * 86400 - 3 * 86400 - 5 * 3600)} if times else set()
+            AND visibility = 'public' AND guest_host IS NULL""", _week(times[0]) * 7 * 86400 - 3 * 86400 - TZ)} if times else set()
         counts["streak"], counts["streak_now"] = _streak({_week(t) for t in times}, busy, _week(core.now()))
     return counts
 
@@ -189,7 +195,7 @@ def _celebrate(con, uid: int, before: dict[str, int], after: int | None = None) 
             con.execute("""INSERT INTO achievement_levels (user_id, code, level, reached_at) VALUES (?, ?, ?, ?)
                 ON CONFLICT (user_id, code) DO UPDATE SET level = excluded.level, reached_at = excluded.reached_at
                 WHERE excluded.code != 'activist' OR excluded.level > achievement_levels.level""", (uid, code, level, core.now()))
-            if code not in PRIVATE and code != "activist":  # the activist unlock is shown in the app
+            if code not in PRIVATE and code not in QUIET:  # these unlocks are shown in the app only
                 notify(con, uid, "achievement", f"ach:{code}:{level}", after=after)
 
 
@@ -249,6 +255,7 @@ BADGE_OF = {c: b for b, vs in BADGES.items() for c in vs}
 GRANTABLE = ("bugs", "dmp", "creator_laugh", "creator_found", "init26", "init26f", "init26p", "supporter", "club_founder", "honor")  # the manual ones (§4.11); "First 500" is given at verification
 ADDS_UP = ("bugs", "dmp")  # one grant is +1, not "held": Bug hunter per bug, Attendance per meeting (a day, _grant)
 CREATOR_ONLY = ("creator_laugh", "creator_found", "supporter", "honor")
+QUIET = ("activist", "ideas", "coder")  # no bot card: the app's unlock moment only
 PRIVATE = ("supporter", "sponsor")  # who gave money: no bot card, no rarity, in no admin list but the creator's, on a profile only if showcased
 ONE_BY_ONE = ("supporter", "club_founder", "honor")  # never by a card scan, a link, a shown QR or a check-in session: Fuel is for Stars, a founder names the club
 # art being redone; delete the tuple to bring them back. Out of the catalogs only (Admin -> Awards' rows, the
@@ -303,7 +310,7 @@ def grant(con, v: Viewer, uid: object, code: object, org: object = None, reason:
 
 def _grant(con, by: int | None, uid: int, code: str, batch: str | None = None, log: bool = True, note: str | None = None) -> int:
     # a meeting counts once: a second QR opened for it, a card scanned twice. Almaty's day (no meetings table to name it)
-    since = (core.now() + 5 * 3600) // 86400 * 86400 - 5 * 3600 if code == "dmp" else 0
+    since = day_start(core.now()) if code == "dmp" else 0
     if code != "bugs" and one(con, "SELECT 1 FROM achievement_grants WHERE user_id = ? AND code = ? AND created_at >= ?", uid, code, since):
         raise ApiError("conflict")
     before = _levels(con, uid)
@@ -730,7 +737,7 @@ PROFILES_A_DAY = 200  # strangers' profiles a day: browsing needs a few dozen, a
 def _stranger_view(con, v: Viewer, uid: int) -> None:
     """Counts a profile opened by someone who is neither a friend nor a clubmate; past the day's limit, refused. One
     row per (Almaty day, viewer, profile), so reopening the same one is free; old days go in the daily job (stats_day)."""
-    day = (core.now() + 5 * 3600) // 86400
+    day = day_of(core.now())
     if one(con, "SELECT 1 FROM profile_views WHERE day = ? AND viewer_id = ? AND user_id = ?", day, v.id, uid):
         return
     # ponytail: count then insert, a burst can pass 200 by a few
@@ -749,7 +756,7 @@ def person(con, v: Viewer, uid: int) -> dict:
     s = one(con, "SELECT * FROM students WHERE user_id = ?", uid)
     if not p or not s:
         raise ApiError("not_found")
-    u = one(con, "SELECT bio, showcase, show_going, can_friend, card_no, is_founder, tg_username, skin_pick, skin_org, city, city_hidden, frame FROM users WHERE id = ?", uid)
+    u = one(con, "SELECT bio, showcase, show_going, can_friend, card_no, is_founder, tg_username, skin_pick, skin_org, skin_look, city, city_hidden, frame FROM users WHERE id = ?", uid)
     link = one(con, "SELECT created_at FROM friendships WHERE a = ? AND b = ?", min(uid, v.id), max(uid, v.id))
     # their @username, to their own club's team only (§3: the team sees it in its roster anyway): "Message on Telegram"
     team = uid != v.id and one(con, "SELECT 1 FROM org_members a JOIN org_members b ON b.org_id = a.org_id WHERE a.user_id = ? AND b.user_id = ?",
@@ -779,6 +786,9 @@ def person(con, v: Viewer, uid: int) -> dict:
         going = cards(con, v, [e for e in rows(con, """SELECT e.* FROM registrations r JOIN events e ON e.id = r.event_id
             WHERE r.user_id = ? AND r.status = 'going' AND e.status = 'published' AND e.starts_at > ? ORDER BY e.starts_at""", uid, core.now())
             if _visible(con, v, e, roles, hidden)])
+    # "Bring a friend": the upcoming events I already invited them to, so the Invite sheet opens with them "Invited"
+    invited = [r[0] for r in rows(con, """SELECT i.event_id FROM friend_invites i JOIN events e ON e.id = i.event_id
+        WHERE i.from_id = ? AND i.to_id = ? AND e.starts_at > ?""", v.id, uid, core.now())] if link else []
     earned = rows(con, """SELECT e.* FROM registrations r JOIN events e ON e.id = r.event_id
         WHERE r.user_id = ? AND r.checked_in_at IS NOT NULL AND e.badge_name IS NOT NULL ORDER BY e.starts_at DESC""", uid) if close else []
     # the role shows only to the club's own team: outside, just the club
@@ -807,11 +817,11 @@ def person(con, v: Viewer, uid: int) -> dict:
         # the showcase as picked (achievements earned, badges owned), in order; empty = never picked, the badge shows a default
         "shelf": [k for k in picked if any(a["code"] == k and a["level"] > 0 for a in ach) or any(f"b{b['eventId']}" == k for b in badges)],
         "awards": {"achievements": ach, "badges": badges},
-        "friendship": state, "friendsSince": link["created_at"] if link else None, "going": going,
+        "friendship": state, "friendsSince": link["created_at"] if link else None, "going": going, "invited": invited,
         "username": u["tg_username"] if team else None,
         # a badge picked to be shown, shows; the one that came by itself from a club would tell a stranger the club
         "frame": u["frame"] if u["frame"] in FRAMES else None,  # on the lanyard, as the photo under it: seen by anyone who sees the card
-        "skin": _skin(con, uid) if close else "sower" if u["is_founder"] and u["skin_pick"] in ("sower", None)
+        "skin": _skin(con, uid) if close else creator_look(u) if u["is_founder"] and u["skin_pick"] in ("sower", None)
                 else u["skin_org"] if u["skin_pick"] == "org" and _skin_ok(con, uid, u["skin_org"]) else None,
         **({} if close else {"limited": True}),
         **({"closed": True} if state == "none" and (not u["can_friend"] or block) else {}),  # no "Add friend": their setting, or a block
@@ -1036,7 +1046,7 @@ def friend_joined(con, v: Viewer, since: int) -> dict:
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
 from . import core, pymk  # noqa: E402
-from .account import FRAMES, _skin, _skin_ok, me  # noqa: E402
+from .account import FRAMES, _skin, _skin_ok, creator_look, me  # noqa: E402
 from .clubs import people  # noqa: E402
 from .organizing import _ask_rating  # noqa: E402
 from .oversight import _admin, _owner  # noqa: E402

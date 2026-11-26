@@ -83,7 +83,7 @@ def _store(con, ranked: list[tuple[int, int, int, int]]) -> None:
 
 def night(con) -> None:
     """Once a day (chores._chores): everyone's suggestions worked out afresh."""
-    if not core._once(con, "pymk_day", str((core.now() + 5 * 3600) // 86400)):
+    if not core._once(con, "pymk_day", str(core.day_of(core.now()))):
         return
     ranked = _rank(con)  # reads only: the write lock just for the swap
     with tx(con):
@@ -107,7 +107,7 @@ def switch(con, uid: int, on: bool) -> None:
     if is_on(con, uid):
         return
     con.execute("INSERT OR REPLACE INTO pymk_consents (user_id, version, at) VALUES (?, ?, ?)", (uid, CONSENT, core.now()))
-    if core._once(con, f"pymk_live:{uid}", str((core.now() + 5 * 3600) // 86400)):
+    if core._once(con, f"pymk_live:{uid}", str(core.day_of(core.now()))):
         con.execute("DELETE FROM pymk WHERE user_id = ?", (uid,))
         _store(con, _rank(con, uid))
 

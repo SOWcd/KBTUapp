@@ -14,7 +14,6 @@
   import GraduationCap from '@lucide/svelte/icons/graduation-cap';
   import User from '@lucide/svelte/icons/user';
   import HandHeart from '@lucide/svelte/icons/hand-heart';
-  import Award from '@lucide/svelte/icons/award';
   import Copy from '@lucide/svelte/icons/copy';
   import Check from '@lucide/svelte/icons/check';
   import { fitTitle } from '../../ui/title';
@@ -37,7 +36,6 @@
   import Group from '../../ui/Group.svelte';
   import SettingsList from './SettingsList.svelte';
   import SupportMedal from './SupportMedal.svelte';
-  import SponsorsBoard from './SponsorsBoard.svelte';
   import Row from '../../ui/Row.svelte';
   import Notice from '../../ui/Notice.svelte';
   import { photoItems, editNick, setNick } from './mine';
@@ -47,11 +45,11 @@
   import { setKriGoogle } from '../../lib/kriGoogle';
   type Part = 'last' | 'first' | 'middle';
   type Typed = Exclude<Fixable, 'course' | 'school'>; // the ones typed in (fix); course and school are picked
-  type Kind = 'app' | 'me' | 'notify' | 'name' | 'privacy' | 'phone' | 'city' | 'school' | 'course' | Part | 'sees' | 'about' | 'donate' | 'sponsors';
+  type Kind = 'app' | 'me' | 'notify' | 'name' | 'privacy' | 'phone' | 'city' | 'school' | 'course' | Part | 'sees' | 'about' | 'donate';
   let { overlay, kind }: { overlay: Overlay; kind: Kind } = $props();
   const TITLE: Record<Kind, [Key, typeof Lock]> = { app: ['me.settings', Settings], me: ['set.aboutMe', User], notify: ['me.notifications', Bell], name: ['set.name', User], privacy: ['set.privacy', Lock], phone: ['pd.phone', Phone], city: ['pd.city', MapPin],
     school: ['look.school', GraduationCap], course: ['pd.course', GraduationCap], last: ['login.lastName', User], first: ['login.firstName', User], middle: ['pd.middle', User],
-    sees: ['set.whoSees', Lock], about: ['set.about', Info], donate: ['set.donate', HandHeart], sponsors: ['sp.sponsors', Award] };
+    sees: ['set.whoSees', Lock], about: ['set.about', Info], donate: ['set.donate', HandHeart] };
   const me = $derived(session.me);
   const phone = $derived(me?.student?.phone ? (kzPhone(me.student.phone) ? fmtPhone(me.student.phone) : me.student.phone) : '');
 
@@ -68,6 +66,16 @@
     try {
       if (await saveSwitch(k, on) && !quiet) say(phrase(on ? 'say.notifyOn' : 'say.notifyOff'), on ? 'megaphone_3d' : 'crescent_moon_3d');
     } catch { say(t('common.error'), 'warning_3d'); }
+  }
+
+  // one channel for my notifications (server push.py): the pick shows at once, back if the server says no
+  async function pickVia(via: 'app' | 'telegram') {
+    if (!me || me.notify.via === via) return;
+    const was = me;
+    haptic.select();
+    session.me = { ...me, notify: { ...me.notify, via } };
+    try { session.me = await api.updateMe({ notifyVia: via }); }
+    catch { session.me = was; haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
 
   // My data (PLAN 71): the phone an event asked for, changed or deleted (null deletes it); the city from the club's
@@ -225,7 +233,7 @@
     if (!(await copyText(session.donate, t('pay.copied')))) return; // the number is selectable too
     copied = true; clearTimeout(copiedT); copiedT = setTimeout(() => (copied = false), 2000);
   }
-  void loadCredits(60000); // People of the app's switch below shows only once the list is known (it isn't loaded at launch)
+  void loadCredits(60000); // Made together's switch below shows only once the list is known (it isn't loaded at launch)
 </script>
 
 <!-- in the app: ›; out of it (out = true): ↗ -->
@@ -246,8 +254,17 @@
   {#if kind === 'app'}
     <SettingsList />
   {:else if kind === 'notify' && me}
+    <!-- both ways open (a live app token, the bot may write): one picked, never both; else the one there is -->
+    {@const both = me.notify?.app && me.canDm}
+    {#if both}
+      <Group footnote={t('set.viaHint')}>
+        <Row title={t('set.via')} value={t(me.notify.via === 'app' ? 'set.viaApp' : 'set.viaTg')} menu={[
+          { label: t('set.viaApp'), checked: me.notify.via === 'app', onselect: () => void pickVia('app') },
+          { label: t('set.viaTg'), checked: me.notify.via === 'telegram', onselect: () => void pickVia('telegram') }]} />
+      </Group>
+    {/if}
     {#each notificationSettings as [k, title, hint], i (k)}
-      <div class={{ sw: i > 0 }}><Group footnote={t(hint)}><Row title={t(title)} accessory="switch" checked={me.settings[k]} onchange={(on) => set(k, on)} /></Group></div>
+      <div class={{ sw: i > 0 || both }}><Group footnote={t(hint)}><Row title={t(title)} accessory="switch" checked={me.settings[k]} onchange={(on) => set(k, on)} /></Group></div>
     {/each}
     <p class="foot always">{t('set.always')}</p>
   {:else if kind === 'me' && me?.student}
@@ -304,10 +321,10 @@
           onchange={async (on) => { if (on && !(await sheets.ask({ title: t('pymk.askTitle'), text: t('pymk.askText'), ok: t('pymk.on'), cancel: t('common.cancel') }))) { undo++; return; }
             await set('suggestMe', on, true); void loadFriends(); }} />{/key}
         {#if me.city}<Row title={t('set.hideCity')} accessory="switch" checked={me.city.hidden} onchange={(on) => cityHidden(on)} />{/if}
-        <!-- People of the app, my own consent (lib/credits.ts): only while something there is mine, or my yes stands.
+        <!-- Made together (lib/credits.ts): shown unless I hid; only while something there is mine, or my yes stands.
              The switch shows what is SAVED: a tap on goes back at once and opens the sheet (what everyone would see, the
              yes or the no), and it turns on only when the server kept the yes; off: at once, my name gone from the list -->
-        {#if data.credits?.mine}{#key undo}<Row title={t('cr.setRow')} accessory="switch" checked={data.credits.mine.consent === true}
+        {#if data.credits?.mine}{#key undo}<Row title={t('cr.setRow')} accessory="switch" checked={data.credits.mine.consent !== false}
           onchange={(on) => { undo++; if (on) sheets.creditAsk(); else void answerCredits(false); }} />{/key}{/if}
         <!-- clubs' event reports, my own consent (lib/reports.ts): one for all my clubs; its text points here -->
         {#if me.reports}{#key undo}<Row title={t('evr.mine')} accessory="switch" checked={me.reports.consent}
@@ -392,8 +409,6 @@
       {@render link(t('set.write'), () => openLink('https://t.me/Sowers'), '@Sowers', true)}
       {@render link(t('set.code'), () => openLink('https://github.com/SOWcd/KBTUapp'), 'GitHub', true)}
     </Group>
-  {:else if kind === 'sponsors'}
-    <SponsorsBoard />
   {:else if kind === 'donate'}
     <!-- one centred column, the title once; the number in one card with its copy as a plain line under
          it; the banks on the page itself; "not a purchase" and "never in DMs" as quiet lines -->

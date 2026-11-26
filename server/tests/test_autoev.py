@@ -156,7 +156,7 @@ def test_admin_queue_and_dismiss(env, monkeypatch):
     assert not [x for x in c.get("/api/admin/inbox", headers=tma(60)).json()["items"] if x["kind"] == "autoev"]
     m = con.execute("SELECT * FROM bot_outbox WHERE kind = 'auto_event'").fetchone()
     assert outbox._render(con, {**dict(m), "lang": "ru"}) is None
-    logic.undo_delete_event(con, logic.Viewer(ids["boss"], "admin", None), eid)
+    logic.organizing.undo_delete_event(con, logic.Viewer(ids["boss"], "admin", None), eid)
     assert [x for x in c.get("/api/admin/inbox", headers=tma(60)).json()["items"] if x["kind"] == "autoev"]
     assert c.delete(f"/api/admin/events/{eid}", headers=tma(60)).status_code == 204
     con.execute("UPDATE meta SET value = json_set(value, '$.due', 0) WHERE key = ?", (f"evdel:{eid}",))

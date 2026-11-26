@@ -11,7 +11,9 @@
   import SowerArt from '../../ui/SowerArt.svelte';
   import { close, removeOverlay, hideChrome, type Overlay } from '../../lib/state/ui.svelte';
   import { t } from '../../lib/i18n/index.svelte';
-  import { haptic } from '../../lib/tg';
+  import { haptic, onIos, openLink, tg } from '../../lib/tg';
+  import { session } from '../../lib/state/session.svelte';
+  import Wallet from '@lucide/svelte/icons/wallet';
   import { glass, recenter } from '../../ui/glass';
   import Qr from '../../ui/Qr.svelte';
   import '../../lib/qrnow'; // its code in the first frame (lib/qr.svelte.ts)
@@ -24,6 +26,10 @@
   import QrCode from '@lucide/svelte/icons/qr-code';
 
   let { overlay, link, p }: { overlay: Overlay; link: string; p: PersonCard } = $props();
+  // this QR as an Apple Wallet pass, for every event's door (server/kbtu/wallet.py): where Wallet is (an iPhone, a Mac).
+  // The link opens in the browser, which hands the signed file to Wallet's own Add sheet
+  const wallet = $derived(onIos || tg.platform === 'macos' ? session.me?.wallet : undefined);
+  // ponytail: our own black pill, not Apple's "Add to Apple Wallet" artwork; swap in the official badge (developer.apple.com/wallet/add-to-apple-wallet-guidelines) with the certificate
   const h = $derived(hero(p));
   const look = $derived(lookOf(p)); // the class and the strap's word
   // the capsule's title (SPEC §8.2), with a QR mark, and dark like the scrim under it: in the light look dark text
@@ -96,6 +102,7 @@
     </div>
   </div>
   <p class="hint">{t('me.qrHint')}</p>
+  {#if wallet}<button class="pill wallet" onclick={() => { haptic.tap(); openLink(wallet, true); }}><Wallet size={18} strokeWidth={2.2} />{t('me.wallet')}</button>{/if}
   </div>
   <CloseX onclick={() => close(overlay.id)} />
 </div>
@@ -212,4 +219,6 @@
   .hint { max-width: 300px; text-align: center; font: 550 13px/1.35 var(--font-text); color: rgba(255, 255, 255, 0.66); }
   .pill { position: relative; height: 44px; padding: 0 24px; border-radius: var(--r-full); color: #fff; font: 650 15px/1 var(--font-text); background-color: rgba(255, 255, 255, 0.1); }
   .pill:active { transform: scale(0.96); }
+  /* Wallet's own look: black, a hairline that keeps its edge on the dark scrim */
+  .wallet { display: flex; align-items: center; gap: 8px; background-color: black; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.3); transition: transform var(--t-fast) var(--ease); }
 </style>

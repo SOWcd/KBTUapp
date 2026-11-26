@@ -126,7 +126,7 @@
           {#if skin === 'japanesecultureclub'}<i class="petals" aria-hidden="true"></i>{/if}<!-- their petals fall past the tear too -->
           {#if valid && my?.ticketCode}
             <div class="qrbox" class:used={!!my.checkedInAt}>
-              <Qr text={'KBTU' + my.ticketCode} minVersion={4} tone={skin ? QR_LOOK[skin] : undefined}>{#if skin}<LookMark look={skin} />{:else}<OrgLogo org={e.org} />{/if}</Qr>
+              <Qr text={'KBTU' + my.ticketCode} minVersion={4} tone={QR_LOOK[skin ?? 'kbtu']}><LookMark look={skin ?? 'kbtu'} /></Qr>
               {#if my.checkedInAt}<span class="stamp">✓ {t('tk.checkedIn', { time: time(my.checkedInAt) })}</span>{/if}
             </div>
             <div class="facts foot">

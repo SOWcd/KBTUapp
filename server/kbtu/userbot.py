@@ -64,6 +64,7 @@ async def run(cfg: Config) -> None:
     while True:
         client = TelegramClient(StringSession(cfg.tg_session), int(cfg.tg_api_id), cfg.tg_api_hash, catch_up=False)
         tasks: list[asyncio.Task] = []
+        con, work = None, None
         try:
             await client.connect()
             if not await client.is_user_authorized():
@@ -90,10 +91,22 @@ async def run(cfg: Config) -> None:
         finally:
             for t in tasks:
                 t.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
             try:
                 await client.disconnect()
             except Exception:  # noqa: BLE001
                 pass
+            try:
+                if work is not None:
+                    looks = list(work.looks)  # disconnect has stopped handlers that could start another look
+                    for t in looks:
+                        t.cancel()
+                    await asyncio.gather(*looks, return_exceptions=True)
+                    if work.http is not None:
+                        await work.http.aclose()
+            finally:
+                if con is not None:
+                    con.close()
         await asyncio.sleep(RETRY)
 
 
@@ -138,9 +151,9 @@ class Mirror:
     async def post(self, m) -> None:
         """A channel post (new or edited) into its org's news; anything from a chat we don't mirror is dropped unread."""
         channel = getattr(m.peer_id, "channel_id", None)
-        if not channel or m.action is not None or mirror.source(self.con, channel) is None:
+        if not channel or m.action is not None or (oid := mirror.source(self.con, channel)) is None:
             return
-        msg = await self.read(channel, m)
+        msg = await self.read(channel, m, oid)
         new = not logic.one(self.con, "SELECT 1 FROM tg_post_msgs WHERE channel = ? AND msg_id = ?", channel, m.id)
         album_empty = False
         if msg.grouped and not msg.text.strip() and getattr(m, "edit_date", None) is not None:
@@ -161,10 +174,11 @@ class Mirror:
             self.looks.add(t)  # held till done (the loop keeps only weak references); never holds up the listener
             t.add_done_callback(self.looks.discard)
 
-    async def read(self, channel: int, m) -> mirror.Msg:
+    async def read(self, channel: int, m, oid: int) -> mirror.Msg:
         """A Telethon message as mirror.Msg: its photo copied (only when the post needs one), a video or a file only named."""
         photo, kind = None, None
-        if m.photo and mirror.needs_photo(self.con, channel, m.id, m.grouped_id):
+        if m.photo and (org := logic.one(self.con, "SELECT * FROM orgs WHERE id = ?", oid)) \
+                and logic.clubs.stories_open(self.con, org) and mirror.needs_photo(self.con, channel, m.id, m.grouped_id):
             data = await self.client.download_media(m, bytes)
             if data and len(data) <= media.MAX_BYTES:
                 try:
@@ -189,7 +203,7 @@ class Mirror:
     async def joins(self) -> None:
         """Every few minutes one step: leave a channel that stopped being a mirror, or join the next one and take its
         last few posts. Public channels only (mirror.wanted); a megagroup or a dead name is skipped for a day."""
-        from telethon.errors import FloodWaitError
+        from telethon.errors import FloodWaitError, RPCError
         from telethon.tl.functions.channels import JoinChannelRequest, LeaveChannelRequest
         from telethon.tl.types import Channel, PeerChannel
         skip: dict[str, float] = {}
@@ -216,17 +230,23 @@ class Mirror:
                 elif todo := [n for n in mirror.to_join(self.con) if skip.get(n, 0) < time.time()]:
                     name = todo[0]
                     try:
-                        ent = await self.client.get_entity(name)
-                    except (ValueError, TypeError):
-                        ent = None
-                    if not isinstance(ent, Channel) or not ent.broadcast:
-                        skip[name] = time.time() + 86400  # no such channel, or a group: the bot keeps its card, nothing to mirror
-                    else:
-                        await self.client(JoinChannelRequest(ent))
-                        await self.mute(ent)
-                        mirror.joined(self.con, ent.id, name)
-                        log.warning("userbot: joined @%s", name)
-                        await self.first(ent)
+                        try:
+                            ent = await self.client.get_entity(name)
+                        except (ValueError, TypeError):
+                            ent = None
+                        if not isinstance(ent, Channel) or not ent.broadcast:
+                            skip[name] = time.time() + 86400  # no such channel, or a group: the bot keeps its card, nothing to mirror
+                        else:
+                            await self.client(JoinChannelRequest(ent))
+                            await self.mute(ent)
+                            mirror.joined(self.con, ent.id, name)
+                            log.warning("userbot: joined @%s", name)
+                            await self.first(ent)
+                    except FloodWaitError:
+                        raise  # the account's backoff still applies to every channel
+                    except RPCError as exc:
+                        skip[name] = time.time() + 86400
+                        log.warning("userbot: skipping @%s for a day (%s)", name, type(exc).__name__)
             except FloodWaitError as exc:
                 log.warning("userbot: flood wait %ds", exc.seconds)
                 await asyncio.sleep(exc.seconds + 5)

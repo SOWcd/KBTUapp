@@ -165,6 +165,11 @@ def concerned(con, v: Viewer) -> bool:
         UNION ALL SELECT 1 FROM vol_access WHERE org_id = ? AND user_id = ?""", org, v.id, org, v.id)))
 
 
+def key(cfg) -> bytes:
+    """KEY from TOKEN_KEY (app.create and admin set it alike, so a deletion from either hashes the same)."""
+    return hmac.new(cfg.token_key, b"kbtu-vol", hashlib.sha256).digest()
+
+
 def _khash(org: int, key: str) -> str:
     return hmac.new(KEY, f"vol-gone {org} {key}".encode(), hashlib.sha256).hexdigest()
 
@@ -769,7 +774,7 @@ def plan(data: bytes, balance: str | None = None) -> dict:
                     rec["balance"] = round(float(row[balance].replace(",", ".").replace(" ", "")) * 60)
                     if not 0 <= rec["balance"] <= 100000 * 60:
                         raise ValueError
-                except ValueError:
+                except (ValueError, OverflowError):
                     rec["balance"] = 0
                     out["problems"].append(f"{name} row {r}: {balance!r} isn't a number of hours (no balance)")
     return out

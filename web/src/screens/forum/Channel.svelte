@@ -1,6 +1,6 @@
 <script lang="ts">
-  // The Forum tab has a personalized order and the public channel's order. The composer and the side doors are
-  // glass (base.css .glass-pill, Button's glass); each post the app's card on the plain ground: the face
+  // The Forum tab has a personalized order and the public channel's order. The composer is glass (base.css
+  // .glass-pill), the places under it lens-glass tiles; each post the app's card on the plain ground: the face
   // (an accent dot on it: new since my last visit), the name over the time, the words; under them Telegram's reactions
   // as bare counts (read-only: they are Telegram's; no chip around them, nothing to press) and, on the right, the one way
   // to the comments, which live in Telegram: who replied, and a grey button with Telegram's mark and the count (an accent
@@ -32,19 +32,23 @@
   import Megaphone from '@lucide/svelte/icons/megaphone';
   import ChartNoAxesColumn from '@lucide/svelte/icons/chart-no-axes-column';
   import BookOpen from '@lucide/svelte/icons/book-open';
+  import LifeBuoy from '@lucide/svelte/icons/life-buoy';
+  import Check from '@lucide/svelte/icons/check';
+  import Footprints from '@lucide/svelte/icons/footprints';
+  import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import Avatar from '../../ui/Avatar.svelte';
   import { initials } from '../../ui/OrgLogo.svelte';
   import { api, ApiErr, type ChannelFeedPost } from '../../lib/api';
   import { session, asStudent } from '../../lib/state/session.svelte';
   import Segmented from '../../ui/Segmented.svelte';
-  import { channel, loadChannel, loadOlder, markChannelSeen, pendingHearts, refreshChannel, removeChannelPost, selectChannelOrder, toggleHeart, touched } from '../../lib/state/channel.svelte';
+  import { channel, loadChannel, loadOlder, markChannelSeen, pendingHearts, refreshChannel, removeChannelPost, selectChannelOrder, toggleComing, toggleHeart, touched } from '../../lib/state/channel.svelte';
   import { ui, say, overlays } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t, tn } from '../../lib/i18n/index.svelte';
   import { nickName } from '../../lib/i18n/nicks';
   import { haptic, inTelegram, on, openLink, shareCard } from '../../lib/tg';
   import { phrase, loadResearch } from '../../lib/state/data.svelte';
-  import { ago } from '../../lib/time';
+  import { ago, nowTs } from '../../lib/time';
   import { compact } from '../../lib/chats';
   import { TAB_ICON } from '../../ui/icons';
   import EmptyState from '../../ui/EmptyState.svelte';
@@ -83,9 +87,13 @@
     ? [focusedPost, ...(channel.feed ?? [])] : (channel.feed ?? []));
   const latestMsg = (posts: ChannelFeedPost[]) => posts.reduce((max, p) => p.status === 'live' ? Math.max(max, p.msg ?? 0) : max, 0);
   const latest = $derived(latestMsg(feed));
-  const shown = (p: ChannelFeedPost) => p.status !== 'live' || (p.msg ?? 0) <= through;
+  // an ask for help leaves on its minute, before the next refresh says so (clock: a tick a minute while here)
+  let clock = $state(nowTs());
+  $effect(() => { if (!here) return; clock = nowTs(); const every = setInterval(() => { clock = nowTs(); }, 60_000); return () => clearInterval(every); });
+  const up = (p: ChannelFeedPost) => !p.help || p.help.until > clock;
+  const shown = (p: ChannelFeedPost) => up(p) && (p.status !== 'live' || (p.msg ?? 0) <= through);
   const list = $derived(feed.filter(shown));
-  const waiting = $derived(feed.filter((p) => !shown(p)).length);
+  const waiting = $derived(feed.filter((p) => up(p) && !shown(p)).length);
   const showAll = () => { through = latest; };
   $effect(() => { if ((atTop || !through) && latest > through) through = latest; });
   function seeNew() { haptic.tap(); showAll(); scroller?.scrollTo({ top: TOP, behavior: 'smooth' }); }
@@ -217,6 +225,26 @@
     else compose();
   }
 
+  // the tab's places (the tiles under the composer)
+  const doors = $derived([
+    { icon: ChartNoAxesColumn, tone: 'var(--tile-indigo)', label: t('research.title'), go: () => sheets.research() },
+    ...(me?.subjects ? [{ icon: BookOpen, tone: 'var(--tile-teal)', label: t('sj.row'), go: () => sheets.subjects() }] : []),
+    ...(me?.appeals ? [{ icon: Megaphone, tone: 'var(--tile-orange)', label: t('apl.chip'), go: () => sheets.appeals() }] : []),
+  ]);
+
+  // an ask for help: "I'm coming" (a confirmed student, as for writing), on at once; time left in the head
+  function coming(p: ChannelFeedPost) {
+    haptic.tap();
+    const go = () => { void toggleComing(p).catch(fail); };
+    if (!me?.student) asStudent(go);
+    else if (me.student.manual) sheets.login();
+    else go();
+  }
+  function left(until: number): string {
+    const min = Math.max(1, Math.ceil((until - clock) / 60));
+    return min < 60 ? t('fc.leftM', { n: min }) : t('fc.leftH', { n: Math.round(min / 60) });
+  }
+
   function heart(p: ChannelFeedPost) {
     haptic.tap();
     asStudent(() => { void toggleHeart(p).catch((e) => { fail(e); void loadChannel(); }); });
@@ -248,7 +276,7 @@
   // pass a post on: our bot's card (its opening words, a button into it by id only: never whose), as an event's
   const share = (p: ChannelFeedPost) => {
     haptic.tap();
-    shareCard({ kind: 'fp', id: String(p.id) }, `https://t.me/KBTUappBot?startapp=fp_${p.id}`, t('fc.sharedPost'))
+    shareCard({ kind: 'fp', id: String(p.id) })
       .then((sent) => { if (sent) say(phrase('say.shared'), 'party_popper_3d'); })
       .catch(() => { haptic.error(); say(t('common.error'), 'warning_3d'); });
   };
@@ -274,13 +302,18 @@
     </button>
     <IconButton icon={SquarePen} size="s" label={t('fc.new')} onclick={write} />
   </div>
-  <!-- the tab's side doors, small glass pills under the composer (full cards here crowded the feed's head): research
-       (the students' voice), the subjects' cards (SUBJECTS_FILE) and the other way to speak up (APPEALS: to the SG alone) -->
-  <div class="doors">
-    <Button kind="glass" size="s" onclick={() => { haptic.tap(); sheets.research(); }}>{#snippet icon()}<ChartNoAxesColumn size={16} strokeWidth={2} />{/snippet}{t('research.title')}</Button>
-    {#if me?.subjects}<Button kind="glass" size="s" onclick={() => { haptic.tap(); sheets.subjects(); }}>{#snippet icon()}<BookOpen size={16} strokeWidth={2} />{/snippet}{t('sj.row')}</Button>{/if}
-    {#if me?.appeals}<Button kind="glass" size="s" onclick={() => { haptic.tap(); sheets.appeals(); }}>{#snippet icon()}<Megaphone size={16} strokeWidth={2} />{/snippet}{t('apl.chip')}</Button>{/if}
-  </div>
+  <!-- the tab's places, under the composer: research (the students' voice), the subjects' cards (SUBJECTS_FILE) and
+       the other way to speak up (APPEALS: to the SG alone). Tiles, not pills: an app-icon square in its own colour,
+       the name and a chevron, so they read as somewhere to go and never as a filter on the feed below -->
+  <nav class="doors" style:--n={doors.length} aria-label={t('fc.places')}>
+    {#each doors as d (d.label)}
+      <button class="door" onclick={() => { haptic.tap(); d.go(); }}>
+        <span class="sq" style:--tone={d.tone} aria-hidden="true"><d.icon size={17} strokeWidth={2.2} /></span>
+        <span class="dl">{d.label}</span>
+        <span class="chev" aria-hidden="true"><ChevronRight size={14} strokeWidth={2.4} /></span>
+      </button>
+    {/each}
+  </nav>
 
   <div class="order">
     <Segmented items={[{ value: 'for_you', label: t('fc.forYou') }, { value: 'new', label: t('fc.newOrder') }]}
@@ -301,7 +334,7 @@
         {@const live = (p.msg ?? 0) > 0 && p.status === 'live'}
         {@const why = p.mine && p.human ? heldWhy(p) : undefined}
         {@const quote = p.mine && p.human ? (channel.why[p.id] ?? p.review?.explain)?.quote : undefined}
-        <article class="post" style:--i={Math.min(i, 8)} class:off={p.status === 'hidden'} class:lit={lit === p.id} data-post={p.id}>
+        <article class="post" style:--i={Math.min(i, 8)} class:off={p.status === 'hidden'} class:lit={lit === p.id} class:sos={!!p.help} data-post={p.id}>
           <!-- the face, the name and when, my mark; the post's one menu at the end -->
           <div class="head">
             <span class="rail">
@@ -317,11 +350,13 @@
               {:else}<b class="ellipsis">{nickName(p.nick) ?? p.sign}</b>{/if}
               <span class="meta"><span>{ago(p.at)}</span>
                 {#if m}<span class="mk {m.tone}">{t(m.key)}</span>
-                {:else if p.hot && live}<span class="mk hot">{t('fc.hot')}</span>{/if}</span>
+                {:else if p.hot && live}<span class="mk hot">{t('fc.hot')}</span>{/if}
+                {#if p.help}<span class="mk left">{left(p.help.until)}</span>{/if}</span>
             </span>
             {#if live}<span class="end"><IconButton kind="plain" size="s" icon={Ellipsis} label={t('common.more')} onclick={(e) => more(e, p)} /></span>
             {:else if p.mine && p.id > 0}<span class="end"><IconButton kind="plain" size="s" icon={Trash2} label={t('fc.delete')} onclick={() => drop(p)} /></span>{/if}
           </div>
+          {#if p.help}<span class="flag"><LifeBuoy size={14} strokeWidth={2.4} aria-hidden="true" />{t('fc.help')}</span>{/if}
           <p class="tx" class:fade={long[p.id] && !open[p.id]} class:open={open[p.id]} style:--h="{full[p.id] ?? 0}px" use:measure={p.id}><Marked text={p.body} {quote} /></p>
           <!-- the photos (up to 4, the channel's album): a tap shows them whole -->
           {#if p.photos?.length}<div class="pics n{p.photos.length}" style:--ar={p.photos.length === 1 ? Math.min(2, Math.max(0.75, p.photos[0].w / p.photos[0].h)) : null}>{#each p.photos as ph, i (i)}<button class="ph" aria-label={t('fc.photo')}
@@ -336,6 +371,25 @@
           {/if}
           <!-- the AI looking: a running bar under the words, not just a word -->
           {#if p.id < 0 || (p.mine && p.status === 'live' && !p.msg)}<div class="chk" role="progressbar" aria-label={t(p.id < 0 ? 'fc.checking' : 'fc.publishing')}><span></span></div>{/if}
+          <!-- an ask for help: "I'm coming" and how many; its author sees who instead (to them alone, the server's rule) -->
+          {#if p.help && live}
+            {@const h = p.help}
+            <div class="come">
+              {#if p.mine}
+                {#if h.who?.length}
+                  <span class="who-came">{#each h.who.slice(0, 4) as w (w.id)}<span class="f"><Avatar person={w} size={28} /></span>{/each}</span>
+                  <span class="cn">{t('fc.comingWho', { who: h.who.map((w) => w.name).join(', ') })}</span>
+                {:else}<span class="cn quiet">{t('fc.comingNone')}</span>{/if}
+              {:else}
+                <Button kind="primary" size="s" on={h.me} onclick={() => coming(p)}>
+                  {#snippet icon()}{#if h.me}<Check size={16} strokeWidth={2.6} />{:else}<Footprints size={16} strokeWidth={2.2} />{/if}{/snippet}{t(h.me ? 'fc.comingOn' : 'fc.coming')}
+                </Button>
+                {#if h.coming}<span class="cn">{tn('fc.comingN', h.coming)}</span>{/if}
+              {/if}
+            </div>
+            <!-- said before the tap: my name goes to the author (the count is all anyone else sees) -->
+            {#if !p.mine}<p class="cnote">{t('fc.comingNote')}</p>{/if}
+          {/if}
           {#if live}
             {@const pick = pendingHearts[p.id] ?? p}
             <div class="feedback">
@@ -392,11 +446,24 @@
      ends: gone once the window has faded in over it (its 90 ms), back at once when the fold starts, for the window
      to thin out over */
   .compose.away { opacity: 0; pointer-events: none; transition: transform 450ms var(--ease-bounce), opacity 0s linear 90ms; }
-  /* the side doors: a row of small glass pills, no card; a scroller on a narrow phone (4 px above: their hit areas;
-     the room below, taken back by the margin: their lift, which the scroller would cut) */
-  .doors { display: flex; gap: var(--s-2); margin: var(--s-3) calc(-1 * var(--gutter)) -14px; padding: 4px var(--gutter) 18px; overflow-x: auto; scrollbar-width: none; }
-  .doors :global(.btn) { box-shadow: var(--lg-bevel), var(--lg-lift); }
-  .doors::-webkit-scrollbar { display: none; }
+  /* the places: equal tiles in one row, Chip's light lens glass (spot, sheen, bevel, lift; no blur: nothing to
+     repaint on scroll), each an app-icon square in its colour over its name, a quiet chevron in the corner */
+  .doors { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: var(--s-2); margin-top: var(--s-3); }
+  .door { position: relative; isolation: isolate; display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-2); min-height: 82px;
+    padding: var(--s-3); border-radius: var(--r-m); text-align: left; color: var(--text);
+    background:
+      radial-gradient(ellipse 50% 60% at 24% 0%, var(--lg-spot), transparent 70%),
+      linear-gradient(180deg, var(--lg-sheen), transparent 60%),
+      linear-gradient(var(--fill), var(--fill)) var(--surface-solid);
+    box-shadow: var(--lg-bevel), var(--lg-lift);
+    transition: transform 450ms var(--ease-bounce); -webkit-tap-highlight-color: transparent; }
+  .door:active { transform: scale(0.96); transition-duration: 80ms; }
+  .sq { display: grid; place-items: center; width: 30px; height: 30px; border-radius: var(--r-xs); background: var(--tone); color: var(--on-accent);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.25); }
+  .dl { font: 600 var(--fs-sub)/1.2 var(--font-text); letter-spacing: -0.01em; overflow-wrap: break-word; hyphens: auto;
+    display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .chev { position: absolute; top: var(--s-3); right: var(--s-2); color: var(--text-3); display: flex; }
+  @media (max-width: 359px) { .dl { font-size: var(--fs-cap); } .door { padding: var(--s-3) var(--s-2) var(--s-3) var(--s-3); } }
   /* the "N new" pill: floats under the capsule, takes no room in the list */
   .pill { position: sticky; top: calc(var(--head-bottom) + var(--s-2) - var(--page-top)); z-index: var(--z-sticky); height: 0; display: flex; justify-content: center; }
   .pin { display: flex; height: max-content; }
@@ -417,6 +484,22 @@
   .feed .post.lit { animation: lit 1.8s var(--ease); }
   @keyframes lit { 0%, 45% { background: var(--accent-soft); } }
   .post.off { opacity: 0.6; }
+  /* an ask for help: a warm wash down from the top and a warm rim, its flag over the words, the time left by the
+     time; the one primary "I'm coming" under them */
+  .post.sos { background: linear-gradient(180deg, var(--warning-soft), transparent 140px) var(--surface);
+    box-shadow: var(--card-rim), inset 0 0 0 1.5px var(--warning-soft); }
+  .flag { align-self: flex-start; display: inline-flex; align-items: center; gap: 5px; margin-top: var(--s-3); padding: 4px 10px 4px 8px; border-radius: var(--r-full);
+    background: var(--warning-soft); color: var(--warning-text); font: 600 var(--fs-cap)/1.2 var(--font-text); letter-spacing: 0.01em; }
+  .flag + .tx { margin-top: var(--s-2); }
+  .mk.left { color: var(--warning-text); }
+  .come { display: flex; align-items: center; gap: var(--s-3); min-height: 36px; margin-top: var(--s-3); }
+  .cn { min-width: 0; font: 500 var(--fs-sub)/1.35 var(--font-text); color: var(--text-2);
+    display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .cn.quiet { color: var(--text-3); }
+  .cnote { margin-top: var(--s-1); font: 450 var(--fs-cap)/1.35 var(--font-text); color: var(--text-3); }
+  .who-came { flex: none; display: flex; }
+  .who-came .f + .f { margin-left: -8px; }
+  .who-came :global(.av) { box-shadow: 0 0 0 2px var(--surface-solid); }
 
   .head { display: flex; align-items: center; gap: var(--s-3); min-height: 36px; }
   .rail { position: relative; flex: none; display: flex; }

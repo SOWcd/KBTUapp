@@ -318,7 +318,7 @@ def _chores(cfg: Config, con) -> None:
     logic.pymk.night(con)  # People you may know: everyone's suggestions afresh, once a day
     casting.forget(con)   # daily: answers and notes of rounds whose results went out 60 days ago
     purge(cfg, con)       # accounts whose week to change their mind ran out
-    logic.ms_sweep(con)   # unfinished Microsoft sign-ins after a week, used-link marks after a day
+    logic.ms_sweep(con)   # unfinished Microsoft sign-ins after a week, used-link marks after a day, held share cards after an hour
     backup_day(cfg, con)  # a nightly copy of the database, 14 kept
     optimize_day(con)     # the query planner's statistics, once a night
     userbot_round(con)    # the owner hears when the channels' userbot goes quiet, and when it's back

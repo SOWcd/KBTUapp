@@ -323,7 +323,7 @@ def test_withdraw(env):
 def test_account_deletion_takes_consent(env):
     c, _, cfg, con, _, _, _ = _setup(env)
     gone = _uid(con, 10)
-    assert ("report_consents", "user_id") in logic._DEL_GONE
+    assert ("report_consents", "user_id") in logic.account._DEL_GONE
     delete_now(c, cfg, tma(10))
     assert not con.execute("SELECT 1 FROM report_consents WHERE user_id = ?", (gone,)).fetchone()
 

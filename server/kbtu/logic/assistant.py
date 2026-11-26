@@ -22,7 +22,7 @@ from functools import cache
 from pathlib import Path
 
 from ..db import tx
-from .core import PERSON, RANK, ApiError, Viewer, _qs, academic_year, at_least, can, club_rights, meet_link, need_student, now, one, person_ref, role_in, rows
+from .core import PERSON, RANK, TZ, ApiError, Viewer, _qs, academic_year, at_least, can, club_rights, meet_link, need_student, now, one, person_ref, role_in, rows
 from .clubs import shown_links
 from .oversight import _mod
 
@@ -144,7 +144,7 @@ def brief(con, v: Viewer, lang: str = "en", q: str = "") -> tuple[str, set[str],
     """The facts for this student (and the rooms, events and clubs a button may open)."""
     s = one(con, "SELECT school, course FROM students WHERE user_id = ?", v.id)
     t = now()
-    local = time.gmtime(t + 5 * 3600)
+    local = time.gmtime(t + TZ)
     facts = rows(con, "SELECT * FROM campus_places ORDER BY kind, id")
     school = s["school"] if s else None
     dean = next((r for r in facts if r["kind"] == "dean" and school and r["school"] == school.upper()), None)
@@ -212,7 +212,7 @@ def studio(con, v: Viewer) -> dict[str, int | None]:
 
 
 def _when(t: int | None) -> str:
-    return time.strftime('%a %d %b %Y %H:%M', time.gmtime(t + 5 * 3600)) if t else "unknown"
+    return time.strftime('%a %d %b %Y %H:%M', time.gmtime(t + TZ)) if t else "unknown"
 
 
 def card(con, ctx: object) -> tuple[str, int | None, set[int]] | None:
@@ -879,7 +879,7 @@ def fill_prompt(con, v: Viewer, org: int, text: object, have: object = None, que
         if not t:
             return [], t, local
     _spend(con, v)
-    today = time.gmtime(now() + 5 * 3600)
+    today = time.gmtime(now() + TZ)
     system = FILL.format(today=f"{WEEKDAYS[today.tm_wday]}, {time.strftime('%Y-%m-%d', today)}")
     h = _have(have)
     if question:

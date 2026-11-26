@@ -1,22 +1,23 @@
 <script lang="ts">
   // The mark in the middle of a badge's QR: the app's for KBTU and SOWER, else the club's own,
   // the same art as its lanyard (ui/LanyardBand) on its colours.
-  import { clubLook, type Look } from '../lib/awards';
+  import { clubLook, lookArt, type Look } from '../lib/awards';
   import KbtuMark from './KbtuMark.svelte';
-  import panther from '../assets/lanyards/panther-mark.webp'; // white: a black head on navy is a blob this small
   import KnightsHelm from './KnightsHelm.svelte';
-  import aperture from '../assets/lanyards/moments-aperture.svg?url';
-  import facesMark from '../assets/lanyards/faces-mark.webp'; // their wordmark on its black (their logo, not the hands)
 
-  let { look }: { look: Look } = $props();
-  const club = $derived(clubLook(look)); // the template's clubs: their mark on their plate's colours (lookVars)
-  const art = $derived(club ? club.mark : ({ cheer: panther, moments: aperture, faces: facesMark } as Partial<Record<Look, string>>)[look]);
+  // Offline tickets pass their saved image (null if missing), never the network asset.
+  let { look, logo }: { look: Look; logo?: string | null } = $props();
+  let failed = $state<string | null>();
+  const art = $derived(logo === undefined ? lookArt(look) : logo);
+  const img = $derived(art && art !== failed ? art : null);
+  // Keep the app mark on its own plate when a club's image is unavailable, including on light club plates.
+  const mark = $derived(img || look === 'knights' || look === 'studex' || look === 'sower' ? look : 'kbtu');
 </script>
 
-<span class="appmark {look}" class:club={!!club}>
-  {#if art}<img src={art} alt="" />
-  {:else if look === 'knights'}<span class="helm"><KnightsHelm /></span>
-  {:else if look === 'studex'}<svg viewBox="0 0 100 100"><path d="M8 92 L70 30 L56 22 L96 8 L82 48 L76 36 L14 98 Z" fill="#fff" /></svg>
+<span class={['appmark', mark, { club: !!clubLook(mark) }]}>
+  {#if img}<img src={img} alt="" onerror={() => failed = img} />
+  {:else if mark === 'knights'}<span class="helm"><KnightsHelm /></span>
+  {:else if mark === 'studex'}<svg viewBox="0 0 100 100"><path d="M8 92 L70 30 L56 22 L96 8 L82 48 L76 36 L14 98 Z" fill="#fff" /></svg>
   {:else}<KbtuMark />{/if}
 </span>
 

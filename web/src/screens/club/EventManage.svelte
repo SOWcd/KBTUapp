@@ -13,6 +13,7 @@
   import Eye from '@lucide/svelte/icons/eye';
   import HandHeart from '@lucide/svelte/icons/hand-heart';
   import MessagesSquare from '@lucide/svelte/icons/messages-square';
+  import Link from '@lucide/svelte/icons/link';
   import MonitorUp from '@lucide/svelte/icons/monitor-up';
   import { onMount } from 'svelte';
   import ClipboardCheck from '@lucide/svelte/icons/clipboard-check';
@@ -84,7 +85,8 @@
   // receipts the app checked by itself (no person looked): one total to find in Kaspi instead of every receipt
   const auto = $derived(going.filter((a) => a.receipt?.auto));
   const autoSum = $derived(auto.reduce((n, a) => n + (a.receipt?.amount ?? 0), 0));
-  // the event's Telegram group: open it, or "Create chat" adds our bot to a group the organizer picks
+  // the event's Telegram group: open it; "Create chat" adds our bot to a group the organizer picks (it lets in only
+  // those going), or "Paste the group's link" names one the organizers already have (no bot)
   let chat = $state<string | null>(null);
   // door helpers (server crew.py): the server sends the list to a running club's President or Vice only
   $effect(() => { if (head) api.event(id).then((x) => { chat = x.chat ?? null; santaN = x.santaN ?? 0; santaTeam = x.santaTeam ?? null; }).catch(() => {}); });
@@ -127,7 +129,7 @@
     if (!e) return;
     haptic.tap();
     // the event's own card (server /api/share kind ev): a member opens the game; anyone else sees what a team-only event shows them
-    shareCard({ kind: 'ev', id: String(id) }, 'https://t.me/KBTUappBot?startapp=ev_' + id, e.title)
+    shareCard({ kind: 'ev', id: String(id) })
       .then((sent) => { if (sent) say(phrase('say.shared'), 'party_popper_3d'); })
       .catch(() => { haptic.error(); say(t('common.error'), 'warning_3d'); });
   }
@@ -153,6 +155,24 @@
     if (chat) { openLink(chat); return; }
     if (!(await sheets.ask({ title: t('chat.ask'), text: t('chat.askText'), ok: t('chat.go'), cancel: t('common.cancel') }))) return;
     try { openLink(await api.chatStart(id)); } catch { say(t('common.error'), 'warning_3d'); }
+  }
+  // the organizers' own group by its link (server seats.chat_set): no bot, no admin rights; shown at once to those going
+  async function pasteChat() {
+    haptic.tap();
+    const link = await sheets.askText({ title: t('chat.paste'), text: t('chat.pasteText'), placeholder: 't.me/+AbCdEf…', value: chat ?? '', max: 200, line: true, ok: t('common.save'), cancel: t('common.cancel') });
+    if (!link || link === chat) return;
+    await saveChat(link, t('chat.saved'));
+  }
+  async function dropChat() {
+    haptic.tap();
+    if (!(await sheets.ask({ title: t('chat.dropAsk'), text: t('chat.dropText'), ok: t('chat.drop'), cancel: t('common.cancel'), danger: true }))) return;
+    await saveChat(null, t('chat.dropped'));
+  }
+  async function saveChat(link: string | null, done: string) {
+    const was = chat;
+    chat = link; // optimistic: the row reads «Event chat» at once
+    try { chat = (await api.chatSet(id, link)).chat; haptic.ok(); say(done, 'party_popper_3d'); }
+    catch (err) { chat = was; haptic.error(); say(t(err instanceof ApiErr && err.code === 'bad_input' ? 'chat.badLink' : 'common.error'), 'warning_3d'); }
   }
   // "Who brought" (a member's KPI): signed up by their link, paid (an accepted receipt), came; the ones who came most first
   const brought = $derived.by(() => {
@@ -240,7 +260,8 @@
   }
   let more = $state(false);
   // the rows under «More», the same conditions as below: three or fewer show plainly, no fold (a fold of two is pointless)
-  const folded = $derived(!e ? 0 : [head, head && e.teamMax, head && e.teamMax, head && e.status !== 'cancelled' && !plain, head && e.needsVolunteers,
+  const folded = $derived(!e ? 0 : [head, head && e.teamMax, head && e.teamMax, head && e.status !== 'cancelled' && !plain, head && e.status !== 'cancelled' && !plain,
+    head && e.status !== 'cancelled' && !plain && chat, head && e.needsVolunteers,
     head && e.guestHost && teamMark, head && live && !e.guestHost, reports, head && live && !e.guestHost && !e.guestList && !e.meeting && !e.santa?.drawn && (!started || e.lateSignup),
     head && live && !started, head && e.status === 'cancelled'].filter(Boolean).length);
   // whom the door records (server checkin.set_audience): an ordinary public event's, where the team is told apart from
@@ -429,7 +450,11 @@
               <Row icon={UsersRound} title={t('studio.attendees')} accessory="chevron" onclick={() => sheets.attendees(id)} />
               {#if e.teamMax}<Row icon={UsersRound} title={t('tm.board')} accessory="chevron" onclick={() => sheets.teams(id)} />{/if}<!-- a team event (server evteams.py) -->
               {#if e.teamMax}<TournamentRows {id} manage manageBracket={may(mem, 'events')} />{/if}
-              {#if e.status !== 'cancelled' && !plain}<Row icon={MessagesSquare} title={t(chat ? 'chat.open' : 'chat.create')} accessory={chat ? 'external' : 'chevron'} onclick={openChat} />{/if}
+              {#if e.status !== 'cancelled' && !plain}
+                <Row icon={MessagesSquare} title={t(chat ? 'chat.open' : 'chat.create')} accessory={chat ? 'external' : 'chevron'} onclick={openChat} />
+                <Row icon={Link} title={t(chat ? 'chat.change' : 'chat.paste')} accessory="chevron" onclick={pasteChat} />
+                {#if chat}<Row tone="destructive" title={t('chat.drop')} onclick={dropChat} />{/if}
+              {/if}
               <!-- one «Helpers»: the door's (server crew.py, its sheet links the volunteers), else the volunteers -->
               <!-- the door's helpers live under the Mark screen's «Helper» (CrewSheet); here the volunteers who asked -->
               {#if e.needsVolunteers}<Row icon={HandHeart} title={t('mg.helpers')} count={e.volunteersAsked ?? 0} accessory="chevron" onclick={() => sheets.volunteers(id, e.needsVolunteers!)} />{/if}

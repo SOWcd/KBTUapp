@@ -1,0 +1,36 @@
+# Serious and critical a11y violations the app had when e2e/a11y.spec.ts came in (#362): one per line,
+# `<theme> <screen> <rule> <element>`. Fix one, strike its line; never add a line for something new.
+dark afisha label-content-name-mismatch .layer.live
+dark afisha label-content-name-mismatch .today
+dark afisha label-content-name-mismatch button[aria-label="Friday, 27 November · 1"]
+dark afisha label-content-name-mismatch button[aria-label="Monday, 30 November"]
+dark afisha label-content-name-mismatch button[aria-label="Saturday, 28 November"]
+dark afisha label-content-name-mismatch button[aria-label="Sunday, 29 November"]
+dark afisha label-content-name-mismatch button[aria-label="Thursday, 26 November · 1"]
+dark afisha label-content-name-mismatch button[aria-label="Tuesday, 1 December"]
+dark clubs label-content-name-mismatch .layer.live
+dark forum label-content-name-mismatch .layer.live
+dark forum label-content-name-mismatch article[data-post="1"] > .head > .rail > .av[aria-label="Ali N"]
+dark forum label-content-name-mismatch article[data-post="4"] > .head > .rail > .av[aria-label="Ali N"]
+dark forum label-content-name-mismatch button[aria-label="Comments: 2"]
+dark me label-content-name-mismatch .fr
+dark me label-content-name-mismatch .layer.live
+dark me label-content-name-mismatch .photo
+dark me nested-interactive .inv
+light afisha label-content-name-mismatch .layer.live
+light afisha label-content-name-mismatch .today
+light afisha label-content-name-mismatch button[aria-label="Friday, 27 November · 1"]
+light afisha label-content-name-mismatch button[aria-label="Monday, 30 November"]
+light afisha label-content-name-mismatch button[aria-label="Saturday, 28 November"]
+light afisha label-content-name-mismatch button[aria-label="Sunday, 29 November"]
+light afisha label-content-name-mismatch button[aria-label="Thursday, 26 November · 1"]
+light afisha label-content-name-mismatch button[aria-label="Tuesday, 1 December"]
+light clubs label-content-name-mismatch .layer.live
+light forum label-content-name-mismatch .layer.live
+light forum label-content-name-mismatch article[data-post="1"] > .head > .rail > .av[aria-label="Ali N"]
+light forum label-content-name-mismatch article[data-post="4"] > .head > .rail > .av[aria-label="Ali N"]
+light forum label-content-name-mismatch button[aria-label="Comments: 2"]
+light me label-content-name-mismatch .fr
+light me label-content-name-mismatch .layer.live
+light me label-content-name-mismatch .photo
+light me nested-interactive .inv

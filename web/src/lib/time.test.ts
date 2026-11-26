@@ -7,8 +7,9 @@ test('multi-day events: past 24 h the span of days, an overnight one stays one e
   expect(multiDay(start, null)).toBe(false);
   expect(multiDay(at(2026, 10, 2, 20), at(2026, 10, 3, 8))).toBe(false); // a night hackathon
   expect(multiDay(start, start + 86400)).toBe(false);                    // exactly a day: still expressible by time alone
-  expect(daySpan(start, end)).toMatch(/^2\s?[–-]\s?12 \D+$/);
-  expect(daySpan(at(2026, 9, 31, 10), at(2026, 10, 2, 10))).toMatch(/31\s\D+?\s?[–-]\s?2\s\D+/);
+  // ICU puts a plain, thin or no-break space (or none) around the dash and before the month, by version
+  expect(daySpan(start, end)).toMatch(/^2\s*[–-]\s*12\s+\D+$/);
+  expect(daySpan(at(2026, 9, 31, 10), at(2026, 10, 2, 10))).toMatch(/31\s+\D+?\s*[–-]\s*2\s+\D+/);
 });
 
 test('a last day with no time shows no end (stored as 23:59)', () => {

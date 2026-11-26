@@ -11,6 +11,7 @@ import asyncio
 import contextlib
 import hashlib
 import hmac
+import ipaddress
 import json
 import logging
 import mimetypes
@@ -25,7 +26,7 @@ from typing import Annotated, Any, Literal
 
 import anyio
 import httpx
-from fastapi import Body, Depends, FastAPI, Header, Query, Request
+from fastapi import BackgroundTasks, Body, Depends, FastAPI, Header, Query, Request
 from fastapi.datastructures import Default, DefaultPlaceholder
 from fastapi.dependencies.utils import get_typed_return_annotation
 from fastapi.routing import APIRoute
@@ -35,7 +36,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Resp
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.gzip import GZipMiddleware
 
-from . import ai, auth, bot, bot_dm, bot_groups, calpage, casting, checkin as qr, config, db, docs, llm, logic, media, mirror, msauth, receipt, roster, texts, video
+from . import ai, auth, bot, bot_dm, bot_groups, calpage, casting, checkin as qr, config, db, docs, llm, logic, media, mirror, msauth, receipt, roster, texts, video, wallet
 from .logic import ApiError, Viewer, donations
 from .logic import web_auth
 
@@ -57,6 +58,30 @@ async def _picture(fn, *args):
         return await _img(fn, *args)
     except media.BadImage:
         raise ApiError("bad_input", "not_an_image") from None
+
+
+# on every answer (Aldiyar's report): no type sniffing, HTTPS only, and framed only by Telegram Web (the Mini App runs
+# in its iframe) or ourselves; a page with its own stricter CSP (forms, calendar) keeps it
+_HEADERS = ((b"x-content-type-options", b"nosniff"), (b"strict-transport-security", b"max-age=31536000"),
+            (b"content-security-policy", b"frame-ancestors 'self' https://web.telegram.org https://*.telegram.org"))
+
+
+class _Secure:
+    """Plain ASGI (no BaseHTTPMiddleware: it buffers and costs every request); adds what a response doesn't set itself."""
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+
+        async def start(m):
+            if m["type"] == "http.response.start":
+                have = {k.lower() for k, _ in m.get("headers", ())}
+                m = {**m, "headers": [*m.get("headers", ()), *(h for h in _HEADERS if h[0] not in have)]}
+            await send(m)
+        await self.app(scope, receive, start)
+
 
 THREADS = 16               # see lifespan
 GUEST_LIST_BYTES = 2_000_000  # a guest list's JSON body (logic.guests.LIST_ROWS rows); bigger is refused before it is read
@@ -152,7 +177,7 @@ MATCH_SCORE_ROUTE = "/api/matches/{mid}"
 def _staff_event_id(con, request: Request, route: tuple[str, str]) -> str:
     if route == ("PUT", MATCH_SCORE_ROUTE):
         mid = request.path_params["mid"]
-        if mid.isascii() and mid.isdigit() and len(mid) <= 19 and (eid := logic.evmatches.match_event(con, int(mid))):
+        if mid.isascii() and mid.isdigit() and len(mid) <= 19 and (eid := logic.tournament.match_event(con, int(mid))):
             return str(eid)
         return ""
     return str(request.path_params.get("eid", ""))
@@ -269,6 +294,8 @@ def viewer(request: Request, con: Con) -> Iterator[Viewer]:
 def _upsert(con, tg: dict, admins: frozenset[int]) -> Viewer:
     """The Telegram user as our user: created on the first call, names and photo kept fresh (SPEC §5)."""
     t = logic.now()
+    if tg["id"] >= logic.apple.SYNTH:  # never a Telegram ID (52 bits): the Apple-made accounts' range (logic/apple.py)
+        raise ApiError("forbidden", "init_data")
     photo = tg.get("photo_url") if str(tg.get("photo_url") or "").startswith("https://t.me/") else None
     fresh = (tg.get("username"), tg.get("first_name") or "", tg.get("last_name") or "", photo)
     dm = int(bool(tg.get("allows_write_to_pm")))
@@ -324,6 +351,19 @@ def _web_csrf(request: Request, domain: str) -> None:
     local = re.fullmatch(r"(?:localhost|127\.0\.0\.1)(?::[0-9]+)?", domain)
     if origin != f"https://{domain}" and not (local and origin == f"http://{domain}"):
         raise ApiError("forbidden", "csrf")
+
+
+def _visitor_ip(request: Request) -> str:
+    """Who is asking. uvicorn takes X-Forwarded-For only from a private peer (the Dockerfile's --forwarded-allow-ips), so
+    a public client address is the real one; Cloudflare's header counts only behind our own proxy (a private or no
+    address): a request straight to the origin can't pick its address and get past a per-address cap (Aldiyar's report)"""
+    peer = request.client.host if request.client else ""
+    try:
+        if ipaddress.ip_address(peer).is_global:
+            return peer
+    except ValueError:  # no address (a test client)
+        pass
+    return request.headers.get("cf-connecting-ip") or peer
 
 
 def _web_cookie(response: Response, token: str) -> None:
@@ -521,7 +561,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     cfg = cfg or config.load()
     logic.core._SHARED.clear(); logic.profiles._RARITY[0] = 0  # per-worker caches belong to one database (tests make many)
     logic.vol.ORG = cfg.volunteers  # the volunteers ledger's club (VOLUNTEERS); empty: off
-    logic.vol.KEY = hmac.new(cfg.token_key, b"kbtu-vol", hashlib.sha256).digest()  # deleted people's import keys, hashed
+    logic.vol.KEY = logic.vol.key(cfg)  # deleted people's import keys, hashed
     def after(con) -> None:
         if not cfg.play_demo:
             web_auth.revoke_demo(con)  # PLAY_DEMO off ends the reviewer's sessions for good, not until it's back on
@@ -556,6 +596,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
     app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=6)  # JSON lists; pictures and video are excluded
+    app.add_middleware(_Secure)
 
     def ai_http() -> httpx.AsyncClient:
         """One client for the AI calls (keep-alive: a new one per request pays DNS and TLS each time)."""
@@ -579,6 +620,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     if cfg.docs and not logic.assistant.DOCS.ready():
         log.warning("DOCS is on but %s doesn't open: the assistant answers without the documents", cfg.docs_db)
     logic.profiles.QR_KEY = hmac.new(cfg.token_key, b"kbtu-badge-qr", hashlib.sha256).digest()  # Admin → Awards → Show QR
+    passes = wallet.signer(cfg)  # Apple Wallet's badge pass (WALLET_PASS_*); None: off
 
     # ------------------------------------------------------------ errors
 
@@ -648,6 +690,100 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             _web_cookie(response, "")
         return response
 
+    # ------------------------------------------------------------ the iPhone app (logic/apple.py, ios/)
+
+    def apple_subject(body: dict) -> str:
+        if not cfg.ios_bundle:
+            raise ApiError("not_found")
+        sub = logic.apple.subject(body.get("token"), body.get("nonce"), cfg.ios_bundle, logic.now())
+        if sub is None:
+            raise ApiError("forbidden", "web_login")
+        return sub
+
+    def web_only(request: Request) -> str:
+        """The session these routes act on; a Mini App is Telegram already and has no session of ours"""
+        if not (token := getattr(request.state, "web_token", "")):
+            raise ApiError("forbidden", "telegram")
+        return token
+
+    @app.post("/api/web/apple", status_code=204)
+    def web_apple(request: Request, con: Con, body: dict = Body(...)):
+        """Sign in with Apple: the account its Apple ID reaches, made now when it has none (its consent at the button)"""
+        _web_csrf(request, cfg.domain)
+        sub, t = apple_subject(body), logic.now()
+        with db.tx(con):
+            uid = logic.apple.sign_in(con, body, sub, str(body.get("lang") or ""), t)
+            _viewer_user(con, logic.one(con, "SELECT * FROM users WHERE id = ?", uid))  # banned: refused, with why
+            web_auth.forget(con, t)
+            token = web_auth.issue(con, uid, request.cookies.get(web_auth.COOKIE, ""), t)
+        response = Response(status_code=204, headers={"Cache-Control": "no-store"})
+        _web_cookie(response, token)
+        return response
+
+    @app.post("/api/me/logins/apple", status_code=204)
+    def link_apple(con: Con, v: Me, body: dict = Body(...)):
+        sub = apple_subject(body)
+        with db.tx(con):
+            logic.apple.link_apple(con, v.id, body, sub, logic.now())
+
+    @app.delete("/api/me/logins/apple", status_code=204)
+    def unlink_apple(request: Request, con: Con, v: Me):
+        token = getattr(request.state, "web_token", "")
+        with db.tx(con):
+            logic.apple.unlink_apple(con, v.id, web_auth._digest(token) if token else None)
+
+    @app.get("/api/me/logins/telegram")
+    def telegram_start(request: Request, v: Me, state: str = "", ios: int = 0):
+        web_only(request)
+        return {"url": logic.apple.telegram_start(cfg.bot_token, cfg.domain, state, bool(ios))}
+
+    @app.get("/api/web/telegram")
+    def telegram_sign_in_start(state: str = ""):
+        """The iPhone app's entrance: Telegram's sign-in page in the system's sign-in sheet (a popup in the web view loses
+        window.opener on iOS 17.5+), back through /tg-back; the proof then signs in at /api/web/login like the widget's"""
+        return {"url": logic.apple.telegram_start(cfg.bot_token, cfg.domain, state, True)}
+
+    @app.get("/tg-back")
+    def telegram_back():
+        """Telegram's return into the iPhone app's sign-in sheet (logic/apple.py APP_SCHEME); the proof stays in the
+        fragment, so no Referer or log carries it"""
+        return Response(logic.apple.TG_BACK_HTML, media_type="text/html; charset=utf-8", headers={
+            "Cache-Control": "no-store", "Referrer-Policy": "no-referrer", "Content-Security-Policy": logic.apple.TG_BACK_CSP})
+
+    @app.post("/api/me/logins/telegram", status_code=204)
+    def link_telegram(request: Request, con: Con, v: Me, body: dict = Body(...)):
+        """Telegram's proof (its sign-in page's #tgAuthResult) put on my Apple-made account: the bot can write to me then"""
+        old, t = web_only(request), logic.now()
+        tg = auth.check_widget(body, cfg.bot_token, t)
+        if tg is None:
+            raise ApiError("forbidden", "web_login")
+        with db.tx(con):
+            web_auth.consume(con, tg, t)
+            push = logic.rows(con, "SELECT token FROM push_devices WHERE session = ?", web_auth._digest(old))
+            logic.apple.link_telegram(con, v.id, tg, t)  # every session of mine ends here (the tg_id trigger)
+            token = web_auth.issue(con, v.id, old, t)
+            logic.apple.keep_devices(con, v.id, [r[0] for r in push], web_auth._digest(token), t)
+        request.state.renew_web_cookie = False
+        response = Response(status_code=204, headers={"Cache-Control": "no-store"})
+        _web_cookie(response, token)
+        return response
+
+    @app.post("/api/me/devices", status_code=204)
+    def add_device(request: Request, con: Con, v: Me, body: dict = Body(...)):
+        """This iPhone's push token for my session here (it ends with the session)"""
+        if not cfg.ios_bundle:
+            raise ApiError("not_found")
+        token = web_only(request)
+        with db.tx(con):
+            logic.apple.add_device(con, v.id, web_auth._digest(token), body, logic.now())
+
+    @app.delete("/api/me/devices", status_code=204)
+    def drop_device(request: Request, con: Con, v: Me):
+        """Notifications off in iOS Settings: this session's push token goes (with IOS_BUNDLE_ID off too: a way out)"""
+        token = web_only(request)
+        with db.tx(con):
+            logic.apple.drop_device(con, v.id, web_auth._digest(token))
+
     def kri_google(con, v: Viewer) -> bool:
         """Google may answer this student's assistant first, once they say yes: its key, ASSIST_LEAD unset or google
         (off: the operator's kill switch), the assistant open to them, the policy that names Google in force (ai_on) and
@@ -657,7 +793,9 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     def me_payload(request: Request, con: Con, v: Me, *, report_log: bool = False):
         demo = is_demo(request)  # the reviewer sees no real person: no support contacts, no donation number
-        if not getattr(request.state, "web_token", ""):
+        web = bool(getattr(request.state, "web_token", ""))
+        lg = logic.apple.logins(con, v.id)
+        if not web:
             logic.guests.claim_username(con, v.id)  # a guest list's ticket by Telegram username, at once
         reports = {}
         if cfg.reports:
@@ -667,7 +805,11 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                 if report_log:
                     reports["reportLog"] = logic.evreports.own_log(con, v) if summary["consent"] else []
         return logic.me(con, v) | {"consentNow": policy_for(con, v, policy), "board": board_on(app.state.cfg, v), "support": [] if demo else logic.account.support(con),
+                                   # outside Telegram: which sign-ins reach this account (Settings links the other one)
+                                   **({"logins": lg} if web or lg["apple"] else {}),  # the Mini App too once Apple is linked: a link from a borrowed session is seen and undone there
                                    **({"forumChannel": True} if app.state.cfg.forum_channel else {}),
+                                   # my badge as an Apple Wallet pass: a link to it (no link: no button)
+                                   **({"wallet": x} if passes and not demo and (x := wallet.link(cfg, con, v.id)) else {}),
                                    **({"subjects": True} if v.student and logic.subjects.on(cfg.subjects_file) else {}),  # the subjects' cards
                                    **reports,
                                    "teams": logic.evteams.summary(con, v),  # team events' own consent (evteams.CONSENT)
@@ -680,10 +822,19 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                                    **({"appeals": logic.appeals.summary(con, v)} if logic.appeals.on(con, cfg.appeals, v) else {}),
                                    **({"ask": logic.appeals.ask_summary(con, v)} if logic.appeals.ask_on(con, cfg.ask, v) else {})}
 
+    async def app_chats(uid: int, tg: int) -> None:
+        """After /api/me's answer: am I in the app's channel and group (logic/appchats.py, once a day at most)."""
+        got = await logic.appchats.look(lambda m, p: bot._call(cfg, ai_http(), m, p, 0), tg)
+        if got:
+            with app.state.pool.conn() as con:
+                await run_in_threadpool(logic.appchats.save, con, uid, got)
+
     @app.get("/api/me")
-    def get_me(request: Request, con: Con, v: Me, response: Response, report_log: Annotated[bool, Query(alias="reportLog")] = True,
-               platform: str | None = None):
+    def get_me(request: Request, con: Con, v: Me, response: Response, later: BackgroundTasks,
+               report_log: Annotated[bool, Query(alias="reportLog")] = True, platform: str | None = None):
         logic.account.seen_platform(con, v.id, platform)  # no extra request: the app's own /api/me says it
+        if cfg.background and cfg.bot_token and (tg := db.maybe(con, logic.appchats.due, con, v.id)):
+            later.add_task(app_chats, v.id, tg)
         if cfg.reports:
             response.headers["Cache-Control"] = "private, no-store"
         if not hasattr(request.state, "web_token"):  # Telegram's signed data, never a browser session's stored username
@@ -875,9 +1026,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     # the laptop (no Telegram): a pairing code, then what to show; its secret in a header, never in a URL
     @app.post("/api/screen/pair")
     def screen_pair(request: Request, con: Con):
-        # the visitor's address through Cloudflare's tunnel (the socket's peer is the tunnel itself)
-        return {**qr.pair(con, cfg.token_key, request.headers.get("cf-connecting-ip") or (request.client.host if request.client else "")),
-                "bot": f"https://t.me/{cfg.bot_username}?startapp="}
+        return {**qr.pair(con, cfg.token_key, _visitor_ip(request)), "bot": f"https://t.me/{cfg.bot_username}?startapp="}
 
     @app.get("/api/screen")
     def screen_show(con: Con, x_screen: str = Header("")):
@@ -981,20 +1130,31 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def ms_start(request: Request, v: Me):
         """The Microsoft sign-in link for me (msauth.py); the Mini App opens it outside Telegram"""
         _mini_app_only(request)
-        return {"url": msauth.link(cfg.token_key, v.id, cfg.domain)}
+        return {"url": msauth.start(cfg.token_key, v.id, cfg.domain)}
+
+    @app.get("/ms/go")
+    def ms_go(state: str = ""):
+        """The app's sign-in link opens here: a random PKCE verifier into this browser's cookie, then on to Microsoft"""
+        if not msauth.state_uid(cfg.token_key, state):
+            return RedirectResponse("/ms.html", status_code=302)  # not ours or stale: ms.html says it didn't work
+        verifier = secrets.token_urlsafe(48)
+        r = RedirectResponse(msauth.link(state, verifier, cfg.domain), status_code=302, headers={"Cache-Control": "no-store"})
+        r.set_cookie(msauth.COOKIE, verifier, max_age=msauth.TTL, secure=True, httponly=True, samesite="lax", path="/")
+        return r
 
     @app.get("/api/ms/verifier")
-    def ms_verifier(state: str, con: Con):
-        """The PKCE verifier and whose Telegram the link is for: ms.html asks "link to <name>?" first, so a sign-in link
-        forwarded to someone else can't tie their KBTU account to the sender's Telegram unseen"""
+    def ms_verifier(request: Request, state: str, con: Con):
+        """The PKCE verifier (this browser's, from /ms/go) and whose Telegram the link is for: ms.html asks "link to
+        <name>?" first, so a sign-in link forwarded to someone else can't tie their KBTU account to the sender's Telegram unseen"""
         uid = msauth.state_uid(cfg.token_key, state)
         u = logic.one(con, "SELECT tg_first_name, tg_last_name, tg_username FROM users WHERE id = ?", uid) if uid else None
-        if not u:
-            raise ApiError("not_found")  # a stale link: ms.html says "expired"
+        verifier = request.cookies.get(msauth.COOKIE, "")
+        if not u or not verifier:
+            raise ApiError("not_found")  # a stale link, or a code brought to another browser: ms.html says "expired"
         name = f"{u['tg_first_name']} {u['tg_last_name']}".strip()
         if u["tg_username"]:
             name = f"{name} (@{u['tg_username']})".strip()
-        return {"verifier": msauth.verifier(cfg.token_key, state), "name": name}
+        return {"verifier": verifier, "name": name}
 
     @app.post("/api/ms/finish")
     async def ms_finish(body: dict = Body(...)):
@@ -1128,6 +1288,15 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def reset_my_calendar(con: Con, v: Me):
         logic.reset_cal_token(con, v)
 
+    @app.get("/wallet/{uid:int}-{sig}.pkpass")
+    def wallet_pass(uid: int, sig: str, con: Con):
+        # no session: Telegram hands the link to Safari, which hands the file to Wallet; the link is the key (wallet.link)
+        body = passes and wallet.build(cfg, passes, con, uid, sig)
+        if not body:
+            raise ApiError("not_found")
+        return Response(body, media_type="application/vnd.apple.pkpass",
+                        headers={"Content-Disposition": 'attachment; filename="kbtu-badge.pkpass"', "Cache-Control": "no-store"})
+
     @app.get("/cal/{token}.ics")
     def calendar_feed(token: str, con: Con):
         body = logic.cal_feed(con, token, lambda eid: f"https://t.me/{cfg.bot_username}?startapp=ev_{eid}")
@@ -1228,37 +1397,37 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.get("/api/events/{eid}/groups")
     def event_groups(eid: int, con: Con, v: Me):
-        return logic.evgroups.board(con, v, eid)
+        return logic.tournament.groups_board(con, v, eid)
 
     @app.post("/api/events/{eid}/groups")
     def draw_groups(eid: int, con: Con, v: Me, body: dict = Body(...)):
-        return logic.evgroups.draw(con, v, eid, body)
+        return logic.tournament.groups_draw(con, v, eid, body)
 
     @app.put("/api/events/{eid}/groups/{gid}/teams")
     def move_group_teams(eid: int, gid: int, con: Con, v: Me, body: dict = Body(...)):
-        return logic.evgroups.move(con, v, eid, gid, body)
+        return logic.tournament.groups_move(con, v, eid, gid, body)
 
     @app.put(MATCH_SCORE_ROUTE)
     async def score_match(mid: int, request: Request, con: Con, v: Me, body: dict | None = Body(None)):
         if body is None and not await request.body():
             raise ApiError("bad_input")
-        return await run_in_threadpool(logic.evmatches.score, con, v, mid, body)
+        return await run_in_threadpool(logic.tournament.score, con, v, mid, body)
 
     @app.delete("/api/events/{eid}/groups", status_code=204)
     def remove_groups(eid: int, con: Con, v: Me):
-        logic.evgroups.remove(con, v, eid)
+        logic.tournament.groups_remove(con, v, eid)
 
     @app.get("/api/events/{eid}/bracket")
     def event_bracket(eid: int, con: Con, v: Me):
-        return logic.evbracket.board(con, v, eid)
+        return logic.tournament.bracket_board(con, v, eid)
 
     @app.post("/api/events/{eid}/bracket")
     def draw_bracket(eid: int, con: Con, v: Me, body: dict = Body(...)):
-        return logic.evbracket.draw(con, v, eid, body)
+        return logic.tournament.bracket_draw(con, v, eid, body)
 
     @app.put("/api/events/{eid}/bracket/swap")
     def swap_bracket_teams(eid: int, con: Con, v: Me, body: dict = Body(...)):
-        return logic.evbracket.swap(con, v, eid, body)
+        return logic.tournament.bracket_swap(con, v, eid, body)
 
     @app.get("/api/events/{eid}/people/{uid}/contact")
     def attendee_contact(eid: int, uid: int, con: Con, v: Me, response: Response):
@@ -1711,6 +1880,11 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def chat_start(eid: int, con: Con, v: Me):
         token = logic.chat_start(con, v, eid)  # the bot comes in as an admin that may add people, pin and delete
         return {"url": f"https://t.me/{cfg.bot_username}?startgroup=ec_{token}&admin=invite_users+pin_messages+delete_messages+restrict_members"}
+
+    @app.put("/api/events/{eid}/chat")
+    def chat_set(eid: int, con: Con, v: Me, body: dict = Body(...)):
+        """The organizers' own group by its link (any t.me or invite link); null removes it. Errors: bad_input, closed."""
+        return {"chat": logic.chat_set(con, v, eid, str(body["link"]) if body.get("link") else None)}
 
     @app.post("/api/events/{eid}/publish")
     def publish(eid: int, con: Con, v: Me):
@@ -2530,7 +2704,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         data = await read_upload(request)
         if not logic.can_add_album_photo(con, v, eid):  # before the work, not only after it
             raise ApiError("forbidden")
-        saved = await _picture(media.save, data, photos)
+        saved = await _picture(lambda d: media.save(d, photos, trim=True), data)
         return await run_in_threadpool(logic.add_album_photo, con, v, eid, saved)
 
     @app.delete("/api/events/{eid}/photos/{fid}")
@@ -2960,8 +3134,14 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                       "reply_markup": {"inline_keyboard": [[{"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp=fp_{ref}"}]]}}
         else:
             raise ApiError("bad_input")
-        if body.get("link") is True:  # outside Telegram (the web app): no card, just the button's link for Telegram's share picker
-            return {"link": result["reply_markup"]["inline_keyboard"][0][0]["url"]}
+        url = result["reply_markup"]["inline_keyboard"][0][0]["url"]
+        words = texts.plain(result["caption"] if result["type"] == "photo" else result["input_message_content"]["message_text"])
+        if body.get("handoff") is True:  # outside Telegram (a browser, the phone apps): the card waits for the bot, which hands it
+            # to Telegram's chat picker (bot_dm._share_start); an account with no Telegram gets the words and the button's link
+            tg = request.state.tg.get("id")
+            return {"open": f"https://t.me/{cfg.bot_username}?start=sh_{logic.share_hold(con, v.id, tg, result)}"} if tg else {"link": url, "text": words}
+        if body.get("link") is True:  # no card here (an old Telegram, an older web build): its words, the button's link under them
+            return {"link": url, "text": words}
         try:
             async with httpx.AsyncClient(timeout=10) as http:
                 r = (await bot._tg(cfg, http, "savePreparedInlineMessage", {
@@ -3056,6 +3236,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     @app.put("/api/forum-posts/{pid}/heart")
     def fchan_heart(pid: int, con: Con, v: FChanWrite, body: dict = Body(...)):
         return F.set_heart(con, v, pid, body.get("hearted"))
+
+    @app.put("/api/forum-posts/{pid}/coming")
+    def fchan_coming(pid: int, con: Con, v: FChanWrite, body: dict = Body(...)):
+        return F.set_coming(con, v, pid, body.get("coming"))  # an ask for help: "I'm coming", its author sees who
 
     @app.post("/api/forum-posts")
     async def fchan_new(con: Con, v: FChanWrite, body: dict = Body(...)):

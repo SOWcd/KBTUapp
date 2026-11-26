@@ -85,15 +85,20 @@ SHARE_AWARD = {
     "kk": ("KBTU App-тағы марапатым", "🏅 <b>{name}</b>{tier}\nKBTU App-тағы жаңа марапатым\n\n💎 Студенттердің {p}%-ында бар. Сен де аласың ба?", "🏅 Марапатты көру"),
     "en": ("My award on KBTU App", "🏅 <b>{name}</b>{tier}\nMy new award on KBTU App\n\n💎 {p}% of students have it. Can you get one too?", "🏅 See the award"),
 }
+SHARE_SEND = {  # under a card the app made outside Telegram (bot_dm._share_start): Telegram's chat picker, then the same card there
+    "ru": "📤 Отправить в чат",
+    "kk": "📤 Чатқа жіберу",
+    "en": "📤 Send to a chat",
+}
 ACH_NAMES = {
     "ru": {"activist": "Главный активист", "regular": "Абонемент", "streak": "Серия", "first_in": "Ранняя пташка", "soul": "Душа тусовки", "season": "Сезон", "first50": "Первые 500",
-           "creator_laugh": "Стендапер", "creator_found": "Встреча века", "bugs": "Охотник за багами", "dmp": "Явка обязательна", "team": "Гроза тимбилдинга", "referral": "Зазывала",
+           "creator_laugh": "Стендапер", "creator_found": "Встреча века", "bugs": "Охотник за багами", "ideas": "Генератор идей", "coder": "Вайб-кодер", "dmp": "Явка обязательна", "team": "Гроза тимбилдинга", "referral": "Зазывала",
            "init26": "Волонтёр посвящения", "init26f": "Посвящение 2026", "init26p": "Выступающий на посвящении", "anthem": "Абсолютный слух", "critic": "Диванный критик", "supporter": "Топливо", "honor": "Почётная медаль", "club_founder": "Основатель клуба"},
     "kk": {"activist": "Бас белсенді", "regular": "Абонемент", "streak": "Серия", "first_in": "Ерте тұрған", "soul": "Ортаның сәні", "season": "Маусым", "first50": "Алғашқы 500",
-           "creator_laugh": "Стендапшы", "creator_found": "Ғасыр кездесуі", "bugs": "Баг аңшысы", "dmp": "Келу міндетті", "team": "Тимбилдинг шебері", "referral": "Шақырушы",
+           "creator_laugh": "Стендапшы", "creator_found": "Ғасыр кездесуі", "bugs": "Баг аңшысы", "ideas": "Идея генераторы", "coder": "Вайб-кодер", "dmp": "Келу міндетті", "team": "Тимбилдинг шебері", "referral": "Шақырушы",
            "init26": "Бағыштау волонтері", "init26f": "Бағыштау 2026", "init26p": "Бағыштауда өнер көрсетуші", "anthem": "Абсолюттік есту", "critic": "Диван сыншысы", "supporter": "Отын", "honor": "Құрмет медалі", "club_founder": "Клуб негізін қалаушы"},
     "en": {"activist": "Chief activist", "regular": "Season ticket", "streak": "Streak", "first_in": "Early bird", "soul": "Life of the party", "season": "Season", "first50": "First 500",
-           "creator_laugh": "Stand-up comic", "creator_found": "Meeting of the century", "bugs": "Bug hunter", "dmp": "Attendance required", "team": "Teambuilding thunder", "referral": "Recruiter",
+           "creator_laugh": "Stand-up comic", "creator_found": "Meeting of the century", "bugs": "Bug hunter", "ideas": "Idea generator", "coder": "Vibe coder", "dmp": "Attendance required", "team": "Teambuilding thunder", "referral": "Recruiter",
            "init26": "Initiation volunteer", "init26f": "Initiation 2026", "init26p": "Initiation performer", "anthem": "Perfect pitch", "critic": "Couch critic", "supporter": "Fuel", "honor": "Honor medal", "club_founder": "Club founder"},
 }
 SCHED_LANG = {  # a schedule's languages in the bot's words ({language} and {languages} in sched_same, sched_added)
@@ -167,6 +172,11 @@ def share_post(lang: str, body: str) -> tuple[str, str, str, str]:
 SHARE_POST_WORDS = 160
 
 
+def plain(text: str) -> str:
+    """A card's HTML as plain words (only <b>-like tags and escapes): the same card, shared outside Telegram."""
+    return html.unescape(re.sub(r"<[^>]*>", "", text))
+
+
 def when(ts: int, lang: str) -> str:
     """'4 октября, 18:00' in Almaty time (UTC+5, as lib/time.ts)."""
     t = time.gmtime(ts + 5 * 3600)
@@ -209,6 +219,7 @@ BOT = {
         "paysupport": ("💬 <b>Поддержка по платежам</b>\nЗвёзды — добровольная поддержка приложения, взамен ничего не выдаётся.\nЕсли заплатил по ошибке и хочешь вернуть их, напиши в поддержку: @Sowers. Приложи чек Telegram и свой Telegram ID: <code>{tg_id}</code>", None),
         "exit": ("🚪 <b>Ищешь выход?</b>\nНажми кнопку, введи номер ближайшей аудитории — приложение доведёт до открытого выхода.", "🚪 Найти выход"),
         "welcome": ("👋 Это <b>KBTU App</b>: мероприятия и клубы, твоё расписание и карта корпуса.\nВсё внутри приложения — открывай 👇", "🚀 Открыть KBTU App"),
+        "share_gone": ("⏳ Эта ссылка уже не работает.\nНажми «Поделиться» в приложении ещё раз 👇", "🚀 Открыть KBTU App"),
         "remind_2h": ("⏰ Через 2 часа — <b>{title}</b>\n📍 {place}\nБилет уже в приложении.", "🎟 Открыть билет"),
         "remind_2h_team": ("⏰ Через 2 часа — <b>{title}</b>\n📍 {place}", "Открыть событие"),
         "group_on": ("👋 Я на месте. Этот чат подключён к KBTU App, заявки на вход проверяю сам.", "Открыть KBTU App"),
@@ -437,6 +448,7 @@ BOT = {
         "paysupport": ("💬 <b>Төлем бойынша қолдау</b>\nЖұлдыздар — қосымшаны ерікті қолдау, орнына ештеңе берілмейді.\nҚателесіп төлеген болсаң және оларды қайтарғың келсе, қолдауға жаз: @Sowers. Telegram чегін және Telegram ID-іңді қоса жібер: <code>{tg_id}</code>", None),
         "exit": ("🚪 <b>Шығатын жол керек пе?</b>\nБатырманы бас, жақын аудиторияның нөмірін жаз — қосымша ашық шығу есігіне дейін апарады.", "🚪 Шығу жолын табу"),
         "welcome": ("👋 Бұл — <b>KBTU App</b>: іс-шаралар мен клубтар, сабақ кестең және корпус картасы.\nБәрі қосымшада — ашып көр 👇", "🚀 KBTU App ашу"),
+        "share_gone": ("⏳ Бұл сілтеме енді жұмыс істемейді.\nҚосымшада «Бөлісу» батырмасын қайта бас 👇", "🚀 KBTU App ашу"),
         "remind_2h": ("⏰ 2 сағаттан кейін — <b>{title}</b>\n📍 {place}\nБилет қосымшада.", "🎟 Билетті ашу"),
         "remind_2h_team": ("⏰ 2 сағаттан кейін — <b>{title}</b>\n📍 {place}", "Іс-шараны ашу"),
         "group_on": ("👋 Мен осындамын. Бұл чат KBTU App-қа қосылған, кіру өтінімдерін өзім тексеремін.", "KBTU App ашу"),
@@ -659,6 +671,7 @@ BOT = {
         "paysupport": ("💬 <b>Payment support</b>\nStars here are voluntary support for the app: nothing is given in return.\nIf you paid by mistake and want them back, write to support: @Sowers. Attach Telegram's receipt and your Telegram ID: <code>{tg_id}</code>", None),
         "exit": ("🚪 <b>Looking for the way out?</b>\nTap the button, type the nearest room number — the app leads you to an open exit.", "🚪 Find the exit"),
         "welcome": ("👋 This is <b>KBTU App</b>: events and clubs, your class schedule and the campus map.\nIt's all inside the app — open it 👇", "🚀 Open KBTU App"),
+        "share_gone": ("⏳ This link no longer works.\nTap Share in the app again 👇", "🚀 Open KBTU App"),
         "remind_2h": ("⏰ In 2 hours — <b>{title}</b>\n📍 {place}\nYour ticket is in the app.", "🎟 Open ticket"),
         "remind_2h_team": ("⏰ In 2 hours — <b>{title}</b>\n📍 {place}", "Open the event"),
         "group_on": ("👋 On duty. This chat is linked to KBTU App, I check join requests myself.", "Open KBTU App"),
@@ -1558,6 +1571,16 @@ MS_PAGE = {
            "expired": ("The link expired", "A sign-in link lasts 15 minutes. Go back to the app and tap the button again."),
            "open": "Back to Telegram",
            "stuck": "Doesn't open?", "here": ("Done!", "Close this page and go back to the app.")},
+}
+
+# The Apple Wallet pass (wallet.py): the badge QR every event's door takes
+WALLET = {
+    "ru": {"description": "Бейдж KBTU App", "name": "Имя", "no": "Номер", "howLabel": "Как пользоваться",
+           "how": "Покажи QR на входе любого события KBTU App: по нему тебя отметят. Он только твой: не пересылай его."},
+    "kk": {"description": "KBTU App бейджі", "name": "Аты", "no": "Нөмірі", "howLabel": "Қалай қолдану",
+           "how": "QR-ды KBTU App-тың кез келген іс-шарасының кіреберісінде көрсет: сол арқылы сені белгілейді. Ол тек сенікі: ешкімге жіберме."},
+    "en": {"description": "KBTU App badge", "name": "Name", "no": "Number", "howLabel": "How to use",
+           "how": "Show the QR at the door of any KBTU App event: it checks you in. It is yours alone: don't send it to anyone."},
 }
 
 # The bot's command menu (Telegram's "/" list), per scope and language (bot._commands): groups get /all, private chats /start

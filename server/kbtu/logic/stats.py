@@ -44,7 +44,7 @@ _uniq: set[tuple[int, str]] = set()
 
 
 def _today() -> int:
-    return (core.now() + 5 * 3600) // 86400  # Almaty
+    return core.day_of(core.now())
 
 
 def add(con, uid: int, body: dict) -> None:

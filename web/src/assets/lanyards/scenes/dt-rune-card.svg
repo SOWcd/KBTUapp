@@ -1,0 +1,132 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 164" width="1020" height="492">
+<!-- V3 RUNE: the river at night between the two jungles. A rune hangs over the water right of the name, a faceted
+     crystal in a tilted ring of glyphs, throwing a cold shaft of light up and a broken reflection down; the far banks
+     are black treelines, a little green on the left and a little red on the right; mist lies on the water. -->
+<defs>
+  <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#05061a"/><stop offset="0.55" stop-color="#0b1236"/><stop offset="0.7" stop-color="#121c4a"/><stop offset="1" stop-color="#060a20"/>
+  </linearGradient>
+  <radialGradient id="aura" cx="306" cy="92" r="120" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#8ff4ff" stop-opacity="0.55"/><stop offset="0.25" stop-color="#5a7bff" stop-opacity="0.28"/><stop offset="0.6" stop-color="#7a3cff" stop-opacity="0.08"/><stop offset="1" stop-color="#7a3cff" stop-opacity="0"/>
+  </radialGradient>
+  <linearGradient id="water" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0d1a48"/><stop offset="1" stop-color="#03051a"/></linearGradient>
+  <linearGradient id="shaft" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#c8faff" stop-opacity="0.5"/><stop offset="1" stop-color="#6a8cff" stop-opacity="0"/></linearGradient>
+  <linearGradient id="fL" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#9ff0ff"/></linearGradient>
+  <linearGradient id="fR" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5fd8ff"/><stop offset="1" stop-color="#3a3cc8"/></linearGradient>
+  <linearGradient id="fB" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3ab8ff"/><stop offset="1" stop-color="#2a1a8a"/></linearGradient>
+  <linearGradient id="fBL" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#b0f4ff"/><stop offset="1" stop-color="#4a6cff"/></linearGradient>
+  <filter id="b14" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="10"/></filter>
+  <filter id="b4" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="3"/></filter>
+  <filter id="hair" x="-5%" y="-20%" width="110%" height="140%"><feGaussianBlur stdDeviation="0.35"/></filter>
+  <filter id="b1" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="0.7"/></filter>
+  <filter id="glow" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="0.9" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <!-- mist on the water -->
+  <filter id="mist" x="0" y="0" width="100%" height="100%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.008 0.05" numOctaves="4" seed="21"/>
+    <feColorMatrix values="0 0 0 0 0.55  0 0 0 0 0.7  0 0 0 0 1  0 0 0 1.3 -0.62"/>
+  </filter>
+  <!-- the reflection breaks on the ripples -->
+  <filter id="ripple" x="-20%" y="-20%" width="140%" height="140%">
+    <feTurbulence type="turbulence" baseFrequency="0.01 0.35" numOctaves="2" seed="5" result="t"/>
+    <feDisplacementMap in="SourceGraphic" in2="t" scale="9" xChannelSelector="R" yChannelSelector="G"/>
+    <feGaussianBlur stdDeviation="0.6"/>
+  </filter>
+  <filter id="stars" x="0" y="0" width="100%" height="100%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="1" seed="31"/>
+    <feColorMatrix values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 9 -7.4"/>
+  </filter>
+  <filter id="grain" x="0" y="0" width="100%" height="100%">
+    <feTurbulence type="fractalNoise" baseFrequency="1.4" numOctaves="2" seed="2"/>
+    <feColorMatrix values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.5 -0.18"/>
+  </filter>
+  <linearGradient id="skyFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff"/><stop offset="0.5" stop-color="#fff" stop-opacity="0"/></linearGradient>
+  <mask id="mSky"><rect width="340" height="164" fill="url(#skyFade)"/></mask>
+  <radialGradient id="vig" cx="0.65" cy="0.55" r="0.8"><stop offset="0.5" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.55"/></radialGradient>
+  <clipPath id="below"><rect y="104" width="340" height="60"/></clipPath>
+  <g id="crystal">
+    <!-- an elongated octahedron, lit from the upper left -->
+    <polygon points="0,-20 -9,0 -1.5,2" fill="url(#fL)"/>
+    <polygon points="0,-20 -1.5,2 9,0" fill="url(#fR)"/>
+    <polygon points="-9,0 -1.5,2 0,18" fill="url(#fBL)"/>
+    <polygon points="-1.5,2 9,0 0,18" fill="url(#fB)"/>
+    <path d="M0 -20 L-9 0 L0 18 L9 0 Z" fill="none" stroke="#e8fdff" stroke-width="0.4" stroke-linejoin="round"/>
+    <path d="M-9 0 L-1.5 2 L9 0 M-1.5 2 L0 -20 M-1.5 2 L0 18" fill="none" stroke="#ffffff" stroke-width="0.25" opacity="0.6"/>
+    <ellipse cx="-1" cy="0" rx="2.4" ry="7" fill="#ffffff" opacity="0.5" filter="url(#b1)"/>
+  </g>
+  <g id="glint" fill="#ffffff"><path d="M0 -4 L0.5 -0.5 L4 0 L0.5 0.5 L0 4 L-0.5 0.5 L-4 0 L-0.5 -0.5 Z"/><circle r="0.9"/></g>
+</defs>
+
+<!-- night sky and stars -->
+<rect width="340" height="164" fill="url(#sky)"/>
+<g mask="url(#mSky)"><rect width="340" height="164" filter="url(#stars)" opacity="0.6"/></g>
+<rect width="340" height="164" fill="url(#aura)"/>
+
+<!-- far banks: tiered fir treelines in haze, a green breath over the Radiant's, a red one over the Dire's -->
+<ellipse cx="40" cy="98" rx="70" ry="10" fill="#2aff9a" opacity="0.1" filter="url(#b4)"/>
+<ellipse cx="320" cy="98" rx="50" ry="9" fill="#ff4a3a" opacity="0.14" filter="url(#b4)"/>
+<path d="M-6 107 V101 L-6.0 101.0 L-5.0 97.5 L-5.6 97.7 L-4.4 94.7 L-4.9 94.9 L-3.2 91.8 L-1.6 94.9 L-2.0 94.7 L-0.9 97.7 L-1.5 97.5 L-0.5 101.0 L-1.9 101.0 L-0.8 98.2 L-1.4 98.3 L-0.2 95.9 L-0.7 96.1 L1.1 93.5 L2.9 96.1 L2.4 95.9 L3.6 98.3 L3.0 98.2 L4.1 101.0 L2.1 101.0 L3.5 97.6 L2.7 97.8 L4.2 94.9 L3.6 95.1 L5.9 92.1 L8.2 95.1 L7.6 94.9 L9.1 97.8 L8.3 97.6 L9.7 101.0 L6.5 101.0 L7.4 97.5 L6.9 97.7 L7.9 94.8 L7.5 94.9 L9.0 91.8 L10.5 94.9 L10.1 94.8 L11.2 97.7 L10.6 97.5 L11.6 101.0 L9.8 101.0 L11.3 99.1 L10.5 99.2 L12.1 97.6 L11.4 97.7 L13.8 96.0 L16.3 97.7 L15.6 97.6 L17.2 99.2 L16.4 99.1 L17.9 101.0 L15.1 101.0 L16.6 98.7 L15.8 98.8 L17.3 96.8 L16.7 96.9 L19.1 94.9 L21.5 96.9 L20.8 96.8 L22.4 98.8 L21.6 98.7 L23.0 101.0 L21.3 101.0 L22.9 99.0 L22.0 99.1 L23.8 97.5 L23.1 97.6 L25.6 95.8 L28.2 97.6 L27.5 97.5 L29.3 99.1 L28.4 99.0 L29.9 101.0 L26.1 101.0 L27.4 97.3 L26.7 97.5 L28.1 94.4 L27.6 94.6 L29.7 91.3 L31.9 94.6 L31.3 94.4 L32.7 97.5 L32.0 97.3 L33.3 101.0 L30.8 101.0 L31.8 98.3 L31.2 98.4 L32.4 96.2 L31.9 96.3 L33.7 93.9 L35.4 96.3 L35.0 96.2 L36.2 98.4 L35.6 98.3 L36.6 101.0 L34.0 101.0 L35.1 98.3 L34.5 98.4 L35.7 96.1 L35.2 96.3 L37.0 93.8 L38.7 96.3 L38.3 96.1 L39.4 98.4 L38.9 98.3 L39.9 101.0 L38.0 101.0 L39.1 98.7 L38.5 98.8 L39.7 96.8 L39.2 96.9 L41.0 94.8 L42.7 96.9 L42.3 96.8 L43.4 98.8 L42.9 98.7 L43.9 101.0 L41.6 101.0 L42.8 98.5 L42.1 98.7 L43.5 96.6 L42.9 96.7 L45.0 94.6 L47.0 96.7 L46.5 96.6 L47.9 98.7 L47.2 98.5 L48.4 101.0 L45.4 101.0 L46.9 98.0 L46.0 98.2 L47.7 95.7 L47.0 95.9 L49.6 93.2 L52.1 95.9 L51.4 95.7 L53.1 98.2 L52.2 98.0 L53.7 101.0 L51.3 101.0 L52.3 97.2 L51.8 97.4 L52.9 94.2 L52.5 94.4 L54.2 91.0 L55.9 94.4 L55.4 94.2 L56.6 97.4 L56.0 97.2 L57.1 101.0 L55.7 101.0 L56.7 98.5 L56.1 98.6 L57.2 96.5 L56.8 96.6 L58.4 94.3 L60.1 96.6 L59.7 96.5 L60.7 98.6 L60.2 98.5 L61.2 101.0 L59.7 101.0 L61.1 97.3 L60.3 97.5 L61.9 94.4 L61.3 94.6 L63.6 91.3 L66.0 94.6 L65.4 94.4 L66.9 97.5 L66.1 97.3 L67.6 101.0 L64.9 101.0 L66.3 97.8 L65.5 98.0 L67.2 95.3 L66.5 95.5 L69.0 92.6 L71.5 95.5 L70.8 95.3 L72.5 98.0 L71.7 97.8 L73.2 101.0 L70.1 101.0 L71.4 97.4 L70.6 97.6 L72.1 94.6 L71.5 94.8 L73.7 91.6 L75.9 94.8 L75.4 94.6 L76.8 97.6 L76.1 97.4 L77.4 101.0 L75.7 101.0 L76.9 98.0 L76.2 98.1 L77.6 95.6 L77.1 95.8 L79.2 93.1 L81.3 95.8 L80.7 95.6 L82.1 98.1 L81.4 98.0 L82.7 101.0 L79.6 101.0 L80.7 97.6 L80.1 97.8 L81.2 94.9 L80.8 95.1 L82.6 92.0 L84.4 95.1 L83.9 94.9 L85.1 97.8 L84.5 97.6 L85.5 101.0 L83.5 101.0 L84.5 98.1 L83.9 98.2 L85.1 95.7 L84.6 95.9 L86.3 93.3 L88.0 95.9 L87.6 95.7 L88.7 98.2 L88.1 98.1 L89.2 101.0 L87.6 101.0 L89.0 98.4 L88.2 98.5 L89.8 96.3 L89.2 96.5 L91.5 94.1 L93.8 96.5 L93.2 96.3 L94.7 98.5 L93.9 98.4 L95.3 101.0 L92.7 101.0 L94.0 97.6 L93.3 97.8 L94.7 95.0 L94.1 95.1 L96.2 92.1 L98.3 95.1 L97.8 95.0 L99.2 97.8 L98.5 97.6 L99.7 101.0 L97.5 101.0 L98.7 98.2 L98.0 98.3 L99.3 95.9 L98.8 96.1 L100.8 93.6 L102.7 96.1 L102.2 95.9 L103.5 98.3 L102.9 98.2 L104.0 101.0 L101.1 101.0 L102.1 97.8 L101.6 97.9 L102.6 95.2 L102.2 95.4 L103.7 92.5 L105.3 95.4 L104.9 95.2 L105.9 97.9 L105.4 97.8 L106.3 101.0 L105.3 101.0 L106.6 98.4 L105.8 98.5 L107.3 96.3 L106.7 96.4 L108.9 94.0 L111.2 96.4 L110.6 96.3 L112.0 98.5 L111.3 98.4 L112.6 101.0 L109.6 101.0 L110.9 97.2 L110.2 97.4 L111.6 94.3 L111.0 94.5 L113.1 91.1 L115.2 94.5 L114.7 94.3 L116.1 97.4 L115.4 97.2 L116.6 101.0 L114.8 101.0 L116.1 97.5 L115.4 97.7 L116.8 94.7 L116.3 94.9 L118.4 91.7 L120.6 94.9 L120.0 94.7 L121.4 97.7 L120.7 97.5 L122.0 101.0 L119.2 101.0 L120.5 97.3 L119.7 97.5 L121.2 94.4 L120.6 94.6 L122.7 91.2 L124.8 94.6 L124.3 94.4 L125.7 97.5 L125.0 97.3 L126.2 101.0 L124.1 101.0 L125.3 98.6 L124.6 98.7 L126.0 96.7 L125.4 96.8 L127.5 94.7 L129.6 96.8 L129.0 96.7 L130.4 98.7 L129.7 98.6 L130.9 101.0 L128.8 101.0 L130.4 99.1 L129.5 99.2 L131.3 97.6 L130.5 97.7 L133.2 96.0 L135.8 97.7 L135.1 97.6 L136.9 99.2 L136.0 99.1 L137.6 101.0 L135.4 101.0 L136.9 97.4 L136.0 97.6 L137.7 94.6 L137.0 94.8 L139.5 91.6 L142.0 94.8 L141.3 94.6 L143.0 97.6 L142.2 97.4 L143.6 101.0 L141.5 101.0 L142.9 98.1 L142.1 98.3 L143.8 95.8 L143.1 96.0 L145.6 93.4 L148.0 96.0 L147.4 95.8 L149.0 98.3 L148.2 98.1 L149.7 101.0 L147.1 101.0 L148.3 99.0 L147.7 99.1 L149.0 97.4 L148.5 97.5 L150.5 95.7 L152.5 97.5 L152.0 97.4 L153.3 99.1 L152.6 99.0 L153.8 101.0 L152.3 101.0 L153.6 98.7 L152.9 98.8 L154.3 96.9 L153.7 97.0 L155.9 95.0 L158.1 97.0 L157.5 96.9 L159.0 98.8 L158.3 98.7 L159.6 101.0 L157.2 101.0 L158.5 98.4 L157.8 98.6 L159.1 96.4 L158.6 96.5 L160.7 94.2 L162.8 96.5 L162.2 96.4 L163.6 98.6 L162.9 98.4 L164.1 101.0 V107 Z" fill="#0c1a2e" opacity="0.85" filter="url(#b1)"/>
+<path d="M-6 107 V104 L-6.0 104.0 L-4.1 97.7 L-5.1 98.0 L-3.0 92.8 L-3.8 93.1 L-0.6 87.5 L2.6 93.1 L1.8 92.8 L3.9 98.0 L2.8 97.7 L4.8 104.0 L0.1 104.0 L1.2 98.1 L0.6 98.4 L1.9 93.4 L1.4 93.8 L3.3 88.5 L5.2 93.8 L4.7 93.4 L6.0 98.4 L5.3 98.1 L6.5 104.0 L4.8 104.0 L6.5 99.9 L5.5 100.1 L7.4 96.7 L6.7 96.9 L9.5 93.2 L12.3 96.9 L11.5 96.7 L13.4 100.1 L12.5 99.9 L14.1 104.0 L11.4 104.0 L13.0 99.0 L12.1 99.2 L13.9 95.0 L13.2 95.3 L15.9 90.8 L18.6 95.3 L17.9 95.0 L19.7 99.2 L18.8 99.0 L20.4 104.0 L16.7 104.0 L18.1 99.6 L17.3 99.8 L19.0 96.2 L18.3 96.4 L20.8 92.5 L23.2 96.4 L22.6 96.2 L24.2 99.8 L23.4 99.6 L24.8 104.0 L22.6 104.0 L24.6 97.7 L23.5 98.0 L25.7 92.7 L24.8 93.1 L28.1 87.5 L31.4 93.1 L30.5 92.7 L32.7 98.0 L31.6 97.7 L33.6 104.0 L30.2 104.0 L31.6 100.0 L30.8 100.3 L32.5 96.9 L31.8 97.1 L34.3 93.6 L36.7 97.1 L36.1 96.9 L37.7 100.3 L36.9 100.0 L38.4 104.0 L34.8 104.0 L35.9 99.4 L35.3 99.6 L36.5 95.7 L36.0 96.0 L37.8 91.8 L39.7 96.0 L39.2 95.7 L40.4 99.6 L39.8 99.4 L40.9 104.0 L38.6 104.0 L40.1 97.9 L39.3 98.2 L40.8 93.1 L40.2 93.4 L42.6 88.0 L44.9 93.4 L44.3 93.1 L45.9 98.2 L45.1 97.9 L46.5 104.0 L44.0 104.0 L45.6 100.2 L44.7 100.4 L46.5 97.1 L45.8 97.3 L48.4 93.9 L51.1 97.3 L50.4 97.1 L52.1 100.4 L51.2 100.2 L52.8 104.0 L48.9 104.0 L50.3 100.5 L49.5 100.7 L51.0 97.7 L50.4 97.9 L52.7 94.8 L55.0 97.9 L54.4 97.7 L55.9 100.7 L55.2 100.5 L56.5 104.0 L54.1 104.0 L56.1 98.7 L55.0 98.9 L57.2 94.4 L56.3 94.7 L59.6 89.9 L62.9 94.7 L62.0 94.4 L64.2 98.9 L63.1 98.7 L65.1 104.0 L60.6 104.0 L62.5 98.2 L61.5 98.5 L63.6 93.7 L62.7 94.0 L65.9 88.8 L69.0 94.0 L68.2 93.7 L70.3 98.5 L69.2 98.2 L71.1 104.0 L68.3 104.0 L70.2 98.4 L69.1 98.6 L71.2 93.9 L70.4 94.2 L73.6 89.1 L76.7 94.2 L75.9 93.9 L78.0 98.6 L76.9 98.4 L78.8 104.0 L76.2 104.0 L77.6 97.6 L76.8 97.9 L78.3 92.6 L77.7 92.9 L80.1 87.2 L82.4 92.9 L81.8 92.6 L83.3 97.9 L82.5 97.6 L83.9 104.0 L82.3 104.0 L83.5 98.4 L82.9 98.7 L84.2 93.9 L83.7 94.2 L85.7 89.2 L87.8 94.2 L87.2 93.9 L88.6 98.7 L87.9 98.4 L89.1 104.0 L87.3 104.0 L88.8 99.1 L87.9 99.4 L89.6 95.3 L88.9 95.6 L91.4 91.2 L93.9 95.6 L93.3 95.3 L94.9 99.4 L94.1 99.1 L95.6 104.0 L92.9 104.0 L94.8 99.2 L93.7 99.5 L95.8 95.5 L95.0 95.7 L98.2 91.5 L101.4 95.7 L100.5 95.5 L102.6 99.5 L101.6 99.2 L103.5 104.0 L100.9 104.0 L102.3 97.9 L101.5 98.3 L103.1 93.2 L102.5 93.5 L104.8 88.1 L107.1 93.5 L106.5 93.2 L108.1 98.3 L107.3 97.9 L108.7 104.0 V107 Z" fill="#030a0c" filter="url(#hair)"/>
+<path d="M-4 107 V104 L100 104 C140 104 170 106 210 106 V107 Z" fill="#030a0c"/>
+<path d="M244 107 V101 L244.0 101.0 L245.0 98.4 L244.5 98.6 L245.6 96.4 L245.1 96.6 L246.9 94.3 L248.6 96.6 L248.1 96.4 L249.3 98.6 L248.7 98.4 L249.7 101.0 L247.7 101.0 L248.9 98.3 L248.2 98.4 L249.6 96.2 L249.0 96.3 L251.1 93.9 L253.1 96.3 L252.6 96.2 L253.9 98.4 L253.3 98.3 L254.5 101.0 L251.5 101.0 L252.4 97.9 L251.9 98.1 L252.9 95.4 L252.5 95.6 L254.0 92.8 L255.6 95.6 L255.2 95.4 L256.2 98.1 L255.7 97.9 L256.6 101.0 L254.6 101.0 L255.7 97.6 L255.1 97.8 L256.2 94.9 L255.8 95.1 L257.5 92.0 L259.2 95.1 L258.7 94.9 L259.9 97.8 L259.3 97.6 L260.3 101.0 L258.4 101.0 L259.8 98.6 L259.0 98.7 L260.5 96.7 L259.9 96.8 L262.2 94.6 L264.4 96.8 L263.8 96.7 L265.3 98.7 L264.6 98.6 L265.9 101.0 L263.8 101.0 L264.7 98.3 L264.2 98.4 L265.3 96.1 L264.9 96.3 L266.5 93.8 L268.1 96.3 L267.7 96.1 L268.8 98.4 L268.2 98.3 L269.2 101.0 L267.9 101.0 L269.1 98.1 L268.5 98.2 L269.8 95.8 L269.3 95.9 L271.2 93.3 L273.2 95.9 L272.7 95.8 L274.0 98.2 L273.3 98.1 L274.5 101.0 L272.7 101.0 L273.6 98.0 L273.1 98.2 L274.1 95.7 L273.7 95.9 L275.3 93.2 L276.8 95.9 L276.4 95.7 L277.4 98.2 L276.9 98.0 L277.9 101.0 L276.3 101.0 L277.3 99.4 L276.8 99.5 L277.9 98.2 L277.5 98.3 L279.2 96.8 L281.0 98.3 L280.5 98.2 L281.7 99.5 L281.1 99.4 L282.2 101.0 L280.8 101.0 L282.0 98.1 L281.3 98.3 L282.6 95.8 L282.1 96.0 L284.0 93.4 L285.9 96.0 L285.4 95.8 L286.7 98.3 L286.1 98.1 L287.2 101.0 L285.7 101.0 L287.0 97.7 L286.3 97.9 L287.7 95.1 L287.2 95.3 L289.3 92.4 L291.5 95.3 L290.9 95.1 L292.3 97.9 L291.6 97.7 L292.9 101.0 L290.4 101.0 L291.7 98.6 L291.0 98.8 L292.5 96.8 L291.9 96.9 L294.1 94.8 L296.3 96.9 L295.7 96.8 L297.2 98.8 L296.5 98.6 L297.8 101.0 L296.2 101.0 L297.6 99.3 L296.8 99.4 L298.3 97.9 L297.7 98.0 L300.0 96.5 L302.3 98.0 L301.7 97.9 L303.2 99.4 L302.4 99.3 L303.8 101.0 L300.6 101.0 L301.7 97.6 L301.1 97.8 L302.2 95.0 L301.8 95.2 L303.5 92.2 L305.2 95.2 L304.7 95.0 L305.8 97.8 L305.3 97.6 L306.3 101.0 L304.4 101.0 L305.6 98.9 L304.9 99.0 L306.3 97.3 L305.7 97.4 L307.8 95.5 L309.9 97.4 L309.3 97.3 L310.7 99.0 L310.0 98.9 L311.3 101.0 L309.0 101.0 L310.1 98.8 L309.5 98.9 L310.8 97.1 L310.3 97.2 L312.1 95.2 L314.0 97.2 L313.5 97.1 L314.7 98.9 L314.1 98.8 L315.2 101.0 L313.3 101.0 L314.5 97.8 L313.9 97.9 L315.2 95.2 L314.7 95.4 L316.7 92.5 L318.7 95.4 L318.2 95.2 L319.5 97.9 L318.9 97.8 L320.1 101.0 L318.2 101.0 L319.6 97.9 L318.8 98.0 L320.4 95.4 L319.7 95.5 L322.1 92.7 L324.4 95.5 L323.8 95.4 L325.3 98.0 L324.6 97.9 L326.0 101.0 L324.4 101.0 L325.7 99.2 L325.0 99.3 L326.4 97.7 L325.8 97.8 L327.9 96.2 L330.0 97.8 L329.4 97.7 L330.8 99.3 L330.1 99.2 L331.4 101.0 L329.8 101.0 L331.2 97.8 L330.4 97.9 L332.0 95.2 L331.3 95.4 L333.7 92.5 L336.1 95.4 L335.4 95.2 L337.0 97.9 L336.2 97.8 L337.7 101.0 L335.2 101.0 L336.5 99.1 L335.8 99.2 L337.2 97.6 L336.7 97.7 L338.8 95.9 L340.9 97.7 L340.4 97.6 L341.8 99.2 L341.1 99.1 L342.4 101.0 L340.6 101.0 L341.8 98.9 L341.2 99.0 L342.5 97.3 L342.0 97.4 L344.0 95.6 L346.0 97.4 L345.5 97.3 L346.8 99.0 L346.1 98.9 L347.4 101.0 L344.4 101.0 L345.8 97.6 L345.0 97.8 L346.6 94.9 L346.0 95.1 L348.2 92.1 L350.5 95.1 L349.9 94.9 L351.4 97.8 L350.6 97.6 L352.0 101.0 V107 Z" fill="#1a0c2a" opacity="0.85" filter="url(#b1)"/>
+<path d="M200 107 V106 C230 106 250 105 270 104 L270 107 Z" fill="#0a0410"/>
+<path d="M268 107 V104 L268.0 104.0 L269.2 101.1 L268.6 101.2 L269.9 98.7 L269.4 98.9 L271.5 96.3 L273.6 98.9 L273.0 98.7 L274.4 101.2 L273.7 101.1 L274.9 104.0 L272.5 104.0 L273.7 101.2 L273.0 101.3 L274.4 98.9 L273.8 99.1 L275.8 96.5 L277.8 99.1 L277.3 98.9 L278.6 101.3 L277.9 101.2 L279.1 104.0 L276.8 104.0 L278.6 99.2 L277.6 99.5 L279.5 95.4 L278.7 95.7 L281.6 91.4 L284.5 95.7 L283.8 95.4 L285.7 99.5 L284.7 99.2 L286.5 104.0 L284.0 104.0 L285.2 99.9 L284.5 100.1 L285.9 96.7 L285.4 96.9 L287.4 93.2 L289.5 96.9 L288.9 96.7 L290.3 100.1 L289.6 99.9 L290.9 104.0 L288.2 104.0 L289.5 101.1 L288.8 101.2 L290.1 98.7 L289.6 98.9 L291.6 96.3 L293.6 98.9 L293.1 98.7 L294.4 101.2 L293.7 101.1 L294.9 104.0 L292.3 104.0 L294.0 99.1 L293.1 99.4 L295.0 95.3 L294.2 95.6 L297.1 91.2 L300.1 95.6 L299.3 95.3 L301.2 99.4 L300.2 99.1 L302.0 104.0 L299.6 104.0 L301.2 100.8 L300.3 101.0 L302.2 98.3 L301.4 98.5 L304.2 95.6 L306.9 98.5 L306.2 98.3 L308.0 101.0 L307.1 100.8 L308.8 104.0 L305.4 104.0 L306.9 99.4 L306.0 99.6 L307.7 95.8 L307.1 96.0 L309.6 91.9 L312.2 96.0 L311.5 95.8 L313.2 99.6 L312.3 99.4 L313.9 104.0 L311.9 104.0 L313.6 101.1 L312.6 101.3 L314.5 98.8 L313.8 99.0 L316.6 96.4 L319.5 99.0 L318.7 98.8 L320.6 101.3 L319.7 101.1 L321.4 104.0 L318.5 104.0 L320.1 100.0 L319.2 100.2 L321.0 96.8 L320.3 97.0 L322.9 93.5 L325.5 97.0 L324.8 96.8 L326.5 100.2 L325.7 100.0 L327.2 104.0 L323.7 104.0 L325.1 101.1 L324.3 101.3 L325.9 98.8 L325.3 99.0 L327.6 96.4 L330.0 99.0 L329.4 98.8 L331.0 101.3 L330.2 101.1 L331.6 104.0 L329.9 104.0 L331.6 99.9 L330.6 100.1 L332.5 96.6 L331.8 96.8 L334.6 93.2 L337.5 96.8 L336.7 96.6 L338.6 100.1 L337.6 99.9 L339.3 104.0 L335.8 104.0 L337.5 99.8 L336.6 100.0 L338.5 96.5 L337.7 96.7 L340.6 93.0 L343.5 96.7 L342.7 96.5 L344.7 100.0 L343.7 99.8 L345.4 104.0 L343.2 104.0 L344.9 100.0 L344.0 100.2 L345.9 96.8 L345.1 97.0 L347.9 93.4 L350.7 97.0 L350.0 96.8 L351.9 100.2 L350.9 100.0 L352.6 104.0 V107 Z" fill="#0a0410" filter="url(#hair)"/>
+<!-- a cloud bank high up, lit from below by the rune -->
+<ellipse cx="300" cy="30" rx="70" ry="9" fill="#6a7cff" opacity="0.16" filter="url(#b4)"/>
+<ellipse cx="320" cy="44" rx="40" ry="5" fill="#8ff4ff" opacity="0.12" filter="url(#b4)"/>
+
+<!-- the river -->
+<rect y="104" width="340" height="60" fill="url(#water)"/>
+<!-- the rune's light lying on the water -->
+<ellipse cx="300" cy="112" rx="70" ry="7" fill="#7ad8ff" opacity="0.35" filter="url(#b4)"/>
+<!-- ripple lines catching it -->
+<g stroke="#b8f0ff" stroke-linecap="round" fill="none" filter="url(#b1)">
+  <path d="M260 112 H292 M318 112 H340" stroke-width="0.5" opacity="0.5"/>
+  <path d="M232 118 H262 M318 118 H340" stroke-width="0.4" opacity="0.35"/>
+  <path d="M210 124 H240 M330 125 H340" stroke-width="0.4" opacity="0.25"/>
+  <path d="M120 116 H160 M60 122 H96" stroke="#7a9cff" stroke-width="0.4" opacity="0.18"/>
+</g>
+<!-- its reflection, broken -->
+<g clip-path="url(#below)" filter="url(#ripple)" opacity="0.55">
+  <rect x="300" y="104" width="12" height="60" fill="#8ff4ff" opacity="0.35"/>
+  <use href="#crystal" transform="translate(306 132) scale(1.1 -1.1)"/>
+</g>
+
+<!-- mist on the water, thickest round the banks -->
+<rect y="70" width="340" height="94" filter="url(#mist)" opacity="0.4"/>
+
+<!-- the shaft of light the rune throws up -->
+<path d="M296 96 L284 -4 H328 L316 96 Z" fill="url(#shaft)" opacity="0.5" filter="url(#b4)"/>
+
+<!-- the rune -->
+<g transform="translate(306 90)">
+  <circle r="28" fill="#5ac8ff" opacity="0.35" filter="url(#b14)"/>
+  <circle r="12" fill="#bff6ff" opacity="0.55" filter="url(#b4)"/>
+  <!-- the back half of its ring, behind the crystal -->
+  <g transform="scale(1 0.32)" fill="none">
+    <path d="M-25 0 A25 25 0 0 1 25 0" stroke="#7a8cff" stroke-width="1.6" opacity="0.5"/>
+    <path d="M-25 0 A25 25 0 0 1 25 0" stroke="#d8f8ff" stroke-width="0.5" opacity="0.6" stroke-dasharray="3 2 0.6 2"/>
+  </g>
+  <use href="#crystal"/>
+  <!-- the front half, over it -->
+  <g transform="scale(1 0.32)" fill="none" filter="url(#glow)">
+    <path d="M25 0 A25 25 0 0 1 -25 0" stroke="#9fe8ff" stroke-width="1.8" opacity="0.9"/>
+    <path d="M25 0 A25 25 0 0 1 -25 0" stroke="#ffffff" stroke-width="0.6" stroke-dasharray="4 2.2 0.8 2.2"/>
+  </g>
+  <use href="#glint" transform="translate(-3.5 -9) scale(1.1)" filter="url(#glow)"/>
+  <!-- a few glyph-motes orbiting it -->
+  <g fill="#e8fdff" filter="url(#glow)">
+    <rect x="-27" y="-10" width="1.2" height="3" rx="0.4" transform="rotate(-20)"/>
+    <rect x="24" y="-14" width="1.2" height="3" rx="0.4" transform="rotate(16)"/>
+    <circle cx="-14" cy="-24" r="0.6"/><circle cx="16" cy="-28" r="0.5"/><circle cx="6" cy="-36" r="0.45" opacity="0.7"/>
+  </g>
+</g>
+
+<!-- motes drifting over the water -->
+<g filter="url(#glow)" fill="#bff6ff">
+  <circle cx="252" cy="74" r="0.5" opacity="0.7"/><circle cx="276" cy="40" r="0.4" opacity="0.6"/><circle cx="262" cy="56" r="0.4" opacity="0.6"/><circle cx="318" cy="64" r="0.5" opacity="0.8"/>
+  <circle cx="334" cy="80" r="0.35" opacity="0.6"/><circle cx="228" cy="96" r="0.4" opacity="0.5"/>
+</g>
+
+<rect width="340" height="164" fill="url(#vig)"/>
+<rect width="340" height="164" filter="url(#grain)" opacity="0.28" style="mix-blend-mode:overlay"/>
+</svg>

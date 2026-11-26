@@ -82,7 +82,8 @@
   button.plate:active { transform: scale(0.96); }
   /* the name and the rest down to the number at the foot. At the most (a two-line name and course line) the name stands
      beside the medallion, so its column stays clear of it; the role starts below the medallion, one line */
-  .bside { position: relative; z-index: 3; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-end; gap: 5px; min-width: 0; flex: 1; align-self: stretch;
+  /* the text block centred on the QR plate beside it (owner: it sat low, at the badge's bottom edge) */
+  .bside { position: relative; z-index: 3; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 5px; min-width: 0; flex: 1; align-self: stretch;
     container-type: inline-size; }
   .bnm { --pr: 64px; padding-right: var(--pr); } /* the medallion: 14 + 52 in from the edge, less the side's 14, and a 12 px gap */
   .bside > * { flex: none; max-width: 100%; }

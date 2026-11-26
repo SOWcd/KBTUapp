@@ -47,7 +47,7 @@ test('a club meeting on the big screen counts a member who scans it', async ({ o
   await screen.look('show pairing');
   const { code } = await screenState(screen);
 
-  // Dana: Clubs > Open Mic Club (Studio) > Meetings > Connect a screen, Telegram's scanner reads the laptop's QR
+  // Dana: Clubs > Open Mic Club (Studio) > Meetings > Connect a screen > the whole club, Telegram's scanner reads the laptop's QR
   const p = dana.page;
   await p.getByRole('button', { name: T('page.clubs') }).first().click();
   await p.locator('section[aria-hidden="false"]').getByText('Open Mic Club', { exact: true }).first().click(); // the tab in view
@@ -56,6 +56,8 @@ test('a club meeting on the big screen counts a member who scans it', async ({ o
   await expect(connect).toBeVisible();
   await dana.look('meetings');
   await connect.click();
+  // whom the meeting is for (ScreenSheet's audience: the whole club, or one of its departments)
+  await p.getByRole('button', { name: T('scr.wholeClub'), exact: true }).click();
   await expect.poll(() => scanPopups(dana), { message: 'Telegram\'s QR scanner opened' }).toBeGreaterThan(0);
   await p.evaluate((data) => (window as unknown as { Telegram: { WebView: { receiveEvent: (e: string, d: unknown) => void } } })
     .Telegram.WebView.receiveEvent('qr_text_received', { data }), `https://t.me/KBTUappBot?startapp=sh_${code}`);
@@ -63,10 +65,10 @@ test('a club meeting on the big screen counts a member who scans it', async ({ o
   await expect(p.getByText(T('scr.live'), { exact: true })).toBeVisible();
   await dana.look('meeting started');
 
-  // the laptop now shows the meeting's rotating QR: nobody yet, of the club's two members
+  // the laptop now shows the meeting's rotating QR and who came: nobody yet (how many are expected is Dana's, in the app)
   await expect(screen.page.getByText(T('scr.scan'))).toBeVisible();
   const count = screen.page.locator('.count');
-  await expect(count).toHaveText(/^0\s*\/\s*2$/);
+  await expect(count).toHaveText('0');
   await screen.look('show running');
 
   // Ali's phone camera reads the QR: Telegram opens the app on its start parameter
@@ -77,7 +79,7 @@ test('a club meeting on the big screen counts a member who scans it', async ({ o
   await phone.look('checked in by the screen');
 
   // the screen counts him (it polls every 2 s), and so does Dana's meeting page
-  await expect(count).toHaveText(/^1\s*\/\s*2$/);
+  await expect(count).toHaveText('1');
   await screen.look('show counted');
   await expect(p.getByText(T('scr.ofM', { m: 2 }))).toBeVisible();
   await expect(p.locator('.big .n')).toHaveText('1');
