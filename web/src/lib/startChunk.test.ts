@@ -27,6 +27,7 @@ describe('the start chunk', () => {
       const f = files.get(name);
       if (f?.type !== 'chunk') throw new Error(`${name} is not in the build`);
       gz += await gzipped(f.code);
+      console.log(`START-FILE ${name} ${await gzipped(f.code)} ${Object.keys(f.modules).filter((m) => !m.includes('node_modules')).map((m) => m.replace(/.*\/src\//, '')).join(',').slice(0, 600)}`); // TEMP
     }
     console.log(`start JS: ${start.length} files, ${gz} B gzip (limit ${MAX_START_GZIP})`);
     expect(gz).toBeLessThanOrEqual(MAX_START_GZIP);
