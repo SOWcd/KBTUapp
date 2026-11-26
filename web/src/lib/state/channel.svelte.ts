@@ -129,6 +129,25 @@ export async function toggleHeart(post: ChannelFeedPost): Promise<void> {
   }
 }
 
+/** "I'm coming" to an ask for help, flipped on every copy of the card in the same frame; the server's count after,
+ *  the old state back if it refuses */
+export async function toggleComing(post: ChannelFeedPost): Promise<void> {
+  const id = post.id, was = post.help;
+  if (!was) return;
+  // the card in hand too (a shared post opened outside the loaded pages is only that)
+  const set = (help: ChannelFeedPost['help']) => { post.help = help; updateChannelPosts((posts) => posts.map((p) => (p.id === id ? { ...p, help } : p))); };
+  const me = !was.me;
+  set({ ...was, me, coming: Math.max(0, was.coming + (me ? 1 : -1)) });
+  try {
+    const got = await api.setChannelComing(id, me);
+    touched();
+    set({ ...was, ...got });
+  } catch (e) {
+    set(was);
+    throw e;
+  }
+}
+
 export async function loadChannel(order = channel.order): Promise<void> {
   const page = pages[order];
   // Once paging starts, keep the original order and cursor while the student reads.

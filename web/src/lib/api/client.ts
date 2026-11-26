@@ -546,7 +546,8 @@ export const server = {
   channelVisit: (): Promise<import('./types').ChannelVisit> => call('GET', '/forum-posts/visit'),
   markChannelSeen: (msg: number): Promise<void> => call('PUT', '/forum-posts/visit', { msg }),
   setChannelHeart: (id: Id, hearted: boolean): Promise<import('./types').ChannelHeart> => call('PUT', `/forum-posts/${id}/heart`, { hearted }),
-  newChannelPost: (body: string, anon: boolean, photos: Id[] = []): Promise<import('./types').ChannelPost> => call('POST', '/forum-posts', { body, anon, photos }), // the AI first, live: the bot posts it; photos: uploadChannelPhoto's ids (anonymous with photos: a moderator first)
+  setChannelComing: (id: Id, coming: boolean): Promise<{ coming: number; me: boolean }> => call('PUT', `/forum-posts/${id}/coming`, { coming }), // an ask for help: "I'm coming"
+  newChannelPost: (body: string, anon: boolean, photos: Id[] = [], help: number | null = null): Promise<import('./types').ChannelPost> => call('POST', '/forum-posts', { body, anon, photos, ...(help ? { help } : {}) }), // help: an ask for help, up this many hours // the AI first, live: the bot posts it; photos: uploadChannelPhoto's ids (anonymous with photos: a moderator first)
   uploadChannelPhoto: (file: Blob): Promise<Media & { id: Id }> => call('POST', '/forum-posts/photos', file), // a photo for my next post, re-encoded (no EXIF); unposted ones go in an hour
   appealChannelPost: (id: Id, body: string, photos: Id[] = []): Promise<import('./types').ChannelPost> => call('POST', `/forum-posts/${id}/appeal`, { body, photos }), // refused by the AI: to a moderator (3 a day), the words given back
   channelPostWhy: (id: Id, body: string): Promise<{ explain: import('./types').ForumWhy | null }> => call('POST', `/forum-posts/${id}/why`, { body }), // the AI's reason for my refused or held post, once

@@ -3228,6 +3228,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def fchan_heart(pid: int, con: Con, v: FChanWrite, body: dict = Body(...)):
         return F.set_heart(con, v, pid, body.get("hearted"))
 
+    @app.put("/api/forum-posts/{pid}/coming")
+    def fchan_coming(pid: int, con: Con, v: FChanWrite, body: dict = Body(...)):
+        return F.set_coming(con, v, pid, body.get("coming"))  # an ask for help: "I'm coming", its author sees who
+
     @app.post("/api/forum-posts")
     async def fchan_new(con: Con, v: FChanWrite, body: dict = Body(...)):
         pid, text = await run_in_threadpool(F.reserve, con, v, body)  # held, inside the day's one, before the AI is asked

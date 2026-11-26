@@ -133,7 +133,8 @@ FEED_MAX = 50
 FEED_RANK_MAX = 500  # ponytail: keep the older archive chronological; precompute engagement if the ranked window grows
 FEED_AGE = 15 * 60
 FEED_SNAPSHOTS = 12  # per viewer and order
-_FEED_VISIBLE = "(status = 'live' AND tg_msg > 0 OR user_id = ? AND status != 'gone')"
+# an ask for help is out of sight once its time is up (expire_help takes it down within the bot's round)
+_FEED_VISIBLE = "COALESCE(help_until, 1 << 62) > ? AND (status = 'live' AND tg_msg > 0 OR user_id = ? AND status != 'gone')"
 
 
 def _feed_hearts(con, ids, uid: int) -> dict:
@@ -186,7 +187,7 @@ def _feed_rows(con, v: Viewer, ids, limit: int = FEED_MAX) -> list:
     if not ids:
         return []
     return rows(con, f"""SELECT p.*, j.key AS feed_index FROM json_each(?) j CROSS JOIN fchan_posts p ON p.id = j.value
-        WHERE {_FEED_VISIBLE} ORDER BY j.key LIMIT ?""", json.dumps(list(ids)), v.id, limit)
+        WHERE {_FEED_VISIBLE} ORDER BY j.key LIMIT ?""", json.dumps(list(ids)), core.now(), v.id, limit)
 
 
 def _feed_account(con, uid: int) -> int | None:
@@ -277,8 +278,8 @@ def feed(con, v: Viewer, before: int | None = None, *, order: str = "for_you") -
         SELECT id FROM (SELECT id FROM fchan_posts WHERE user_id = ? AND status != 'gone'
             AND COALESCE(NULLIF(tg_msg, 0), 1 << 62) < ?
             ORDER BY COALESCE(NULLIF(tg_msg, 0), 1 << 62) DESC, id DESC LIMIT ?)
-        ) ORDER BY COALESCE(NULLIF(tg_msg, 0), 1 << 62) DESC, id DESC LIMIT ?""",
-              cursor, FEED_MAX, v.id, cursor, FEED_MAX, FEED_MAX)
+        ) AND COALESCE(help_until, 1 << 62) > ? ORDER BY COALESCE(NULLIF(tg_msg, 0), 1 << 62) DESC, id DESC LIMIT ?""",
+              cursor, FEED_MAX, v.id, cursor, FEED_MAX, core.now(), FEED_MAX)
     return _feed_cards(con, v, ps)
 
 
@@ -290,6 +291,7 @@ def _feed_cards(con, v: Viewer, ps, hearts=None, comments=None) -> list[dict]:
     faces = _faces(con, [p["id"] for p in ps if p["comments"] and not p["anon"]]) if v.student else {}
     pics = _photos(con, [p["id"] for p in ps])
     live = {p["id"] for p in ps if p["status"] == "live" and (p["tg_msg"] or 0) > 0}
+    helps = _coming(con, v, [p for p in ps if p["help_until"]])
     hearts, comments = hearts or {}, comments or {}
     hearts.update(_feed_hearts(con, sorted(live - hearts.keys()), v.id))
     comments.update(_feed_comments(con, [p["id"] for p in ps if p["id"] not in comments and (p["comments"] or p["id"] in live)]))
@@ -307,6 +309,7 @@ def _feed_cards(con, v: Viewer, ps, hearts=None, comments=None) -> list[dict]:
              "hearts": heart["n"] if heart else 0, "hearted": bool(heart and heart["picked"]),
              # Telegram's side of the post: the latest commenters' faces (app students only), its top reactions
              "faces": faces.get(p["id"], []), "reactions": _top(p["reactions"]),
+             **({"help": helps[p["id"]]} if p["id"] in helps else {}),
              "hot": bool(discussion and (p["comments"] >= HOT and discussion["busy"] >= HOT
                      or p["id"] in live and discussion["talked"] >= TALK_MIN)),  # being discussed (one label, in place): a busy hour, or several people over the day
              # my own held post: the AI passed it to a person (why != 'check': not still being checked), or its look is
@@ -332,6 +335,66 @@ def set_heart(con, v: Viewer, pid: int, picked: bool) -> dict:
         else:
             con.execute("DELETE FROM fchan_hearts WHERE post_id = ? AND user_id = ?", (pid, v.id))
         return {"hearts": one(con, "SELECT COUNT(*) FROM fchan_hearts WHERE post_id = ?", pid)[0], "hearted": picked}
+
+
+HELP_HOURS = (1, 3, 6, 12, 24)  # how long an ask for help stays up, the author's pick (the app offers 3 h first)
+
+
+def _coming(con, v: Viewer, ps) -> dict[int, dict]:
+    """Each ask for help's side: until when, how many said "I'm coming", whether I did; and to its author alone, who
+    (newest first). One query for the counts of all of them, one for the people under my own."""
+    if not ps:
+        return {}
+    ids = json.dumps([p["id"] for p in ps])
+    got = {r["post_id"]: r for r in rows(con, """SELECT post_id, COUNT(*) n, MAX(user_id = ?) me FROM fchan_coming
+        WHERE post_id IN (SELECT value FROM json_each(?)) GROUP BY post_id""", v.id, ids)}
+    who: dict[int, list[dict]] = {}
+    mine = [p["id"] for p in ps if p["user_id"] == v.id]
+    if mine:
+        for r in rows(con, f"""SELECT c.post_id, {PERSON_COLS} FROM fchan_coming c JOIN users u ON u.id = c.user_id
+                LEFT JOIN students s ON s.user_id = u.id WHERE c.post_id IN (SELECT value FROM json_each(?)) ORDER BY c.at DESC""", json.dumps(mine)):
+            who.setdefault(r["post_id"], []).append(person_ref(r))
+    out = {}
+    for p in ps:
+        r = got.get(p["id"])
+        out[p["id"]] = {"until": p["help_until"], "coming": r["n"] if r else 0, "me": bool(r and r["me"]),
+                        **({"who": who.get(p["id"], [])} if p["user_id"] == v.id else {})}
+    return out
+
+
+def set_coming(con, v: Viewer, pid: int, coming: object) -> dict:
+    """I'm coming (or not after all) to an ask for help: a verified student, someone else's, live in the channel and
+    still up. Its author sees who; everyone else only how many."""
+    need_student(v)
+    if not isinstance(coming, bool) or not 0 < pid < 1 << 63:
+        raise ApiError("bad_input")
+    with tx(con):
+        core.need_current_student(con, v)
+        p = one(con, "SELECT user_id FROM fchan_posts WHERE id = ? AND status = 'live' AND tg_msg > 0 AND help_until > ?", pid, core.now())
+        if not p:
+            raise ApiError("not_found")
+        if p["user_id"] == v.id:
+            raise ApiError("bad_input", "own")
+        if coming:
+            con.execute("INSERT INTO fchan_coming (post_id, user_id, at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING", (pid, v.id, core.now()))
+        else:
+            con.execute("DELETE FROM fchan_coming WHERE post_id = ? AND user_id = ?", (pid, v.id))
+        return {"coming": one(con, "SELECT COUNT(*) FROM fchan_coming WHERE post_id = ?", pid)[0], "me": coming}
+
+
+def expire_help(con) -> None:
+    """Asks for help whose time is up: taken down as their author would (out of the channel, the words wiped), and
+    who came forgotten (a taken-down one keeps its row for the moderators, never the list). Every round: a read
+    first, so a quiet round takes no write lock."""
+    due = rows(con, "SELECT id FROM fchan_posts WHERE help_until <= ? AND (status IN ('held', 'live') OR id IN (SELECT post_id FROM fchan_coming))", core.now())
+    if not due:
+        return
+    with tx(con):
+        for (pid,) in due:
+            con.execute("DELETE FROM fchan_coming WHERE post_id = ?", (pid,))
+            p = one(con, "SELECT * FROM fchan_posts WHERE id = ? AND status IN ('held', 'live') AND help_until <= ?", pid, core.now())
+            if p:
+                _wipe(con, p)
 
 
 def visit(con, v: Viewer) -> dict:
@@ -401,9 +464,11 @@ def reserve(con, v: Viewer, body: dict) -> tuple[int, str]:
     """A new post, held ('check') before the AI is asked, the pace counted in the same transaction (posts
     sent at the same moment can't all pass it, nor all cost the AI a look). settle() puts the verdict on it."""
     need_student(v)
-    anon = body.get("anon", False)
-    if not isinstance(anon, bool):
+    anon, hours = body.get("anon", False), body.get("help")
+    if not isinstance(anon, bool) or hours is not None and (type(hours) is not int or hours not in HELP_HOURS):
         raise ApiError("bad_input")
+    if hours and anon:  # an ask for help is signed: who's coming shows to its author, never to a mask
+        raise ApiError("bad_input", "help_anon")
     pics = _pics(body)
     text = _clean(body.get("body"))
     if pics and len(text) > CAPTION_MAX:  # a caption: Telegram's 1024 with the signature under it
@@ -422,8 +487,8 @@ def reserve(con, v: Viewer, body: dict) -> tuple[int, str]:
         sign = None if anon else signature(one(con, PERSON + " WHERE u.id = ?", v.id))
         a, n = pick_nick(con) if anon else (None, None)
         pid = _next_id(con, "fchan_posts")
-        con.execute("INSERT INTO fchan_posts (id, user_id, body, anon, status, why, created_at, sign, nick_a, nick_n) VALUES (?, ?, ?, ?, 'held', 'check', ?, ?, ?, ?)",
-                    (pid, v.id, text, int(anon), core.now(), sign, a, n))
+        con.execute("INSERT INTO fchan_posts (id, user_id, body, anon, status, why, created_at, sign, nick_a, nick_n, help_until) VALUES (?, ?, ?, ?, 'held', 'check', ?, ?, ?, ?, ?)",
+                    (pid, v.id, text, int(anon), core.now(), sign, a, n, core.now() + hours * 3600 if hours else None))
         _attach(con, v.id, pid, pics)
         return pid, text
 
@@ -683,14 +748,21 @@ def delete(con, v: Viewer, pid: int) -> None:
         p = one(con, "SELECT * FROM fchan_posts WHERE id = ? AND user_id = ? AND status != 'gone'", pid, v.id)
         if not p:
             raise ApiError("not_found")
-        con.execute("DELETE FROM fchan_hearts WHERE post_id = ?", (pid,))
-        _unpost(con, p, "author")
-        con.execute("""UPDATE fchan_replies SET status = 'gone', why = 'author', body = '', ai_reason = NULL,
-            drop_at = CASE WHEN tg_msg >= 0 THEN ? END WHERE post_id = ?""", (core.now(), pid))
-        con.execute("""UPDATE fchan_posts SET status = 'gone', body = '', sign = NULL, why = NULL, tg_msg = NULL, ai_reason = NULL, ai_fix = NULL,
-                       ai_quote = NULL, refused = NULL WHERE id = ?""", (pid,))
-        con.execute("DELETE FROM fchan_photos WHERE post_id = ?", (pid,))  # its photos with the words (their files: the bot's round)
-        _notes_off(con, pid)
+        _wipe(con, p)
+
+
+def _wipe(con, p) -> None:
+    """The author's take-down (or an ask for help's time up), inside the caller's transaction."""
+    pid = p["id"]
+    con.execute("DELETE FROM fchan_hearts WHERE post_id = ?", (pid,))
+    con.execute("DELETE FROM fchan_coming WHERE post_id = ?", (pid,))
+    _unpost(con, p, "author")
+    con.execute("""UPDATE fchan_replies SET status = 'gone', why = 'author', body = '', ai_reason = NULL,
+        drop_at = CASE WHEN tg_msg >= 0 THEN ? END WHERE post_id = ?""", (core.now(), pid))
+    con.execute("""UPDATE fchan_posts SET status = 'gone', body = '', sign = NULL, why = NULL, tg_msg = NULL, ai_reason = NULL, ai_fix = NULL,
+                   ai_quote = NULL, refused = NULL WHERE id = ?""", (pid,))
+    con.execute("DELETE FROM fchan_photos WHERE post_id = ?", (pid,))  # its photos with the words (their files: the bot's round)
+    _notes_off(con, pid)
 
 
 def _notes_off(con, pid: int) -> None:
@@ -722,7 +794,7 @@ def resigned(con, msg: int) -> None:
 def to_send(con) -> list:
     """Live posts not in the channel yet, oldest first, with their signature: the one fixed when written (signature(),
     never a @username) or the anonymous line; and their photos' files (media paths), in order."""
-    ps = rows(con, "SELECT * FROM fchan_posts WHERE status = 'live' AND tg_msg IS NULL ORDER BY id LIMIT 5")
+    ps = rows(con, "SELECT * FROM fchan_posts WHERE status = 'live' AND tg_msg IS NULL AND COALESCE(help_until, 1 << 62) > ? ORDER BY id LIMIT 5", core.now())
     return [(p["id"], p["body"], _sign(con, p), [r[0] for r in rows(con, "SELECT path FROM fchan_photos WHERE post_id = ? ORDER BY n", p["id"])]) for p in ps]
 
 
@@ -930,6 +1002,7 @@ def reacted(con, upd: dict) -> None:
 def sweep(con) -> None:
     """What the privacy policy promises: a deleted post's wordless row after its day, a taken-down one after 30 days.
     Every 5 minutes (the bot's round): a DELETE takes the write lock even finding nothing."""
+    expire_help(con)  # every round: an ask for help leaves on its minute
     if not core._once(con, "fch_sweep", str(core.now() // 300)):
         return
     # (an appealed one stays its day from the appeal: appeals_left counts it)

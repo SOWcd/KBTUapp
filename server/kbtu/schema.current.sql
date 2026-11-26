@@ -512,6 +512,12 @@ CREATE TABLE events (
   CHECK (status = 'draft' OR starts_at IS NOT NULL),
   CHECK (status = 'draft' OR price IS NULL OR (pay_to_name IS NOT NULL AND pay_phone IS NOT NULL))
 ) STRICT;
+CREATE TABLE fchan_coming (
+      post_id INTEGER NOT NULL REFERENCES fchan_posts(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      at      INTEGER NOT NULL,
+      PRIMARY KEY (post_id, user_id)
+    ) STRICT;
 CREATE TABLE fchan_comments (
       msg_id  INTEGER PRIMARY KEY,
       post_id INTEGER NOT NULL REFERENCES fchan_posts(id) ON DELETE CASCADE,
@@ -551,7 +557,7 @@ CREATE TABLE fchan_posts (
       why        TEXT,                                  -- held: 'check' (no AI answer yet), 'ai', 'person', 'busy'; hidden: 'moderator'
       tg_msg     INTEGER,                               -- the channel message, once sent
       created_at INTEGER NOT NULL
-    , rules_for INTEGER, rules_msg INTEGER, comments INTEGER NOT NULL DEFAULT 0, sign TEXT, reactions TEXT, nick_a INTEGER, nick_n INTEGER, appealed_at INTEGER, refused TEXT, explained INTEGER, ai_reason TEXT, posted_at INTEGER, ai_fix TEXT, ai_quote TEXT) STRICT;
+    , rules_for INTEGER, rules_msg INTEGER, comments INTEGER NOT NULL DEFAULT 0, sign TEXT, reactions TEXT, nick_a INTEGER, nick_n INTEGER, appealed_at INTEGER, refused TEXT, explained INTEGER, ai_reason TEXT, posted_at INTEGER, ai_fix TEXT, ai_quote TEXT, help_until INTEGER) STRICT;
 CREATE TABLE fchan_replies (
       id          INTEGER PRIMARY KEY,
       post_id     INTEGER NOT NULL REFERENCES fchan_posts(id) ON DELETE CASCADE,
@@ -1630,6 +1636,7 @@ CREATE INDEX events_by_org ON events(org_id, starts_at);
 CREATE INDEX events_by_start ON events(starts_at);
 CREATE UNIQUE INDEX events_chat_token ON events(chat_token) WHERE chat_token IS NOT NULL;
 CREATE INDEX events_upcoming ON events(status, starts_at);
+CREATE INDEX fchan_coming_by_user ON fchan_coming(user_id);
 CREATE INDEX fchan_comments_by_post ON fchan_comments(post_id, at);
 CREATE INDEX fchan_comments_by_user ON fchan_comments(user_id);
 CREATE INDEX fchan_feed_pages_by_user ON fchan_feed_pages(user_id, sort, expires_at DESC);
@@ -1641,6 +1648,7 @@ CREATE INDEX fchan_photos_by_user ON fchan_photos(user_id);
 CREATE INDEX fchan_posts_by_message ON fchan_posts(status, tg_msg, id);
 CREATE INDEX fchan_posts_by_status ON fchan_posts(status, id);
 CREATE INDEX fchan_posts_by_user ON fchan_posts(user_id, created_at);
+CREATE INDEX fchan_posts_help ON fchan_posts(help_until) WHERE help_until IS NOT NULL;
 CREATE INDEX fchan_replies_by_msg ON fchan_replies(tg_msg) WHERE tg_msg > 0;
 CREATE INDEX fchan_replies_by_post ON fchan_replies(post_id, created_at);
 CREATE INDEX fchan_replies_todo ON fchan_replies(status, send_at) WHERE tg_msg IS NULL;
