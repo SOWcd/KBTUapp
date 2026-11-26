@@ -1605,11 +1605,13 @@ LISTS_A_DAY = 30  # saved guest lists per event per day (each one rewrites the d
 
 
 def guest_list(con, v: Viewer, eid: int, table: object, save: object) -> dict:
-    """The organizers' own guest list from Studio (guests.load), for whoever has the door (the door list's right).
+    """The organizers' own guest list from Studio (guests.load), for the host's organizers (the events right): a list
+    turns the event into a guest-list one, takes every unlisted sign-up's seat (paid ones too) and hands out tickets,
+    so never a door helper's or a co-host's team's, who only run the door.
     Without `save` the same work runs and is rolled back: the preview's numbers are exactly what saving does."""
     try:
         with tx(con):
-            e = _door_ok(con, v, _staff_event(con, v, eid, "door", cohost=True, helper=("door",)))
+            e = _door_ok(con, v, _staff_event(con, v, eid, "events"))
             if e["status"] == "cancelled" or e["hidden_at"] or e["memo_only"] or end_of(e) <= core.now():
                 raise ApiError("closed")
             if save is True and one(con, """SELECT COUNT(*) FROM audit_log WHERE action = 'guest_list' AND target = ?

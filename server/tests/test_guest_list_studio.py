@@ -82,6 +82,21 @@ def test_rights_and_other_club_refused(door_event):
     assert c.post(URL, headers=tma(9), json={"rows": table, "save": True}).status_code == 200
 
 
+def test_door_helper_cannot_load_a_list(door_event):
+    """A temporary door helper runs the door but never loads a list: saving one would take every sign-up's seat,
+    paid ones too, and hand out tickets."""
+    c, cfg, con = door_event
+    paid = _student(c, con, 2, "24B030009")
+    con.execute("INSERT INTO registrations (event_id, user_id, status, ticket_code, created_at, updated_at) VALUES (1, ?, 'going', '1-PAID', 0, 0)", (paid,))
+    helper = _student(c, con, 5, "24B030006")
+    con.execute("""INSERT INTO event_crew (event_id, user_id, org_id, kind, added_by, created_at)
+        SELECT id, ?, org_id, 'door', (SELECT id FROM users WHERE tg_id = 9), 0 FROM events WHERE id = 1""", (helper,))
+    for save in (False, True):
+        assert _list(c, _rows(["Name Only"]), save=save, who=5).status_code == 403
+    assert not con.execute("SELECT guest_list FROM events WHERE id = 1").fetchone()[0]
+    assert con.execute("SELECT status FROM registrations WHERE user_id = ?", (paid,)).fetchone()[0] == "going"
+
+
 def test_limits(door_event):
     c, cfg, con = door_event
     too_many = _rows(*[[f"Person {i}"] for i in range(guests.LIST_ROWS + 1)])
