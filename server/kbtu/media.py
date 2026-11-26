@@ -50,10 +50,39 @@ def drop(root: Path, paths) -> None:
             (root / f"{rel}{ext}").unlink(missing_ok=True)
 
 
-def save(data: bytes, root: Path, key: bytes | None = None) -> dict:
-    """key: what names the files instead of the upload's bytes (a random one: no hash that matches the same picture elsewhere)."""
+def save(data: bytes, root: Path, key: bytes | None = None, trim: bool = False) -> dict:
+    """key: what names the files instead of the upload's bytes (a random one: no hash that matches the same picture elsewhere).
+    trim: an album photo, its baked-in bars cut off (trim_bars)."""
     with _busy:
-        return {**store(_decode(data), key or data, root), "taken": taken(data)}
+        im = _decode(data)
+        return {**store(trim_bars(im) if trim else im, key or data, root), "taken": taken(data)}
+
+
+def trim_bars(im: Image.Image, tol: int = 12) -> Image.Image:
+    """An album photo without the uniform near-black or near-white bars a screenshot bakes around it (a landscape
+    shot saved as a 3:4 portrait). The bars are the colour of at least two corners; the photo is the box of pixels
+    further than tol from it (a 3x3 min filter first, so JPEG specks in a bar don't count). A side is cut only when
+    its bar is over 4% of the side, and never below half of the image."""
+    g = im.convert("L")  # luminance near 0 (or 255) only when every channel is: a coloured pixel never passes for a bar
+    w, h = g.size
+    corners = [g.getpixel(p) for p in ((0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1))]
+    for edge in ([v for v in corners if v <= 16], [v for v in corners if v >= 239]):
+        if len(edge) >= 2:
+            break
+    else:
+        return im
+    bg = sorted(edge)[len(edge) // 2]
+    box = g.point(lambda p: 255 if abs(p - bg) > tol else 0).filter(ImageFilter.MinFilter(3)).getbbox()
+    if not box:
+        return im  # all one colour: nothing to keep apart from
+    left, top, right, bottom = box
+    left, right = (0 if left <= w * 0.04 else left), (w if w - right <= w * 0.04 else right)
+    top, bottom = (0 if top <= h * 0.04 else top), (h if h - bottom <= h * 0.04 else bottom)
+    if right - left < w / 2:
+        left, right = 0, w
+    if bottom - top < h / 2:
+        top, bottom = 0, h
+    return im if (left, top, right, bottom) == (0, 0, w, h) else im.crop((left, top, right, bottom))
 
 
 _JPEG_MARKER = re.compile(rb"\xff([^\x00\xff\xd0-\xd7])")  # skip stuffed bytes and restart markers in a scan
@@ -94,7 +123,7 @@ def save_gallery(data: bytes, root: Path) -> dict:
     if not _gallery_jpeg(data):
         raise BadImage("gallery metadata or format")
     with _busy:
-        return store(_decode(data), data, root)
+        return store(trim_bars(_decode(data)), data, root)
 
 
 ALMATY = timezone(timedelta(hours=5))  # a camera's clock without an offset tag: the campus's

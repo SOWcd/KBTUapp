@@ -141,8 +141,10 @@
   .cap em { font: 500 var(--fs-cap)/1.2 var(--font-text); font-style: normal; color: rgba(255, 255, 255, 0.78); }
 
   /* the photos: squares edge to edge, out of the page's gutters, as the phone's grid (AlbumGrid's) */
-  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; margin: 0 calc(-1 * var(--gutter)); }
-  @media (min-width: 600px) { .grid { grid-template-columns: repeat(4, 1fr); } }
+  /* minmax(0, 1fr): a column never widens for its content, so every cell is the same square (aspect-ratio on .c, the
+     img absolute inside it) */
+  .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px; margin: 0 calc(-1 * var(--gutter)); }
+  @media (min-width: 600px) { .grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
   .c { position: relative; aspect-ratio: 1; overflow: hidden; cursor: pointer; -webkit-tap-highlight-color: transparent;
     content-visibility: auto; contain-intrinsic-size: auto 125px; }
   .c img { opacity: 0; transition: opacity 260ms ease-out; }

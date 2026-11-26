@@ -2695,7 +2695,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         data = await read_upload(request)
         if not logic.can_add_album_photo(con, v, eid):  # before the work, not only after it
             raise ApiError("forbidden")
-        saved = await _picture(media.save, data, photos)
+        saved = await _picture(lambda d: media.save(d, photos, trim=True), data)
         return await run_in_threadpool(logic.add_album_photo, con, v, eid, saved)
 
     @app.delete("/api/events/{eid}/photos/{fid}")
