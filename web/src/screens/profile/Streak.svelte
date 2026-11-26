@@ -42,11 +42,14 @@
 
 <style>
   /* the tier's light: --tc its colour, --tc2 the halo's outer ring and the card's wash, --ta the halo's strength, --tr its reach */
-  .streak { --tc: var(--warning); --tc2: var(--tc); --ta: 0.18; --tr: -3px;
+  .streak { --tc: var(--warning); --tc2: var(--tc); --ta: 0.18; --tr: -3px; position: relative; isolation: isolate;
     display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 12px 14px; border-radius: var(--r-l); text-align: left; white-space: nowrap;
-    background: radial-gradient(70% 120% at 0% 50%, color-mix(in srgb, var(--tc2) 12%, transparent), transparent 70%), var(--surface); }
-  .streak[data-tier='1'] { --tc: color-mix(in srgb, var(--gold), var(--danger) 40%); --ta: 0.3; --tr: -5px; }       /* copper */
-  .streak[data-tier='2'] { --tc: color-mix(in srgb, var(--tile-gray), var(--tile-blue) 25%); --ta: 0.36; --tr: -7px; } /* steel */
+    background: var(--surface); }
+  /* the card's tier-tinted wash: opacity over a token, not color-mix() (iOS before 16.2 drops it) */
+  .streak::before { content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit; opacity: 0.12; pointer-events: none;
+    background: radial-gradient(70% 120% at 0% 50%, var(--tc2), transparent 70%); }
+  .streak[data-tier='1'] { --tc: var(--tile-orange); --ta: 0.3; --tr: -5px; } /* copper */
+  .streak[data-tier='2'] { --tc: var(--tile-gray); --ta: 0.36; --tr: -7px; }  /* steel */
   .streak[data-tier='3'] { --tc: var(--gold); --ta: 0.46; --tr: -9px; }
   .streak[data-tier='4'] { --tc: var(--gold); --tc2: var(--accent-2); --ta: 0.56; --tr: -12px; }                     /* legend: gold into violet */
   .streak:active { transform: scale(0.98); }
@@ -55,7 +58,7 @@
   .fl { position: relative; isolation: isolate; display: flex; flex: none; animation: sway 4.6s ease-in-out infinite; transform-origin: 50% 90%; }
   /* the halo: a static gradient, only its scale moves */
   .fl::before { content: ''; position: absolute; inset: var(--tr); z-index: -1; opacity: var(--ta);
-    background: radial-gradient(closest-side, var(--tc), color-mix(in srgb, var(--tc2) 45%, transparent) 60%, transparent);
+    background: radial-gradient(closest-side, var(--tc), var(--tc2) 35%, transparent 75%);
     animation: breathe 6s ease-in-out infinite; }
   .off .fl { animation: none; opacity: 0.45; filter: grayscale(1); }
   .off .fl::before { display: none; }
