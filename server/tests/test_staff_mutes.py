@@ -40,7 +40,7 @@ def test_mutes(env):
     assert not sent("tgc_queue", "tq:1")                                                       # nobody to tell: not the owner either
     # deleting the account takes the mutes along
     assert con.execute("SELECT 1 FROM staff_mutes WHERE user_id = ?", (adm,)).fetchone()
-    assert ("staff_mutes", "user_id") in logic._DEL_GONE
+    assert ("staff_mutes", "user_id") in logic.account._DEL_GONE
 
 
 def test_appeal_text():

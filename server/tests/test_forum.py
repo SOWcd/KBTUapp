@@ -213,7 +213,7 @@ def test_forum_moderator_queue(env):
     # what the privacy policy promises: a request 30 days after it ran out, a ping's record after 30 days
     con.execute("UPDATE asks SET expires_at = ? WHERE id = ?", (t0 - 31 * 86400, held["id"]))
     con.execute("INSERT INTO ask_pings (ask_id, user_id, at) VALUES (?, ?, ?), (?, ?, ?)", (held["id"], mod.id, t0, other["id"], mod.id, t0 - 31 * 86400))
-    logic.forum_sweep(con)
+    logic.forum.forum_sweep(con)
     assert [r[0] for r in con.execute("SELECT id FROM asks")] == [other["id"]] and not con.execute("SELECT 1 FROM ask_pings").fetchone()
 
 

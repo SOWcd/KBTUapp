@@ -34,7 +34,7 @@ def test_manual_sign_in(env, monkeypatch):
     assert c.get("/api/friends/joined", headers=tma(23)).json()["error"] == "need_student"
     who = lambda n: {"oid": f"oid-{n}", "email": f"s_{n}@kbtu.kz", "first": "Maga", "last": f"N{n}", "employeeId": "", "profile": {}}  # noqa: E731
     for tg in (21, 22, 24):
-        logic.ms_remember(con, ids[tg], who(tg))
+        logic.account.ms_remember(con, ids[tg], who(tg))
     me = manual(21).json()                                                                 # the ID held by a typed-in row: it gives way
     assert me["student"]["studentId"] == "24B031234" and me["student"]["ms"] and me["no"] is not None
     assert not con.execute("SELECT 1 FROM students WHERE user_id = ?", (ids[23],)).fetchone()
@@ -56,7 +56,7 @@ def test_manual_sign_in(env, monkeypatch):
         logic.id_clash(con, f"24B00000{i}", ids[24], ids[21])
     assert con.execute("SELECT COUNT(*) FROM bot_outbox WHERE kind = 'sid_check' AND ref LIKE 'sc:24B00000%'").fetchone()[0] == 3
     assert manual(22, {**body, "studentId": "24B031235", "firstName": "x1"}).json()["student"]["firstName"] == "Maga"  # Microsoft's names win
-    logic.delete_me(con, logic.Viewer(ids[24], "user", True))                            # an unfinished sign-in leaves with the account
+    logic.account.delete_me(con, logic.Viewer(ids[24], "user", True))                            # an unfinished sign-in leaves with the account
     assert not con.execute("SELECT 1 FROM meta WHERE key = ?", (f"ms:{ids[24]}",)).fetchone()
     con.execute("INSERT INTO meta (key, value) VALUES ('ms:999', ?), ('ms_used:abc', '1')", (json.dumps({"at": 1}),))
     logic.ms_sweep(con)

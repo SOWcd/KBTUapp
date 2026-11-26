@@ -174,7 +174,6 @@ A role counts once the person has signed in with KBTU or is staff (only students
 the audit log. Prints Telegram names only, never the KBTU profile."""
 from __future__ import annotations
 
-import hashlib
 import hmac
 import json
 import re
@@ -188,7 +187,7 @@ from pathlib import Path
 
 from .logic.account import _DEL_GONE, PLATFORMS, staff_row
 from .logic import credits, guests
-from .logic.core import is_staff, staff_sql
+from .logic.core import TZ, is_staff, staff_sql
 from .logic import RANK, STUDENT_ID, ApiError, Viewer, fix_identity, log_action, _slug_free, create_org, replay_deletions, find_user, notify, now, one, rows, set_role
 
 # names and notes are users' words: no control or bidi characters reach the admin's terminal (escape codes, a title,
@@ -442,7 +441,7 @@ def main(args: list[str]) -> None:
         db.init(cfg.db_path)  # the restored file can predate tables that erasure now covers
     con = db.connect(cfg.db_path)
     from .logic import vol
-    vol.ORG, vol.KEY = cfg.volunteers, hmac.new(cfg.token_key, b"kbtu-vol", hashlib.sha256).digest()  # as app.create: a deletion here hashes the same
+    vol.ORG, vol.KEY = cfg.volunteers, vol.key(cfg)  # as app.create: a deletion here hashes the same
     guests.KEY = hmac.digest(cfg.token_key, b"kbtu-guest-name", "sha256")
     cmd = args[0] if args else ""
     gz = _gz_arg(args)
@@ -473,12 +472,12 @@ def main(args: list[str]) -> None:
             sys.exit("guest CSV must be UTF-8")
         print(f"registered {registered}, pending {pending}, offline {offline}, bad rows {bad}")
     elif cmd == "groups-draw" and len(args) == 4 and all(re.fullmatch(r"[0-9]{1,4}", a) for a in args[1:]):
-        from .logic import evgroups
+        from .logic import tournament
         boss, e = one(con, "SELECT id FROM users WHERE is_founder = 1"), one(con, "SELECT org_id FROM events WHERE id = ?", int(args[1]))
         if not boss or not e:
             sys.exit("needs the creator (`founder`) and an existing event")
         try:
-            got = evgroups.draw(con, Viewer(boss[0], "admin", True, staff_org=e[0]), int(args[1]), {"size": int(args[2]), "advance": int(args[3])})
+            got = tournament.groups_draw(con, Viewer(boss[0], "admin", True, staff_org=e[0]), int(args[1]), {"size": int(args[2]), "advance": int(args[3])})
         except ApiError as exc:
             sys.exit(f"refused: {exc.code}")
         print("groups", " ".join(f"{g['name']}:{len(g['standings'])}" for g in got["groups"]))
@@ -720,7 +719,7 @@ def main(args: list[str]) -> None:
         got = assistant.places(con, Viewer(0, "admin", False))
         for f in got:
             names = " / ".join(x for x in (f["nameEn"], f["nameRu"], f["nameKk"]) if x) + (f" (also: {f['aliases']})" if f["aliases"] else "")
-            checked = time.strftime("%Y-%m-%d", time.gmtime(f["verifiedAt"] + 5 * 3600)) if f["verifiedAt"] else "never"
+            checked = time.strftime("%Y-%m-%d", time.gmtime(f["verifiedAt"] + TZ)) if f["verifiedAt"] else "never"
             print(f"{'STALE' if f['stale'] else '':<5}  {f['code']:<12} {f['kind']:<6} {f['school'] or '':<6} {assistant.where(f):<28} checked {checked:<10}  {names}")
         print(f"{len(got)} facts, {sum(f['stale'] for f in got)} stale")
     elif cmd == "users":
@@ -1083,7 +1082,7 @@ def main(args: list[str]) -> None:
         import calendar
         from .logic.profiles import claim_link
         try:  # the end of that day in Almaty (UTC+5)
-            token = claim_link(con, args[2], calendar.timegm(time.strptime(args[4], "%Y-%m-%d")) + 86400 - 5 * 3600)
+            token = claim_link(con, args[2], calendar.timegm(time.strptime(args[4], "%Y-%m-%d")) + 86400 - TZ)
         except (ValueError, ApiError):
             sys.exit("claim new <init26 | creator_laugh | creator_found> --until YYYY-MM-DD (today or later; the owner set: founder)")
         print(f"https://t.me/{config.load().bot_username}?startapp=gl_{token}")
@@ -1098,7 +1097,7 @@ def main(args: list[str]) -> None:
         org = one(con, "SELECT id FROM orgs WHERE slug = 'dmp'")
         if not boss or not org:
             sys.exit("needs the creator and the dmp office")
-        v, at = Viewer(boss[0], "admin", True, staff_org=org[0]), calendar.timegm(time.strptime(args[3], "%Y-%m-%d %H:%M")) - 5 * 3600
+        v, at = Viewer(boss[0], "admin", True, staff_org=org[0]), calendar.timegm(time.strptime(args[3], "%Y-%m-%d %H:%M")) - TZ
         e = create_event(con, v, org[0], {"title": args[2], "startsAt": at, "endsAt": at + int(args[4]) * 60, "place": args[5],
                                           "description": args[6], "emoji": "megaphone_3d", "color": "#2F5BEA", "visibility": "leaders", "leadersFrom": "head", "seats": None})
         publish_event(con, v, e["id"])
@@ -1139,7 +1138,7 @@ def main(args: list[str]) -> None:
         if not e or not e["place"]:
             sys.exit("no such event, or it has no place")
         boss = one(con, "SELECT user_id FROM org_members WHERE org_id = ? AND role = 'president'", e["org_id"]) or one(con, "SELECT id FROM users WHERE is_founder = 1")
-        start, end, place = _casting_input({"from": now(), "to": calendar.timegm(time.strptime(args[3], "%Y-%m-%d %H:%M")) - 5 * 3600, "place": e["place"]})
+        start, end, place = _casting_input({"from": now(), "to": calendar.timegm(time.strptime(args[3], "%Y-%m-%d %H:%M")) - TZ, "place": e["place"]})
         with db.tx(con):
             if one(con, "SELECT 1 FROM posts WHERE org_id = ? AND hidden_at IS NULL AND casting_cancelled_at IS NULL AND casting_to > ?", e["org_id"], now()):
                 sys.exit("this club already has a casting on")
@@ -1197,7 +1196,7 @@ def main(args: list[str]) -> None:
         print(f"linked {vol.autolink(con, org)}")
     elif cmd == "vol" and args[1:] == ["batches"]:
         for b in rows(con, "SELECT * FROM vol_batches ORDER BY id"):
-            print(b["id"], time.strftime("%Y-%m-%d %H:%M", time.gmtime(b["created_at"] + 5 * 3600)), "undone" if b["undone_at"] else "", b["source"], b["counts"])
+            print(b["id"], time.strftime("%Y-%m-%d %H:%M", time.gmtime(b["created_at"] + TZ)), "undone" if b["undone_at"] else "", b["source"], b["counts"])
     elif cmd == "vol" and len(args) == 3 and args[1] == "undo" and args[2].isdigit():
         from .logic import vol
         cfg = config.load()

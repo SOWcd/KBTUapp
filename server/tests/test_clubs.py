@@ -777,8 +777,8 @@ def test_team_two(env):
     outbox = lambda kind: [r[0] for r in con.execute("SELECT user_id FROM bot_outbox WHERE kind = ?", (kind,))]  # noqa: E731
 
     # roles: a name and colour on a level below the maker's own
-    smm = {"name": "SMM lead", "color": "#FF4FA3", "rights": list(logic.LEVEL_RIGHTS["head"])}
-    vice_rights = list(logic.LEVEL_RIGHTS["vice"])
+    smm = {"name": "SMM lead", "color": "#FF4FA3", "rights": list(logic.core.LEVEL_RIGHTS["head"])}
+    vice_rights = list(logic.core.LEVEL_RIGHTS["vice"])
     assert c.post("/api/orgs/1/roles", headers=tma(22), json=smm).status_code == 403                  # a Head makes none
     assert c.post("/api/orgs/1/roles", headers=tma(21), json={**smm, "rights": vice_rights}).status_code == 403
     for bad in ({"color": "pink"}, {"name": ""}, {"name": "x" * 25}, {"rights": ["president"]}):
@@ -1008,7 +1008,7 @@ def test_club_short_links(env):
     r = c.get("/Chess", follow_redirects=False)
     assert r.status_code == 302 and r.headers["location"].endswith(f"?startapp=cl_{a}")
     assert c.get("/shahmatnyiklub", follow_redirects=False).headers["location"].endswith(f"cl_{a}")  # the old bio still works
-    assert logic.slug_for(con, "Shahmatnyi klub") == "shahmatnyiklub3"                 # and nobody else takes it
+    assert logic.clubs.slug_for(con, "Shahmatnyi klub") == "shahmatnyiklub3"                 # and nobody else takes it
     assert c.get("/nosuchclub", follow_redirects=False).status_code == 200                              # the app itself
     assert c.get("/exit", follow_redirects=False).headers["location"].endswith("startapp=exit")
 
@@ -1049,7 +1049,7 @@ def test_custom_short_links(env):
     assert add("other", {"slug": "join-it", "kind": "club"}, 2).json()["message"] == "taken"   # first come, first served
     assert c.patch("/api/orgs/2", headers=H["other"], json={"slug": "hacknight"}).status_code == 200
     assert add("vice", {"slug": "hacknight", "kind": "club"}).json()["message"] == "taken"      # nor a club's slug
-    assert logic.slug_for(con, "Join") == "join" and not logic._slug_free(con, "join-it", None)
+    assert logic.clubs.slug_for(con, "Join") == "join" and not logic._slug_free(con, "join-it", None)
     assert c.get("/api/orgs/1/links", headers=H["head"]).status_code == 403
     go = lambda p: c.get(p, follow_redirects=False).headers.get("location", "")  # noqa: E731
     assert go("/join-it").endswith("?startapp=cl_1") and go("/HACK-NIGHT").endswith(f"?startapp=ev_{ev['id']}") and go("/it-casting").endswith("?startapp=rc_1")
@@ -1120,7 +1120,7 @@ def test_club_abbr(env):
     logic.fill_abbrs(con)
     logic.fill_abbrs(con)   # every start: nothing left to fill
     assert [r[0] for r in con.execute("SELECT abbr FROM orgs WHERE id IN (1, 2, 3) ORDER BY id")] == ["OMC", "\u041a\u041a\u0422", "Baduk"]
-    assert logic.initials("Studex") == "STUDEX" and logic.initials("The Club") == "CLUB"
+    assert logic.clubs.initials("Studex") == "STUDEX" and logic.clubs.initials("The Club") == "CLUB"
     assert con.execute("SELECT abbr FROM orgs WHERE id = ?", (logic.create_org(con, None, "Robotics and AI Society", "R", "laptop_3d", False),)).fetchone()[0] == "RAS"
 
     patch = lambda uid, body: c.patch("/api/orgs/1", headers=tma(uid), json=body)  # noqa: E731
@@ -1156,7 +1156,7 @@ def test_student_government_mark(env):
     h = tma(31)
     con = db.connect(cfg.db_path)
     big = logic.create_org(con, None, "Chess Club", "CH", "trophy_3d", True, "chess")
-    gov = logic.create_org(con, None, "Student Government", "SG", "trophy_3d", True, logic.GOV_SLUG)
+    gov = logic.create_org(con, None, "Student Government", "SG", "trophy_3d", True, logic.core.GOV_SLUG)
     con.execute("INSERT INTO subscriptions (user_id, org_id, created_at) SELECT id, ?, 0 FROM users", (big,))
     login(c, 32, "o1")
     login(c, 33, "o2")
@@ -1182,7 +1182,7 @@ def test_org_names(env):
                               ("\u041a\u043b\u0443\u0431 \u00ab\u0414\u0435\u0431\u0430\u0442\u044b\u00bb", "\u0414\u0435\u0431\u0430\u0442\u044b", "\u041a\u0414"), ("Club", "Club", "CLUB"),
                               ("3D Printing (KBTU)", "3D Printing", "3P"), ("KBTU", "KBTU", "KBTU"),
                               ("\u041a\u0411\u0422\u0423 \u0414\u0435\u0431\u0430\u0442\u044b", "\u0414\u0435\u0431\u0430\u0442\u044b", "\u0414\u0415\u0411\u0410\u0422\u042b")]:
-        assert (logic.org_name(typed)[0], logic.guess_abbr(typed)) == (name, abbr), typed
+        assert (logic.org_name(typed)[0], logic.clubs.guess_abbr(typed)) == (name, abbr), typed
     _, cfg = env
     c = TestClient(server.create(dataclasses.replace(cfg, admins=frozenset({20}))))
     A = tma(20)

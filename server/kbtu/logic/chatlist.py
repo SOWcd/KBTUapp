@@ -150,8 +150,8 @@ TG_PAGES = {"addstickers", "addemoji", "addlist", "addtheme", "bg", "boost", "co
 ANY_LINK = re.compile(r"(?<![\w.-])(?:https?://)?(?:www\.)?(?:t|telegram)\.me/([^\s?#<>\"'«»()]+)", re.I)
 
 
-def chat_links(msg: dict, at_most: int = 10) -> list[str]:
-    """The chats a message (typed or forwarded) links to, in order, each once: their t.me addresses (chat_link). From
+def chat_links(msg: dict) -> list[str]:
+    """The chats a message (typed or forwarded) links to, in order, each once, ten at most: their t.me addresses (chat_link). From
     its text or caption and their hidden links (text_link); a whole message "@name" too. Not a post (t.me/name/123,
     t.me/c/...), Telegram's own pages, or a bot (its name ends in "bot")."""
     text = str(msg.get("text") or msg.get("caption") or "")
@@ -167,7 +167,7 @@ def chat_links(msg: dict, at_most: int = 10) -> list[str]:
             continue  # a post, a topic, Telegram's own page, a bot
         if (url := chat_link(f"t.me/{parts[0]}")) and url not in out:
             out.append(url)
-    return out[:at_most]
+    return out[:10]
 
 
 def known_chat(con, url: str, tg_chat: int | None = None) -> sqlite3.Row | None:
@@ -204,7 +204,7 @@ def suggest_chat(con, uid: int, url: str, kind: str, tg_chat: int | None, peek: 
                                                                        url, tg_chat, peek.get("photo"), peek.get("members"), about, uid, core.now())).lastrowid
         con.execute("INSERT OR IGNORE INTO chat_asks (chat_id, user_id) VALUES (?, ?)", (cid, uid))
         notify_staff(con, [r[0] for r in rows(con, "SELECT id FROM users WHERE role IN ('admin', 'moderator')")], "chat_suggested",
-                     f"cs:{(core.now() + 5 * 3600) // 86400}")
+                     f"cs:{core.day_of(core.now())}")
     return title
 
 

@@ -165,6 +165,11 @@ def concerned(con, v: Viewer) -> bool:
         UNION ALL SELECT 1 FROM vol_access WHERE org_id = ? AND user_id = ?""", org, v.id, org, v.id)))
 
 
+def key(cfg) -> bytes:
+    """KEY from TOKEN_KEY (app.create and admin set it alike, so a deletion from either hashes the same)."""
+    return hmac.new(cfg.token_key, b"kbtu-vol", hashlib.sha256).digest()
+
+
 def _khash(org: int, key: str) -> str:
     return hmac.new(KEY, f"vol-gone {org} {key}".encode(), hashlib.sha256).hexdigest()
 

@@ -295,10 +295,10 @@ def test_course_raise(env, monkeypatch):
 
 def test_streak_pauses():
     # weeks with a check-in, weeks that had public events, this week
-    assert logic._streak({1, 2, 4}, {1, 2, 4}, 6) == (3, 3)     # 3 and 5 had no events: no break; 6 is still on
-    assert logic._streak({1, 2, 4}, {1, 2, 3, 4}, 6) == (2, 1)  # 3 had events and I missed them
-    assert logic._streak({1, 2}, {1, 2, 5}, 6) == (2, 0)        # 5 went by without me
-    assert logic._streak(set(), {1}, 6) == (0, 0)
+    assert logic.profiles._streak({1, 2, 4}, {1, 2, 4}, 6) == (3, 3)     # 3 and 5 had no events: no break; 6 is still on
+    assert logic.profiles._streak({1, 2, 4}, {1, 2, 3, 4}, 6) == (2, 1)  # 3 had events and I missed them
+    assert logic.profiles._streak({1, 2}, {1, 2, 5}, 6) == (2, 0)        # 5 went by without me
+    assert logic.profiles._streak(set(), {1}, 6) == (0, 0)
 
 
 def test_badge_skin(env):

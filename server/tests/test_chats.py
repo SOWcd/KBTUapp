@@ -222,7 +222,7 @@ def test_suggest_chat(env, monkeypatch):
     adm = c.get("/api/me", headers=tma(31)).json()
     con = db.connect(cfg.db_path)
     con.execute("UPDATE users SET role = 'moderator' WHERE id = ?", (adm["id"],))  # an admin's role comes from the config
-    assert [logic.chat_handle(x) for x in ("@KBTU_news", "https://t.me/kbtu_news/", "t.me/s/Kbtu_news", "https://t.me/+AbCdEf", "hi")] \
+    assert [logic.chatlist.chat_handle(x) for x in ("@KBTU_news", "https://t.me/kbtu_news/", "t.me/s/Kbtu_news", "https://t.me/+AbCdEf", "hi")] \
         == ["kbtu_news", "kbtu_news", "kbtu_news", None, None]
     pages = {"https://t.me/kbtu_news": {"title": "KBTU News", "image": None, "members": 4900, "channel": True},
              "https://t.me/some_person": {"title": "Some Person", "image": None, "members": None}}

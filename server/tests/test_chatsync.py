@@ -174,15 +174,15 @@ def test_departments_a_set(club):
     feed(con, upd(MAIN, 1, "left", "member"))
     feed(con, upd(DEPT, 1, "left", "member", date=logic.core.now() + 2))
     feed(con, upd(DEPT2, 1, "left", "member", date=logic.core.now() + 2))
-    assert logic.depts_of(con, org, uid(con, 1)) == sorted([media, events])
+    assert logic.teams.depts_of(con, org, uid(con, 1)) == sorted([media, events])
     assert con.execute("SELECT sync FROM member_tags WHERE user_id = ? AND tag_id = ?", (uid(con, 1), media)).fetchone()[0] == 1
     feed(con, upd(DEPT2, 1, "member", "left"))
-    assert logic.depts_of(con, org, uid(con, 1)) == [media]  # the other stays
+    assert logic.teams.depts_of(con, org, uid(con, 1)) == [media]  # the other stays
     # a Head whose department came by sync manages nothing by it
     con.execute("UPDATE org_members SET role = 'head' WHERE user_id = ?", (uid(con, 1),))
-    assert logic.depts_of(con, org, uid(con, 1), own=True) == []
+    assert logic.teams.depts_of(con, org, uid(con, 1), own=True) == []
     feed(con, upd(MAIN, 1, "member", "left"))  # out of the club: its departments go too
-    assert role(con, org, 1) is None and logic.depts_of(con, org, uid(con, 1)) == []
+    assert role(con, org, 1) is None and logic.teams.depts_of(con, org, uid(con, 1)) == []
 
 
 def test_manual_removal_respected(club):
@@ -201,7 +201,7 @@ def test_manual_removal_respected(club):
     feed(con, upd(DEPT, 1, "left", "member", date=removed + 2))
     assert c.patch(f"/api/orgs/{org}/members/{uid(con, 1)}", headers=tma(V), json={"dropDept": media}).status_code == 200
     sweep(con, chatsync_start(con, DEPT, True, tg_api({1: "member"})))
-    assert logic.depts_of(con, org, uid(con, 1)) == []
+    assert logic.teams.depts_of(con, org, uid(con, 1)) == []
     # banned: never back, whatever the chat says
     assert c.post(f"/api/orgs/{org}/members/{uid(con, 1)}/remove", headers=tma(P), json={"ban": True}).status_code == 200
     feed(con, upd(MAIN, 1, "left", "member", date=logic.core.now() + 99))
@@ -270,7 +270,7 @@ def test_consent_version_and_policy_page(env):
 
 def test_account_deletion(club):
     c, cfg, con, org = club
-    assert ("chat_sync_todo", "user_id") in logic._DEL_GONE
+    assert ("chat_sync_todo", "user_id") in logic.account._DEL_GONE
     feed(con, upd(MAIN, 1, "left", "member"))
     feed(con, upd(DEPT, 1, "left", "member", date=logic.core.now() + 2))
     con.execute("INSERT INTO chat_sync_todo (chat_id, user_id, op) VALUES (?, ?, 'drop')", (MAIN, uid(con, 1)))
@@ -290,13 +290,13 @@ def test_casting_gives_no_department_powers_by_self_approval(club):
     media, events = tag(con, "Media"), tag(con, "Events")
     head, new = uid(con, 1), uid(con, 2)
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, 'head', 0)", (org, head))
-    logic.set_dept(con, None, org, head, media, True)
+    logic.teams.set_dept(con, None, org, head, media, True)
     rid = con.execute("INSERT INTO rounds (org_id, title, closes_at, status, created_at) VALUES (?, 'r', 0, 'closed', 0)", (org,)).lastrowid
     for u in (head, new):
         con.execute("""INSERT INTO round_apps (round_id, user_id, departments, answers, stage, taken_tag, created_at, updated_at)
             VALUES (?, ?, '[]', '{}', 'yes', ?, 0, 0)""", (rid, u, events))
     casting.send(con, logic.Viewer(head, "user", True), rid)
-    assert logic.depts_of(con, org, head) == [media] and logic.depts_of(con, org, new) == [events]
+    assert logic.teams.depts_of(con, org, head) == [media] and logic.teams.depts_of(con, org, new) == [events]
 
 
 def test_sync_only_department_narrows_a_heads_meetings(club):
@@ -386,9 +386,9 @@ def test_joined_before_consent_caught_up(club):
         chatsync.check_later(con, uid(con, 1))
     while asyncio.run(chatsync.ask_step(con, tg_api({1: "member"}))):
         pass
-    assert role(con, org, 1) == "member" and logic.depts_of(con, org, uid(con, 1)) == sorted([tag(con, "Media"), tag(con, "Events")])
+    assert role(con, org, 1) == "member" and logic.teams.depts_of(con, org, uid(con, 1)) == sorted([tag(con, "Media"), tag(con, "Events")])
     assert not con.execute("SELECT 1 FROM chat_sync_ask").fetchone()
-    assert ("chat_sync_ask", "user_id") in logic._DEL_GONE
+    assert ("chat_sync_ask", "user_id") in logic.account._DEL_GONE
     assert c.post("/api/me/consent", headers=tma(2), json={"version": logic.CONSENT}).status_code == 200  # the app's route queues it
     assert con.execute("SELECT 1 FROM chat_sync_ask WHERE user_id = ?", (uid(con, 2),)).fetchone()
 
@@ -403,7 +403,7 @@ def test_sync_taking_the_last_department_keeps_the_scope_narrow(club):
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, 'head', 0)", (org, uid(con, 1)))
     assert c.patch(f"/api/orgs/{org}/members/{uid(con, 1)}", headers=tma(V), json={"addDept": media}).status_code == 200
     feed(con, upd(DEPT, 1, "member", "left"))
-    assert logic.depts_of(con, org, uid(con, 1)) == []
+    assert logic.teams.depts_of(con, org, uid(con, 1)) == []
     meet = {"title": "All", "place": "305", "startsAt": logic.core.now() + 86400, "emoji": "laptop_3d", "color": "#3B6BFF", "seats": None,
             "visibility": "members", "meeting": True}
     assert c.post(f"/api/orgs/{org}/events", headers=tma(1), json=meet).json().get("message") == "dept"

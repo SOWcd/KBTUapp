@@ -106,7 +106,7 @@ def test_staff_ok_sign_in(env, monkeypatch, capsys):
     admin.main(["unlink", "86"])
     assert not granted(h)
     admin.main(["staff-ok", "86"])
-    logic.delete_me(con, Viewer(h, "user", True))
+    logic.account.delete_me(con, Viewer(h, "user", True))
     con.commit()
     assert not granted(h)
 

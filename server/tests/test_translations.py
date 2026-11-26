@@ -117,7 +117,7 @@ def test_translations(env):
     assert logic.ai_next(con) is None
     full = c.get(f"/api/events/{rid}", headers=tma(20)).json()
     assert full["i18n"]["en"] == {"title": "Hack night", "description": "Code till dawn"}
-    assert logic.cards(con, logic.Viewer(pres["id"], "student", True), [logic.one(con, "SELECT * FROM events WHERE id = ?", rid)])[0]["i18n"] == \
+    assert logic.core.cards(con, logic.Viewer(pres["id"], "student", True), [logic.one(con, "SELECT * FROM events WHERE id = ?", rid)])[0]["i18n"] == \
         {"kk": {"title": "\u0425\u0430\u043a\u0430\u0442\u043e\u043d \u0442\u04af\u043d\u0456"}, "en": {"title": "Hack night"}}
     post = logic.channel_due(con, "bot")[0][1]
     assert "Hack night" not in post and "\u0425\u0430\u043a\u0430\u0442\u043e\u043d" not in post  # no translations: the title as written
@@ -133,7 +133,7 @@ def test_translations(env):
     assert one_val(con, "SELECT i18n FROM events WHERE id = ?", rid) is None and logic.ai_next(con)[2]["title"] == "\u041d\u043e\u0447\u044c \u043a\u043e\u0434\u0430 2"
     for _ in range(3):
         logic.ai_failed(con, "event", rid, "bad")
-    assert logic.ai_next(con) is None and logic.ai_state(con)["error"].endswith("event %d: bad" % rid)
+    assert logic.ai_next(con) is None and logic.queues.ai_state(con)["error"].endswith("event %d: bad" % rid)
 
     c.patch(f"/api/events/{rid}", headers=tma(20), json={**body, "title": "\u0421\u0431\u043e\u0440 \u043a\u043e\u043c\u0430\u043d\u0434\u044b", "visibility": "members"})
     assert logic.ai_next(con) is None                                     # a team-only event never goes out
@@ -146,8 +146,8 @@ def test_translations(env):
     logic.ai_save(con, kind, oid, was, "ru", {"kk": {"description": "\u0411\u0456\u0437 \u0436\u0430\u0441\u0430\u0439\u043c\u044b\u0437."}, "en": {"description": "We build things."}})
     assert json.loads(one_val(con, "SELECT i18n FROM orgs WHERE id = 1")) == {"kk": {"name": "IT \u043a\u043b\u0443\u0431\u044b", "description": "\u0411\u0456\u0437 \u0436\u0430\u0441\u0430\u0439\u043c\u044b\u0437."},
                                                                              "en": {"description": "We build things."}}
-    assert "description" not in logic.org_ref(con, logic.one(con, "SELECT * FROM orgs WHERE id = 1"))["i18n"]["kk"]
-    assert logic.ai_state(con)["today"] == 2
+    assert "description" not in logic.core.org_ref(con, logic.one(con, "SELECT * FROM orgs WHERE id = 1"))["i18n"]["kk"]
+    assert logic.queues.ai_state(con)["today"] == 2
     c.patch("/api/orgs/1", headers=tma(20), json={"description": "\u041d\u043e\u0432\u043e\u0435."})
     assert json.loads(one_val(con, "SELECT i18n FROM orgs WHERE id = 1")) == {"kk": {"name": "IT \u043a\u043b\u0443\u0431\u044b"}} and logic.ai_next(con)[0] == "org"
     con.close()
@@ -200,7 +200,7 @@ def test_role_titles(env):
                     (f"{sec} {i + 10}", "\u0425" if i == 0 else None))
     con.execute("INSERT INTO org_roles (org_id, name, color, level, fixed, created_at) VALUES (1, 'Head', '#3B6BFF', 'head', 1, 0)")
     old = con.execute("SELECT MIN(id) FROM org_roles WHERE src IS NULL").fetchone()[0]
-    logic.roles_backfill(con)
+    logic.teams.roles_backfill(con)
     assert con.execute("SELECT COUNT(*) FROM org_roles WHERE src IS NULL").fetchone()[0] == 3  # 2 next night, the official one never
     assert logic.ai_next(con)[0] == "role"
     o = con.execute("SELECT src, hand, ai_wait, name_kk FROM org_roles WHERE id = ?", (old,)).fetchone()
@@ -213,7 +213,7 @@ def test_role_titles(env):
     con.execute("DELETE FROM org_roles WHERE src IS NULL OR ai_wait = 1")
     kz = "\u0416\u0435\u0442\u0435\u043a\u0448\u0456"
     odd = con.execute("INSERT INTO org_roles (org_id, name, name_kk, color, level, created_at) VALUES (1, ?, 'SMM', '#FF4FA3', 'member', 0)", (kz,)).lastrowid
-    logic.roles_backfill(con)
+    logic.teams.roles_backfill(con)
     assert tuple(con.execute("SELECT src, hand, ai_wait FROM org_roles WHERE id = ?", (odd,)).fetchone()) == ("ru", "kk", 1)
     assert logic.ai_next(con) == ("role", odd, {"title": kz})
     logic.ai_save(con, "role", odd, {"title": kz}, "kk", {"ru": {"title": "x"}, "en": {"title": "Lead"}})
@@ -229,7 +229,7 @@ def test_role_titles(env):
     late = con.execute("INSERT INTO org_roles (org_id, name, color, level, created_at) VALUES (1, 'Late', '#FF4FA3', 'member', 0)").lastrowid
     stale = logic.one(con, "SELECT * FROM org_roles WHERE id = ?", late)
     con.execute("UPDATE org_roles SET src = 'en', hand = 'kk', name_kk = 'K' WHERE id = ?", (late,))
-    logic.normalize_role(con, stale)
+    logic.teams.normalize_role(con, stale)
     assert tuple(con.execute("SELECT src, hand, name_kk FROM org_roles WHERE id = ?", (late,)).fetchone()) == ("en", "kk", "K")
     con.close()
 

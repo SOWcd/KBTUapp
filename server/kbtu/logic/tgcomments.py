@@ -44,7 +44,7 @@ def stranger(con, tg_id: int, body: str, link: str | None, msg_id: int = 0) -> t
     """A stranger's comment (already on its way out): ('warn', raid) the first time, his text kept SAVE_FOR for the
     app; ('ban', raid) the second time, or at once during a raid (the owner hears once an hour); ('again', False) for
     the message he was warned for, handed again after a restart (Telegram's offset lives in memory)."""
-    t = now()
+    t = core.now()
     with tx(con):
         if msg_id and one(con, "SELECT 1 FROM tgc_strangers WHERE tg_id = ? AND warned_msg = ?", tg_id, msg_id):
             return "again", False
@@ -74,7 +74,7 @@ RULES = ("abuse", "fake", "spam", "pdata", "disrupt", "other")  # the clause of 
 def saved(con, v: Viewer) -> bool:
     """A card waits for this Telegram account (GET /api/me says so; the app then asks for it): a stranger's text under
     the hour, or what became of a comment of mine the reports removed, while the bot may not write to me."""
-    return one(con, "SELECT 1 FROM tgc_saved s JOIN users u ON u.tg_id = s.tg_id WHERE u.id = ? AND s.at > ?", v.id, now() - SAVE_FOR) is not None \
+    return one(con, "SELECT 1 FROM tgc_saved s JOIN users u ON u.tg_id = s.tg_id WHERE u.id = ? AND s.at > ?", v.id, core.now() - SAVE_FOR) is not None \
         or one(con, _REMOVED, v.id) is not None
 
 
@@ -85,7 +85,7 @@ def take_saved(con, v: Viewer) -> dict | None:
     the reports removed, once per news (the bot couldn't tell me in DM): "pending" under review, "confirmed" with the
     rule it broke, "restored" (post it again)."""
     tg = one(con, "SELECT tg_id FROM users WHERE id = ?", v.id)[0]
-    r = one(con, "SELECT body, link FROM tgc_saved WHERE tg_id = ? AND at > ?", tg, now() - SAVE_FOR)
+    r = one(con, "SELECT body, link FROM tgc_saved WHERE tg_id = ? AND at > ?", tg, core.now() - SAVE_FOR)
     if r:
         student = commenter(con, tg) == "student"
         if student:
@@ -105,7 +105,7 @@ def take_saved(con, v: Viewer) -> dict | None:
 def report_closed(con, uid: int) -> bool:
     if not one(con, "SELECT 1 FROM tgc_closed WHERE user_id = ?", uid):
         return False
-    notify(con, uid, "tgc_closed", f"rc:{now() // 86400}")
+    notify(con, uid, "tgc_closed", f"rc:{core.now() // 86400}")
     return True
 
 
@@ -126,11 +126,11 @@ def report(con, reporter_tg: int, chat: int, msg_id: int, author_tg: int, body: 
         cid = core.next_id(con, "tgc_comments", floor=1 << 32)
         c = one(con, """INSERT INTO tgc_comments (id, chat_id, msg_id, author_id, author_tg, body, link, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (chat_id, msg_id) DO UPDATE SET body = CASE WHEN status IN ('open', 'queued') THEN excluded.body ELSE body END
-            RETURNING id, status""", cid, chat, msg_id, author["id"] if author else None, author_tg, body[:4096], link, now())
+            RETURNING id, status""", cid, chat, msg_id, author["id"] if author else None, author_tg, body[:4096], link, core.now())
         if c["status"] not in (*LIVE, "kept"):
             return "gone", c["id"]
         new = con.execute("INSERT OR IGNORE INTO tgc_reports (comment_id, reporter_id, body, at) VALUES (?, ?, ?, ?)",
-                          (c["id"], u["id"], body[:4096], now())).rowcount
+                          (c["id"], u["id"], body[:4096], core.now())).rowcount
         notify(con, u["id"], "tgc_report_ok", f"ro:{c['id']}")
     return ("kept" if c["status"] == "kept" else "ok" if new else "dup"), c["id"]
 
@@ -143,13 +143,13 @@ def fresh_look(con, reporter_tg: int) -> bool:
     """May this reporter's new report bring about a fresh AI look? AI_LOOKS a day; past them the report still counts,
     it reuses a look at the same text or waits for a moderator (the AI's cost, without capping /report)."""
     return one(con, """SELECT COUNT(*) FROM tgc_reports r JOIN users u ON u.id = r.reporter_id WHERE u.tg_id = ? AND r.at > ?""",
-               reporter_tg, now() - 86400)[0] <= AI_LOOKS
+               reporter_tg, core.now() - 86400)[0] <= AI_LOOKS
 
 
 def fresh_edit(con, author_tg: int) -> bool:
     """May this edit of a reported comment bring about a fresh AI look? EDIT_LOOKS a day per author (counted in meta,
     gone the next day: sweep); past them a moderator decides, as for a reporter past AI_LOOKS."""
-    key = f"tgcedit:{author_tg}:{now() // 86400}"
+    key = f"tgcedit:{author_tg}:{core.now() // 86400}"
     n = int((one(con, "SELECT value FROM meta WHERE key = ?", key) or ["0"])[0]) + 1
     con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (key, str(n)))
     return n <= EDIT_LOOKS
@@ -166,7 +166,7 @@ def looked(con, cid: int) -> tuple[bool | None, str | None] | None:
 def banned(con, tg_id: int) -> None:
     """Banned in the app, so banned in the group: on record, so the app's unban lifts it here too (unban_due)."""
     con.execute("""INSERT INTO tgc_strangers (tg_id, seen_at, banned_at) VALUES (?, ?, ?)
-        ON CONFLICT (tg_id) DO UPDATE SET seen_at = excluded.seen_at, banned_at = excluded.banned_at""", (tg_id, now(), now()))
+        ON CONFLICT (tg_id) DO UPDATE SET seen_at = excluded.seen_at, banned_at = excluded.banned_at""", (tg_id, core.now(), core.now()))
 
 
 def judge(con, cid: int, verdict: bool | None, rule: str | None = None, *, body: str) -> str | None:
@@ -184,20 +184,20 @@ def judge(con, cid: int, verdict: bool | None, rule: str | None = None, *, body:
         n = one(con, """SELECT COUNT(*) FROM tgc_reports r JOIN students s ON s.user_id = r.reporter_id AND s.manual = 0
             WHERE r.comment_id = ? AND s.verified_at < ? AND (SELECT COUNT(*) FROM tgc_reports w JOIN tgc_comments x ON x.id = w.comment_id
                 WHERE w.reporter_id = r.reporter_id AND x.author_tg = ? AND w.outcome IN ('overturned', 'abuse')) < ?""",
-                cid, now() - REPORTER_AGE, c["author_tg"], PAIR_AT)[0]
+                cid, core.now() - REPORTER_AGE, c["author_tg"], PAIR_AT)[0]
         reports = one(con, "SELECT COUNT(*) FROM tgc_reports WHERE comment_id = ?", cid)[0]
         cleared = one(con, "SELECT 1 FROM meta WHERE key = ?", f"tgcok:{_hash(c['body'])}") is not None
         ai = {True: "ok", False: "flag", None: "none"}[verdict]
         if verdict is False and rule in RULES:  # the AI's guess at the rule, the moderator's default
             con.execute("UPDATE tgc_comments SET clause = ? WHERE id = ?", (rule, cid))
         if verdict is False and n >= DELETE_AT and not cleared:
-            con.execute("UPDATE tgc_comments SET status = 'deleting', review = 1, ai = ?, decided_at = ? WHERE id = ?", (ai, now(), cid))
+            con.execute("UPDATE tgc_comments SET status = 'deleting', review = 1, ai = ?, decided_at = ? WHERE id = ?", (ai, core.now(), cid))
             log_action(con, None, "tg_auto_remove", f"tgc:{cid}")
             return "delete"
         if reports >= ALERT_AT:  # many at once: the moderators now, not in the hour's digest
             notify_staff(con, _mods(con), "tgc_queue", f"ta:{cid}")
         if n >= DELETE_AT or verdict is False or reports >= ALERT_AT:
-            con.execute("UPDATE tgc_comments SET status = 'queued', ai = ?, decided_at = ? WHERE id = ?", (ai, now(), cid))
+            con.execute("UPDATE tgc_comments SET status = 'queued', ai = ?, decided_at = ? WHERE id = ?", (ai, core.now(), cid))
             return "queue"
         con.execute("UPDATE tgc_comments SET ai = ? WHERE id = ?", (ai, cid))
         return "open"
@@ -216,7 +216,7 @@ def edited(con, chat: int, msg_id: int, body: str) -> int | None:
 def to_delete(con) -> list[tuple[int, int, int]]:
     """(id, chat, message) the bot takes out of Telegram now; a deleted account's (tgc_undel) with id 0."""
     return [tuple(r) for r in rows(con, """SELECT id, chat_id, msg_id FROM tgc_comments WHERE status = 'deleting'
-        UNION ALL SELECT 0, chat_id, msg_id FROM tgc_undel WHERE at <= ?""", now())]
+        UNION ALL SELECT 0, chat_id, msg_id FROM tgc_undel WHERE at <= ?""", core.now())]
 
 
 def deleted(con, cid: int, chat: int, msg_id: int) -> None:
@@ -240,8 +240,8 @@ def delete_failed(con, cid: int, chat: int, msg_id: int) -> None:
     """Telegram refused removal: back to the moderators with its thread link."""
     with tx(con):
         # An erased account's cleanup stores only Telegram message IDs. Retry those separately.
-        con.execute("UPDATE tgc_undel SET at = ? WHERE chat_id = ? AND msg_id = ?", (now() + 86400, chat, msg_id))
-        if con.execute("UPDATE tgc_comments SET status = 'queued', review = 0, decided_at = ? WHERE id = ? AND status = 'deleting'", (now(), cid)).rowcount:
+        con.execute("UPDATE tgc_undel SET at = ? WHERE chat_id = ? AND msg_id = ?", (core.now() + 86400, chat, msg_id))
+        if con.execute("UPDATE tgc_comments SET status = 'queued', review = 0, decided_at = ? WHERE id = ? AND status = 'deleting'", (core.now(), cid)).rowcount:
             notify_staff(con, _mods(con), "tgc_delete_failed", f"tf:{cid}")
             log_action(con, None, "tg_delete_failed", f"tgc:{cid}")
 
@@ -275,7 +275,7 @@ def queue_items(con, v: Viewer) -> list[dict]:
         out.append({"target": "tgc", "id": c["id"], "text": c["body"], "where": {"kind": "tgc", "id": c["id"], "link": c["link"]},
                     "count": len(reps), "reasons": {"other": len(reps)}, "ai": c["ai"], "rule": c["clause"], "removed": c["status"] == "deleted",
                     "reporters": [{"right": r["ok"] or 0, "wrong": r["bad"] or 0,
-                                   "days": (now() - r["verified_at"]) // 86400 if r["verified_at"] else None} for r in reps],
+                                   "days": (core.now() - r["verified_at"]) // 86400 if r["verified_at"] else None} for r in reps],
                     "notes": [{"reason": "other", "note": b, "at": a} for b, a in list(seen.items())[:5]], "at": reps[-1]["at"]})
     removed = [x for x in out if x["removed"]]
     return removed + sorted((x for x in out if not x["removed"]), key=lambda x: -x["count"])
@@ -298,7 +298,7 @@ def resolve(con, v: Viewer, cid: int, action: str, rule: object = None) -> None:
             raise ApiError("forbidden")
         if action == "remove":
             con.execute("""UPDATE tgc_comments SET status = CASE WHEN status = 'deleted' THEN 'deleted' ELSE 'deleting' END, review = 0,
-                clause = ?, shown = 0, decided_at = ? WHERE id = ?""", (rule or c["clause"] or "other", now(), cid))
+                clause = ?, shown = 0, decided_at = ? WHERE id = ?""", (rule or c["clause"] or "other", core.now(), cid))
             con.execute("UPDATE tgc_reports SET outcome = 'confirmed' WHERE comment_id = ?", (cid,))
             if c["author_id"] and c["status"] == "deleted":  # only confirmed removals are announced
                 notify(con, c["author_id"], "tgc_confirmed", f"tc:{cid}")
@@ -309,20 +309,20 @@ def resolve(con, v: Viewer, cid: int, action: str, rule: object = None) -> None:
         if c["review"]:
             _restore(con, cid)
         else:
-            con.execute("UPDATE tgc_comments SET status = 'kept', decided_at = ? WHERE id = ?", (now(), cid))
+            con.execute("UPDATE tgc_comments SET status = 'kept', decided_at = ? WHERE id = ?", (core.now(), cid))
             _clear(con, c["body"])
         con.execute("UPDATE tgc_reports SET outcome = ? WHERE comment_id = ?", ("abuse" if action == "abuse" else "overturned", cid))
         log_action(con, v.id, "tg_restore" if c["review"] else "tg_keep", f"tgc:{cid}", '{"abuse": true}' if action == "abuse" else "{}")
         if action == "abuse":
             for (uid,) in rows(con, """SELECT r.reporter_id FROM tgc_reports r WHERE r.comment_id = ? AND (SELECT COUNT(*) FROM tgc_reports w
-                    WHERE w.reporter_id = r.reporter_id AND w.outcome = 'abuse' AND w.at > ?) >= ?""", cid, now() - KEEP, CLOSE_AT):
-                if con.execute("INSERT OR IGNORE INTO tgc_closed (user_id, at, by_id) VALUES (?, ?, ?)", (uid, now(), v.id)).rowcount:
+                    WHERE w.reporter_id = r.reporter_id AND w.outcome = 'abuse' AND w.at > ?) >= ?""", cid, core.now() - KEEP, CLOSE_AT):
+                if con.execute("INSERT OR IGNORE INTO tgc_closed (user_id, at, by_id) VALUES (?, ?, ?)", (uid, core.now(), v.id)).rowcount:
                     log_action(con, v.id, "tg_report_close", f"tgreport:{uid}", f'{{"tgc": {cid}}}')
 
 
 def _clear(con, body: str) -> None:
     """A text a moderator let stand: posted again, reports on it go to the queue, never to an automatic deletion."""
-    con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (f"tgcok:{_hash(body)}", str(now())))
+    con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (f"tgcok:{_hash(body)}", str(core.now())))
 
 
 def _restore(con, cid: int) -> None:
@@ -330,7 +330,7 @@ def _restore(con, cid: int) -> None:
     was a mistake and may post it again (his own words once more, in DM). Nothing in the thread."""
     c = one(con, "SELECT * FROM tgc_comments WHERE id = ?", cid)
     con.execute("UPDATE tgc_comments SET status = ?, review = 0, shown = 0, decided_at = ? WHERE id = ?",
-                ("kept" if c["status"] == "deleting" else "restored", now(), cid))
+                ("kept" if c["status"] == "deleting" else "restored", core.now(), cid))
     _clear(con, c["body"])
     if c["status"] == "deleted" and c["author_id"]:
         notify(con, c["author_id"], "tgc_back", f"tb:{cid}")
@@ -341,7 +341,7 @@ def _good(con, uid: int) -> None:
     credit): the owner is told once, to offer the moderator status himself (a person decides)."""
     c = one(con, """SELECT COUNT(DISTINCT CASE WHEN r.outcome = 'confirmed' THEN x.author_tg END) AS ok,
         SUM(r.outcome IN ('overturned', 'abuse')) AS bad FROM tgc_reports r JOIN tgc_comments x ON x.id = r.comment_id
-        WHERE r.reporter_id = ? AND r.at > ?""", uid, now() - KEEP)
+        WHERE r.reporter_id = ? AND r.at > ?""", uid, core.now() - KEEP)
     if (c["ok"] or 0) >= GOOD_AT and not c["bad"] and one(con, "SELECT 1 FROM users WHERE id = ? AND role = 'user'", uid):
         for (owner,) in rows(con, "SELECT id FROM users WHERE is_founder = 1 AND role = 'admin' AND tg_id > 0"):
             notify(con, owner, "tgc_good", f"gr:{uid}")
@@ -377,7 +377,7 @@ def later_delete(con, msg_id: int, at: int) -> None:
 
 
 def due_deletes(con) -> list[int]:
-    found = [int(r[0][7:]) for r in rows(con, "SELECT key FROM meta WHERE key >= 'tgcdel:' AND key < 'tgcdel;' AND CAST(value AS INTEGER) <= ?", now())]
+    found = [int(r[0][7:]) for r in rows(con, "SELECT key FROM meta WHERE key >= 'tgcdel:' AND key < 'tgcdel;' AND CAST(value AS INTEGER) <= ?", core.now())]
     con.executemany("DELETE FROM meta WHERE key = ?", [(f"tgcdel:{m}",) for m in found])
     return found
 
@@ -404,23 +404,19 @@ def unban_due(con) -> list[int]:
 def sweep(con) -> None:
     """Every 5 minutes (the bot's round): strangers' texts after the hour (every read checks the hour too); the old
     records (the policy's 30 and 90 days) and the moderators' hourly digest when something new waits."""
-    if not _once(con, "tgc_sweep", str(now() // 300)):  # a DELETE takes the write lock even finding nothing
+    if not _once(con, "tgc_sweep", str(core.now() // 300)):  # a DELETE takes the write lock even finding nothing
         return
-    con.execute("DELETE FROM tgc_saved WHERE at <= ?", (now() - SAVE_FOR,))
-    con.execute("DELETE FROM tgc_strangers WHERE seen_at < ?", (now() - STRANGER_KEEP,))
+    con.execute("DELETE FROM tgc_saved WHERE at <= ?", (core.now() - SAVE_FOR,))
+    con.execute("DELETE FROM tgc_strangers WHERE seen_at < ?", (core.now() - STRANGER_KEEP,))
     with tx(con):
-        con.execute("DELETE FROM tgc_comments WHERE created_at < ? AND status != 'deleting'", (now() - KEEP,))
+        con.execute("DELETE FROM tgc_comments WHERE created_at < ? AND status != 'deleting'", (core.now() - KEEP,))
         con.execute("""DELETE FROM bot_outbox WHERE (kind IN ('tgc_removed', 'tgc_confirmed', 'tgc_back', 'tgc_delete_failed') OR kind = 'tgc_report_ok' AND ref LIKE 'ro:%')
             AND CAST(substr(ref, 4) AS INTEGER) NOT IN (SELECT id FROM tgc_comments)""")
     # key ranges, not LIKE: LIKE (case-blind, `_` a wildcard) can't use meta's primary key
-    con.execute("DELETE FROM meta WHERE key >= 'tgcok:' AND key < 'tgcok;' AND CAST(value AS INTEGER) < ?", (now() - KEEP,))
-    con.execute("DELETE FROM meta WHERE key >= 'tgcedit:' AND key < 'tgcedit;' AND key NOT LIKE ?", (f"tgcedit:%:{now() // 86400}",))
-    if one(con, "SELECT 1 FROM tgc_comments WHERE (status = 'queued' OR review = 1) AND decided_at > ?", now() - 3600):
-        notify_staff(con, _mods(con), "tgc_queue", f"tq:{now() // 3600}")
-
-
-def now() -> int:
-    return core.now()
+    con.execute("DELETE FROM meta WHERE key >= 'tgcok:' AND key < 'tgcok;' AND CAST(value AS INTEGER) < ?", (core.now() - KEEP,))
+    con.execute("DELETE FROM meta WHERE key >= 'tgcedit:' AND key < 'tgcedit;' AND key NOT LIKE ?", (f"tgcedit:%:{core.now() // 86400}",))
+    if one(con, "SELECT 1 FROM tgc_comments WHERE (status = 'queued' OR review = 1) AND decided_at > ?", core.now() - 3600):
+        notify_staff(con, _mods(con), "tgc_queue", f"tq:{core.now() // 3600}")
 
 
 # the other domains', imported last: they import this one too

@@ -139,7 +139,7 @@ def listing(con, v: Viewer) -> dict:
     for r in top:
         if r["honored"] is None or not _named(r) or r["is_founder"] or r["mark"] == "idea" or r["tg_id"] in team_items:
             continue
-        day = time.strftime("%Y-%m-%d", time.gmtime(r["honored"] + 5 * 3600))
+        day = time.strftime("%Y-%m-%d", time.gmtime(r["honored"] + core.TZ))
         row = people.setdefault(r["tg_id"], {"person": person_ref(r), "gh": None, "items": [], "at": (day, _tie(r["id"]))})
         row["honor"] = True
     is_idea = bool(idea and idea["id"] == v.id)
@@ -274,7 +274,7 @@ def set_gh(con, cid: int, gh: str) -> None:
 
 
 def ship(con, cid: int, day: str | None = None) -> str:
-    day = day or time.strftime("%Y-%m-%d", time.gmtime(core.now() + 5 * 3600))  # today in Almaty
+    day = day or time.strftime("%Y-%m-%d", time.gmtime(core.now() + core.TZ))  # today in Almaty
     try:
         time.strptime(day, "%Y-%m-%d")
     except ValueError:

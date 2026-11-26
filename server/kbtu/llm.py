@@ -299,9 +299,9 @@ async def munito_account(cfg, http: httpx.AsyncClient) -> dict:
     return out
 
 
-def usage(con, days: int = 7) -> dict[str, dict[str, list[int]]]:
-    """{day: {link: [answers, failures, ms, timed]}} for the last days (old [ok, fail] rows padded with zeros)."""
+def usage(con) -> dict[str, dict[str, list[int]]]:
+    """{day: {link: [answers, failures, ms, timed]}} for the last 7 days (old [ok, fail] rows padded with zeros)."""
     out = {}
-    for k, v in con.execute("SELECT key, value FROM meta WHERE key LIKE 'ai_use:%' ORDER BY key DESC LIMIT ?", (days,)).fetchall():
+    for k, v in con.execute("SELECT key, value FROM meta WHERE key LIKE 'ai_use:%' ORDER BY key DESC LIMIT 7").fetchall():
         out[k.split(":", 1)[1]] = {link: n + [0] * (4 - len(n)) for link, n in json.loads(v).items()}
     return out

@@ -392,8 +392,9 @@ def vectors(r: httpx.Response) -> np.ndarray:
     return v / np.maximum(np.linalg.norm(v, axis=1, keepdims=True), 1e-9)
 
 
-def embed(texts: list[str], account: str, token: str, timeout: float = 60, tries: int = 4) -> np.ndarray:
+def embed(texts: list[str], account: str, token: str) -> np.ndarray:
     """bge-m3's vectors for these texts; a refusal or a network error is tried again after 2, 4, 8 s."""
+    timeout, tries = 60, 4
     for i in range(tries):
         try:
             return vectors(httpx.post(**request(texts, account, token), timeout=timeout))
@@ -404,9 +405,10 @@ def embed(texts: list[str], account: str, token: str, timeout: float = 60, tries
     raise AssertionError  # not reached
 
 
-def embed_all(path: Path, account: str, token: str, batch: int = 20) -> int:
+def embed_all(path: Path, account: str, token: str) -> int:
     """Each chunk still without a vector gets one (its title with its text), in a copy swapped in at the end (a running
     server never reads a half-written file); resumable: what was done stays even when it stops."""
+    batch = 20
     work = path.with_suffix(".embedding")
     src, dst = sqlite3.connect(path), sqlite3.connect(work)
     src.backup(dst)

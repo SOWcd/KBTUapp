@@ -1,6 +1,7 @@
 """The ground every rule stands on: the caller, errors, the clock, queries, rights; and the shapes the app gets (web/src/lib/api/types.ts)."""
 from __future__ import annotations
 
+import calendar
 import json
 import logging
 import re
@@ -128,8 +129,28 @@ def titled(r, key: str = "title") -> dict:
 TITLES = "t.name AS title, t.name_kk AS title_kk, t.name_en AS title_en"
 
 
+TZ = 5 * 3600  # Almaty is UTC+5 all year
+
+
 def now() -> int:
     return int(time.time())
+
+
+def day_of(ts: int) -> int:
+    """The Almaty day number of a moment."""
+    return (ts + TZ) // 86400
+
+
+def day_start(ts: int) -> int:
+    """The moment the Almaty day of `ts` began."""
+    return (ts + TZ) // 86400 * 86400 - TZ
+
+
+def at(date: str, hm: str) -> int:
+    """A form's 'YYYY-MM-DD' and 'HH:MM' in Almaty as a timestamp."""
+    y, m, d = (int(x) for x in date.split("-"))
+    h, mi = (int(x) for x in hm.split(":"))
+    return calendar.timegm((y, m, d, h, mi, 0)) - TZ
 
 
 def one(con: sqlite3.Connection, sql: str, *args) -> sqlite3.Row | None:
@@ -498,7 +519,7 @@ def course_cap(sid: str | None) -> int:
 
 def academic_year(t: int | None = None) -> int:
     """2026 from September 1, 2026 to August 31, 2027 (Almaty)."""
-    d = time.gmtime((now() if t is None else t) + 5 * 3600)
+    d = time.gmtime((now() if t is None else t) + TZ)
     return d.tm_year if d.tm_mon >= 9 else d.tm_year - 1
 
 
@@ -507,7 +528,7 @@ def course_day(con) -> None:
     stored year already past it, the portal's, is never lowered). A course was right for
     course_year, or else for the academic year it was written in (synced_at; an August ID of the coming intake: its own
     year). Moved on, not re-read from the ID: the portal's years stay (a repeater's ID is older than their year)."""
-    if not _once(con, "course_day", str((now() + 5 * 3600) // 86400)):
+    if not _once(con, "course_day", str(day_of(now()))):
         return
     ay = academic_year()
     for r in rows(con, "SELECT user_id, student_id, course, course_year, synced_at FROM students WHERE course IS NOT NULL"):

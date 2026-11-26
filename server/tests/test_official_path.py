@@ -88,7 +88,7 @@ def _all_done(con, ids, oid):
 
 def test_each_level(env):
     c, con, ids, oid = _setup(env)
-    assert _steps(c, oid) == dict.fromkeys(logic.PATH_STEPS, False)
+    assert _steps(c, oid) == dict.fromkeys(logic.clubs.PATH_STEPS, False)
     assert c.get(f"/api/orgs/{oid}/official-path", headers=tma(A)).status_code == 403  # not in the club
     # 1. the profile: a logo, a description of 10+ and 5 members in the app (a banned one doesn't count)
     _profile(con, oid)
@@ -108,7 +108,7 @@ def test_each_level(env):
     assert _steps(c, oid)["round"]
     # any order: a round done counts without the profile
     con.execute("UPDATE orgs SET description = '' WHERE id = ?", (oid,))
-    assert _steps(c, oid) == {**dict.fromkeys(logic.PATH_STEPS, False), "round": True}
+    assert _steps(c, oid) == {**dict.fromkeys(logic.clubs.PATH_STEPS, False), "round": True}
     con.execute("UPDATE orgs SET description = 'We play chess every Friday.' WHERE id = ?", (oid,))
     # a Telegram channel linked (a group isn't one)
     con.execute("INSERT INTO chats (title, kind, url, org_id, created_at) VALUES ('Chat', 'group', 'https://t.me/kbtu_chess_chat', ?, 0)", (oid,))
@@ -179,7 +179,7 @@ def test_each_level(env):
     _steps(c, oid)
     assert con.execute("SELECT COUNT(*) FROM bot_outbox WHERE kind = 'club_top'").fetchone()[0] == 0  # no founder in this test
     con.execute("DELETE FROM org_members WHERE user_id = ?", (ids[E],))
-    assert _steps(c, oid) == dict.fromkeys(logic.PATH_STEPS, True)
+    assert _steps(c, oid) == dict.fromkeys(logic.clubs.PATH_STEPS, True)
     assert con.execute("SELECT top_at FROM orgs WHERE id = ?", (other,)).fetchone()[0] is None
     assert next(o for o in c.get("/api/orgs", headers=tma(A)).json() if o["id"] == oid)["top"] is True
     # an official club sees no path

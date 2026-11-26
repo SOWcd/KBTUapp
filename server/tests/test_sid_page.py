@@ -82,7 +82,7 @@ def test_clash_alert_goes_with_the_account(env):
     bot_dm._page_sid(con, uid, "26B000002")
     alerts = lambda: con.execute("SELECT COUNT(*) FROM bot_outbox WHERE kind = 'sid_page_clash'").fetchone()[0]  # noqa: E731
     assert alerts() == 1
-    logic.delete_me(con, logic.Viewer(uid, "user", True))
+    logic.account.delete_me(con, logic.Viewer(uid, "user", True))
     assert alerts() == 0
 
 

@@ -81,5 +81,5 @@ def test_share_handoff(env, monkeypatch):
     assert con.execute("SELECT COUNT(*) FROM meta WHERE key >= 'share:' AND key < 'share;'").fetchone()[0] == n
 
     # deleting the account takes the held cards with it
-    logic.delete_me(con, logic.Viewer(ali["id"], "user", True))
+    logic.account.delete_me(con, logic.Viewer(ali["id"], "user", True))
     assert not con.execute("SELECT 1 FROM meta WHERE key >= 'share:' AND key < 'share;'").fetchone()

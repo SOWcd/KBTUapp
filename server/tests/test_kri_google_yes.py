@@ -105,7 +105,7 @@ def test_unavailable_never_google_even_with_a_yes(kri, why):
 def test_deleting_the_account_removes_the_yes(kri):
     _row(kri)
     con = db.connect(kri.db)
-    logic.delete_me(con, logic.Viewer(kri.uid, "user", True))
+    logic.account.delete_me(con, logic.Viewer(kri.uid, "user", True))
     assert con.execute("SELECT COUNT(*) FROM kri_consents").fetchone()[0] == 0
     assert ("kri_consents", "user_id") in logic.account._DEL_GONE
 
@@ -153,7 +153,7 @@ def test_a_late_grant_after_deletion_inserts_nothing(kri):
     needs the student row); the API says 404."""
     x, _ = kri()
     con = db.connect(kri.db)
-    logic.delete_me(con, logic.Viewer(kri.uid, "user", True))
+    logic.account.delete_me(con, logic.Viewer(kri.uid, "user", True))
     with pytest.raises(logic.ApiError):
         logic.assistant.google_agree(con, logic.Viewer(kri.uid, "user", True), {"consent": "kri-g1"}, ("1",), lambda: True)
     assert con.execute("SELECT COUNT(*) FROM kri_consents").fetchone()[0] == 0

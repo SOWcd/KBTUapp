@@ -26,9 +26,9 @@ def _overseer_only(con, v: Viewer) -> None:
 
 def _month(back: int = 0) -> tuple[int, int]:
     """A month in Almaty (UTC+5), `back` months before this one: its first second and the next month's."""
-    t = time.gmtime(core.now() + 5 * 3600)
+    t = time.gmtime(core.now() + core.TZ)
     y, m = divmod(t.tm_year * 12 + t.tm_mon - 1 - back, 12)
-    start = lambda y, m: calendar.timegm((y, m + 1, 1, 0, 0, 0)) - 5 * 3600  # noqa: E731  (m is 0-based here)
+    start = lambda y, m: calendar.timegm((y, m + 1, 1, 0, 0, 0)) - core.TZ  # noqa: E731  (m is 0-based here)
     return start(y, m), start(y + (m == 11), (m + 1) % 12)
 
 

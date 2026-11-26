@@ -125,30 +125,3 @@ def _read(data: bytes) -> tuple[dict[str, list[list[str]]], int]:
             grid.append(cells)
         out[sh.get("name") or ""] = grid
     return out, formulas
-
-
-def write(sheets: dict[str, list[list[str]]]) -> bytes:
-    """A minimal .xlsx of inline strings (tests build their synthetic files with it)."""
-    def esc(s: str) -> str:
-        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
-
-    def letters(i: int) -> str:
-        s = ""
-        i += 1
-        while i:
-            i, r = divmod(i - 1, 26)
-            s = chr(65 + r) + s
-        return s
-
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
-        z.writestr("[Content_Types].xml", '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>')
-        z.writestr("xl/workbook.xml", f'<?xml version="1.0"?><workbook xmlns="{_NS["m"]}" xmlns:r="{_NS["r"]}"><sheets>'
-                   + "".join(f'<sheet name="{esc(n)}" sheetId="{i + 1}" r:id="rId{i + 1}"/>' for i, n in enumerate(sheets)) + "</sheets></workbook>")
-        z.writestr("xl/_rels/workbook.xml.rels", f'<?xml version="1.0"?><Relationships xmlns="{_NS["p"]}">'
-                   + "".join(f'<Relationship Id="rId{i + 1}" Type="worksheet" Target="worksheets/sheet{i + 1}.xml"/>' for i in range(len(sheets))) + "</Relationships>")
-        for i, grid in enumerate(sheets.values()):
-            body = "".join(f'<row r="{r + 1}">' + "".join(f'<c r="{letters(j)}{r + 1}" t="inlineStr"><is><t>{esc(v)}</t></is></c>' for j, v in enumerate(row) if v != "")
-                           + "</row>" for r, row in enumerate(grid))
-            z.writestr(f"xl/worksheets/sheet{i + 1}.xml", f'<?xml version="1.0"?><worksheet xmlns="{_NS["m"]}"><sheetData>{body}</sheetData></worksheet>')
-    return buf.getvalue()

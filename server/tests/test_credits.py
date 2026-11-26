@@ -96,7 +96,7 @@ def test_visibility_matrix(env):
     # the deleted account: its line stays, with no Telegram id left on it, and its answers are gone
     assert con.execute("SELECT tg_id FROM credits WHERE en = 'en gone'").fetchone()[0] is None
     assert con.execute("SELECT COUNT(*) FROM credit_consents c JOIN users u ON u.id = c.user_id WHERE u.tg_id < 0").fetchone()[0] == 0
-    assert ("credit_consents", "user_id") in logic._DEL_GONE
+    assert ("credit_consents", "user_id") in logic.account._DEL_GONE
     # a yes again after a withdrawal names them again
     assert _yes(c, tgs["back"]).status_code == 200
     assert _names(_get(c)) == {"Yes T", "Quiet T", "Back T"}
@@ -252,7 +252,7 @@ def test_team_order_and_consent(env, monkeypatch, capsys):
     assert _team(_get(c)) == [("New T", [])]
     delete_now(c, cfg, tma(7000804))
     assert _get(c)["team"] == [] and con.execute("SELECT COUNT(*) FROM credit_team").fetchone()[0] == 2  # bo's and shy's
-    assert ("credit_team", "user_id") in logic._DEL_GONE
+    assert ("credit_team", "user_id") in logic.account._DEL_GONE
 
 
 def test_consent_record(env):

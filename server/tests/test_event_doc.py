@@ -54,7 +54,7 @@ def test_event_doc(env):
     for uid in (63, 64, 61):  # a student, another club's President, a moderator
         assert put(_pdf(1), uid).status_code == 403
     assert put(_png((1, 2, 3))).status_code == 400 and put(b"%PDF-1.7 broken").status_code == 400
-    assert put(_pdf(logic.DOC_PAGES + 1)).json()["message"] == "too_many_pages"
+    assert put(_pdf(logic.organizing.DOC_PAGES + 1)).json()["message"] == "too_many_pages"
     assert put(b"%PDF-" + b"0" * logic.DOC_BYTES).json()["message"] == "too_big"
     assert not con.execute("SELECT 1 FROM event_docs").fetchone()
 
