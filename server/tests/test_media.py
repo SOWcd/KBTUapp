@@ -116,6 +116,8 @@ def test_videos(env, tmp_path):
     assert c.post(f"/api/videos/{vid}/done", headers=P).json()["status"] == "queued"
     start = int(time.time()) + 86400
     body = {"seats": None, "title": "Reel", "place": "305", "startsAt": start, "emoji": "laptop_3d", "color": "#3B6BFF", "videoId": vid}
+    for invalid in (True, str(vid), vid + 0.9, 2**63):
+        assert c.post("/api/orgs/1/events", headers=P, json={**body, "videoId": invalid}).status_code == 400
     ev = c.post("/api/orgs/1/events", headers=P, json=body).json()
     assert ev["video"]["status"] == "queued"                                                           # the editor sees it coming
     c.post(f"/api/events/{ev['id']}/publish", headers=P)

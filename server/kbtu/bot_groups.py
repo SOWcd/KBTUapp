@@ -91,10 +91,11 @@ async def _group(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> None:
     links it to the event and makes its join-request link; a group turned supergroup keeps its event."""
     chat = msg["chat"]
     if new := msg.get("migrate_to_chat_id"):
-        logic.chatlist.seen_moved(con, chat["id"], new)  # first; the links then in the holder's order (chatlist._holder)
-        con.execute("UPDATE chat_sync SET chat_id = ? WHERE chat_id = ?", (new, chat["id"]))
-        con.execute("UPDATE chats SET tg_chat_id = ? WHERE tg_chat_id = ?", (new, chat["id"]))
-        con.execute("UPDATE events SET chat_id = ? WHERE chat_id = ?", (new, chat["id"]))
+        with db.tx(con):
+            logic.chatlist.seen_moved(con, chat["id"], new)  # first; the links then in the holder's order (chatlist._holder)
+            con.execute("UPDATE chat_sync SET chat_id = ? WHERE chat_id = ?", (new, chat["id"]))
+            con.execute("UPDATE chats SET tg_chat_id = ? WHERE tg_chat_id = ?", (new, chat["id"]))
+            con.execute("UPDATE events SET chat_id = ? WHERE chat_id = ?", (new, chat["id"]))
         logic.chatmod.stale()  # its swear filter goes on under the new id at once
         if chat["id"] in _tagged:  # /all's wait goes on under the new id too
             _tagged[new] = _tagged[chat["id"]]

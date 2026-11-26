@@ -237,6 +237,7 @@ def take(con, channel: int, m: Msg, *, album_empty: bool = False) -> int | None:
         tg_fmt = json.dumps({"msg": m.id, **fmt}, ensure_ascii=False) if fmt or m.grouped else None
         if pid is None:
             if not stories_open(con, one(con, "SELECT * FROM orgs WHERE id = ?", oid)):
+                con.execute("UPDATE tg_channels SET last_msg = MAX(last_msg, ?) WHERE id = ?", (m.id, channel))
                 return None  # a student initiative below the Ascent's collab step posts no stories, mirrored ones neither
             pid = con.execute("""INSERT INTO posts (org_id, author_id, audience, title, body, tg_fmt, photo_file_id, comments_on,
                     created_at, tg_channel, tg_url, tg_media) VALUES (?, NULL, 'public', ?, ?, ?, ?, 0, ?, ?, ?, ?)""",

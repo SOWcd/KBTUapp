@@ -7,7 +7,9 @@ Each mark can carry a comment and its authorship and edit dates. People see thei
 profiles, including after leaving the club.
 The feature's own consent (the policy's section 3, CONSENT): one per person, for every club's reports (as appeals':
 one version, one row). Without it a person can neither open a report nor be marked in one; withdrawing it takes their
-marks and their comments from every report and clears their author and editor links (the other text stays)."""
+marks and their comments from every report and clears their author and editor links (the other text stays).
+An older consent keeps its marks hidden until the person accepts the current version; accepting restores access.
+Withdrawal erases them even without accepting the new version."""
 from __future__ import annotations
 
 import json

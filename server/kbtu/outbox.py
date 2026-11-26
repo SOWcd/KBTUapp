@@ -8,6 +8,7 @@ import json
 import logging
 import secrets
 import time
+from collections.abc import Awaitable, Callable
 
 import anyio.to_thread
 import httpx
@@ -576,7 +577,12 @@ def _take(con, m, forum_channel: bool, pushable: bool = False):
         return _mark(con, m, False, "gone")
     if m["kind"] == "fch_comments" and not forum_channel:
         return _mark(con, m, False, "gone")
-    msg = _render(con, m)
+    try:
+        msg = _render(con, m)
+    except Exception as exc:  # one malformed row must not cancel messages already in flight
+        error = f"render: {type(exc).__name__}"
+        log.warning("postman: row %s kind %s %s", m["id"], m["kind"], error)
+        return _mark(con, m, False, error)
     if msg is None:
         _mark(con, m, False, "gone")
     return msg
@@ -655,6 +661,7 @@ async def _batch(cfg: Config, http: httpx.AsyncClient, con, due: list) -> bool:
     the sends started GAP apart overall. False: stop the round (stop(), the network or a 429)."""
     lock, gate, halt = asyncio.Lock(), asyncio.Semaphore(SENDERS), asyncio.Event()
     nxt = time.monotonic()
+    telegram_gate, next_telegram = asyncio.Lock(), nxt
 
     async def turn() -> bool:  # this send's slot, GAP after the one before; False: the round is over
         nonlocal nxt
@@ -663,12 +670,23 @@ async def _batch(cfg: Config, http: httpx.AsyncClient, con, due: list) -> bool:
         await asyncio.sleep(at - time.monotonic())
         return not (halt.is_set() or _stopping())  # between messages: one cut mid-send would go again after its LEASE, maybe twice
 
+    async def send(body: dict) -> httpx.Response | None:
+        # Concurrent push failures can reach Telegram together, after their original slots.
+        nonlocal next_telegram
+        async with telegram_gate:
+            if (delay := next_telegram - time.monotonic()) > 0:
+                await asyncio.sleep(delay)
+            if halt.is_set():
+                return None  # no new Telegram sends after a 429 or transport failure
+            next_telegram = time.monotonic() + GAP
+        return await _send(cfg, http, body)
+
     async def chat(ms: list) -> None:
         async with gate:
             for m in ms:
                 if not await turn():
                     return
-                await _deliver(cfg, http, con, m, lock, halt)
+                await _deliver(cfg, http, con, m, lock, halt, send)
 
     chats: dict[int, list] = {}
     for m in due:
@@ -679,7 +697,8 @@ async def _batch(cfg: Config, http: httpx.AsyncClient, con, due: list) -> bool:
     return not (halt.is_set() or _stopping())
 
 
-async def _deliver(cfg: Config, http: httpx.AsyncClient, con, m, lock: asyncio.Lock, halt: asyncio.Event) -> None:
+async def _deliver(cfg: Config, http: httpx.AsyncClient, con, m, lock: asyncio.Lock, halt: asyncio.Event,
+                   send: Callable[[dict], Awaitable[httpx.Response | None]]) -> None:
     """One queued message taken, sent and marked. The connection serves one thread at a time (lock), the sends run
     side by side; the network down or a 429 sets halt."""
     async with lock:
@@ -689,11 +708,12 @@ async def _deliver(cfg: Config, http: httpx.AsyncClient, con, m, lock: asyncio.L
         if msg is None:
             return
         text, button, start = msg
-        # one channel per person (push.py): the app's push when it took it, else at once Telegram's (if the bot may write).
-        # Under the lock: push.deliver reads and writes the connection between its sends
-        if _pushes(cfg, m, start) and await push.deliver(cfg, con, m["user_id"], text, start, now()):
+    # Only database work takes the shared lock; Apple's network waits must not hold up other chats.
+    if _pushes(cfg, m, start) and await push.deliver(cfg, con, m["user_id"], text, start, now(), lock):
+        async with lock:
             await anyio.to_thread.run_sync(_pushed, con, m)
-            return
+        return
+    async with lock:
         if not m["can_dm"]:
             await anyio.to_thread.run_sync(_mark, con, m, False, "no_dm")
             return
@@ -723,7 +743,9 @@ async def _deliver(cfg: Config, http: httpx.AsyncClient, con, m, lock: asyncio.L
         async with lock:  # it reads the connection first (and returns at once for any other kind)
             r = await tgc.edit_first(cfg, http, con, m, body)  # a comment's verdict: its first message edited
         if r is None:
-            r = await _send(cfg, http, body)
+            r = await send(body)
+        if r is None:
+            return
         answer = r.json()
     except (httpx.HTTPError, ValueError) as exc:
         log.warning("postman: %s", type(exc).__name__)
