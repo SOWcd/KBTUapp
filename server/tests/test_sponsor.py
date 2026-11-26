@@ -88,7 +88,10 @@ def test_only_telegram_confirmation_counts_once_and_upgrades(support):
     assert con.execute("SELECT level FROM achievement_levels WHERE user_id = ? AND code = 'sponsor'", (ids[7],)).fetchone()[0] == 3
     assert {tuple(r) for r in con.execute("SELECT star_rate, consent FROM donations")} == {(donations.STAR_KZT, stars.CONSENT)}
     assert not con.execute("SELECT 1 FROM bot_outbox WHERE user_id = ?", (ids[7],)).fetchone()
-    assert c.get("/api/sponsors", headers=tma(8)).json() == [{"name": "Aidar T", "tier": 3, "amount": 20000}]  # shown by default
+    # the Stars invoice and the Support page say the name stays hidden unless they opt in: not listed until they do
+    assert c.get("/api/sponsors", headers=tma(8)).json() == [] and mine(support)["show"] is False
+    assert consent(support, True).status_code == 200
+    assert c.get("/api/sponsors", headers=tma(8)).json() == [{"name": "Aidar T", "tier": 3}]  # the total waits for its own switch
 
 
 def test_old_invoices_keep_the_old_anonymous_promise(support):
@@ -363,6 +366,25 @@ def test_amount_is_shown_beside_the_name_and_hides_on_its_own(support, monkeypat
     assert consent(support, True).status_code == 200
     assert mine(support)["showAmount"] is False and board(support) == [(2, None), (1, None)]
     assert con.execute("SELECT amount FROM sponsor_consents WHERE user_id = ? ORDER BY id DESC", (ids[8],)).fetchone()[0] is None
+
+
+def test_a_donor_promised_a_separate_yes_stays_hidden(support, monkeypatch):
+    """A receipt sent under dn1 ("publishing my name needs separate consent") never lists its donor by default, nor shows
+    the medal on their profile; their own switch does. A later dn2 receipt accepts the shown-by-default text."""
+    c, _, con, ids, clock = support
+    con.execute("""INSERT INTO donations (user_id, source, status, amount, flags, consent, created_at, reviewed_at)
+        VALUES (?, 'receipt', 'confirmed', 6000, '', 'dn1', ?, ?)""", (ids[7], clock[0], clock[0]))
+    donations.sync_medal(con, ids[7])
+    c.patch("/api/me", headers=tma(7), json={"showcase": ["sponsor"]})
+    assert board(support) == [] and (mine(support)["show"], mine(support)["showAmount"]) == (False, False)
+    assert "sponsor" not in str(c.get(f"/api/users/{ids[7]}", headers=tma(8)).json())
+    assert shown(support, True).status_code == 409  # no figure beside nobody
+    assert consent(support, True).status_code == 200 and board(support) == [(2, None)]
+    assert consent(support, False).status_code == 200 and board(support) == []
+    # a new receipt under the text that says "shown, hide any time", with no answer standing: shown
+    con.execute("DELETE FROM sponsor_consents WHERE user_id = ?", (ids[7],))
+    upload(support, monkeypatch, fields(clock[0]))  # waits for the creator (it would lift the tier): the total stays
+    assert board(support) == [(2, 6000)]
 
 
 def test_consent_does_not_follow_a_telegram_account_change(support, monkeypatch):
