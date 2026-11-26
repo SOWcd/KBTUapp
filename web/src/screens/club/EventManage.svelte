@@ -367,8 +367,9 @@
         {/if}
       {/if}
 
-      <!-- the organizers' own guest list (server organizing.guest_list): whoever has the door, as the door's list -->
-      {#if !staff && !e.guestHost && e.status !== 'cancelled' && (co ? coCrew : may(mem, 'door'))}
+      <!-- the organizers' own guest list (server organizing.guest_list): the host's events right, never a co-host's team
+           (loading one takes every unlisted sign-up's seat) -->
+      {#if !staff && !e.guestHost && e.status !== 'cancelled' && !co && may(mem, 'events')}
         <Group><Row icon={FileSpreadsheet} title={t('mk.guestList')} accessory="chevron" onclick={() => { haptic.tap(); sheets.guestList(id); }} /></Group>
       {/if}
 
