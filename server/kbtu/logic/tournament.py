@@ -276,25 +276,6 @@ def _from_groups(con, eid: int) -> dict:
     return _bracket_board(con, eid)
 
 
-def bracket_swap(con, v: Viewer, eid: int, body: dict) -> dict:
-    a, b = body.get("a"), body.get("b")
-    if not integer(a, 1) or not integer(b, 1) or a == b:
-        raise ApiError("bad_input")
-    with tx(con):
-        evteams.staff_event(con, v, eid)
-        unscored(con, eid)
-        opening = rows(con, "SELECT home, away FROM ev_matches WHERE event_id = ? AND stage = 'upper' AND round = 1", eid)
-        if not opening:
-            raise ApiError("not_found")
-        if not {a, b} <= {team for match in opening for team in match}:
-            raise ApiError("bad_input")
-        con.execute("""UPDATE ev_matches SET home = CASE home WHEN :a THEN :b WHEN :b THEN :a ELSE home END,
-                away = CASE away WHEN :a THEN :b WHEN :b THEN :a ELSE away END
-            WHERE event_id = :eid AND stage = 'upper' AND round = 1 AND (home IN (:a, :b) OR away IN (:a, :b))""",
-                    {"a": a, "b": b, "eid": eid})
-        return _bracket_board(con, eid)
-
-
 def _outcome(match: dict, waiting: bool = False) -> tuple[str, int | None, int | None]:
     home, away = match["home"], match["away"]
     a, b = match["home_score"], match["away_score"]

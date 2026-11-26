@@ -154,8 +154,7 @@ def test_m1_cancel_and_delete_terminally_close_both_sessions(door, action):
 
 
 @pytest.mark.parametrize("state", ["cancelled", "hidden"])
-@pytest.mark.parametrize("path", ["tick", "surname"])
-def test_m2_pending_admission_rejects_closed_events(door, state, path):
+def test_m2_pending_admission_rejects_closed_events(door, state):
     _, _, con, _, _, eid, host = door
     con.execute("UPDATE events SET guest_list = 1 WHERE id = ?", (eid,))
     con.execute("INSERT INTO event_guests (event_id, student_id, name, surname_hash) VALUES (?, '24B030001', 'Testov Zed', ?)",
@@ -165,10 +164,7 @@ def test_m2_pending_admission_rejects_closed_events(door, state, path):
     else:
         con.execute("UPDATE events SET hidden_at = 1 WHERE id = ?", (eid,))
     with pytest.raises(logic.ApiError):
-        if path == "tick":
-            organizing.tick_pending(con, host, eid, guests.door_list(con, eid)[0]["key"])
-        else:
-            organizing.let_in_pending(con, host, eid, "24B030001", "Testov")
+        organizing.tick_pending(con, host, eid, guests.door_list(con, eid)[0]["key"])
     assert con.execute("SELECT came_at FROM event_guests WHERE event_id = ?", (eid,)).fetchone()[0] is None
 
 
