@@ -16,7 +16,7 @@ import { data, eventDetails, keepRef, loadAfisha, loadMyCard, loadResearch, load
 import { asStudent, loadMe, runningCheckin, session } from './session.svelte';
 import { sheets, type InviteLanding, type SheetKey } from './sheets';
 import { loadSubjects } from './subjects.svelte';
-import { open, say, ui } from './ui.svelte';
+import { close, open, overlays, say, ui } from './ui.svelte';
 
 // A sheet in its own chunk needs the network the first time: offline, taps used to queue and all open on top of each
 // other once it was back. Now only the latest tap opens, and after 2 s the app says there's no network.
@@ -30,6 +30,15 @@ export function lazy<P extends Record<string, unknown>>(load: () => Promise<{ de
   if (got) { open(got.default, props, stat, key); return Promise.resolve(); }
   const slow = setTimeout(() => { if (mine === want) say(t('common.offline'), 'pleading_face_3d'); }, 2000);
   return load().then((m) => { clearTimeout(slow); loaded.set(load, m); if (mine === want && !session.revoked && !session.banned) open(m.default, props, stat, key); }).catch(() => { clearTimeout(slow); if (mine === want) say(t('common.offline'), 'pleading_face_3d'); });
+}
+// One full-screen place at a time (owner): the map, the gallery, the feed, all posts. Opening one over another closes
+// that one and whatever was opened over it, so closing the new one lands where the first was opened from.
+const isPlace = (o: (typeof overlays)[number]) => o.stat === 'sheet.map' || o.stat === 'sheet.feed' || o.stat === 'sheet.news' || o.component === loaded.get(chunks.gallery)?.default;
+function onePlace(opened: Promise<void>): Promise<void> {
+  return opened.then(() => {
+    const top = overlays.at(-1), i = overlays.findIndex((o) => o !== top && !o.closing && isPlace(o));
+    if (top && isPlace(top) && i >= 0) for (const o of overlays.slice(i, -1)) if (!o.closing) close(o.id);
+  });
 }
 /** the account closed (banned, revoked): a sheet still loading opens nothing */
 export const dropLazy = () => { want++; };
@@ -131,7 +140,7 @@ export const openers = {
   album: (list: () => AlbumPhoto[], onremove?: (p: AlbumPhoto) => Promise<AlbumPhoto[] | null>, ongone?: (p: AlbumPhoto) => void, add?: () => void, adding?: () => number) =>
     lazy(chunks.album, { list, onremove, ongone, add, adding }),
   /** the Gallery: the albums' strip and every photo by place, one "+" to add mine */
-  gallery: () => lazy(chunks.gallery, {}),
+  gallery: () => onePlace(lazy(chunks.gallery, {})),
   // Studio (lazy chunks): the event editor (new when no id), the door scanner, the attendee list
   editor: (org: Id, id?: Id, staff?: boolean) => lazy(() => import('../../screens/club/EventEditor.svelte'), { org, id, staff }, 'sheet.editor', id == null ? null : `${org}:${id}:${!!staff}`), // staff: Admin's "an event for a club"
   // names: a club's own event, marked by name (no tickets); qr: the door screen, its switch to the event's QR
@@ -235,15 +244,15 @@ export const openers = {
   admin: () => lazy(chunks.admin, {}),
   /** the campus map, on a floor (step 1: the 2023 plans) */
   // exit: "Help me get out" (the startapp=exit link); a place with a room ("Aud. 305", a class's "251"): its floor, the room circled
-  map: (place?: string, exit?: boolean) => { warmMap(); return lazy(() => import('../../screens/map/CampusMap.svelte'), { place, exit }, 'sheet.map'); },
+  map: (place?: string, exit?: boolean) => { warmMap(); return onePlace(lazy(() => import('../../screens/map/CampusMap.svelte'), { place, exit }, 'sheet.map')); },
   /** delete account: what goes, then the KBTU password again */
   deleteAccount: (lost: { awards: number; tickets: number; clubs: number }) => lazy(() => import('../../screens/profile/DeleteSheet.svelte'), { lost }),
   /** news as stories (Afisha's List, a club's page): the clubs' posts full screen, from club `start` */
   stories: (groups: StoryGroup[], start?: number, at?: number) => lazy(chunks.stories, { groups, start, at }),
   /** a tab's other pages (one tab, one screen): every post (Afisha's "All"), the Feed full screen
    *  (Afisha's "In a row"), my friends (Profile's row), my club's team (My club's row) */
-  news: () => lazy(chunks.news, {}, 'sheet.news'),
-  feed: () => lazy(chunks.feed, {}, 'sheet.feed'),
+  news: () => onePlace(lazy(chunks.news, {}, 'sheet.news')),
+  feed: () => onePlace(lazy(chunks.feed, {}, 'sheet.feed')),
   friends: () => lazy(chunks.friends, {}, 'sheet.friends'),
   team: (at?: Id) => lazy(chunks.team, { at }, 'sheet.team'),  // at: that person's actions open (Studio's Roles and admins)
   /** a new post for a club (Head+), from Studio */
