@@ -3046,6 +3046,7 @@ const kk: Dict = {
   'casting.till': '{when} дейін',
   'casting.come': 'Кастингке кел',
   'casting.offline': 'Офлайн кастинг',
+  'casting.inEventTill': 'Офлайн кастинг · {time} дейін',
   'casting.offlineNow': 'Офлайн кастинг жүріп жатыр',
   'casting.time': 'Уақыт',
   'casting.place': 'Орын',
