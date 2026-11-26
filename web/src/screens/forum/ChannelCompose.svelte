@@ -22,6 +22,9 @@
   // asking/hours: an ask for help and how long it stays up (the last pick kept; 3 h first)
   const kept: { body: string; anon: boolean; photos: Pic[]; next: number | null; asking: boolean; hours: number } =
     { body: '', anon: false, photos: [], next: null, asking: false, hours: 3 };
+  // uploads outlive the window: closed mid-upload and opened again, the new window waits on the same one (it used to
+  // wait on nothing: "a photo is still uploading" for good)
+  const going = new Map<string, Promise<Media & { id: Id }>>();
 
   /** The writing window, out of the Forum tab's "Share with KBTU…" pill. Called in a tap: the field takes the focus in
    *  that same tap (flushSync mounts the window first), or iOS won't bring the keyboard up. */
@@ -104,6 +107,7 @@
   const PICS = 4;
   let revealed = $state<number | null>(null), next = $state<number | null>(kept.next), clock = $state(nowTs());
   onMount(() => {
+    for (const p of pics) if (!p.id && !p.failed && p.file) void upload(p.url, p.file);  // left uploading when the window closed
     api.channelRevealed().then((r) => { revealed = r.revealed; next = kept.next = r.next; }).catch(() => {});
     const tick = setInterval(() => { clock = nowTs(); }, 10_000);
     return () => clearInterval(tick);
@@ -129,13 +133,19 @@
   let more = $state(false);  // the anonymity's details, a tap deeper
 
   async function upload(url: string, file: Blob) {
+    const job = going.get(url) ?? shrink(file).then((f) => api.uploadChannelPhoto(f));
+    going.set(url, job);
+    // kept too: this window may be closed by the time it lands
+    const swap = (to: (p: Pic) => Pic) => { const f = (ps: Pic[]) => ps.map((p) => (p.url === url ? to(p) : p)); pics = f(pics); kept.photos = f(kept.photos); };
     try {
-      const got = await api.uploadChannelPhoto(await shrink(file));
-      pics = pics.map((p) => (p.url === url ? got : p));
+      const got = await job;
+      swap(() => got);
       URL.revokeObjectURL(url);
     } catch {
       haptic.error();
-      pics = pics.map((p) => (p.url === url ? { ...p, failed: true } : p));  // stays, with a retry: the text and the others too
+      swap((p) => ({ ...p, failed: true }));  // stays, with a retry: the text and the others too
+    } finally {
+      going.delete(url);
     }
   }
   function pick(ev: Event) {
