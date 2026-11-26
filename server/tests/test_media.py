@@ -507,3 +507,38 @@ def test_userpic_refetch(env, monkeypatch, media_dns):
     con.execute("UPDATE users SET tg_photo_at = ? WHERE tg_id = 10", (t - 4 * 86400,))
     assert asyncio.run(fetch(503, None)) == second and second.is_file()
     con.close()
+
+
+def test_trim_bars(tmp_path):
+    import io
+    from PIL import Image
+
+    def shot(size, photo, at, bar=(0, 0, 0)):
+        """A screenshot as people upload it: a noisy photo pasted on bars, through JPEG."""
+        im = Image.new("RGB", size, bar)
+        n = Image.effect_noise(photo, 30)
+        im.paste(Image.merge("RGB", (n, n, n)), at)
+        buf = io.BytesIO()
+        im.save(buf, "JPEG", quality=85)
+        return buf.getvalue()
+
+    def near(im, w, h):
+        return abs(im.width - w) <= 3 and abs(im.height - h) <= 3
+
+    # a landscape photo in a 3:4 portrait with black bars above and below: the bars go
+    letterbox = shot((1200, 1600), (1200, 900), (0, 350))
+    assert near(media.trim_bars(media.decode(letterbox)), 1200, 900)
+    # white bars at the sides, and only one bar (at the bottom)
+    assert near(media.trim_bars(media.decode(shot((1600, 1200), (1000, 1200), (300, 0), (255, 255, 255)))), 1000, 1200)
+    assert near(media.trim_bars(media.decode(shot((1200, 1600), (1200, 1200), (0, 0)))), 1200, 1200)
+    # bars of 4% or less stay; cutting below half the side doesn't happen; a photo without bars is itself
+    for size, photo, at in (((1200, 1600), (1200, 1480), (0, 60)), ((1200, 1600), (1200, 700), (0, 450))):
+        im = media.decode(shot(size, photo, at))
+        assert media.trim_bars(im) is im
+    plain = Image.merge("RGB", (Image.effect_noise((800, 600), 30),) * 3)
+    assert media.trim_bars(plain) is plain
+    # an album upload is stored trimmed; any other picture as it came
+    saved = media.save(letterbox, tmp_path, trim=True)
+    assert abs(saved["width"] - 1200) <= 3 and abs(saved["height"] - 900) <= 3
+    raw = media.save(letterbox, tmp_path)
+    assert (raw["width"], raw["height"]) == (1200, 1600)
