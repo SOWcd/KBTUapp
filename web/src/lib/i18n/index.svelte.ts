@@ -3,7 +3,7 @@
 // no reload (a reload looks like a crash).
 import ru, { type Dict, type Key, type Plural } from './ru';
 import { tg } from '../tg';
-import { campusPlace, type CampusPlace } from '../campusPlace';
+import { campusPlace, EVENT_BUILDINGS, type CampusPlace } from '../campusPlace';
 
 export type Lang = 'ru' | 'kk' | 'en';
 export const LANGS: Lang[] = ['ru', 'kk', 'en'];
@@ -74,6 +74,8 @@ export function fmtNum(n: number): string {
 /** Tenge amount: «3 000 ₸». */
 /** An event's place as shown; empty while it's to be confirmed (a room asked of DMP by memo) */
 export function placeOf(place: string, online?: boolean): string {
+  if (place === EVENT_BUILDINGS.bldg2) return t('ed.placeBuilding2');
+  if (place === EVENT_BUILDINGS.dorm) return t('ed.placeDorm');
   const campus = campusPlace(place);
   return campus ? campusPlaceLabel(campus) : place || t(online ? 'event.online' : 'event.placeTba');
 }

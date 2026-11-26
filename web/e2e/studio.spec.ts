@@ -66,6 +66,12 @@ async function place(ph: Phone, where: string) {
   const p = ph.page;
   await p.getByRole('button', { name: tr('ex.placeAdd') }).click();
   const field = p.getByRole('textbox', { name: tr('ed.place'), exact: true });
+  await expect(p.getByRole('button', { name: tr('ed.placeMain'), exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await p.getByRole('button', { name: tr('ed.placeElsewhere'), exact: true }).click();
+  await expect(p.getByRole('textbox', { name: tr('ed.placeLink'), exact: true })).toBeVisible();
+  await ph.look('elsewhere place fields');
+  await p.getByRole('button', { name: tr('ed.placeMain'), exact: true }).click();
+  await ph.look('main building place fields');
   await field.fill(where);
   const done = doneOf(p);
   // the keyboard's own Done first (the field blurred), as on a phone: with the field focused the sheet rides up over

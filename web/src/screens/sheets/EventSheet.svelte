@@ -10,9 +10,7 @@
   import Lock from '@lucide/svelte/icons/lock';
   import HandHeart from '@lucide/svelte/icons/hand-heart';
   import MessagesSquare from '@lucide/svelte/icons/messages-square';
-  import MapPin from '@lucide/svelte/icons/map-pin';
   import VideoCall from '@lucide/svelte/icons/video';
-  import MapIcon from '@lucide/svelte/icons/map';
   import ExternalLink from '@lucide/svelte/icons/external-link';
   import Ticket from '@lucide/svelte/icons/ticket';
   import UserCheck from '@lucide/svelte/icons/user-check';
@@ -54,9 +52,7 @@
   import Emoji from '../../ui/Emoji.svelte';
   import OrgTag from '../../ui/OrgTag.svelte';
   import OrgLogo from '../../ui/OrgLogo.svelte';
-  import TwoGisMark from '../../ui/TwoGisMark.svelte';
-  import { floorOf, addressGis } from '../../lib/map';
-  import { campusPlace } from '../../lib/campusPlace';
+  import EventPlaceRow from '../../ui/EventPlaceRow.svelte';
   import { meetHost } from '../../lib/meet';
   import { eventLinks } from '../../lib/eventLinks';
   import { api, ApiErr, translated, type AlbumPhoto, type EventCard, type DoorAudience, type EventFull, type EventUpdate, type Id, type MeetingAnswer } from '../../lib/api';
@@ -94,8 +90,6 @@
 
   // the shared card is the live source (it changes when you tap Going); details add the text
   const e = $derived(preview ?? eventById(id) ?? detail);
-  const gis = $derived(e && !e.online ? addressGis(e.place, e.placeUrl) : null); // online: never a route
-  const placeFloor = $derived(floorOf(e?.place));
   // an online event's link: the row says where it leads, its host always in sight (a typed link may be any https host)
   // the link only from the event just loaded (a card the app holds may carry one since changed or removed); https, a
   // plain host, never Telegram's own (it would open inside Telegram as a deep link): the server's rule, checked again
@@ -491,20 +485,13 @@
     {/if}
 
     <!-- where: a row that ends honestly (a chevron opens the map, an arrow leaves for 2GIS) -->
-    {#if gis || !e.santa || e.place || e.online}
+    {#if !e.santa || e.place || e.placeUrl || e.online}
     <Group>
       {#if e.online}
         <!-- online: the meeting opens outside, the server checked the link (core.online_url) -->
         {#if meetUrl && meetAt}<Row icon={VideoCall} title={placeOf(e.place, true)} subtitle={meetAt} accessory="external" onclick={() => openLink(meetUrl, true)} />
         {:else}<Row icon={VideoCall} title={placeOf(e.place, true)} />{/if}
-      {:else if gis}
-        <!-- off campus: the place opens in 2GIS, so it wears their mark; a typed street address without a link searches
-             2GIS for it (owner, Nov 15: a street address stayed plain text) -->
-        <Row title={e.place} subtitle={t('event.route')} accessory="external" onclick={() => openLink(gis)}>{#snippet lead()}<span class="gis"><TwoGisMark size={22} /></span>{/snippet}</Row>
-      {:else if placeFloor != null}
-        <Row icon={MapIcon} title={placeOf(e.place)} whole value={campusPlace(e.place) ? undefined : (placeFloor ? t('route.floor', { n: placeFloor }) : t('route.basement'))}
-          accessory="chevron" onclick={() => sheets.map(e.place)} />
-      {:else if !e.santa || e.place}<Row icon={MapPin} title={placeOf(e.place, e.online)} /><!-- a Santa game started from Studio has no room yet: no "place to be confirmed" -->
+      {:else}<EventPlaceRow {e} />
       {/if}
     </Group>
     {/if}
@@ -749,7 +736,6 @@
   .warn { color: var(--warning-text); font-weight: 600; }
   .desc { color: var(--text); white-space: pre-line; padding: 0 var(--s-1); }
   .rep { display: flex; justify-content: center; --plain-ink: var(--text-3); }
-  .gis { width: 24px; display: grid; place-items: center; }
 
   /* the head: the title is the largest thing on the page, the time right under it in the text's own colour, then one
      grey line (price, who goes, what is left) over a hairline bar */

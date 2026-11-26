@@ -15,7 +15,8 @@
   import { touchAhead } from '../../lib/touch';
   import { coverFor, focusPos } from '../../lib/photo';
   import { sheets, takeIris, irisOpen } from '../../lib/state/sheets';
-  import { t, fmtNum, money, friendsLine, placeOf } from '../../lib/i18n/index.svelte';
+  import { t, fmtNum, money, friendsLine } from '../../lib/i18n/index.svelte';
+  import EventPlace from '../../ui/EventPlace.svelte';
   import { whenLine } from '../../lib/time';
   import { openLink, shareCard, haptic, inTelegram } from '../../lib/tg';
   import X from '@lucide/svelte/icons/x';
@@ -122,7 +123,7 @@
         {/if}
         <span class="org"><OrgTag org={e.org} co={e.coHost} />{#if e.guestHost}<Tag tone="onphoto">{t('event.partner')}</Tag>{/if}</span>
         <h2 class="title">{e.title}</h2>
-        <p class="meta">{whenLine(e.startsAt)} · {placeOf(e.place, e.online)}{e.price ? ' · ' + money(e.price) : ''}</p>
+        <p class="meta">{whenLine(e.startsAt)} · <EventPlace {e} />{e.price ? ' · ' + money(e.price) : ''}</p>
         {#if e.friends.length}
           <p class="fr">
             <span class="stack">{#each e.friends.slice(0, 3) as f (f.id)}<Avatar person={f} size={22} tappable={false} />{/each}</span>

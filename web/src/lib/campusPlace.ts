@@ -6,6 +6,9 @@ export const CAMPUS_SIDES = {
   kazybek: { min: 1, max: 4, aliases: /^(?:\u043a\u0431|kb|[kq]azybek(?: bi)?|[\u043a\u049b]\u0430\u0437\u044b\u0431\u0435\u043a(?: \u0431\u0438)?)$/i },
 } as const;
 
+/** The editor's two fixed places, stored by these names (i18n's placeOf shows them in the reader's language). */
+export const EVENT_BUILDINGS = { bldg2: 'Building 2', dorm: 'Dormitory' } as const;
+
 export type CampusSide = keyof typeof CAMPUS_SIDES;
 export const campusSides = Object.keys(CAMPUS_SIDES) as CampusSide[];
 export type CampusPlace = { side: CampusSide; floor: number; room: string };

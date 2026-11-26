@@ -2,15 +2,12 @@
 // The Russian inputs are written as escapes (\u0410\u0443\u0434 = "Aud", \u0410\u0431\u0430\u044f = "Abaya") to keep the source English.
 import { describe, expect, it } from 'vitest';
 import ru from './i18n/ru';
-import { DORM_2GIS, addressGis, atBldg2, awayOf, bldg2Room, floorOf, nearRooms, roomOf, spotOf, adminZone, locate, tapAt } from './map';
+import { BLDG2_2GIS, DORM_2GIS, eventPlace, atBldg2, awayOf, bldg2Room, floorOf, nearRooms, roomOf, spotOf, adminZone, locate, tapAt } from './map';
 import uniqRooms from '../assets/map/uniq-rooms.json';
 
 it('opens campus sides and known rooms on the selected floor', () => {
   const rooms = uniqRooms as unknown as Record<string, number[][]>[];
-  const stale = 'https://2gis.kz/almaty/geo/1';
   const kazybek = '\u049a\u0430\u0437\u044b\u0431\u0435\u043a \u0431\u0438 1';
-  expect(addressGis(kazybek, stale)).toBeNull();
-  expect(addressGis('Kazybek 12', stale)).toBe(stale);
   expect(floorOf(kazybek)).toBe(1);
   expect(floorOf(' KB  0 ')).toBeNull();
   expect(floorOf(' PF  0 ')).toBe(0);
@@ -92,19 +89,24 @@ it('the institutes off campus', () => {
   expect(awayOf(b)).toMatchObject({ k: 'ihn', room: '314' });
   expect(roomOf(b)).toBe(null);
   expect(floorOf(b)).toBe(null);
-  expect(addressGis('\u0418\u0422\u041a\u0438\u042d \u043a\u0430\u0431 \u21161(\u0443\u043b\u0438\u0446\u0430 \u041a\u0443\u043d\u0430\u0435\u0432\u0430 142)')).toBe(null);
   expect(awayOf('314')).toBe(null);
 });
 
-it('a typed street address becomes a 2GIS search; rooms and campus places never do', () => {
-  expect(addressGis('KBTU Jastar City (Dormitory), Islam Karimova, 70k4')).toBe(DORM_2GIS);
-  expect(addressGis('\u041e\u0431\u0449\u0430\u0433\u0430')).toBe(DORM_2GIS);
-  expect(addressGis('Gogolya 157')).toBe('https://2gis.kz/almaty/search/Gogolya%20157');
-  expect(addressGis('\u0443\u043b. \u0410\u0431\u0430\u044f 150, 2 \u044d\u0442\u0430\u0436')).toContain('2gis.kz/almaty/search/');
-  for (const p of ['305', 'Room 412', '251a', '\u0430\u0443\u0434. 305', 'Hall', '']) expect(addressGis(p)).toBeNull();
-  // a named venue off campus is searched too (owner, Nov 20); the campus's own places never are
-  expect(addressGis("Mad Murphy's Irish Pub")).toBe("https://2gis.kz/almaty/search/Mad%20Murphy's%20Irish%20Pub");
-  for (const p of ['\u0410\u043a\u0442\u043e\u0432\u044b\u0439 \u0437\u0430\u043b', 'KBTU Atrium', '\u041a\u0411\u0422\u0423, \u0445\u043e\u043b\u043b', 'Main Hall', '\u0423\u0442\u043e\u0447\u043d\u044f\u0435\u0442\u0441\u044f']) expect(addressGis(p)).toBeNull();
+it('opens the campus map or 2GIS for every event venue', () => {
+  const link = 'https://2gis.kz/almaty/geo/1';
+  expect(eventPlace('Room 412', link)).toEqual({ kind: 'room', floor: 4 });
+  expect(eventPlace('45')).toEqual({ kind: 'room', floor: 0 });
+  expect(eventPlace(' KB  1 ', link)).toEqual({ kind: 'room', floor: 1 });
+  expect(eventPlace('312 (\u041a\u043e\u0440\u043f\u0443\u0441 \u21162)', link)).toEqual({ kind: 'bldg2', url: BLDG2_2GIS });
+  expect(eventPlace('\u041e\u0431\u0449\u0430\u0433\u0430', link)).toEqual({ kind: 'dorm', url: DORM_2GIS });
+  expect(eventPlace('  PlatformA  ')).toEqual({ kind: 'elsewhere', url: 'https://2gis.kz/almaty/search/PlatformA' });
+  expect(eventPlace('\u0410\u0431\u0430\u044f 157/3 #2')?.url).toBe('https://2gis.kz/almaty/search/%D0%90%D0%B1%D0%B0%D1%8F%20157%2F3%20%232');
+  expect(eventPlace('PlatformA', 'https://2gis.kz.example.org/path')?.url).toBe('https://2gis.kz/almaty/search/PlatformA');
+  expect(eventPlace('PlatformA', link)?.url).toBe(link);
+  expect(eventPlace('', link)?.url).toBe(link);
+  expect(eventPlace(' ')).toBeNull();
+  // the campus's own places the map can't point at stay plain, never a search across Almaty
+  for (const p of ['Atrium', '\u0410\u043a\u0442\u043e\u0432\u044b\u0439 \u0437\u0430\u043b', 'KBTU Atrium', 'Main Hall']) expect(eventPlace(p)).toEqual({ kind: 'campus' });
 });
 
 // Our map's SVGs are made from a floor's geometry and one style (tools/map): an edit to either without building
