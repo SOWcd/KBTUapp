@@ -2,7 +2,6 @@
   // A day is one card, one timeline: events and the optional timetable's classes by start time.
   import Clock from '@lucide/svelte/icons/clock';
   import MapPin from '@lucide/svelte/icons/map-pin';
-  import VideoCall from '@lucide/svelte/icons/video';
   import MapIcon from '@lucide/svelte/icons/map';
   import Play from '@lucide/svelte/icons/play';
   import QrCode from '@lucide/svelte/icons/qr-code';
@@ -27,7 +26,8 @@
   import { session, kriCorner } from '../../lib/state/session.svelte';
   import { sheets, openMapFrom, irisFrom } from '../../lib/state/sheets';
   import { ui, toTickets, goTab } from '../../lib/state/ui.svelte';
-  import { t, tn, money, placeOf, subjectOf, friendsLine } from '../../lib/i18n/index.svelte';
+  import { t, tn, money, subjectOf, friendsLine } from '../../lib/i18n/index.svelte';
+  import EventPlace from '../../ui/EventPlace.svelte';
   import { lessonKind } from '../../lib/i18n/subjects';
   import { dayNo, nowTs, parts, weekday, weekdayShort, dayMonth, dayMonthShort, OFFSET, soon, time, dateInput, multiDay, daySpan } from '../../lib/time';
   import { byStart, classesOn, classesLeft } from '../../lib/classes';
@@ -357,14 +357,14 @@
       <div class="slab glass glass-sheet">
         <span class="hero-tx">
           <b class="clamp-2">{e.title}</b>
-          <span class="where"><span class="ellipsis"><b class="num">{multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : time(e.startsAt)}</b> · {soon(e.startsAt, now)} · {placeOf(e.place, e.online)}</span><span class="by ellipsis">&nbsp;· {shortOf(e.org)}{#if e.coHost} × {shortOf(e.coHost)}{/if}</span></span>
+          <span class="where"><span class="ellipsis"><b class="num">{multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : time(e.startsAt)}</b> · {soon(e.startsAt, now)}</span><span class="by ellipsis">&nbsp;· {shortOf(e.org)}{#if e.coHost} × {shortOf(e.coHost)}{/if}</span></span>
+          <span class="hero-place"><EventPlace {e} pin /></span>
           {#if !mine}<span class="hsub">{@render status(e)}</span>{/if}
         </span>
-        <!-- under the thumb, at the slab's end: my ticket and the way there, two round icons; not mine yet: one tap signs up (a paid one opens its payment) -->
+        <!-- under the thumb, at the slab's end: my ticket, or one tap to sign up -->
         {#if mine}
           <span class="acts">
             <IconButton kind="tinted" size="s" icon={QrCode} label={t('event.ticket')} onclick={() => sheets.ticket(e.id)} />
-            {#if floorOf(e.place) != null}<IconButton kind="secondary" size="s" icon={MapPin} label={t('route.open')} onclick={() => sheets.map(e.place)} />{/if}
           </span>
         {:else if e.my?.status === 'hold'}
           <span class="acts"><Button kind="tinted" size="s" onclick={() => sheets.pay(e.id)}>{t('event.pay', { price: money(e.price ?? 0) })}</Button></span>
@@ -463,7 +463,7 @@
           <button class="hit" onpointerdown={(ev) => touchAhead(ev, () => prefetchEvent(e.id))} onclick={(ev) => sheets.event(e.id, ev.currentTarget.parentElement?.querySelector('.poster'))} aria-label={e.title}></button>
           <Poster item={e} size={48} radius={12} />
           <span class="tx"><b class="ellipsis title">{e.title}</b>
-            <span class="meta num ellipsis">{soon(e.startsAt, now)} · {multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : time(e.startsAt)} · {placeOf(e.place, e.online)}</span></span>
+            <span class="meta num"><span>{soon(e.startsAt, now)} · {multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : time(e.startsAt)}</span><EventPlace {e} pin /></span></span>
           <span class="end"><Button kind="secondary" size="s" onclick={() => sheets.ticket(e.id)}>{#snippet icon()}<QrCode size={15} />{/snippet}{t('event.ticket')}</Button></span>
         </div>
       {/each}
@@ -523,7 +523,7 @@
                 <b class="clamp-2 title">{e.title}</b>
                 <span class="meta num">
                   <span><Clock size={14} strokeWidth={1.75} />{multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : time(e.startsAt)}</span>
-                  <span class="ellipsis">{#if e.online}<VideoCall size={14} strokeWidth={1.75} />{:else}<MapPin size={14} strokeWidth={1.75} />{/if}{placeOf(e.place, e.online)}</span>
+                  <EventPlace {e} pin />
                   {#if e.price}<span>{money(e.price)}</span>{/if}
                 </span>
                 {#if cast}<button class="cast ellipsis" onclick={() => openCast(cast)}>{castLine(cast, e)}</button>{/if}
@@ -682,11 +682,10 @@
      (nowrap) is the card's min-content, and a flex card grows to it: the root of the card past the right edge (PRs 324, 328) */
   .hero-tx { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; contain: inline-size; }
   .hero-tx > b { font: 700 var(--fs-t3)/1.18 var(--font-display); letter-spacing: -0.02em; }
-  /* one line: when (in the title's ink), how soon, where, whose. The club goes first and whole: it wraps to a hidden
-     second line (shrunk, it left a lone "·" behind), then the room gives way with an ellipsis */
-  .where { display: flex; flex-wrap: wrap; max-height: 1.3em; overflow: hidden; min-width: 0; font: 500 var(--fs-sub)/1.3 var(--font-text); color: var(--text-2); }
+  .where, .hero-place { min-width: 0; font: 500 var(--fs-sub)/1.3 var(--font-text); color: var(--text-2); }
+  .where { display: flex; flex-wrap: wrap; max-height: 1.3em; overflow: hidden; }
   .where > span { flex: 0 1 auto; min-width: 0; }
-  @media (max-width: 340px) { .where > .by { display: none; } } /* 320: the line is the time and the room alone */
+  @media (max-width: 340px) { .where > .by { display: none; } }
   .where b { font-weight: 600; color: var(--text); }
   .hsub { display: flex; align-items: center; gap: 8px; min-width: 0; margin-top: 5px; }
   .hsub:not(:has(*)) { display: none; } /* nothing to say: no line (:empty misses it, the snippet leaves white space) */
@@ -746,7 +745,6 @@
   .cancelled .title { text-decoration: line-through; color: var(--text-2); }
   .meta { display: flex; flex-wrap: wrap; gap: 2px 12px; min-width: 0; font: 500 var(--fs-sub)/1.3 var(--font-text); color: var(--text-2); }
   .meta span { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
-  .meta.ellipsis { display: block; }
   .meta :global(svg) { flex: none; color: var(--text-3); }
   /* the club's casting inside its event: one line in the casting's green, its own tap over the row's (taller to the
      finger than it looks: padding, given back by the margin; the ellipsis clips, so no pseudo hit area) */

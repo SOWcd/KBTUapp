@@ -83,7 +83,7 @@
   import LookPick from '../../ui/LookPick.svelte';
   import Button from '../../ui/Button.svelte';
   import { may, RANK } from '../../lib/perms';
-  import { addressGis } from '../../lib/map';
+  import { eventPlace, EVENT_BUILDINGS, GIS_LINK, isGisLink } from '../../lib/map';
   import { marked, missing, nextQuestion, updateDraft, type ChatFill, type Differs, type Marked } from '../../lib/eventFill';
   import { ONLINE_LINK } from '../../lib/meet';
 
@@ -112,8 +112,6 @@
   // eleven around the colour wheel and night (10-12, no RGB picker); BRAND when nothing else is set
   const COLORS = ['#F2542D', '#FF8A3D', '#FFB23D', '#7CB518', '#2FBF71', '#14B8A6', '#18A9DB', '#3B6BFF', '#7C4DFF', '#AF52DE', '#FF4FA3', '#2A2340'];
   const BRAND = '#3B6BFF';
-  // a 2GIS link anywhere in what was pasted into the place field (2GIS → Share → Copy gives name, address, link)
-  const GIS_LINK = /https:\/\/(?:[a-z]+\.)?2gis\.(?:kz|ru|com)\/\S*/i; // the server accepts the same hosts
   const FORMATS = ['feed', 'card', 'list'] as const;
   const FMT_NAME = { feed: 'ed.inFeed', card: 'ed.inCard', list: 'ed.inList' } as const;
 
@@ -141,6 +139,23 @@
     paid: false, price: '', payTo: myKaspiName, payPhone: '', freeFirst: '', deadline: false, late: false, regDate: '', regTime: '18:00',
     tba: false, memo: { room: { any: true, projector: false, capacity: null } } as MemoAsks };
   let f = $state({ ...blank });
+  const PLACE_OPTIONS = { room: 'ed.placeMain', bldg2: 'ed.placeBuilding2', dorm: 'ed.placeDorm', elsewhere: 'ed.placeElsewhere' } as const;
+  type PlaceChoice = keyof typeof PLACE_OPTIONS;
+  const placeOptions = Object.keys(PLACE_OPTIONS) as PlaceChoice[];
+  let placeChoice = $state<PlaceChoice | null>(null);
+  const placeKind = $derived(eventPlace(f.place, f.placeUrl)?.kind);
+  const placeType = $derived(placeChoice ?? placeKind ?? 'room');
+  const placeText = $derived(f.place.trim() || (f.placeUrl.trim() ? '2GIS' : ''));
+  const badGis = $derived(!!f.placeUrl.trim() && (f.placeUrl.trim().length > 500 || !isGisLink(f.placeUrl.trim())));
+
+  function choosePlace(choice: PlaceChoice) {
+    haptic.select();
+    if (choice === placeType) return;
+    if (choice === 'bldg2' || choice === 'dorm') f.place = EVENT_BUILDINGS[choice];
+    else if (placeType === 'bldg2' || placeType === 'dorm') f.place = '';
+    placeChoice = choice;
+    f.placeUrl = '';
+  }
   // a new event named like a casting, by someone who may open the club's recruitment: say that's the better tool
   // ponytail: a word list; the AI event check can tell it from the description once it runs on every event
   const castLike = $derived(!id && /\u043a\u0430\u0441\u0442\u0438\u043d\u0433|\u043d\u0430\u0431\u043e\u0440 \u0432|recruit|casting|\u0456\u0440\u0456\u043a\u0442\u0435\u0443/i.test(f.title)
@@ -212,7 +227,9 @@
     title: f.title.trim() ? '' : t('ed.need'),
     when: !Number.isFinite(startTs) || f.endDate && endTs == null ? t('ed.need') : !live && startTs <= nowTs() ? t('ed.past') : endTs != null && endTs <= startTs ? t('ed.endEarly') : '',
     // online: no place; a link, if any, https with a plain host (the server checks it again)
-    place: f.online ? (!f.onlineUrl.trim() || ONLINE_LINK.test(f.onlineUrl.trim()) ? '' : t('ed.onlineBad')) : f.tba || f.place.trim() ? '' : t('ed.need'),
+    place: f.online ? (!f.onlineUrl.trim() || ONLINE_LINK.test(f.onlineUrl.trim()) ? '' : t('ed.onlineBad')) : f.tba ? ''
+      : badGis ? t('ed.placeLinkBad') : placeText.length > 80 ? t('ed.placeTooLong') : !placeKind ? t('ed.need')
+      : placeType !== placeKind ? t(placeType === 'room' ? 'ed.placeRoomBad' : 'ed.placeElsewhereBad') : '',
     // capacity is a choice, never a default (the server refuses an event without it): a number, or no limit
     seats: isMeeting || f.partner || capSeats ? '' : !f.cap ? t('ed.capNeed') : f.cap === 'unlimited' || Number.isInteger(+f.seats) && +f.seats > 0 ? '' : t('ed.need'),
     price: !f.paid || (Number.isInteger(+f.price) && +f.price >= 1 && +f.price <= 1_000_000) ? '' : t('ed.need'),
@@ -227,18 +244,13 @@
     reg: regMode !== 'date' ? '' : !Number.isFinite(regTs) ? t('ed.need') : Number.isFinite(startTs) && regTs > startTs ? t('ed.regLate') : f.santa && !saved?.santa?.drawn && Number.isFinite(startTs) && regTs > startTs - 3600 ? t('santa.badUntil') : !live && regTs <= nowTs() ? t('ed.past') : '',
   });
 
-  // An example instead of "e.g. …": a real place from the events in the app, another one each time
-  // the editor opens; built-in ones until the app has events of its own.
-  const realPlaces = [...new Set(data.events.filter((e) => !e.placeUrl && e.place && e.place.length <= 30).map((e) => e.place))];
-  const example = { place: realPlaces.length ? any(realPlaces) : phrase('ed.placePh') };
-
-  // the place field takes a room or a pasted 2GIS share: the link becomes the route, the text stays the name
+  // A pasted 2GIS share can include both the address and the URL.
   const hasCampusPlace = $derived(!!campusPlace(f.place));
   $effect(() => {
     const m = f.place.match(GIS_LINK);
     if (m) f.place = f.place.replace(m[0], ' ').replace(/\s+/g, ' ').replace(/^[\s,.·-]+|[\s,.·-]+$/g, '').slice(0, 80);
     if (m || hasCampusPlace) f.placeUrl = hasCampusPlace ? '' : (m?.[0] ?? '');
-    if (m && !hasCampusPlace) { haptic.ok(); say(phrase('say.gisLink'), 'globe_with_meridians_3d'); }
+    if (m && !hasCampusPlace) { placeChoice = 'elsewhere'; haptic.ok(); say(phrase('say.gisLink'), 'globe_with_meridians_3d'); }
   });
   // the Kaspi number written as the phone shows it, as it's typed
   $effect(() => { const v = fmtPhone(f.payPhone); if (v !== f.payPhone) f.payPhone = v; });
@@ -398,7 +410,7 @@
           form: (e.form ?? []).map((q) => ({ label: q.label, kind: q.kind, opts: (q.options ?? []).join(', '), required: q.required })),
           paid: !!e.price, price: e.price ? String(e.price) : '', payTo: e.payToName ?? myKaspiName, payPhone: fmtPhone(e.payPhone ?? ''), freeFirst: e.freeFirst ? String(e.freeFirst) : '',
           deadline: !!e.regUntil, late: !!e.lateSignup, regDate: e.regUntil ? dateInput(e.regUntil) : '', regTime: e.regUntil ? time(e.regUntil) : '18:00',
-          tba: !e.place && !e.online, memo: e.memo ?? {} };
+          tba: !e.place && !e.placeUrl && !e.online, memo: e.memo ?? {} };
         if (campusPlace(e.place)) { f.place = placeOf(e.place); f.placeUrl = ''; }
         // a cover's tint used to be the photo's average colour: such an event starts on the photo's dot
         if (e.cover && (photoColor = await coverColor(e.cover)) && e.tint !== shade(f.color)) f.color = photoColor;
@@ -440,9 +452,9 @@
   const input = (): EventInput => ({
     ...(ownTr && ownTr.title === f.title.trim() && ownTr.description === f.description.trim() ? { tr: ownTr.tr } : {}),
     ...(schoolOnly === undefined ? {} : { schoolOnly }),
-    title: f.title.trim(), description: f.description.trim(), startsAt: startTs, endsAt: endTs, place: f.tba || f.online ? '' : f.place.trim(),
+    title: f.title.trim(), description: f.description.trim(), startsAt: startTs, endsAt: endTs, place: f.tba || f.online ? '' : placeText,
     ...(asStaff && !lent || member ? {} : { memo: full && Object.keys(f.memo).length ? $state.snapshot(f.memo) : null }), // a memo to DMP: a recognised club's organizers' alone, never the admin's from Admin
-    placeUrl: f.online ? null : f.placeUrl.trim() || null, online: f.online, onlineUrl: f.online ? f.onlineUrl.trim() || null : null, emoji: f.emoji, color: f.color, seats: !isMeeting ? seatsN : null, regUntil: regMode === 'date' && !isMeeting && Number.isFinite(regTs) ? regTs : null, lateSignup: regMode === 'end',
+    placeUrl: f.online || f.tba ? null : f.placeUrl.trim() || null, online: f.online, onlineUrl: f.online ? f.onlineUrl.trim() || null : null, emoji: f.emoji, color: f.color, seats: !isMeeting ? seatsN : null, regUntil: regMode === 'date' && !isMeeting && Number.isFinite(regTs) ? regTs : null, lateSignup: regMode === 'end',
     firstYear: f.firstYear && !isMeeting, needsPhone: f.needsPhone && !isMeeting, santa: f.santa && !isMeeting && !f.partner, volunteers: f.vol && !isMeeting && +f.volN > 0 ? Math.min(500, Math.round(+f.volN)) : null, volunteersSenior: f.volSenior, ...(f.teams && teamsOk ? { teamMin: +f.teamMin, teamMax: +f.teamMax, teamCap: +f.teamCap > 0 ? +f.teamCap : null } : { teamMin: null, teamMax: null, teamCap: null }), visibility: f.partner ? 'public' : f.leaders ? 'leaders' : f.teamOnly ? 'members' : 'public', ...(f.leaders ? { leadersFrom: f.leadersFrom } : {}),
     meeting: isMeeting && !f.partner, meetingTag: f.teamOnly && !f.partner && !f.forBoard ? f.meetingTag : null, forBoard: f.teamOnly && !f.partner && f.forBoard,
     form: isMeeting || f.partner ? [] : f.form.map((q) => ({ label: q.label.trim(), kind: q.kind, ...(q.kind === 'choice' ? { options: opts(q.opts) } : {}), required: q.required })),
@@ -464,7 +476,7 @@
     const o = mine?.org ?? club!;
     const i = input();
     sheets.preview({
-      ...i, santa: i.santa ? { drawn: false } : undefined, teamMin: i.teamMin ?? undefined, teamMax: i.teamMax ?? undefined, volunteers: i.volunteers ? { need: i.volunteers, senior: !!i.volunteersSenior, taken: 0, mine: null } : null, id: saved?.id ?? 0, guestList: !!saved?.guestList, ageCheck: !!saved?.ageCheck, org: o, status: 'published', title: i.title || '—', place: i.online ? '' : i.place || '—', online: !!i.online, onlineUrl: i.onlineUrl ?? null,
+      ...i, santa: i.santa ? { drawn: false } : undefined, teamMin: i.teamMin ?? undefined, teamMax: i.teamMax ?? undefined, volunteers: i.volunteers ? { need: i.volunteers, senior: !!i.volunteersSenior, taken: 0, mine: null } : null, id: saved?.id ?? 0, guestList: !!saved?.guestList, ageCheck: !!saved?.ageCheck, org: o, status: 'published', title: i.title || '—', online: !!i.online, onlineUrl: i.onlineUrl ?? null,
       startsAt: Number.isFinite(startTs) ? startTs : nowTs() + 7 * 86400, seats: Number.isInteger(i.seats) && i.seats! > 0 ? i.seats : null,
       cover: art.cover, slides: f.cover ? f.slides : [], tint: shade(f.color), taken: saved?.taken ?? 0, freeLeft: i.freeFirst ?? null, externalUrl: i.externalUrl !== undefined ? i.externalUrl : saved?.externalUrl ?? null, guestHost: i.guestHost !== undefined ? i.guestHost : saved?.guestHost ?? null, price: i.price === undefined ? saved?.price ?? null : i.price,
       coHost: saved?.coHost ?? null, my: null, saved: false, friends: [], payToName: null, payPhone: null, badgeName: saved?.badgeName ?? null, photos: [], canAddPhotos: false, comments: 0, commentsOn: true, discuss: null, updates: [], myRating: null, canRate: false, ratings: null,
@@ -538,7 +550,7 @@
   }
 
   // ---- the text that must not be lost: the name, the description, the place and what was being written to KRI
-  const textFields = ['title', 'description', 'place'] as const;
+  const textFields = ['title', 'description', 'place', 'placeUrl'] as const;
   type TextField = typeof textFields[number];
   type TextDraft = { fields: Partial<Record<TextField, { before: string; value: string }>>; announcement: string };
   const textDraft = useDraft<TextDraft>(untrack(() => `kb-editor-${org}-${id ?? 'new'}`));
@@ -547,7 +559,7 @@
 
   function restoreText() {
     if (!mayKeepText) return;
-    textBase = { title: f.title, description: f.description, place: f.place };
+    textBase = { title: f.title, description: f.description, place: f.place, placeUrl: f.placeUrl };
     const draft = textDraft.read();
     if (!draft) return;
     for (const k of textFields) {
@@ -585,7 +597,7 @@
       ...d, title: str(f.title), description: str(f.description),
       date: f.date && (f.date !== blank.date || d.date) ? f.date : undefined, start: f.start && (f.start !== blank.start || d.start) ? f.start : undefined,
       end: f.end || undefined, endDate: f.endDate || undefined,
-      place: f.online || f.tba ? undefined : str(f.place), placeUrl: f.online || f.tba ? undefined : str(f.placeUrl),
+      place: f.online || f.tba ? undefined : str(placeText), placeUrl: f.online || f.tba ? undefined : str(f.placeUrl),
       online: f.online || undefined, onlineUrl: f.online ? str(f.onlineUrl) : undefined, tba: f.tba && !f.online || undefined,
       paid: f.paid ? true : d.paid === false ? false : undefined, price: f.paid && +f.price > 0 ? +f.price : undefined,
       payTo: f.paid ? str(f.payTo) : undefined, payPhone: f.paid ? str(f.payPhone) : undefined, freeFirst: f.paid && +f.freeFirst > 0 ? +f.freeFirst : undefined,
@@ -607,7 +619,7 @@
     date: (v) => { f.date = v ?? ''; }, start: (v) => { f.start = v ?? ''; }, end: (v) => { f.end = v ?? ''; }, endDate: (v) => { f.endDate = v ?? ''; },
     emoji: (v) => { if (v && !f.cover) f.emoji = v; }, color: (v) => { if (v && !f.cover) f.color = v; }, // the look it picked, where no photo is
     tr: () => {}, // after the name and the description are in (tell)
-    place: (v) => { f.place = v ?? ''; if (v) f.tba = false; }, placeUrl: (v) => { f.placeUrl = v ?? ''; },
+    place: (v) => { placeChoice = null; f.place = v ?? ''; if (v) f.tba = false; }, placeUrl: (v) => { f.placeUrl = v ?? ''; },
     online: (v) => { f.online = !!v; if (v) f.tba = false; }, onlineUrl: (v) => { f.onlineUrl = v ?? ''; }, tba: (v) => { f.tba = !!v; },
     paid: (v) => { f.paid = canPrice && !!v; }, price: (v) => { if (canPrice) f.price = num(v); },
     payTo: (v) => { if (canPrice && v) f.payTo = v; }, payPhone: (v) => { if (canPrice && v) f.payPhone = v; }, freeFirst: (v) => { if (canPrice) f.freeFirst = num(v); },
@@ -676,12 +688,13 @@
   let fromAi = $state(false);
   let fromChat = $state(false);
   const unmark = (k: Marked) => { if (ai.includes(k)) ai = ai.filter((x) => x !== k); };
-  const lacks = $derived(fromAi ? missing({ ...f, tba: f.tba || f.online }) : []);
+  const lacks = $derived(fromAi ? missing({ ...f, place: placeText, tba: f.tba || f.online }) : []);
   let differs = $state<{ k: Differs | 'onlineUrl'; v: string }[]>([]);
   const DIFF_KEY = { date: 'ed.date', start: 'ed.start', end: 'ed.end', place: 'ed.place', price: 'ex.price', onlineUrl: 'ed.onlineLink' } as const;
   function take(d: { k: Differs | 'onlineUrl'; v: string }) {
     haptic.tap();
-    if (d.k === 'price') { f.paid = true; f.price = d.v; } else if (d.k === 'onlineUrl') { f.online = true; f.onlineUrl = d.v; f.tba = false; } else f[d.k] = d.v;
+    if (d.k === 'price') { f.paid = true; f.price = d.v; } else if (d.k === 'onlineUrl') { f.online = true; f.onlineUrl = d.v; f.tba = false; }
+    else if (d.k === 'place') { PUT.place(d.v); f.placeUrl = ''; } else f[d.k] = d.v;
     differs = differs.filter((x) => x !== d);
   }
   // a missing one tapped: its picker, or the place's page
@@ -761,7 +774,7 @@
   const priceBad = $derived(!!(err.price || err.payTo || err.payPhone || err.freeFirst));
   const vidN = $derived([vids.tall, vids.wide].filter(Boolean).length);
   // the card's own line, as the Afisha writes it: the day, the time, the place
-  const placeVal = $derived(f.online ? t('event.online') : f.tba ? t('ed.tba') : f.place.trim());
+  const placeVal = $derived(f.online ? t('event.online') : f.tba ? t('ed.tba') : placeText && placeOf(placeText));
   const cardLine = $derived([dayText, f.start, placeVal].filter(Boolean).join(' · '));
   // what "More" holds that is switched on, so the row says it without being opened
   const moreBad = $derived(!!(err.form || err.teams || err.teamCap || err.host || err.link));
@@ -788,7 +801,7 @@
   const SERIOUS = new Set(['priceText', 'priceDiff', 'past', 'seatsText']);
   const clubNames = $derived.by(() => { const o = club ?? mine?.org; return o ? [o.name, o.abbr ?? '', o.short] : []; });
   const found = $derived(check({ title: f.title, description: f.description, paid: f.paid, price: f.paid ? +f.price || null : null, tba: f.tba || f.online,
-    place: f.place, startTs, now: nowTs(), live, cover: !!f.cover, seats: own, club: clubNames })
+    place: placeText, startTs, now: nowTs(), live, cover: !!f.cover, seats: own, club: clubNames })
     .filter((x) => (tickets || !['priceText', 'priceDiff', 'seatsText'].includes(x.id)) && (!live || SERIOUS.has(x.id))));
   const fixable = (x: Finding) => canPrice || !['priceText', 'priceDiff'].includes(x.id);
   const n = (x: number) => x.toLocaleString('ru-RU');
@@ -1023,27 +1036,23 @@
             <Field label={t('ed.onlineLink')} bind:value={f.onlineUrl} type="url" inputmode="url" maxlength={500} placeholder="https://meet.google.com/…" enterkeyhint="done"
               error={tried && err.place ? err.place : undefined} />
           {:else}
-          {#if !f.tba}
-            <CampusPlacePicker bind:value={f.place} placeholder={f.placeUrl ? t('ed.placeName') : example.place}
-              error={tried && err.place ? err.place : undefined} />
-          {/if}
-          {#if !f.placeUrl && !f.tba && addressGis(f.place)}
-            <!-- a typed street address: its 2GIS route offered, seen before saving -->
-            <span class="lone"><Button kind="tinted" size="s" onclick={() => { f.placeUrl = addressGis(f.place)!; haptic.ok(); say(phrase('say.gisLink'), 'globe_with_meridians_3d'); }}>
-              {#snippet icon()}<MapPin size={16} />{/snippet}{t('ed.gisOffer')}</Button></span>
-          {/if}
-          {#if f.placeUrl && !f.tba}
-            <Group>
-              <Row icon={MapPin} title={t('event.route')}>
-                {#snippet trailing()}<IconButton icon={X} kind="plain" size="s" label={t('ed.photoRemove')} onclick={() => (f.placeUrl = '')} />{/snippet}
-              </Row>
-            </Group>
-          {:else if !f.tba}
-            <p class="hint">{t('ed.placeHint')}</p>
-          {/if}
-          {#if !f.placeUrl}
+            {#if !f.tba}
+              <Group>
+                {#each placeOptions as choice (choice)}
+                  <Row title={t(PLACE_OPTIONS[choice])} accessory="check" checked={placeType === choice} onclick={() => choosePlace(choice)} />
+                {/each}
+              </Group>
+              {#if placeType === 'room'}
+                <CampusPlacePicker bind:value={() => f.place, (v) => { placeChoice = 'room'; f.place = v; }} placeholder="305"
+                  error={tried && err.place ? err.place : undefined} />
+              {:else if placeType === 'elsewhere'}
+                <Field label={t('ed.placeAddress')} bind:value={() => f.place, (v) => { placeChoice = 'elsewhere'; f.place = v; }} maxlength={600} enterkeyhint="done"
+                  error={tried && err.place && !badGis ? err.place : undefined} />
+                <Field label={t('ed.placeLink')} bind:value={f.placeUrl} type="url" inputmode="url" maxlength={500} placeholder="https://2gis.kz/…" enterkeyhint="done"
+                  error={tried && badGis ? err.place : undefined} />
+              {/if}
+            {/if}
             <Group footnote={t('ed.tbaHint')}><Row title={t('ed.tba')} accessory="switch" checked={f.tba} onchange={(v) => (f.tba = v)} /></Group>
-          {/if}
           {/if}
 
         {:else if pick === 'about'}

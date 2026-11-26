@@ -117,6 +117,34 @@ test('a free event: sign up, the ticket, cancel, sign up again', async ({ open }
   await ali.look('afisha with the ticket');
 });
 
+test('a plain venue name opens 2GIS from the hero, timeline, event and ticket', async ({ open }) => {
+  const dana = await open('Dana');
+  await dana.api('/api/events/2/place', { place: 'PlatformA' });
+  const ali = await open('Ali');
+  const { page } = ali;
+  const links = () => page.evaluate(() => (window as unknown as { __tg: { events: [string, { url?: string }][] } }).__tg.events
+    .filter(([type, data]) => type === 'web_app_open_link' && data.url === 'https://2gis.kz/almaty/search/PlatformA').length);
+  const where = { name: 'PlatformA', exact: true };
+  const hero = page.locator('.hero').filter({ has: page.getByRole('button', { name: FREE, exact: true }) });
+  const row = page.locator('.day .row').filter({ has: page.getByRole('button', { name: FREE, exact: true }) });
+  const ev = sheet(page, 'cap.event');
+
+  await hero.getByRole('button', where).click();
+  await expect.poll(links).toBe(1);
+  await ali.look('venue in the hero');
+  await row.getByRole('button', where).click();
+  await expect.poll(links).toBe(2);
+  await ali.look('venue in the timeline');
+  await row.getByRole('button', { name: FREE, exact: true }).click();
+  await ev.getByRole('button', { name: new RegExp('^PlatformA') }).click();
+  await expect.poll(links).toBe(3);
+  await ali.look('venue in the event');
+  await ev.getByRole('button', { name: s('event.ticket'), exact: true }).click();
+  await page.getByRole('group', { name: s('event.ticket') }).getByRole('button', where).click();
+  await expect.poll(links).toBe(4);
+  await ali.look('venue in the ticket');
+});
+
 test('a paid event leads to its Kaspi receipt step', async ({ open }) => {
   const ali = await open('Ali');
   await asideLaunchMoments(ali.page);

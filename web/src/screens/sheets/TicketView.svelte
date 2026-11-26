@@ -15,7 +15,8 @@
   import WifiOff from '@lucide/svelte/icons/wifi-off';
   import { session } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
-  import { t, money, placeOf } from '../../lib/i18n/index.svelte';
+  import { t, money } from '../../lib/i18n/index.svelte';
+  import EventPlace from '../../ui/EventPlace.svelte';
   import Ticket from '@lucide/svelte/icons/ticket';
   import { relDay, time, nowTs, multiDay, daySpan } from '../../lib/time';
   import { haptic, openLink } from '../../lib/tg';
@@ -117,7 +118,7 @@
           </button>
           <div class="facts">
             <div><i>{t('tk.when')}</i><b>{multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : relDay(e.startsAt) + ', ' + time(e.startsAt)}</b></div>
-            <div><i>{t('tk.where')}</i><b>{placeOf(e.place, e.online)}{e.price ? ' · ' + (e.my?.free ? t('event.freeMine') : money(e.price)) : ''}</b></div>
+            <div><i>{t('tk.where')}</i><b><EventPlace {e} />{e.price ? ' · ' + (e.my?.free ? t('event.freeMine') : money(e.price)) : ''}</b></div>
           </div>
         </div>
         <!-- the stub: torn off at the notches along the perforation -->

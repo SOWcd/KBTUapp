@@ -2,12 +2,13 @@
   // Event card #1 (of three): the list row used in List, club pages and tickets. A saved event has a small bookmark in
   // its corner (Profile's "Coming up" is gone, the saved ones are found on the list).
   import type { EventCard } from '../lib/api';
-  import { t, tn, money, friendsLine, placeOf } from '../lib/i18n/index.svelte';
+  import { t, tn, money, friendsLine } from '../lib/i18n/index.svelte';
   import { time, nowTs, multiDay, daySpan } from '../lib/time';
   import { sheets } from '../lib/state/sheets';
   import { prefetchEvent } from '../lib/state/data.svelte';
   import { touchAhead } from '../lib/touch';
   import Poster from './Poster.svelte';
+  import EventPlace from './EventPlace.svelte';
   import Tag from './Tag.svelte';
   import Avatar from './Avatar.svelte';
   import UsersRound from '@lucide/svelte/icons/users-round';
@@ -26,12 +27,13 @@
 </script>
 
 <!-- a club's own event looks like one: an outline instead of a card, the team mark by its time -->
-<button class="row press" class:cancelled class:inner={inner(e)} onpointerdown={(ev) => { if (!onopen) touchAhead(ev, () => prefetchEvent(e.id)); }} onclick={(ev) => (onopen ? onopen() : sheets.event(e.id, ev.currentTarget.querySelector('.poster')))}>
+<div class="row press" class:cancelled class:inner={inner(e)}>
+  <button class="hit" type="button" aria-label={e.title} onpointerdown={(ev) => { if (!onopen) touchAhead(ev, () => prefetchEvent(e.id)); }} onclick={(ev) => (onopen ? onopen() : sheets.event(e.id, ev.currentTarget.parentElement?.querySelector('.poster')))}></button>
   <Poster item={e} size={68} radius={16} dim={cancelled} />
   {#if e.saved && !cancelled}<span class="saved" title={t('event.saved')}><Bookmark size={14} strokeWidth={2.4} fill="currentColor" /></span>{/if}
   <span class="txt" class:pr={e.saved && !cancelled}>
     <span class="t-title clamp-2 title">{e.title}</span>
-    <span class="t-foot meta">{#if inner(e)}<UsersRound size={13} strokeWidth={2.4} />{/if}{#if multiDay(e.startsAt, e.endsAt)}{daySpan(e.startsAt, e.endsAt)}{:else}{showDate ? dateLine + ' · ' : ''}{time(e.startsAt)}{/if} · {placeOf(e.place, e.online)}{e.price ? ' · ' + money(e.price) : ''}</span>
+    <span class="t-foot meta">{#if inner(e)}<UsersRound size={13} strokeWidth={2.4} />{/if}{#if multiDay(e.startsAt, e.endsAt)}{daySpan(e.startsAt, e.endsAt)}{:else}{showDate ? dateLine + ' · ' : ''}{time(e.startsAt)}{/if} · <EventPlace {e} />{e.price ? ' · ' + money(e.price) : ''}</span>
     <span class="foot">
       {#if e.toCheck && !cancelled}<Tag tone="warning">{t('studio.chipCheck', { n: e.toCheck })}</Tag>{/if}
       {#if cancelled}<Tag tone="danger">{t('event.cancelled')}</Tag>
@@ -56,10 +58,11 @@
       {/if}
     </span>
   </span>
-</button>
+</div>
 
 <style>
   .row { position: relative; display: flex; gap: 12px; align-items: center; width: 100%; padding: 10px; border-radius: var(--r-l); background: var(--surface); box-shadow: var(--card-rim, var(--shadow-card)); text-align: left; }
+  .hit { position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
   .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
   .txt.pr .title { padding-right: 16px; }
   .saved { position: absolute; top: 10px; right: 10px; display: flex; color: var(--warning-text); } /* the themed amber: plain gold faded on a light row */
