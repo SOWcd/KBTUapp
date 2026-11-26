@@ -14,12 +14,3 @@ export function meetHost(url: string | null | undefined): string {
     return x.protocol === 'https:' && !x.username && !x.password && !x.port && !TG_HOST.test(x.hostname) ? x.hostname : '';
   } catch { return ''; }
 }
-
-/** A link the fill found, against the form: 'fill' it in, 'ask' (a different link or a place already set, "Add more"
- *  lists it for a tap like any field the new text says otherwise), or 'keep' (the same one, or nothing found) */
-export function linkFill(found: string | undefined, adding: boolean, f: { online: boolean; onlineUrl: string; place: string; tba: boolean }): 'fill' | 'ask' | 'keep' {
-  if (!found) return 'keep';
-  const had = f.online ? f.onlineUrl.trim() : f.tba ? '' : f.place.trim();
-  if (!adding || !had) return 'fill';
-  return f.online && had === found ? 'keep' : 'ask';
-}

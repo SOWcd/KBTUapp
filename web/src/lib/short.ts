@@ -15,9 +15,6 @@ export const nameOf = (o: Pick<OrgRef, 'name' | 'abbr' | 'kind'>): string => (o.
 /** A school's short name by its slug (an event only for its students), the slug itself until the orgs are in. */
 export const schoolName = (slug: string): string => { const o = data.orgs.find((x) => x.kind === 'school' && x.slug === slug); return o ? shortOf(o) : slug.toUpperCase(); };
 
-/** A name split before its last word, the space kept on the first part: what follows the word (a mark) stays with it. */
-export const lastWord = (s: string): [string, string] => { const i = s.lastIndexOf(' ') + 1; return [s.slice(0, i), s.slice(i)]; };
-
 const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
 /** A student's or a chat's school as typed (the KBTU portal's full name, or an abbreviation, in any of the three
  *  languages) by its abbreviation in the app's language; one the app doesn't know stays as it is. */
