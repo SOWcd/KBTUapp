@@ -1,8 +1,8 @@
 <script module lang="ts">
-  import type { EventFull, Id } from '../../lib/api';
+  import type { EventCard, EventFull, Id } from '../../lib/api';
   // a receipt on its way outlives its sheet: opened again meanwhile, the new sheet waits on the same upload and alone
   // answers it (it offered an idle button for a second receipt, and the old one opened the ticket over it)
-  const going = new Map<Id, Promise<EventFull>>(), owner = new Map<Id, object>();
+  const going = new Map<Id, Promise<EventCard>>(), owner = new Map<Id, object>();
 </script>
 
 <script lang="ts">
@@ -68,7 +68,7 @@
     going.set(id, job);
     await settle(job);
   }
-  async function settle(job: Promise<EventFull>) {
+  async function settle(job: Promise<EventCard>) {
     busy = true;
     try {
       const c = await job;
