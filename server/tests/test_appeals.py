@@ -12,7 +12,7 @@ import pathlib
 import pytest
 from fastapi.testclient import TestClient
 
-from kbtu import app as server, bot, db, llm, logic, texts
+from kbtu import app as server, db, llm, logic, outbox, texts
 from kbtu.logic import appeals, assistant, stats
 from kbtu.logic.core import ApiError
 from test_core import delete_now, login, tma  # noqa: F401
@@ -130,7 +130,7 @@ def test_status_answer_overdue_and_message(ap, monkeypatch):
     act(status="work"); act(status="closed")
     m = con.execute("SELECT * FROM bot_outbox WHERE kind = 'appeal_answer'").fetchall()
     assert len(m) == 1 and m[0]["user_id"] == _uid(c, ANN)                           # once, to the author
-    text, button, start = bot._render(con, {**dict(m[0]), "lang": "en"})
+    text, button, start = outbox._render(con, {**dict(m[0]), "lang": "en"})
     assert start == f"apl_{a['id']}" and "Fixed" not in text and text == texts.bot_message("en", "appeal_answer")[0]
     mine = c.get("/api/appeals", headers=tma(ANN)).json()["items"][0]
     assert mine["status"] == "closed" and mine["answer"] == "Fixed on Wednesday"
@@ -523,7 +523,7 @@ def test_help_desk_review_cases(env, monkeypatch):
     appeals.notify(con, _uid(c, ANN), "ask_answer", f"apl:{ids[1]}")
     m = con.execute("SELECT b.*, 'en' AS lang FROM bot_outbox b WHERE kind = 'ask_answer'").fetchone()
     monkeypatch.setattr(appeals, "ASK", "")
-    assert bot._render(con, m) is None
+    assert outbox._render(con, m) is None
     monkeypatch.setattr(appeals, "ASK", "all")
-    assert bot._render(con, m)[2] == f"ask_{ids[1]}"  # that question's own view, the answer first
+    assert outbox._render(con, m)[2] == f"ask_{ids[1]}"  # that question's own view, the answer first
     con.close()

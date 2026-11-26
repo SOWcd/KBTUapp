@@ -295,9 +295,10 @@ def resolve_report(con, v: Viewer, target: str, tid: int, remove: bool) -> list[
             elif target == "photo" and gallery.take_down(con, tid):  # a Gallery post: out, kept 30 days for an undo like an album photo
                 pass
             elif target == "photo":  # out of the album; the row and the file kept 30 days for an undo (purge_takedowns)
+                at = core.now()  # one decision, one time: restore brings back every album row stamped with it
                 for p in rows(con, "DELETE FROM event_photos WHERE file_id = ? RETURNING *", tid):
                     con.execute("INSERT INTO takedowns (target, target_id, user_id, data, file_id, at) VALUES ('photo', ?, ?, ?, ?, ?)",
-                                (tid, p["added_by"], json.dumps(dict(p)), tid, core.now()))
+                                (tid, p["added_by"], json.dumps(dict(p)), tid, at))
             elif target == "ask":  # its reports close below, with this decision (hide_ask leaves them to it); only the row
                 # the reports were made on (there when the first came, its author the same since): else they just close
                 a = one(con, """SELECT user_id, created_at FROM asks WHERE id = ? AND created_at <= (SELECT MIN(created_at) FROM reports
@@ -349,9 +350,12 @@ def restore(con, v: Viewer, target: str, tid: int) -> list[str]:
             d = json.loads(k["data"]) if k else {}
             if k and target == "photo" and "gallery" in d:  # a Gallery post (gallery.take_down)
                 gallery.restore(con, d)
-            elif k and target == "photo" and one(con, "SELECT 1 FROM events WHERE id = ?", d["event_id"]):
-                con.execute("INSERT OR IGNORE INTO event_photos (event_id, file_id, sort, added_by) VALUES (?, ?, ?, ?)",
-                            (d["event_id"], d["file_id"], d["sort"], d["added_by"]))
+            elif k and target == "photo":  # an album photo: one row per album it was in (resolve_report), all back as one
+                more = rows(con, "DELETE FROM takedowns WHERE target = 'photo' AND target_id = ? AND at = ? RETURNING data", tid, k["at"])
+                for x in [d, *(json.loads(r[0]) for r in more)]:
+                    if one(con, "SELECT 1 FROM events WHERE id = ?", x["event_id"]):
+                        con.execute("INSERT OR IGNORE INTO event_photos (event_id, file_id, sort, added_by) VALUES (?, ?, ?, ?)",
+                                    (x["event_id"], x["file_id"], x["sort"], x["added_by"]))
             elif k and target == "user":
                 con.execute("""UPDATE users SET nick = COALESCE(nick, ?), bio = CASE WHEN bio = '' THEN ? ELSE bio END,
                     avatar_file_id = COALESCE(avatar_file_id, ?), avatar_tg = CASE WHEN avatar_file_id IS NULL AND ? IS NOT NULL THEN 0 ELSE avatar_tg END
@@ -380,12 +384,10 @@ def purge_takedowns(con) -> list[str]:
 # when a function runs
 from . import core, pymk  # noqa: E402
 from .account import _drop_unused  # noqa: E402
-from .clubs import org  # noqa: E402
 from .forum import hide_ask, may_touch_ask  # noqa: E402
 from . import fchannel, gallery  # noqa: E402
 from .organizing import _asking  # noqa: E402
 from .oversight import _mod  # noqa: E402
 from .seats import _event, notify, notify_staff  # noqa: E402
 from .tgcomments import _mods  # noqa: E402
-from .teams import remove  # noqa: E402
 from . import tgcomments  # noqa: E402

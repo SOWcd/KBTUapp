@@ -1,7 +1,7 @@
 """Nov 6: club socials without Telegram, "Message the club" to the President, no emoji in org names."""
 from __future__ import annotations
 
-from kbtu import bot, db, logic
+from kbtu import db, logic, outbox
 from test_core import env, login, tma  # noqa: F401  (env: the fixture)
 from test_team_link import _club
 
@@ -76,7 +76,7 @@ def test_strip_emoji_names_once(env):
     m = con.execute("SELECT * FROM bot_outbox WHERE kind = 'club_emoji'").fetchone()
     assert m["user_id"] == pres["id"] and m["ref"] == "emo:1"
     for lang in ("ru", "kk", "en"):
-        text, button, start = bot._render(con, {**dict(m), "lang": lang})
+        text, button, start = outbox._render(con, {**dict(m), "lang": lang})
         assert "kbTTu" in text and button and start == "cl_1"
     con.execute("UPDATE orgs SET name = 'X \U0001f976' WHERE id = 2")
     logic.strip_emoji_names(con)  # once: the meta key

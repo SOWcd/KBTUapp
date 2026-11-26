@@ -3,7 +3,7 @@ the club's page, for its members, for whoever signed up or saved, by link, and w
 people's reports of an event ring the moderators at once (moderation._urgent_event); it stays up."""
 from __future__ import annotations
 
-from kbtu import bot, db, logic, texts
+from kbtu import db, logic, outbox, texts
 from test_core import env, login, tma  # noqa: F401  (env is a fixture)
 
 EV = {"place": "Atrium", "emoji": "crown_3d", "color": "#3B6BFF", "seats": 50}
@@ -103,11 +103,11 @@ def test_three_reports_ring_the_moderators(env):
     assert _report(c, 33, eid).status_code == 204
     m = rung()
     assert [r["user_id"] for r in m] == [con.execute("SELECT id FROM users WHERE tg_id = ?", (MOD,)).fetchone()[0]]
-    assert bot._render(con, m[0]) == (*texts.bot_message("ru", "event_reported"), "capps")
+    assert outbox._render(con, m[0]) == (*texts.bot_message("ru", "event_reported"), "capps")
     assert c.get(f"/api/events/{eid}", headers=tma(OTHER)).status_code == 200  # not hidden: a moderator decides
     assert [(x["target"], x["id"], x["count"]) for x in c.get("/api/admin/reports", headers=tma(MOD)).json()] == [("event", eid, 3)]
     assert c.post(f"/api/admin/reports/event/{eid}", headers=tma(MOD), json={"remove": False}).status_code == 204
-    assert bot._render(con, m[0]) is None  # decided: nothing to ring about
+    assert outbox._render(con, m[0]) is None  # decided: nothing to ring about
     for tg in (31, 32, 33):  # a new round rings again
         _report(c, tg, eid)
     assert len(rung()) == 2

@@ -29,6 +29,7 @@
   import { hit } from '../../lib/search';
   import { relDay, time } from '../../lib/time';
   import { haptic, inTelegram, scanQr, closeScanner, tg } from '../../lib/tg';
+  import { native } from '../../lib/native';
   import Avatar from '../../ui/Avatar.svelte';
   import Button from '../../ui/Button.svelte';
   import QrCam from '../../ui/QrCam.svelte';
@@ -55,9 +56,11 @@
   // the Mark screen's counts once the event says who I am at its door (a scanner-only helper reads no lists: no 403s)
   $effect(() => { api.event(id).then((d) => { detail = d; if (qr) recount(); }).catch(() => {}); });
   const e = $derived(eventById(id) ?? detail);
-  const camera = inTelegram && /^(ios|android)$/.test(tg.platform) && tg.can('6.4');
-  // our camera (ui/QrCam) until it fails (refused, none), then Telegram's popup takes over
-  let live = $state<'off' | 'on' | 'failed'>('mediaDevices' in navigator ? 'off' : 'failed');
+  // the iPhone app's own scanner (ios/, native.ts) or Telegram's popup
+  const camera = native.has('scan') || inTelegram && /^(ios|android)$/.test(tg.platform) && tg.can('6.4');
+  // our camera (ui/QrCam) until it fails (refused, none), then Telegram's popup takes over; the iPhone app's scanner
+  // from the start (a web view's camera asks again and again)
+  let live = $state<'off' | 'on' | 'failed'>('mediaDevices' in navigator && !native.has('scan') ? 'off' : 'failed');
 
   let res = $state<CheckinResult | null>(null);
   let seq = $state(0);

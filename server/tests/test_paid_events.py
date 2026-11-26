@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from kbtu import bot, config, db, logic, receipt, app as server, texts
+from kbtu import bot_dm, config, db, logic, receipt, app as server, texts
 from test_core import INTAKE, delete_now, env, login, tma  # noqa: F401  (env: the fixture)
 
 
@@ -166,9 +166,9 @@ def test_receipt_reading(env, monkeypatch):
     doc = lambda uid, mid: {"message_id": mid, "chat": {"id": uid, "type": "private"}, "from": {"id": uid}, "date": int(time.time()),  # noqa: E731
                             "document": {"file_id": f"f{mid}", "mime_type": "application/pdf", "file_size": 900}}
     fake({"amount": 2000, "no": "123456789012345678", "recipient": look("Arman A."), "paid_at": made + 60})
-    assert texts.bot_message("ru", "receipt_none")[0] in asyncio.run(bot._receipt(cfg, http, con, doc(11, 1)))["text"]  # no seat held yet
+    assert texts.bot_message("ru", "receipt_none")[0] in asyncio.run(bot_dm._receipt(cfg, http, con, doc(11, 1)))["text"]  # no seat held yet
     c.post(f"/api/events/{eid}/registration", headers=tma(11), json={})
-    answer = asyncio.run(bot._receipt(cfg, http, con, doc(11, 2)))
+    answer = asyncio.run(bot_dm._receipt(cfg, http, con, doc(11, 2)))
     assert "Gala" in answer["text"] and answer["reply_markup"]["inline_keyboard"][0][0]["url"].endswith(f"startapp=tk_{eid}")
     assert texts.receipt_why("ru", ["duplicate"]) in answer["text"]  # looks wrong: said at once, the ticket stays
     assert c.get(f"/api/events/{eid}", headers=tma(11)).json()["my"]["status"] == "going"
@@ -182,17 +182,17 @@ def test_receipt_reading(env, monkeypatch):
     c.post(f"/api/events/{ev2['id']}/publish", headers=tma(20))
     for e in (eid, ev2["id"]):
         c.post(f"/api/events/{e}/registration", headers=tma(12), json={})
-    ask = asyncio.run(bot._receipt(cfg, http, con, doc(12, 3)))
+    ask = asyncio.run(bot_dm._receipt(cfg, http, con, doc(12, 3)))
     assert ask["reply_parameters"] == {"message_id": 3} and len(ask["reply_markup"]["inline_keyboard"]) == 2
     fake({})                                                                           # read, but nothing there: not a receipt (a selfie)
     tap = {"id": "q", "from": {"id": 12}, "data": f"rc:{ev2['id']}", "message": {"message_id": 4, "chat": {"id": 12}, "reply_to_message": doc(12, 3)}}
-    asyncio.run(bot._tapped(cfg, http, con, tap))
+    asyncio.run(bot_dm._tapped(cfg, http, con, tap))
     assert texts.bot_message("ru", "receipt_not")[0] in http.posts[1][1]["text"]
     assert c.get(f"/api/events/{ev2['id']}", headers=tma(12)).json()["my"]["status"] == "hold"  # refused, nothing kept
     assert c.post(f"/api/events/{ev2['id']}/receipt", headers=tma(12), content=pdf(505)).json()["message"] == "not_receipt"
     fake({"amount": 500, "no": "777000111222333444", "recipient": look("Arman A."), "paid_at": made + 60})
     http.posts.clear()
-    asyncio.run(bot._tapped(cfg, http, con, tap))
+    asyncio.run(bot_dm._tapped(cfg, http, con, tap))
     assert [m for m, _ in http.posts] == ["answerCallbackQuery", "editMessageText"] and "Quiz" in http.posts[1][1]["text"]
     assert c.get(f"/api/events/{ev2['id']}", headers=tma(12)).json()["my"]["status"] == "going"
     assert c.get(f"/api/events/{eid}", headers=tma(12)).json()["my"]["status"] == "hold"  # the other one still waits

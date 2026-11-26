@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import threading
 
-from kbtu import bot, checkin, db, logic, texts
+from kbtu import checkin, db, logic, outbox, texts
 from test_club_checkin import _join
 from test_core import _club_runs, env, login, set_clock, tma  # noqa: F401
 
@@ -83,16 +83,16 @@ def test_notification_grouped_once_and_current_at_delivery(env):
     m = _notice(con, sid, ids[8])
     first_scan = con.execute('SELECT scanned_at FROM qr_meet_scans WHERE session_id = ?', (sid,)).fetchone()[0]
     assert m and m["send_after"] == first_scan + 30
-    assert bot._render(con, m) == (*texts.bot_message('ru', 'meetup_review', dept='Media'), f'meet_{sid}')
+    assert outbox._render(con, m) == (*texts.bot_message('ru', 'meetup_review', dept='Media'), f'meet_{sid}')
     for tg in (1, 3, 4, 1):
         assert _scan(c, tg, p).status_code == 200
     assert con.execute("SELECT COUNT(*) FROM bot_outbox WHERE kind = 'meetup_review'").fetchone()[0] == 1
-    assert bot._render(con, m) == (*texts.bot_message('ru', 'meetup_ask', dept='Media'), f'meet_{sid}')
+    assert outbox._render(con, m) == (*texts.bot_message('ru', 'meetup_ask', dept='Media'), f'meet_{sid}')
     con.execute("UPDATE bot_outbox SET sent_at = 1 WHERE id = ?", (m['id'],))
     assert _scan(c, 1, p).status_code == 200
     assert con.execute("SELECT COUNT(*) FROM bot_outbox WHERE kind = 'meetup_review'").fetchone()[0] == 1
     con.execute("UPDATE member_tags SET sync = 1 WHERE tag_id = ? AND user_id = ?", (tags[0], ids[8]))
-    assert bot._render(con, m) is None  # a synced department is not authority to manage it
+    assert outbox._render(con, m) is None  # a synced department is not authority to manage it
     con.close()
 
 
@@ -187,7 +187,7 @@ def test_unlinked_leaders_cannot_read_and_deleted_scans_disappear(env):
         con.execute('DELETE FROM students WHERE user_id = ?', (ids[tg],))
         assert c.get(f'/api/screens/{sid}/scans', headers=tma(tg)).status_code == 403
         assert sid not in [s['session'] for s in c.get('/api/screens', headers=tma(tg)).json()]
-    assert bot._render(con, notice) is None
+    assert outbox._render(con, notice) is None
     logic.account.delete_me(con, logic.Viewer(ids[1], 'user', True))
     assert not con.execute('SELECT 1 FROM qr_meet_scans WHERE user_id = ?', (ids[1],)).fetchone()
     assert not con.execute('SELECT 1 FROM qr_marks WHERE user_id = ?', (ids[1],)).fetchone()

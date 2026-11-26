@@ -6,7 +6,7 @@ from __future__ import annotations
 import re
 import time
 
-from kbtu import bot, db, logic
+from kbtu import db, logic, outbox
 from kbtu.logic.core import Viewer
 from test_core import env, login, tma  # noqa: F401  (env is a fixture)
 
@@ -120,7 +120,7 @@ def test_nobody_else_sees_it_anywhere(env):
     assert uid10 in told and _uid(con, 11) not in told
     logic.notify(con, _uid(con, 11), "new_event", f"event:{eid}")  # one queued anyway: the bot stays quiet
     row = lambda tg: dict(con.execute("SELECT * FROM bot_outbox WHERE user_id = ? AND kind = 'new_event'", (_uid(con, tg),)).fetchone()) | {"lang": "en"}  # noqa: E731
-    assert bot._render(con, row(11)) is None and TITLE in bot._render(con, row(10))[0]
+    assert outbox._render(con, row(11)) is None and TITLE in outbox._render(con, row(10))[0]
 
 
 def test_who_may_set_it_and_after(env):

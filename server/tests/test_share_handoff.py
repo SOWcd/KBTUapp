@@ -3,13 +3,13 @@ bot (core.share_hold) and answers with the bot's start link; /start sh_<secret> 
 that made it, once, with a button that offers it in inline mode to that account alone; an hour, then gone."""
 from __future__ import annotations
 
-from kbtu import bot, db, logic
+from kbtu import bot, bot_dm, db, logic
 from test_afisha import OFF, _event, _setup
 from test_core import env, login, set_clock, tma  # noqa: F401  (env is a fixture)
 
 
 def _start(con, cfg, tg, arg, lang="en"):
-    return bot._welcome(con, cfg, {"chat": {"id": tg, "type": "private"}, "date": logic.now(), "text": f"/start {arg}",
+    return bot_dm._welcome(con, cfg, {"chat": {"id": tg, "type": "private"}, "date": logic.now(), "text": f"/start {arg}",
                                    "from": {"id": tg, "language_code": lang}})
 
 
@@ -76,7 +76,7 @@ def test_share_handoff(env, monkeypatch):
 
     # the Mini App's own way is unchanged: no handoff, no held card
     n = con.execute("SELECT COUNT(*) FROM meta WHERE key >= 'share:' AND key < 'share;'").fetchone()[0]
-    assert c.post("/api/share", headers=A, json={"kind": "aw", "code": "bugs", "link": True}).json() == {"link": f"https://t.me/{cfg.bot_username}?startapp=aw_bugs"}
+    assert c.post("/api/share", headers=A, json={"kind": "aw", "code": "bugs", "link": True}).json()["link"] == f"https://t.me/{cfg.bot_username}?startapp=aw_bugs"
     assert con.execute("SELECT COUNT(*) FROM meta WHERE key >= 'share:' AND key < 'share;'").fetchone()[0] == n
 
     # deleting the account takes the held cards with it

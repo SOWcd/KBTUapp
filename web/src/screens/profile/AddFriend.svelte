@@ -43,7 +43,7 @@
   onDestroy(() => { stop(); clearTimeout(quiet); });
 
   async function send() {
-    try { if (code) await shareInvite(code); } catch { say(t('common.error'), 'warning_3d'); }
+    try { if (code) await shareInvite(); } catch { say(t('common.error'), 'warning_3d'); }
   }
 
   // ---- by @username ----
