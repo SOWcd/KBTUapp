@@ -42,7 +42,6 @@ _checked: deque[str] = deque(maxlen=256)  # pre-checkouts already answered: the 
 WAIT = 25                   # getUpdates: Telegram holds the request this long while nobody writes
 FRESH = 300                 # an older message isn't answered: what piled up while nobody listened
 SYNC_GAP = 0.25             # a chat sync's getChatMember calls: about 4 a second, beside the postman (logic/chatsync.py)
-_sync_live = False          # a chat sync link exists (CHAT_SYNC): other chats' chat_member updates are used; _chat_sync keeps it
 # A deploy stops the container (SIGTERM; Docker's grace is 10 s, then SIGKILL): stop() ends the long poll at once, a batch
 # at its next update, the postman at its next message; jobs spawned beside the ears get the rest of DRAIN, then go.
 # It starts only after uvicorn has closed its connections, and the lifespan waits DRAIN + 2 s before it cancels.
@@ -217,8 +216,8 @@ def _wanted(cfg: Config) -> str:
     return json.dumps(["message", "edited_message", "callback_query", "inline_query", "chat_join_request", "my_chat_member", "pre_checkout_query",
                        # the forum channel's reactions (sent only where the bot is the channel's admin, and only when asked for)
                        *(["message_reaction_count"] if cfg.forum_channel else []),
-                       # someone joining or leaving a club's linked chat (logic/chatsync.py; sent only where the bot is an admin)
-                       # and the app's own channel and group (logic/appchats.py), always
+                       # someone joining or leaving a chat where the bot is an admin: a club's linked chat (logic/chatsync.py),
+                       # /all's memory (logic/chatlist.py), the app's own channel and group (logic/appchats.py)
                        "chat_member"])
 
 
@@ -470,7 +469,7 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
                     continue
                 if cm := upd.get("chat_member"):  # a linked chat's join or leave; recorded before the offset moves on
                     try:
-                        if logic.appchats.heard(con, cm) or not _sync_live:  # ours, or nobody else's asked for (no linked chat)
+                        if logic.appchats.heard(con, cm):  # the app's own channel or group: Profile's two flags, nothing else kept
                             continue
                         new, where = cm.get("new_chat_member") or {}, (cm.get("chat") or {}).get("id")
                         if where and logic.chatsync.in_chat(new):  # /all's memory of who is in a club's chat (logic/chatlist.py)
@@ -631,9 +630,8 @@ async def _call(cfg: Config, http: httpx.AsyncClient, method: str, params: dict,
 
 
 async def _chat_sync(cfg: Config, http: httpx.AsyncClient) -> None:
-    """Clubs mirrored from their chats (CHAT_SYNC, logic/chatsync.py): whether to ask Telegram for chat_member updates, and
-    the sweeps, a step at a time at about 4 calls a second; a 429 waits as told. Never inside a request or the postman."""
-    global _sync_live
+    """Clubs mirrored from their chats (CHAT_SYNC, logic/chatsync.py): the sweeps, a step at a time at about 4 calls a
+    second; a 429 waits as told. Never inside a request or the postman."""
     bot_id = int(cfg.bot_token.split(":")[0])
 
     async def call(method: str, params: dict) -> dict | None:
@@ -641,7 +639,6 @@ async def _chat_sync(cfg: Config, http: httpx.AsyncClient) -> None:
     con = db.connect(cfg.db_path)
     while True:
         try:
-            _sync_live = logic.chatsync.live(con)
             if not await logic.chatsync.ask_step(con, call) and not await logic.chatsync.step(con, call, bot_id):
                 await asyncio.sleep(30)
         except Exception:  # noqa: BLE001 - the loop must outlive one bad round
@@ -778,7 +775,6 @@ async def run(cfg: Config) -> None:
 
 
 async def _lead(cfg: Config) -> None:
-    global _sync_live
     with open(f"{cfg.db_path}.bot.lock", "w") as lock:
         while True:
             try:
@@ -790,8 +786,6 @@ async def _lead(cfg: Config) -> None:
                 await _nap(5)
         log.warning("postman in process %d", os.getpid())  # one line per start (warning: the level the container's log keeps)
         log.warning("receipts ocr: %s", await asyncio.to_thread(receipt.ready))
-        if cfg.chat_sync:  # before the first poll: a join in that window would never come again
-            _sync_live = logic.chatsync.live(db.connect(cfg.db_path))
         try:
             async with httpx.AsyncClient(timeout=15) as http:
                 await load_pack(cfg, http)

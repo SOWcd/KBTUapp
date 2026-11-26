@@ -2587,7 +2587,7 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE INDEX fchan_coming_by_user ON fchan_coming(user_id);"""),
     # the app's own channel and topics group (logic/appchats.py): whether I am in them, for Profile's rows; checked_at:
     # the last getChatMember look (once a day at most)
-    (250, """CREATE TABLE app_chats (
+    (250, """CREATE TABLE IF NOT EXISTS app_chats (
       user_id    INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
       channel    INTEGER NOT NULL DEFAULT 0 CHECK (channel IN (0, 1)),
       grp        INTEGER NOT NULL DEFAULT 0 CHECK (grp IN (0, 1)),
