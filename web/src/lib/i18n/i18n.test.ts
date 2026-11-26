@@ -15,6 +15,19 @@ it('keeps the same holes in ru, kk and en', () => {
   expect(bad).toEqual([]);
 });
 
+// kk.ts and en.ts list their keys in ru.ts's order, so one key sits at the same spot in all three and a new one goes
+// in at the same anchor (tools/i18n.mjs add). The first key out of place is named.
+it('keeps the keys of ru, kk and en in one order', () => {
+  const want = Object.keys(ru);
+  const bad: string[] = [];
+  for (const [name, d] of [['kk', kk], ['en', en]] as const) {
+    const got = Object.keys(d);
+    const i = (got.length > want.length ? got : want).findIndex((_, j) => got[j] !== want[j]);
+    if (i >= 0) bad.push(`${name}.ts has ${got[i] ?? 'nothing'} where ru.ts has ${want[i] ?? 'nothing'} (after ${want[i - 1]})`);
+  }
+  expect(bad).toEqual([]);
+});
+
 // A word too long for its line on a 320-px phone (a 34-px title shrunk to 24, a 17-px row) breaks at its soft hyphen
 // (U+00AD) with a visible hyphen, never anywhere: WebKit has no Kazakh hyphenation. Every Russian and Kazakh word of
 // 15 letters or more carries at least one, at a syllable or morpheme joint.
