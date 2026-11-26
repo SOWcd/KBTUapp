@@ -31,8 +31,10 @@ def test_team_link(env, monkeypatch):
     assert c.post("/api/orgs/1/team-link", headers=M).status_code == 403                 # a plain member can't
     assert c.post("/api/orgs/1/team-link", headers=tma(30)).status_code == 403           # nor an outsider
     assert c.delete("/api/orgs/1/team-link", headers=M).status_code == 403               # nor turn it off
+    t0 = logic.now()
+    set_clock(monkeypatch, lambda: t0)                                                 # a second ticking by can't skew the TTL
     link = c.post("/api/orgs/1/team-link", headers=V).json()
-    assert link["expiresAt"] - logic.now() == logic.teams.TEAM_LINK_TTL
+    assert link["expiresAt"] - t0 == logic.teams.TEAM_LINK_TTL
     assert c.post("/api/orgs/1/team-link", headers=P).json() == link                     # one per club: the live one again
     assert c.get("/api/orgs/1/team", headers=P).json()["teamLink"] == {"expiresAt": link["expiresAt"]}
     assert "teamLink" not in c.get("/api/orgs/1/team", headers=M).json()            # members don't see it
