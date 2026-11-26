@@ -42,7 +42,7 @@ screen per PR, never slower than before, checked on a phone in both themes.
 | API contract | `web/src/lib/api/types.ts`, `index.ts` (the interface), `client.ts` |
 | UI strings | `web/src/lib/i18n/{ru,kk,en}.ts` (ru is the source; kk and en are typed against it). ~70k tokens each: never read them whole; add a string with `node tools/i18n.mjs add <key> --ru "…" --kk "…" --en "…" [--after <key>]` (from `web/`): the same spot in all three, which keep one key order (a test checks) |
 | Shared UI | `web/src/ui/` (tokens.css, base.css, glass, Sheet, Button, ...) |
-| Test helpers | `env`, `login`, `tma`, `set_clock` in `server/tests/test_core.py` (import them from there) |
+| Test helpers | `env`, `login`, `tma`, `set_clock`, `delete_now` in `server/tests/helpers.py` (`from helpers import ...`; `test_core.py` re-exports them for the older tests) |
 | Android app (Play) | `android/` (a TWA from `twa-manifest.json`; README: release, demo login, Data safety), built only by `.github/workflows/android.yml` |
 | Deep links | parsed in `web/src/App.svelte` (`deepLink`): `ev_<id>`, `cl_<id>`, ... |
 | iPhone app | `ios/` (a web view shell, built only by `.github/workflows/ios.yml`), its bridge `web/src/lib/native.ts`; Sign in with Apple and linked sign-ins `server/kbtu/logic/apple.py`, push `server/kbtu/apns.py` |
