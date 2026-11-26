@@ -81,6 +81,7 @@ jobs:
       - run: npm run check
       - run: npm test
       - run: npm run build  # incl. the old-iOS regex check
+      - run: npm run size  # the first screen's gzipped JS and CSS against size-budget.json; the table goes to the job summary
   e2e:
     # the built app on qa.py's seeded servers, in Chromium at 375x812 from Playwright's Linux image (web/e2e/linux.sh,
     # the same pixels as on a Mac): the flows in two halves, the screen snapshots (both themes) beside them
