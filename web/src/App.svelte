@@ -341,6 +341,7 @@
   // u_<id>_<code> (a profile: the QR on someone's badge; the code is for the door scanner),
   // friends (Profile with the Friends sheet: the bot's request message), donate, sponsors (Made together at its Support section) ----
   function deepLink(p = tg.startParam, afterSignIn = false) {
+    if (p === 'vp') { void import('./screens/sheets/VpDiag.svelte').then((m) => open(m.default, {})); return; } // ponytail: the Android inset diagnostic
     if (p === 'donate') { ui.tab = 'profile'; sheets.settings(p); return; }
     if (p === 'sponsors') { ui.tab = 'profile'; sheets.credits('support'); return; }
     if (p === 'verify') { sheets.login(); return; }
