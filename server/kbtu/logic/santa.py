@@ -476,18 +476,23 @@ def report(con, v: Viewer, eid: int, body: dict) -> None:
         rid = -next_id(con, "santa_msgs")
         con.execute("INSERT INTO santa_msgs (id, event_id, giver_id, to_id, from_giver, created_at) VALUES (?, ?, ?, ?, ?, ?)",
                     (rid, eid, *p, int(mine), now()))
-        notify_staff(con, _mods(con), "santa_reported", f"srp:{rid}")
+        players = {r[0] for r in rows(con, "SELECT user_id FROM santa_people WHERE event_id = ?", eid)} | set(p)
+        notify_staff(con, [m for m in _mods(con) if m not in players], "santa_reported", f"srp:{rid}")
 
 
 _OPEN = "FROM santa_msgs WHERE text IS NULL AND done_at IS NULL"
+# what a staff member may read (args: their id twice): never a report from a game they play or a thread they are in. A
+# report names both its people: one of the pair would learn their Santa, and anyone else in the ring one more of its
+# links (in a ring of four, all of them)
+_OPEN_FOR = _OPEN + " AND ? NOT IN (giver_id, to_id) AND event_id NOT IN (SELECT event_id FROM santa_people WHERE user_id = ?)"
 
 
 def reports(con, v: Viewer) -> list[dict]:
-    """Admin → Santa reports, the app's staff alone (never a club's organizer): each open report with the whole thread
-    and both its people, oldest first."""
+    """Admin → Santa reports, the app's staff alone (never a club's organizer, nor anyone playing that game): each open
+    report with the whole thread and both its people, oldest first."""
     _mod(v)
     out = []
-    for r in rows(con, f"SELECT id, event_id, giver_id, to_id, from_giver, created_at {_OPEN} ORDER BY abs(id)"):
+    for r in rows(con, f"SELECT id, event_id, giver_id, to_id, from_giver, created_at {_OPEN_FOR} ORDER BY abs(id)", v.id, v.id):
         who = {p["id"]: person_ref(p) for p in rows(con, PERSON + " WHERE u.id IN (?, ?)", r["giver_id"], r["to_id"])}
         e = one(con, "SELECT title FROM events WHERE id = ?", r["event_id"])
         out.append({"id": r["id"], "at": r["created_at"], "title": e["title"], "giver": who.get(r["giver_id"]), "to": who.get(r["to_id"]),
@@ -502,7 +507,8 @@ def report_done(con, v: Viewer, rid: int) -> None:
     log keeps who and which report, never the pair or a word."""
     _mod(v)
     with tx(con):
-        if not con.execute("UPDATE santa_msgs SET done_at = ? WHERE id = ? AND text IS NULL AND done_at IS NULL", (now(), rid)).rowcount:
+        if not con.execute("UPDATE santa_msgs SET done_at = ? WHERE id = ? AND id IN (SELECT id " + _OPEN_FOR + ")",
+                           (now(), rid, v.id, v.id)).rowcount:
             raise ApiError("not_found")
         log_action(con, v.id, "santa_report_done", f"santa_report:{rid}")
 

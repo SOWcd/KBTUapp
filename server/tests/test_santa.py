@@ -924,3 +924,31 @@ def test_no_chat_in_a_small_ring(env):
         assert _chat(c, eid, tg).status_code == 404 and _say(c, eid, tg, "to").status_code == 404
         assert c.post(f"/api/events/{eid}/santa/chat/report", headers=tma(tg), json={"side": "from"}).status_code == 404
     assert not con.execute("SELECT 1 FROM santa_msgs").fetchone()
+
+
+def test_staff_in_the_pair_never_see_its_report(env):
+    """Staff who play: a report names both people of its thread, so it never reaches anyone in that game (one of the
+    pair would learn their Santa; another player one more link of the ring, in a ring of four all of them): not the
+    list, the count, Handled or the bot's alert. A moderator outside the game handles it."""
+    c, cfg = env
+    con, eid = _game(c, cfg, 4)
+    assert _draw(c, eid).status_code == 200
+    gives = _gives(c, con, eid, PLAYERS[:4])
+    me = 10
+    santa = next(tg for tg, to in gives.items() if to == me)
+    bystander = next(tg for tg in PLAYERS[:4] if tg not in (me, santa))  # plays, not in the reported pair
+    login(c, 30, "mod")
+    con.execute("UPDATE users SET role = 'moderator' WHERE tg_id IN (30, ?, ?)", (me, bystander))
+    assert _say(c, eid, santa, "to", "a hint").status_code == 200
+    assert c.post(f"/api/events/{eid}/santa/chat/report", headers=tma(me), json={"side": "from"}).status_code == 204
+    for tg in (me, bystander):
+        got = c.get("/api/admin/santa-reports", headers=tma(tg))
+        assert got.status_code == 200 and got.json() == [] and "hint" not in got.text
+        assert c.get("/api/admin/inbox", headers=tma(tg)).json()["santa"] == 0
+    assert _to(con, "santa_reported") == [30]  # the alert: never to someone in the game
+    other = c.get("/api/admin/santa-reports", headers=tma(30)).json()
+    assert len(other) == 1 and other[0]["giver"]["id"] == _uid(con, santa)
+    assert c.get("/api/admin/inbox", headers=tma(30)).json()["santa"] == 1
+    for tg in (me, bystander):
+        assert c.post(f"/api/admin/santa-reports/{other[0]['id']}/done", headers=tma(tg)).status_code == 404
+    assert c.post(f"/api/admin/santa-reports/{other[0]['id']}/done", headers=tma(30)).status_code == 204
