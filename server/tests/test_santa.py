@@ -924,3 +924,28 @@ def test_no_chat_in_a_small_ring(env):
         assert _chat(c, eid, tg).status_code == 404 and _say(c, eid, tg, "to").status_code == 404
         assert c.post(f"/api/events/{eid}/santa/chat/report", headers=tma(tg), json={"side": "from"}).status_code == 404
     assert not con.execute("SELECT 1 FROM santa_msgs").fetchone()
+
+
+def test_staff_in_the_pair_never_see_its_report(env):
+    """A moderator who plays: a report on their own thread (theirs or the other side's) names both people, so it never
+    reaches them (the list, the count, Handled, the bot's alert); another moderator handles it."""
+    c, cfg = env
+    con, eid = _game(c, cfg, 4)
+    assert _draw(c, eid).status_code == 200
+    gives = _gives(c, con, eid, PLAYERS[:4])
+    me = 10
+    santa = next(tg for tg, to in gives.items() if to == me)
+    login(c, 30, "mod")
+    con.execute("UPDATE users SET role = 'moderator' WHERE tg_id IN (30, ?)", (me,))
+    assert _say(c, eid, santa, "to", "a hint").status_code == 200
+    assert c.post(f"/api/events/{eid}/santa/chat/report", headers=tma(me), json={"side": "from"}).status_code == 204
+    mine = c.get("/api/admin/santa-reports", headers=tma(me))
+    assert mine.status_code == 200 and mine.json() == []
+    assert str(_uid(con, santa)) not in mine.text and "hint" not in mine.text
+    assert c.get("/api/admin/inbox", headers=tma(me)).json()["santa"] == 0
+    assert _to(con, "santa_reported") == [30]  # the alert: never to one of the pair
+    other = c.get("/api/admin/santa-reports", headers=tma(30)).json()
+    assert len(other) == 1 and other[0]["giver"]["id"] == _uid(con, santa)
+    assert c.get("/api/admin/inbox", headers=tma(30)).json()["santa"] == 1
+    assert c.post(f"/api/admin/santa-reports/{other[0]['id']}/done", headers=tma(me)).status_code == 404
+    assert c.post(f"/api/admin/santa-reports/{other[0]['id']}/done", headers=tma(30)).status_code == 204

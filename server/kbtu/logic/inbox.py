@@ -45,7 +45,7 @@ def inbox(con, v: Viewer) -> dict:
     items.sort(key=lambda x: (not x["hidden"], not x.pop("harm"), x["at"]))
     # the map's open flaws: a count for a quiet row at Admin's bottom, not a card to decide
     flaws = one(con, "SELECT COUNT(*) FROM map_flaws WHERE done_at IS NULL")[0] if admin else 0
-    return {"items": items, "done": done(con, v), "flaws": flaws, "santa": one(con, "SELECT COUNT(*) " + santa._OPEN)[0],
+    return {"items": items, "done": done(con, v), "flaws": flaws, "santa": one(con, "SELECT COUNT(*) " + santa._OPEN_FOR, v.id)[0],
             "voices": helpus.unread(con, v) if admin else 0}  # its own row in Admin, as the flaws
 
 
