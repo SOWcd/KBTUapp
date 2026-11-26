@@ -81,6 +81,42 @@ def test_expired_ask_not_released_and_author_gone_ends_it(env, monkeypatch):
     con.close()
 
 
+def test_block_keeps_the_two_apart(env, monkeypatch):
+    c, cfg, _, _ = setup(env, monkeypatch)
+    a, b, d = tma(1), tma(2), tma(5)
+    login(c, 1, "ann")
+    bob, dan = login(c, 2, "bob"), login(c, 5, "dan")
+    con = db.connect(cfg.db_path)
+    pid = c.post("/api/forum-posts", headers=a, json={"body": "Need two people now to cut forms in room 404", "help": 3}).json()["id"]
+    con.execute("UPDATE fchan_posts SET tg_msg = 73 WHERE id = ?", (pid,))
+    url = f"/api/forum-posts/{pid}/coming"
+    assert c.put(url, headers=b, json={"coming": True}).status_code == 200
+    # bob blocks ann after coming: off her list of faces (the count stays), and dan is still there
+    assert c.post("/api/forum/blocks", headers=b, json={"user": con.execute("SELECT id FROM users WHERE tg_id = 1").fetchone()[0]}).status_code == 204
+    assert c.put(url, headers=d, json={"coming": True}).status_code == 200
+    mine = _card(c, a, pid)["help"]
+    assert mine["coming"] == 2 and [x["id"] for x in mine["who"]] == [dan["id"]]
+    # across a block nobody comes anew; taking it back still works
+    assert c.put(url, headers=b, json={"coming": False}).json() == {"coming": 1, "me": False}
+    assert c.put(url, headers=b, json={"coming": True}).status_code == 404
+    assert bob["id"] not in {x["id"] for x in _card(c, a, pid)["help"]["who"]}
+    con.close()
+
+
+def test_expired_ask_not_appealed(env, monkeypatch):
+    c, cfg, _, _ = setup(env, monkeypatch, "noise")  # refused by the AI
+    login(c, 1, "ann")
+    body = "zzz test please read this"
+    r = c.post("/api/forum-posts", headers=tma(1), json={"body": body, "help": 1})
+    assert r.status_code == 400 and r.json()["appeal"] is True
+    con = db.connect(cfg.db_path)
+    con.execute("UPDATE fchan_posts SET help_until = ? WHERE id = ?", (logic.core.now() - 1, r.json()["post"]))
+    # its time is up: no appeal spent on it (the next round would wipe it)
+    assert c.post(f"/api/forum-posts/{r.json()['post']}/appeal", headers=tma(1), json={"body": body}).status_code == 409
+    assert logic.fchannel.appeals_left(con, con.execute("SELECT id FROM users WHERE tg_id = 1").fetchone()[0]) == logic.fchannel.APPEALS_A_DAY
+    con.close()
+
+
 def test_plain_post_has_no_help(env, monkeypatch):
     c, cfg, _, _ = setup(env, monkeypatch)
     login(c, 1, "ann"), login(c, 2, "bob")

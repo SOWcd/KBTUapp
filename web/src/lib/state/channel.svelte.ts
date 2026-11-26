@@ -131,9 +131,11 @@ export async function toggleHeart(post: ChannelFeedPost): Promise<void> {
 
 /** "I'm coming" to an ask for help, flipped on every copy of the card in the same frame; the server's count after,
  *  the old state back if it refuses */
+const comingTap: Record<number, number> = {}; // per post, the latest tap: an older tap's answer never overwrites it
 export async function toggleComing(post: ChannelFeedPost): Promise<void> {
   const id = post.id, was = post.help;
   if (!was) return;
+  const tap = (comingTap[id] = (comingTap[id] ?? 0) + 1);
   // the card in hand too (a shared post opened outside the loaded pages is only that)
   const set = (help: ChannelFeedPost['help']) => { post.help = help; updateChannelPosts((posts) => posts.map((p) => (p.id === id ? { ...p, help } : p))); };
   const me = !was.me;
@@ -141,9 +143,9 @@ export async function toggleComing(post: ChannelFeedPost): Promise<void> {
   try {
     const got = await api.setChannelComing(id, me);
     touched();
-    set({ ...was, ...got });
+    if (comingTap[id] === tap) set({ ...was, ...got });
   } catch (e) {
-    set(was);
+    if (comingTap[id] === tap) set(was);
     throw e;
   }
 }

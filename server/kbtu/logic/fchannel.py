@@ -351,8 +351,11 @@ def _coming(con, v: Viewer, ps) -> dict[int, dict]:
     who: dict[int, list[dict]] = {}
     mine = [p["id"] for p in ps if p["user_id"] == v.id]
     if mine:
+        # a block either way hides the two from each other (forum.block): never a face here, only the count
         for r in rows(con, f"""SELECT c.post_id, {PERSON_COLS} FROM fchan_coming c JOIN users u ON u.id = c.user_id
-                LEFT JOIN students s ON s.user_id = u.id WHERE c.post_id IN (SELECT value FROM json_each(?)) ORDER BY c.at DESC""", json.dumps(mine)):
+                LEFT JOIN students s ON s.user_id = u.id WHERE c.post_id IN (SELECT value FROM json_each(?))
+                AND NOT EXISTS (SELECT 1 FROM blocks b WHERE b.user_id = ? AND b.blocked_id = c.user_id OR b.user_id = c.user_id AND b.blocked_id = ?)
+                ORDER BY c.at DESC""", json.dumps(mine), v.id, v.id):
             who.setdefault(r["post_id"], []).append(person_ref(r))
     out = {}
     for p in ps:
@@ -375,6 +378,8 @@ def set_coming(con, v: Viewer, pid: int, coming: object) -> dict:
             raise ApiError("not_found")
         if p["user_id"] == v.id:
             raise ApiError("bad_input", "own")
+        if coming and one(con, "SELECT 1 FROM blocks WHERE user_id = ? AND blocked_id = ? OR user_id = ? AND blocked_id = ?", v.id, p["user_id"], p["user_id"], v.id):
+            raise ApiError("not_found")  # blocked either way: as if it weren't there (a block is quiet; taking one back still works)
         if coming:
             con.execute("INSERT INTO fchan_coming (post_id, user_id, at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING", (pid, v.id, core.now()))
         else:
@@ -681,6 +686,8 @@ def appeal(con, v: Viewer, pid: int, body: dict) -> dict:
             raise ApiError("not_found")
         if p["refused"] != _refused(pid, text):
             raise ApiError("bad_input", "changed")
+        if _expired(p):  # an ask for help past its time: the next round would wipe it, an appeal spent for nothing
+            raise ApiError("conflict", "expired")
         if appeals_left(con, v.id) <= 0:
             raise ApiError("rate_limited", "appeals")
         if _repeat(con, v.id, text):
