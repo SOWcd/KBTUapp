@@ -172,6 +172,28 @@ def test_render_error_retires_only_its_row(queue, monkeypatch, caplog):
     assert "private payload" not in caplog.text
 
 
+def test_render_busy_database_keeps_the_row_for_its_lease(queue, monkeypatch):
+    con, cfg = queue
+    bad = con.execute("SELECT id FROM bot_outbox WHERE user_id = (SELECT id FROM users WHERE tg_id = 2)").fetchone()[0]
+    render, busy = outbox._render, [True]
+
+    def locked(con, m):
+        if m["id"] == bad and busy[0]:
+            raise sqlite3.OperationalError("database is locked")
+        return render(con, m)
+
+    monkeypatch.setattr(outbox, "_render", locked)
+    tg = Telegram()
+    _round(cfg, tg)
+    assert tuple(con.execute("SELECT sent_at, error FROM bot_outbox WHERE id = ?", (bad,)).fetchone()) == (None, None)
+    assert len(tg.starts) == 41
+    busy[0] = False
+    con.execute("UPDATE bot_outbox SET send_after = 0 WHERE id = ?", (bad,))  # its lease over
+    _round(cfg, tg)
+    assert tuple(con.execute("SELECT sent_at IS NOT NULL, error FROM bot_outbox WHERE id = ?", (bad,)).fetchone()) == (1, None)
+    assert len(tg.starts) == 42
+
+
 @pytest.mark.parametrize("grouped", [None, 99])
 def test_closed_stories_advance_without_downloading(env, grouped):
     _, cfg = env

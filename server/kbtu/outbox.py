@@ -7,6 +7,7 @@ import asyncio
 import json
 import logging
 import secrets
+import sqlite3
 import time
 from collections.abc import Awaitable, Callable
 
@@ -579,6 +580,9 @@ def _take(con, m, forum_channel: bool, pushable: bool = False):
         return _mark(con, m, False, "gone")
     try:
         msg = _render(con, m)
+    except sqlite3.OperationalError as exc:  # busy or locked: passing, so it stays taken and goes again after its lease
+        log.warning("postman: row %s kind %s render: %s", m["id"], m["kind"], type(exc).__name__)
+        return None
     except Exception as exc:  # one malformed row must not cancel messages already in flight
         error = f"render: {type(exc).__name__}"
         log.warning("postman: row %s kind %s %s", m["id"], m["kind"], error)
