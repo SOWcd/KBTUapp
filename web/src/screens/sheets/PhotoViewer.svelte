@@ -4,7 +4,7 @@
   // scroll, its momentum and snapping), a pull down drags the photo away (it shrinks, the black fades; far or fast
   // enough it closes into its square, else springs back); pinch or a double tap zooms at the fingers, a zoomed photo
   // pans with a rubber edge. A tap hides and shows the chrome: "3 / 12" in the capsule, the filmstrip (it follows the
-  // photo, a tap jumps), who added it and when, and ⋯: report (another's: gone for me at once, the admin decides) and
+  // photo, a finger along it scrubs, a tap jumps), who added it and when, and ⋯: report (another's: gone for me at once, the admin decides) and
   // delete (mine, or any for the club's Head+). Telegram's Back or the app's one × (CloseX) leaves. A person's lone photo
   // opens here too: a tap closes it. Every move is transform and opacity (clip-path in the flight).
   import { calm } from '../../ui/fold';
@@ -98,14 +98,96 @@
   $effect(() => { if (overlay.closing) leave(); });
   $effect(() => { overlay.title = list.length > 1 ? `${at + 1} / ${list.length}` : ''; overlay.icon = Images; }); // the capsule's title
 
-  // the filmstrip follows the photo on show, its square in the middle
-  $effect(() => {
-    const el = film?.children[at] as HTMLElement | undefined;
-    if (!film || !el) return;
-    film.scrollTo({ left: el.offsetLeft + el.offsetWidth / 2 - film.clientWidth / 2, behavior: calm() || !film.dataset.ready ? 'instant' : 'smooth' });
-    film.dataset.ready = '1';
+  // The filmstrip, as the phone's Photos scrubs: `pos` is where it stands in photos (fractional), its centre is the
+  // photo on show. A swipe of the big photo moves it with the scroll; a finger dragged along it scrubs (the photo
+  // follows, a tick per photo, a fling coasts and settles), a tap jumps. The centred thumbnail widens to the photo's
+  // own shape. Only the ones on screen exist (an album may hold hundreds); every move is a transform.
+  const STEP = 32, TH = 40, NARROW = 30; // px: a thumbnail's slot, its height, its width when not centred
+  let pos = $state(untrack(() => start)), fw = $state(0), scrubbing = $state(false), scrubFrom = -1;
+  let owned = false, near = -1, swallow = false, raf = 0, vel = 0, lastMv = { x: 0, t: 0 };
+  let scrub: { x: number; p: number; id: number; moved: boolean } | null = null;
+  const wideOf = (p: AlbumPhoto) => Math.max(22, Math.min(84, p.w && p.h ? (TH * p.w) / p.h : TH));
+  // the two either side of pos share the widening by how near each is (one whole when centred, so it never jumps);
+  // it takes a little room either side too, and the rest make way by half of what it grew
+  const frames = $derived.by(() => {
+    const n = list.length, half = Math.ceil(fw / 2 / STEP) + 3, a = Math.floor(pos), b = a + 1, c = Math.round(pos);
+    const grow = (i: number) => { const f = i >= 0 && i < n ? 1 - Math.abs(i - pos) : 0; return f > 0 ? (wideOf(list[i]) - NARROW) * f : 0; };
+    const ga = grow(a), gb = grow(b), ma = 8 * (1 - (pos - a)), mb = 8 * (pos - a);
+    const out: { i: number; x: number; w: number }[] = [];
+    for (let i = Math.max(0, c - half); i <= Math.min(n - 1, c + half); i++) {
+      const x = (i - pos) * STEP + (i === a ? 0 : (Math.sign(i - a) * (ga + ma)) / 2) + (i === b ? 0 : (Math.sign(i - b) * (gb + mb)) / 2);
+      out.push({ i, x, w: NARROW + (i === a ? ga : i === b ? gb : 0) });
+    }
+    return out;
   });
-  const jump = (i: number) => { strip.scrollLeft = i * strip.clientWidth; haptic.select(); };
+  // the film says which photo shows: the big strip jumps to it (instantly: it's under the finger) with a tick
+  function place(p: number) {
+    pos = Math.max(0, Math.min(list.length - 1, p));
+    const i = Math.round(pos);
+    if (i !== near) { near = i; strip.scrollLeft = i * strip.clientWidth; haptic.select(); }
+  }
+  function settle(to: number) {
+    const from = pos, t0 = performance.now(), ms = calm() ? 0 : 220;
+    const step = (t: number) => {
+      const k = ms ? Math.min(1, (t - t0) / ms) : 1;
+      place(from + (to - from) * (1 - (1 - k) ** 3));
+      if (k < 1) raf = requestAnimationFrame(step);
+      else { owned = false; scrubbing = false; }
+    };
+    cancelAnimationFrame(raf); raf = requestAnimationFrame(step);
+  }
+  function coast() {
+    let prev = performance.now();
+    const step = (t: number) => {
+      const dt = t - prev; prev = t;
+      vel *= 0.995 ** dt;
+      place(pos + vel * dt);
+      if (Math.abs(vel) > 0.003 && pos > 0 && pos < list.length - 1) raf = requestAnimationFrame(step);
+      else settle(Math.round(pos));
+    };
+    raf = requestAnimationFrame(step);
+  }
+  function filmDown(e: PointerEvent) {
+    if (scrub) return;
+    cancelAnimationFrame(raf);
+    swallow = false; owned = true; near = Math.round(pos); vel = 0;
+    scrub = { x: e.clientX, p: pos, id: e.pointerId, moved: false };
+    lastMv = { x: e.clientX, t: e.timeStamp };
+  }
+  function filmMove(e: PointerEvent) {
+    if (!scrub || e.pointerId !== scrub.id) return;
+    const d = e.clientX - scrub.x;
+    if (!scrub.moved) {
+      if (Math.abs(d) < 6) return;
+      scrub.moved = true; scrubbing = true; scrubFrom = at;
+      film?.setPointerCapture(e.pointerId);
+    }
+    place(scrub.p - d / STEP);
+    const dt = Math.max(1, e.timeStamp - lastMv.t);
+    vel = 0.7 * (-(e.clientX - lastMv.x) / STEP / dt) + 0.3 * vel; // photos per ms, a little smoothed
+    lastMv = { x: e.clientX, t: e.timeStamp };
+  }
+  function filmUp(e: PointerEvent) {
+    if (!scrub || e.pointerId !== scrub.id) return;
+    const s = scrub;
+    scrub = null;
+    if (!s.moved) { owned = false; return; } // a tap: its click jumps
+    swallow = true; // the click a drag ends with isn't a tap
+    if (e.type !== 'pointerup' || e.timeStamp - lastMv.t > 80) vel = 0; // held still before letting go: no fling
+    if (calm() || !vel) settle(Math.round(pos)); else coast();
+  }
+  function jump(i: number) {
+    if (swallow) { swallow = false; return; }
+    cancelAnimationFrame(raf);
+    owned = true; near = Math.round(pos);
+    settle(i);
+  }
+  // the big strip's own swipe moves the film with it, unless the film is the one moving
+  function scrolled() {
+    at = Math.max(0, Math.min(list.length - 1, Math.round(strip.scrollLeft / strip.clientWidth)));
+    if (!owned) pos = Math.max(0, Math.min(list.length - 1, strip.scrollLeft / strip.clientWidth));
+  }
+  $effect(() => () => cancelAnimationFrame(raf));
 
   // zoom: the photo on show scales and pans by transform; the strip holds still while it's zoomed in.
   // A pull down (not zoomed): dx, dy follow the finger
@@ -133,6 +215,7 @@
     x = fix(x, r.x); y = fix(y, r.y);
   }
   function down(e: PointerEvent) {
+    if (owned && !scrub) { cancelAnimationFrame(raf); owned = false; scrubbing = false; } // a finger on the photo stops a coasting film
     pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
     moved = false; past = false;
     if (pts.size === 1 && z === 1) { drag = { x: e.clientX, y: e.clientY }; last = { y: e.clientY, t: e.timeStamp }; vy = 0; } else drag = null;
@@ -240,23 +323,28 @@
 
 <div class="viewer" bind:this={root}>
   <div class="bd" bind:this={bd} style:opacity={1 - Math.min(dy, 300) / 360}></div>
-  <div class="strip" class:zoomed={z > 1} role="presentation" bind:this={strip} onscroll={() => (at = Math.max(0, Math.min(list.length - 1, Math.round(strip.scrollLeft / strip.clientWidth))))}
+  <div class="strip" class:zoomed={z > 1} role="presentation" bind:this={strip} onscroll={scrolled}
     onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up}>
     {#each list as p, i (p.id)}
       <!-- the small copy under the big one: on screen at once (it's the thumbnail just seen), sharp when the big one lands -->
       <div class="slide"><div class="pic" class:held={held && i === at} style:transform={i === at ? picMove : null}>
         <img src={p.thumb} alt="" decoding="async" draggable="false" loading={Math.abs(i - start) < 2 ? 'eager' : 'lazy'} />
-        <img src={p.url} alt="" decoding="async" draggable="false" loading={i === start ? 'eager' : 'lazy'} />
+        <!-- while scrubbing, the photos flown past show their small copy only: no full-size download for each -->
+        {#if !scrubbing || i === scrubFrom}<img src={p.url} alt="" decoding="async" draggable="false" loading={i === start ? 'eager' : 'lazy'} />{/if}
       </div></div>
     {/each}
   </div>
   <div class="chrome" class:off={!shown}>
     {#if list.length > 1}
-      <div class="film" bind:this={film} role="tablist">
-        {#each list as p, i (p.id)}
-          <button class="fr" class:on={i === at} role="tab" aria-selected={i === at} aria-label="{i + 1} / {list.length}" onclick={() => jump(i)}>
-            <img src={p.thumb} alt="" loading="lazy" decoding="async" draggable="false" /></button>
-        {/each}
+      <div class="tray glass">
+        <div class="film" bind:this={film} bind:clientWidth={fw} role="tablist" tabindex="-1"
+          onpointerdown={filmDown} onpointermove={filmMove} onpointerup={filmUp} onpointercancel={filmUp}>
+          {#each frames as f (list[f.i].id)}
+            <button class="fr" role="tab" aria-selected={f.i === at} aria-label="{f.i + 1} / {list.length}" onclick={() => jump(f.i)}
+              style:width="{f.w}px" style:transform="translate3d({f.x - f.w / 2}px, 0, 0)">
+              <img src={list[f.i].thumb} alt="" decoding="async" draggable="false" style:background-color={list[f.i].color ?? null} /></button>
+          {/each}
+        </div>
       </div>
     {/if}
     {#if list[at]?.by || list[at]?.event}
@@ -301,13 +389,15 @@
   .chrome > :global(*) { pointer-events: auto; }
   .chrome.off { opacity: 0; }
   .chrome.off > :global(*) { pointer-events: none; }
-  /* the filmstrip: small squares in a row, the one on show wider in the middle */
-  .film { position: absolute; left: 0; right: 0; bottom: calc(var(--safe-bottom) + 84px); display: flex; align-items: center; gap: 2px; height: 46px;
-    padding: 0 50%; overflow-x: auto; scrollbar-width: none; overscroll-behavior: contain; touch-action: pan-x; }
-  .film::-webkit-scrollbar { display: none; }
-  .fr { flex: none; width: 30px; height: 42px; padding: 0; overflow: hidden; background: rgba(255, 255, 255, 0.12); opacity: 0.75; -webkit-tap-highlight-color: transparent; }
-  .fr img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .fr.on { width: 52px; height: 46px; margin: 0 4px; opacity: 1; }
+  /* the filmstrip: a calm glass tray (the viewer is black in both themes), slim thumbnails that fade out at its ends,
+     the one on show at its true shape in the middle. Ours to drag (touch-action: none): a finger along it scrubs */
+  .tray { position: absolute; left: 12px; right: 12px; bottom: calc(var(--safe-bottom) + 80px); height: 52px; border-radius: var(--r-s);
+    background-color: rgba(255, 255, 255, 0.08); }
+  .film { position: absolute; inset: 0; overflow: hidden; touch-action: none; border-radius: inherit;
+    -webkit-mask-image: linear-gradient(90deg, transparent, black 12%, black 88%, transparent); mask-image: linear-gradient(90deg, transparent, black 12%, black 88%, transparent); }
+  .fr { position: absolute; left: 50%; top: 6px; height: 40px; padding: 0; overflow: hidden; border-radius: calc(var(--r-xs) / 2); background: rgba(255, 255, 255, 0.12);
+    will-change: transform; contain: strict; -webkit-tap-highlight-color: transparent; }
+  .fr img { width: 100%; height: 100%; object-fit: cover; display: block; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; pointer-events: none; }
   .by { position: absolute; left: 16px; right: 16px; bottom: calc(var(--safe-bottom) + 140px); text-align: center; font: 600 13px/1.2 var(--font-text);
     color: rgba(255, 255, 255, 0.8); text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7); }
   .by.low { bottom: calc(var(--safe-bottom) + 84px); }
