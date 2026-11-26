@@ -2593,4 +2593,6 @@ MIGRATIONS: list[tuple[int, str]] = [
       grp        INTEGER NOT NULL DEFAULT 0 CHECK (grp IN (0, 1)),
       checked_at INTEGER NOT NULL DEFAULT 0
     ) STRICT;"""),
+    # Help given by running our tasks with the contributor's own AI subscription; the credit's words stay as written.
+    (251, "ALTER TABLE credits ADD COLUMN via_ai INTEGER NOT NULL DEFAULT 0 CHECK (via_ai IN (0, 1));"),
 ]
