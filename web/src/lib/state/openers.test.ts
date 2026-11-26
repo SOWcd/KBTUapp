@@ -26,7 +26,8 @@ vi.mock('./session.svelte', () => ({
   loadMe: () => Promise.resolve(),
   asStudent: (action: () => void, ...again: unknown[]) => { h.log.push(['asStudent', ...again]); action(); },
 }));
-vi.mock('./ui.svelte', () => ({ ui: h.ui, say: h.rec('say'), open: h.rec('open') }));
+// open's tap time (its 5th argument, for the counters) is left out: only what opens matters here
+vi.mock('./ui.svelte', () => ({ ui: h.ui, say: h.rec('say'), open: (...a: unknown[]) => h.rec('open')(...a.slice(0, 4)) }));
 vi.mock('./subjects.svelte', () => ({ loadSubjects: () => Promise.resolve() }));
 vi.mock('./channel.svelte', () => ({ channel: h.channel }));
 vi.mock('./data.svelte', () => ({
@@ -41,7 +42,7 @@ vi.mock('../teamConsent', () => ({ setTeamConsent: h.rec('setTeamConsent') }));
 vi.mock('../perms', () => ({ may: (m: { role: string } | undefined) => m?.role === 'president' }));
 vi.mock('../awards', () => ({ achItem: (a: { code: string }) => `item:${a.code}` }));
 vi.mock('../map', () => ({ warmMap: () => {} }));
-vi.mock('../stats', () => ({ count: () => {}, timed: () => {}, failed: () => {} }));
+vi.mock('../stats', () => ({ count: () => {}, timed: () => {} }));
 vi.mock('../../ui/burst', () => ({ burst: () => {} }));
 
 import { openDeepLink } from './openers';
@@ -100,7 +101,7 @@ const cases: [string, unknown[][], string?][] = [
   ['ce_5', [['asStudent'], ['sheets.clubEdit', 5, 'chats']]],
   ['rc_5', [['asStudent'], ['sheets.roundApply', 5, 'link']]],
   ['iv_5', [['asStudent'], ['sheets.roundApply', 5, 'bot']]],
-  ['tc_5', [['asStudent'], ['open', 'EventSheet', { id: 5 }, 'sheet.event', undefined, expect.any(Number)], ['setTeamConsent', true]]],
+  ['tc_5', [['asStudent'], ['open', 'EventSheet', { id: 5 }, 'sheet.event', undefined], ['setTeamConsent', true]]],
   ['memo_5', [['asStudent'], ['sheets.memo', 5]]],
   ['ev_5', [['sheets.event', 5]]],
   [`ev_5_${H10}`, [['keepRef', 5, H10], ['sheets.event', 5]]],
@@ -111,12 +112,12 @@ const cases: [string, unknown[][], string?][] = [
   ['jr_5', [['sheets.joinInbox', 5]]],
   ['u_5', [['sheets.person', 5]]],
   [`u_5_${H10}`, [['api.refer', `5_${H10}`], ['sheets.person', 5]]],
-  ['tm_3', [['open', 'StudioPane', { org: 3 }, 'sheet.studio', undefined, expect.any(Number)], ['sheets.team']], 'club'],
+  ['tm_3', [['open', 'StudioPane', { org: 3 }, 'sheet.studio', undefined], ['sheets.team']], 'club'],
   ['tm_4', [['sheets.club', 4]]],
-  ['st_3', [['open', 'StudioPane', { org: 3 }, 'sheet.studio', undefined, expect.any(Number)]], 'club'],
+  ['st_3', [['open', 'StudioPane', { org: 3 }, 'sheet.studio', undefined]], 'club'],
   ['st_4', [['sheets.club', 4]]],
-  ['sn_3', [['open', 'StudioPane', { org: 3 }, 'sheet.studio', undefined, expect.any(Number)], ['sheets.santaHi', 3]], 'club'],
-  ['sn_6', [['open', 'StudioPane', { org: 6 }, 'sheet.studio', undefined, expect.any(Number)]], 'club'], // a member who may not start it: the Studio alone
+  ['sn_3', [['open', 'StudioPane', { org: 3 }, 'sheet.studio', undefined], ['sheets.santaHi', 3]], 'club'],
+  ['sn_6', [['open', 'StudioPane', { org: 6 }, 'sheet.studio', undefined]], 'club'], // a member who may not start it: the Studio alone
   ['sn_4', [['sheets.club', 4]]],
   ['mg_5', [['asStudent'], ['eventDetails', 5], ['sheets.manage', 5]]],
 ];

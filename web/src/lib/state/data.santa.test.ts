@@ -4,7 +4,7 @@ import { changeSantaChat, data, eventDetails, loadSantaChat, prefetchEvent } fro
 
 vi.mock('../api', async () => ({ ...(await import('../api/errors')), api: { event: vi.fn(), santaChat: vi.fn() } }));
 vi.mock('./ui.svelte', () => ({ close: vi.fn(), overlays: [], say: vi.fn() }));
-vi.mock('../stats', () => ({ count: vi.fn(), timed: vi.fn(), failed: vi.fn() }));
+vi.mock('../stats', () => ({ count: vi.fn(), timed: vi.fn() }));
 vi.mock('../../ui/burst', () => ({ burst: vi.fn() }));
 const teamLoaded = vi.hoisted(() => vi.fn());
 vi.mock('../../screens/sheets/EventTeam.svelte', () => ({ default: teamLoaded() }));
