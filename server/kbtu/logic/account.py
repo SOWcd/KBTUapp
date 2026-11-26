@@ -1381,6 +1381,7 @@ _DEL_GONE = {
     ("qr_helpers", "user_id"),  # my right to help run a check-in (checkin.py)
     ("qr_meet_scans", "user_id"),  # every scan of a team meetup, including membership exceptions
     ("fchan_hearts", "user_id"),
+    ("fchan_coming", "user_id"),  # my "I'm coming" under others' asks for help
     ("fchan_signed", "user_id"),  # who my signed comments under channel posts are (the comments are deleted above, with their messages in the group)
     ("fchan_comments", "user_id"),  # my face under channel posts (the comments stay in Telegram, Telegram's own)
     ("fchan_reply_reports", "user_id"),  # my /report on an anonymous author's reply
@@ -1486,6 +1487,10 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         con.execute("UPDATE comments SET user_id = :p WHERE user_id = :u", me_)
         for (msg,) in rows(con, "SELECT tg_msg FROM fchan_posts WHERE user_id = ? AND status = 'live' AND anon = 0 AND tg_msg > 0", v.id):
             con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, '1')", (f"fch_resign:{msg}",))
+        # who came to my asks for help: a list for my eyes alone, nobody's once I'm gone
+        con.execute("DELETE FROM fchan_coming WHERE post_id IN (SELECT id FROM fchan_posts WHERE user_id = ?)", (v.id,))
+        # and my asks for help end now (the next round takes them down): nobody is left to come to
+        con.execute("UPDATE fchan_posts SET help_until = ? WHERE user_id = ? AND help_until > ?", (core.now(), v.id, core.now()))
         con.execute("UPDATE fchan_posts SET user_id = :p, sign = :gone WHERE user_id = :u AND status = 'live' AND anon = 0", {**me_, "gone": core.GONE["ru"]})
         # the anonymous ones to one placeholder all deleted accounts share: never the named ones' (that would pair them)
         ghost = one(con, "SELECT CAST(value AS INTEGER) FROM meta WHERE key = 'anon_ghost'")

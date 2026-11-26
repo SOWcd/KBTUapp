@@ -2574,4 +2574,15 @@ MIGRATIONS: list[tuple[int, str]] = [
     # the creator's archived lanyard (logic.ARCHIVE), with skin_pick 'sower' (its CHECK can't take a new value): NULL is
     # his own SOWER
     (248, "ALTER TABLE users ADD COLUMN skin_look TEXT;"),
+    # "Ask for help" (logic/fchannel.py): a signed channel post that leaves the feed and the channel by itself at
+    # help_until; fchan_coming: who pressed "I'm coming", shown to its author alone, gone with the post
+    (249, """ALTER TABLE fchan_posts ADD COLUMN help_until INTEGER;
+    CREATE INDEX fchan_posts_help ON fchan_posts(help_until) WHERE help_until IS NOT NULL;
+    CREATE TABLE fchan_coming (
+      post_id INTEGER NOT NULL REFERENCES fchan_posts(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      at      INTEGER NOT NULL,
+      PRIMARY KEY (post_id, user_id)
+    ) STRICT;
+    CREATE INDEX fchan_coming_by_user ON fchan_coming(user_id);"""),
 ]

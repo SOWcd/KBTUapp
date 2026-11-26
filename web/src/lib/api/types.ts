@@ -83,6 +83,9 @@ export interface ChannelPost { id: Id; body: string; anon: boolean; nick: Nick; 
  *  (to mark), a sentence why, one on what to change. Mine alone; null: the app's own words */
 export interface ForumWhy { quote: string | null; reason: string; fix: string | null }
 export interface ChannelHeart { hearts: number; hearted: boolean }
+export interface ChannelHelp { until: Ts; coming: number; me: boolean; who?: PersonRef[] }
+/** how long an ask for help stays up, in hours (the server's HELP_HOURS); 3 first */
+export const HELP_HOURS = [1, 3, 6, 12, 24] as const;
 export type ChannelOrder = 'for_you' | 'new';
 export interface ChannelFeedPage { posts: ChannelFeedPost[]; cursor: string | null }
 export interface ChannelVisit { seen: number; latest: number }
@@ -97,6 +100,9 @@ export interface ChannelFeedPost extends ChannelHeart { id: Id; body: string; st
   reactions: { emoji: string; n: number }[]
   hot: boolean /* being discussed: 5+ students' comments in the last hour, or 3+ people besides its author in the last day */
   photos: Media[] /* up to 4, in order (an album in the channel) */
+  /** an ask for help: up until `until` (then out of the feed), how many said "I'm coming", whether I did; who: to
+   *  its author alone */
+  help?: ChannelHelp
   /** my held post (to me alone): why it waits: I sent it to a moderator, anonymous with photos, or the AI's own words (kept: a reload keeps them) */
   review?: { kind: 'appeal' | 'photo' | 'tg' | 'ai'; explain: ForumWhy | null } }
 /** The moderators' list: held posts (why: 'ai', 'person', 'check', 'busy') and this week's live ones. An anonymous
