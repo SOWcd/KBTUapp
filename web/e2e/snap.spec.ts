@@ -53,12 +53,22 @@ async function shot(p: Phone, name: string, part?: Locator) {
     const decoded = (i: HTMLImageElement) => Promise.race([i.decode().catch(() => {}), new Promise((r) => setTimeout(r, 3000))]);
     return Promise.all([...document.images, ...css].map(decoded));
   });
-  // the light on the glass and the badge's sheen (glass.ts: --gx/--gy, the phone's tilt or a slow drift) held still.
-  // The badge's hidden back (Hero.svelte) mounts when the page is idle, at no fixed moment, and the 3D card around it
-  // left the face's text and crest rasterised one of two ways (profile.png: 513 px, either theme, now and then): the
-  // picture takes the face alone, flat
-  const style = '* { --gx: 0 !important; --gy: 0 !important; } .card > .back { display: none !important; } .card { transform-style: flat !important; }';
-  await expect(part ?? p.page).toHaveScreenshot(`${name}.png`, { style });
+  // the light on the glass and the badge's sheen (glass.ts: --gx/--gy, the phone's tilt or a slow drift) held still
+  if (name === 'profile') console.log('DIAG ' + test.info().project.name + ' r' + test.info().repeatEachIndex + ' ' + await p.page.evaluate(() => {
+    const out: Record<string, unknown> = { sy: scrollY };
+    for (const s of ['.hang', '.swing', '.card', '.badge', '.top', '.medal', '.nm', '.role', '.foot', '.back']) {
+      const el = document.querySelector<HTMLElement>(s);
+      if (!el) { out[s] = null; continue; }
+      const r = el.getBoundingClientRect(), cs = getComputedStyle(el);
+      out[s] = [r.x, r.y, r.width, r.height, cs.transform, cs.opacity, el.className];
+    }
+    const sc: number[] = [];
+    for (let a = document.querySelector('.hang')?.parentElement; a; a = a.parentElement) if (a.scrollTop || a.scrollLeft) sc.push(a.scrollTop, a.scrollLeft);
+    out.scroll = sc;
+    out.anims = document.getAnimations().map((a) => [(a.effect as KeyframeEffect)?.target?.className?.toString().slice(0, 40), a.playState, a.currentTime, (a as CSSAnimation).animationName ?? (a as CSSTransition).transitionProperty ?? 'waapi']);
+    return JSON.stringify(out);
+  }));
+  await expect(part ?? p.page).toHaveScreenshot(`${name}.png`, { style: '* { --gx: 0 !important; --gy: 0 !important; }' });
 }
 
 const ali = async (open: (who: 'Ali') => Promise<Phone>) => settled(await open('Ali'));
