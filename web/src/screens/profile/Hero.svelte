@@ -338,10 +338,6 @@
   .prep { position: absolute; inset: 0; z-index: -1; overflow: hidden; visibility: hidden; pointer-events: none; contain: strict; }
   .prep :global(*) { animation: none !important; }
   .rest .badge { transform: none; } /* and still: a hidden card, or one under the QR's blur (re-blurred on every move) */
-  /* calm (reduced motion, power saving) never tilts (glass.ts reads no sensor): the card stays flat, not a 3D layer whose
-     no-op transition on each Profile open left its text rasterised one way or another (e2e profile.png flaked by 513 px) */
-  :global(.lowfx) .badge { transform: none; transition: none; }
-  @media (prefers-reduced-motion: reduce) { .badge { transform: none; transition: none; } }
   .hang { --kb: linear-gradient(155deg, #2A4FD6, #121A3D 72%); --sh: 8, 12, 34; display: flex; flex-direction: column; align-items: center; perspective: 900px; margin-top: -14px; padding-top: 52px; }
   /* the word sits clear of the clip (it hid behind it at the bottom) */
   /* the strap swings with the card, from its top (it stood still while the card moved) */
