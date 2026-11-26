@@ -30,11 +30,11 @@ const freePort = () => new Promise<number>((ok, fail) => {
   s.listen(0, '127.0.0.1', () => { const p = (s.address() as { port: number }).port; s.close(() => ok(p)); });
 });
 
-async function startQa(): Promise<Qa & { stop: () => void }> {
+async function startQa(now?: number): Promise<Qa & { stop: () => void }> {
   const port = await freePort();
   const dir = mkdtempSync(join(tmpdir(), 'kbtu-e2e-'));
   const db = join(dir, 'qa.db');
-  const proc: ChildProcess = spawn(PYTHON, ['tools/qa.py', '--port', String(port), '--db', db], {
+  const proc: ChildProcess = spawn(PYTHON, ['tools/qa.py', '--port', String(port), '--db', db, ...(now ? ['--now', String(now)] : [])], {
     cwd: SERVER, env: { ...process.env, PYTHONUNBUFFERED: '1' }, stdio: ['ignore', 'pipe', 'pipe'], detached: true,
   });
   const links: Partial<Record<Who, string>> = {};
@@ -86,6 +86,9 @@ export type Phone = {
 export type OpenOpts = { path?: string; moments?: boolean };
 
 const theme = (info: TestInfo) => (info.project.metadata?.theme as 'dark' | 'light') ?? 'dark';
+/** a project's fixed clock (Unix seconds; the snapshot projects): the server's and the browser's, so every screen says
+ *  the same "in 2 days" on every run */
+const clock = (info: TestInfo) => info.project.metadata?.now as number | undefined;
 
 async function openPhone(page: Page, qa: Qa, who: Who, info: TestInfo, faults: Faults, opts: OpenOpts = {}): Promise<Phone> {
   const dark = theme(info) === 'dark';
@@ -115,6 +118,7 @@ async function openPhone(page: Page, qa: Qa, who: Who, info: TestInfo, faults: F
       },
     };
   });
+  if (clock(info)) await page.clock.install({ time: clock(info)! * 1000 }); // runs on from there; a test may fast-forward it
   page.on('console', (m) => { if (m.type() === 'error') faults.errors.push(`console: ${m.text()}`); });
   page.on('pageerror', (e) => faults.errors.push(`page: ${e.message}`));
   page.on('requestfailed', (r) => {
@@ -189,8 +193,8 @@ export async function look(page: Page, info: TestInfo, step: string): Promise<vo
 
 export const test = base.extend<{ qa: Qa; open: (who: Who, opts?: OpenOpts) => Promise<Phone>; faults: Faults }>({
   // eslint-disable-next-line no-empty-pattern
-  qa: async ({}, use) => {
-    const qa = await startQa();
+  qa: async ({}, use, info) => {
+    const qa = await startQa(clock(info));
     try { await use(qa); } finally { qa.stop(); }
   },
   faults: async ({}, use) => { // eslint-disable-line no-empty-pattern
