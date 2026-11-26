@@ -26,7 +26,7 @@ from typing import Annotated, Any, Literal
 
 import anyio
 import httpx
-from fastapi import Body, Depends, FastAPI, Header, Query, Request
+from fastapi import BackgroundTasks, Body, Depends, FastAPI, Header, Query, Request
 from fastapi.datastructures import Default, DefaultPlaceholder
 from fastapi.dependencies.utils import get_typed_return_annotation
 from fastapi.routing import APIRoute
@@ -822,10 +822,19 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                                    **({"appeals": logic.appeals.summary(con, v)} if logic.appeals.on(con, cfg.appeals, v) else {}),
                                    **({"ask": logic.appeals.ask_summary(con, v)} if logic.appeals.ask_on(con, cfg.ask, v) else {})}
 
+    async def app_chats(uid: int, tg: int) -> None:
+        """After /api/me's answer: am I in the app's channel and group (logic/appchats.py, once a day at most)."""
+        got = await logic.appchats.look(lambda m, p: bot._call(cfg, ai_http(), m, p, 0), tg)
+        if got:
+            with app.state.pool.conn() as con:
+                await run_in_threadpool(logic.appchats.save, con, uid, got)
+
     @app.get("/api/me")
-    def get_me(request: Request, con: Con, v: Me, response: Response, report_log: Annotated[bool, Query(alias="reportLog")] = True,
-               platform: str | None = None):
+    def get_me(request: Request, con: Con, v: Me, response: Response, later: BackgroundTasks,
+               report_log: Annotated[bool, Query(alias="reportLog")] = True, platform: str | None = None):
         logic.account.seen_platform(con, v.id, platform)  # no extra request: the app's own /api/me says it
+        if cfg.background and cfg.bot_token and (tg := db.maybe(con, logic.appchats.due, con, v.id)):
+            later.add_task(app_chats, v.id, tg)
         if cfg.reports:
             response.headers["Cache-Control"] = "private, no-store"
         if not hasattr(request.state, "web_token"):  # Telegram's signed data, never a browser session's stored username

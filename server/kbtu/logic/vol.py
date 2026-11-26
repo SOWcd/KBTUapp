@@ -774,7 +774,7 @@ def plan(data: bytes, balance: str | None = None) -> dict:
                     rec["balance"] = round(float(row[balance].replace(",", ".").replace(" ", "")) * 60)
                     if not 0 <= rec["balance"] <= 100000 * 60:
                         raise ValueError
-                except ValueError:
+                except (ValueError, OverflowError):
                     rec["balance"] = 0
                     out["problems"].append(f"{name} row {r}: {balance!r} isn't a number of hours (no balance)")
     return out

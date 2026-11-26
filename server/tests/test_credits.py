@@ -63,7 +63,7 @@ def test_visibility_matrix(env):
     c.get("/api/me", headers=tma(tgs["guest"], "Guestname"))  # opened the app, never signed in as a student
     tgs["nobody"] = 7000199  # never opened the app
     for s, tg in tgs.items():
-        _line(con, tg, word=s)
+        credits.set_ai(con, _line(con, tg, word=s), True)
         _line(con, tg, day=None, word=f"{s}-suggested")
     for s in ("yes", "back", "gone", "banned"):
         assert _yes(c, tgs[s]).status_code == 200
@@ -92,7 +92,7 @@ def test_visibility_matrix(env):
     assert "Guestname" not in raw and "tg_id" not in raw and "whose" not in raw
     assert {p["person"]["id"] for p in got["people"] if p["person"]} == shown
     assert set(got) == {"founder", "idea", "team", "people", "mine", "version"} and got["team"] == []
-    assert all(set(p) == {"person", "items"} and all(set(i) == {"kind", "text", "on"} for i in p["items"]) for p in got["people"])
+    assert all(set(p) == {"person", "items"} and all(set(i) == {"kind", "text", "on", "via_ai"} and i["via_ai"] is True for i in p["items"]) for p in got["people"])
     # the deleted account: its line stays, with no Telegram id left on it, and its answers are gone
     assert con.execute("SELECT tg_id FROM credits WHERE en = 'en gone'").fetchone()[0] is None
     assert con.execute("SELECT COUNT(*) FROM credit_consents c JOIN users u ON u.id = c.user_id WHERE u.tg_id < 0").fetchone()[0] == 0
@@ -167,7 +167,7 @@ def test_order_and_grouping(env):
         (None, ["en stranger b"]), (None, ["en stranger a"]), (None, ["en shy a"]), (None, ["en shy b"]),
         ("Many T", [f"en many 2026-{d}" for d in ("10-10", "09-04", "09-03", "09-02", "09-01")]),
         ("Old T", ["en w203"])]
-    assert _get(c, 7000201)["people"][5]["items"][0] == {"kind": "find", "text": {"ru": "ru many 2026-10-10", "kk": "kk many 2026-10-10", "en": "en many 2026-10-10"}, "on": "2026-10-10"}
+    assert _get(c, 7000201)["people"][5]["items"][0] == {"kind": "find", "text": {"ru": "ru many 2026-10-10", "kk": "kk many 2026-10-10", "en": "en many 2026-10-10"}, "on": "2026-10-10", "via_ai": False}
     # twelve nameless lines of one day: not in the order (nor the reverse) they were written in
     for i in range(12):
         _line(con, 7000300 + i % 2, "idea", "2026-07-07", f"same {i:02d}")
@@ -191,7 +191,7 @@ def test_creator_and_idea_author(env):
     got = _get(c, 7000302)
     assert got["founder"]["id"] == boss["id"] and set(got["founder"]) <= {"id", "name", "nick", "avatar", "founder", "mark", "staff", "realName", "i18n"}
     assert "en boss" not in json.dumps(got)
-    item = {"kind": "find", "text": {"ru": "ru muse", "kk": "kk muse", "en": "en muse"}, "on": "2026-11-01"}
+    item = {"kind": "find", "text": {"ru": "ru muse", "kk": "kk muse", "en": "en muse"}, "on": "2026-11-01", "via_ai": False}
     assert got["idea"] == {"person": got["idea"]["person"], "items": [item]} and got["idea"]["person"]["id"] == muse["id"]
     assert got["people"] == [] and got["mine"] == {"consent": None, "rev": None, "idea": True, "items": [item]}
     got = _no(c, 7000302).json()
@@ -513,6 +513,66 @@ def test_cli(env, capsys, monkeypatch):
     admin.main(["credit", "del", "1"])
     assert con.execute("SELECT COUNT(*) FROM credits").fetchone()[0] == 0
 
+
+
+def test_ai_tag_migration(tmp_path, monkeypatch):
+    """An existing line is untagged after the upgrade; its text and release date survive."""
+    path = str(tmp_path / "credits.db")
+    with monkeypatch.context() as m:
+        m.setattr(db, "MIGRATIONS", [step for step in db.MIGRATIONS if step[0] < 251])
+        db.init(path)
+    con = db.connect(path)
+    con.execute("INSERT INTO credits (tg_id, kind, ru, kk, en, shipped_on, created_at) VALUES (7000601, 'code', 'a', 'b', 'c', '2026-11-01', 1)")
+    before = dict(con.execute("SELECT * FROM credits").fetchone())
+    con.close()
+    db.init(path)
+    con = db.connect(path)
+    assert dict(con.execute("SELECT * FROM credits").fetchone()) == {**before, "via_ai": 0}
+    con.execute("INSERT INTO credits (tg_id, kind, ru, kk, en, created_at) VALUES (7000602, 'find', 'a', 'b', 'c', 2)")
+    assert con.execute("SELECT via_ai FROM credits WHERE tg_id = 7000602").fetchone()[0] == 0
+    con.close()
+
+
+def test_ai_tag_cli_and_api(env, capsys, monkeypatch):
+    """Only the tag changes: it follows each line through naming, hiding and the owner's CLI."""
+    c, cfg = env
+    con = _con(cfg)
+    monkeypatch.setattr(admin.config, "load", lambda: cfg)
+    login(c, 7000601, "helper")
+    plain = _line(con, 7000601, kind="code", word="plain")
+    base = ["credit", "add", "7000601", "code", "ru line", "kk line", "en line"]
+    for opts in (["--ai", "--gh", "helper", "--name", "Helper"], ["--name", "Helper", "--ai", "--gh", "helper"],
+                 ["--gh", "helper", "--name", "Helper", "--ai"]):
+        admin.main([*base, *opts])
+    admin.main(["credit", "add", "gh:octo", "find", "ru github", "kk github", "en github", "--ai"])
+    tagged = [r[0] for r in con.execute("SELECT id FROM credits WHERE via_ai = 1")]
+    assert len(tagged) == 4
+    assert con.execute("SELECT via_ai FROM credits WHERE id = ?", (plain,)).fetchone()[0] == 0
+    assert all(i["via_ai"] is False for p in _get(c, 7000601)["people"] for i in p["items"])  # still suggested
+    for cid in tagged:
+        credits.ship(con, cid, "2026-11-02")
+    before = _get(c, 7000601)
+    assert sorted(i["via_ai"] for i in before["mine"]["items"]) == [False, True, True, True]
+    github = next(p for p in before["people"] if p.get("gh") == "octo")
+    assert github["items"][0]["via_ai"] is True
+    cid = tagged[0]
+    row = dict(con.execute("SELECT * FROM credits WHERE id = ?", (cid,)).fetchone())
+    for value, expected in (([], 0), ([], 1), (["0"], 0), (["0"], 0), (["1"], 1), (["1"], 1)):
+        admin.main(["credit", "ai", str(cid), *value])
+        assert dict(con.execute("SELECT * FROM credits WHERE id = ?", (cid,)).fetchone()) == {**row, "via_ai": expected}
+    assert _get(c, 7000601) == before
+    capsys.readouterr()
+    admin.main(["credit", "list"])
+    assert "code [AI]" in capsys.readouterr().out
+    for bad in (["credit", "ai", str(cid), "2"], ["credit", "ai", str(cid), "true"], ["credit", "ai", "99999"],
+                ["credit", "ai", str(cid), "1", "0"], ["credit", "ai"], [*base, "--ai", "--ai"], [*base, "--ai", "1"],
+                [*base, "--gh", "--ai"], [*base, "--ai", "--unknown"], [*base, "--ai", "--name"]):
+        with pytest.raises(SystemExit):
+            admin.main(bad)
+    assert _get(c, 7000601) == before  # invalid arguments write nothing
+    hidden = _no(c, 7000601).json()
+    assert hidden["mine"]["items"] == before["mine"]["items"]
+    assert all(p["person"] is None for p in hidden["people"])
 
 
 def test_github_login(env, capsys, monkeypatch):

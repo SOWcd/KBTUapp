@@ -16,7 +16,7 @@ from .. import media, portal
 from .. import db
 from ..db import tx
 
-from . import notifications, pymk
+from . import appchats, notifications, pymk
 from .core import (_LAT, LATIN_NAME, NAME, STUDENT_ID, ApiError, NO_END, PERSON, RANK, Viewer, _rights_from, avatar_of, clean_nick, log, log_action,
     name_i18n, need_student, one, org_ref, person_ref, rows, shown_name)
 
@@ -604,6 +604,7 @@ def me(con, v: Viewer) -> dict:
                      "friendRequests": one(con, "SELECT COUNT(*) FROM friend_requests WHERE to_id = ? AND status = 'pending'", v.id)[0] if v.student else 0,
                      "inbox": inbox.count(con, v)},  # Admin's shield: everything waiting for the staff (logic/inbox.py)
         "unlocked": unlocked(con, v),
+        **appchats.mine(con, v.id),  # in the app's channel / group: Profile hides their rows
         "skin": _skin(con, v.id) if s else None,
         "frame": u["frame"] if s and u["frame"] in FRAMES else None,
         "deleteAt": u["delete_at"],  # my week to change my mind, whoever may ask it (a student, relink, an Apple account)
@@ -1389,6 +1390,7 @@ _DEL_GONE = {
     ("research_requests", "user_id"),  # signed research proposals
     ("research_answers", "user_id"),  # delete signed answer contents; anonymous answers have no account link
     ("research_participants", "user_id"),  # only the fact that I answered, never a link to an answer
+    ("app_chats", "user_id"),  # whether I am in the app's channel and group (logic/appchats.py)
     ("helper_offers", "user_id"),  # my offers to help the app (helpus.py)
     ("team_asks", "user_id"),  # my asks to come to my club's event as a guest
     ("credit_team", "user_id"),  # my place in People of the app's Team

@@ -269,7 +269,7 @@ export interface PersonRef { id: Id; name: string; nick?: string | null; realNam
  *  no yes from them (or no account, banned, deleted): the app signs the line "Student", each such line a row of its
  *  own (nothing says two of them are one person's), nothing else comes */
 export type CreditKind = 'idea' | 'find' | 'code';
-export interface CreditItem { kind: CreditKind; text: Record<Lang, string>; on: string /* YYYY-MM-DD it shipped */ }
+export interface CreditItem { kind: CreditKind; text: Record<Lang, string>; on: string /* YYYY-MM-DD it shipped */; via_ai: boolean }
 export interface CreditPerson { honor?: boolean; person: PersonRef | null; gh?: string /* a GitHub login: a nameless card's lines together under it, or a named person's own */; name?: string /* no account yet: the name the team gave, no face */; items: CreditItem[] }
 export interface Credits {
   founder: PersonRef | null;
@@ -371,6 +371,8 @@ export interface Me {
   appeals?: { consent: boolean; sg: boolean }; // appeals to SG are on for me (APPEALS); agreed to its section; SG's queue mine
   ask?: { consent: boolean; staff: boolean };  // the help desk (KRI's "Ask a person", ASK) is on for me; its own consent; its queue mine
   vol?: VolMe;                  // GET /api/me only: the volunteers ledger's club (server logic/vol.py, VOLUNTEERS); absent: nothing of it for me
+  inChannel?: boolean;          // in the app's Telegram channel / topics group (server logic/appchats.py): Profile hides their rows
+  inGroup?: boolean;
   bigScreen?: 'pair' | 'qr' | null; // Profile's "Big screen" row: scan a computer's QR (who runs events), or a helper's own QR
   bio: string;
   showcase: string[];

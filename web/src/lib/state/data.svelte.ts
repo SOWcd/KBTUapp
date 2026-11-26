@@ -20,7 +20,7 @@ import { SvelteSet } from 'svelte/reactivity';
 import { dayNo, nowTs } from '../time';
 import { clearCache } from './cache';
 import { castingOn } from '../posts';
-import { unreachable } from '../offlineTickets';
+import { unreachable } from '../api/errors';
 
 export const data = $state({
   support: null as Support | null,

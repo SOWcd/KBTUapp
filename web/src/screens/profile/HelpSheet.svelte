@@ -1,8 +1,9 @@
 <script lang="ts">
-  // "Help the app": students make it, and here is how to join in. The ways out (the bugs-and-ideas group, the code,
-  // what is wrong, the people already named), then a short signed offer the creator reads in Admin (server
-  // logic/helpus.py; the line under the form is its own consent, sent as CONSENT).
+  // "Help the app": students make it, and here is how to join in. The ways out (the donate page, the bugs-and-ideas
+  // group, the code, what is wrong, the people already named), then a short signed offer the creator reads in Admin
+  // (server logic/helpus.py; the line under the form is its own consent, sent as CONSENT).
   import HeartHandshake from '@lucide/svelte/icons/heart-handshake';
+  import HandHeart from '@lucide/svelte/icons/hand-heart';
   import MessagesSquare from '@lucide/svelte/icons/messages-square';
   import MessageCircleWarning from '@lucide/svelte/icons/message-circle-warning';
   import UsersRound from '@lucide/svelte/icons/users-round';
@@ -10,6 +11,7 @@
   import { api, ApiErr } from '../../lib/api';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
+  import { session } from '../../lib/state/session.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic, openLink } from '../../lib/tg';
   import { CODE, TALK } from '../../lib/feedback';
@@ -45,6 +47,7 @@
   <div class="help">
     <p class="t-body dim">{t('help.text')}</p>
     <Group footnote={t('help.credit')}>
+      {#if session.donate}<Row icon={HandHeart} title={t('set.donate')} tone="action" accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('donate'); }} />{/if}
       <Row icon={MessagesSquare} title={t('help.bug')} value={t('app.group').toLowerCase()} accessory="external" onclick={() => go(TALK)} />
       <Row icon={MessageCircleWarning} title={t('fb.title')} accessory="chevron" onclick={() => { haptic.tap(); sheets.feedback(); }} />
       <Row icon={GitHubMark} title={t('help.code')} value="GitHub" accessory="external" onclick={() => go(`${CODE}/blob/main/CONTRIBUTING.md`)} />
