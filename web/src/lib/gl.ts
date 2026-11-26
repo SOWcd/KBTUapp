@@ -5,7 +5,8 @@
 // then fail() is called and the caller keeps its CSS picture. Uniforms the caller doesn't declare: uRes (px), uTime (s).
 
 /** a phone that should keep the CSS picture: few cores or little memory (the browser's own words, where it says them) */
-export const weak = () => (navigator.hardwareConcurrency || 8) <= 4 || ((navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 8) <= 3;
+// iOS WebKit reports few cores even on new iPhones (owner saw no WebGL orb): only 2 or fewer counts as weak; the first-frames budget catches the rest
+export const weak = () => (navigator.hardwareConcurrency || 8) <= 2 || ((navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 8) <= 3;
 
 export type Shader = {
   gl: WebGLRenderingContext;
