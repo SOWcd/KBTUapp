@@ -11,7 +11,7 @@ vi.mock('../api', async () => ({
 vi.mock('./session.svelte', () => ({ session: { me: { id: 1, student: {}, memberships: [{}] } }, asStudent: vi.fn(), loadMe: vi.fn() }));
 vi.mock('./ui.svelte', () => ({ close: vi.fn(), overlays: [], say: vi.fn() }));
 vi.mock('../i18n/index.svelte', () => ({ t: (k: string) => k, tn: (k: string) => k, subjectOf: vi.fn(), i18n: { lang: 'en' } }));
-vi.mock('../tg', () => ({ tg: { initData: '' }, haptic: {}, requestWriteAccess: vi.fn() })); // tg: recovery.ts, through offlineTickets
+vi.mock('../tg', () => ({ tg: { initData: '' }, haptic: {}, requestWriteAccess: vi.fn() }));
 vi.mock('../stats', () => ({ count: vi.fn() }));
 vi.mock('../../ui/burst', () => ({ burst: vi.fn() }));
 vi.mock('./cache', () => ({ clearCache: vi.fn() }));
