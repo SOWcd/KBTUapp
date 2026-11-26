@@ -261,7 +261,7 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         if not a or a["status"] != ("approved" if ref[2] == "yes" else "rejected"):  # an Undo since: nothing to say
             return None
         return (*texts.bot_message(lang, "club_yes" if ref[2] == "yes" else "club_no", name=a["name"]), f"cl_{a['org_id']}" if ref[2] == "yes" and a["org_id"] else "newclub")
-    if kind == "club_handover":  # ho:<org>, to the new President: the old one deleted the account (logic._hand_over)
+    if kind == "club_handover":  # ho:<org>, to the new President: the old one deleted the account (logic.account._hand_over)
         o = one(con, "SELECT name FROM orgs WHERE id = ?", int(ref[1]))
         return (*texts.bot_message(lang, kind, name=o["name"]), f"cl_{ref[1]}") if o else None
     if kind == "club_emoji":  # emo:<org>, to the President: the name lost its emoji (logic.strip_emoji_names)

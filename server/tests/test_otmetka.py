@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 
 from kbtu import checkin, db, roster
-from test_checkin_door import _mem, _qr, _reg
+from test_checkin_door import _mem, _qr
 from test_core import delete_now, login, tma, env  # noqa: F401
 from test_one_qr import _crew, _marks, _setup
 from test_review_checkin import _scan

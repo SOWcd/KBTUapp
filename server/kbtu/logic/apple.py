@@ -26,7 +26,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 
 from . import core
-from .core import ApiError, one, rows
+from .core import ApiError, one
 from .daily import visit
 
 log = logging.getLogger("kbtu.apple")

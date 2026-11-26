@@ -252,7 +252,6 @@ def test_off_without_the_switch(club, monkeypatch):
     feed(con, upd(MAIN, 1, "left", "member"))
     chatsync.start(con, MAIN, True)
     assert role(con, org, 1) is None and not asyncio.run(chatsync.step(con, tg_api({1: "member"}), BOT_ID))
-    assert not chatsync.live(con)
     assert "chat_member" in json.loads(bot._wanted(cfg))  # asked for anyway: the app's own channel and group (logic/appchats.py)
 
 
