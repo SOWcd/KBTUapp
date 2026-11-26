@@ -224,6 +224,18 @@ export const test = base.extend<{ qa: Qa; open: (who: Who, opts?: OpenOpts) => P
 
 export { expect };
 
+/** On a fixed clock (the snap-* projects): the Afisha in, then the launch's greeting (a toast: "Physics in 40 min",
+ *  once the day's data is in) come and gone. Its moment depends on the server's speed, so it would land on some
+ *  screens' pictures or checks and not others. */
+export async function settled(p: Phone): Promise<Phone> {
+  await expect(p.page.getByRole('button', { name: 'Board games night', exact: true }).first()).toBeVisible();
+  const hi = p.page.locator('.toast');
+  await hi.waitFor({ timeout: 5000 }).catch(() => { /* no greeting this time */ });
+  await p.page.clock.fastForward(10_000);
+  await expect(hi).toHaveCount(0);
+  return p;
+}
+
 /** The page reloaded, as a relaunch: WebKit reports the app's own start-up navigation as an interrupted reload
  *  ("Frame load interrupted"), the page loads all the same */
 export async function reload(page: Page): Promise<void> {

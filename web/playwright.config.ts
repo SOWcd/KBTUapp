@@ -1,6 +1,6 @@
 // End-to-end: the real app (web/dist) on a real server (server/tools/qa.py, a fresh seeded database per test) in
 // iPhone-sized windows, both themes, WebKit and Chromium. `npm run e2e` builds first; e2e/fixtures.ts has the harness,
-// e2e/README.md how to run it and the screen snapshots (snap-* projects, e2e/snap.spec.ts).
+// e2e/README.md how to run it, the screen snapshots and the a11y check (snap-* projects, e2e/snap.spec.ts, e2e/a11y.spec.ts).
 import { defineConfig, devices } from '@playwright/test';
 
 const phones = [
@@ -40,7 +40,7 @@ export default defineConfig({
   // every flow in every browser, phone size and theme: 8 projects
   ...browsers.flatMap((b) => phones.flatMap((p) => themes.map((theme) => ({
     name: `${b.name}-${p.name}-${theme}`,
-    testIgnore: 'snap.spec.ts',
+    testIgnore: /(snap|a11y)\.spec\.ts$/,
     use: {
       ...b.device,
       browserName: b.device.defaultBrowserType,
@@ -55,7 +55,7 @@ export default defineConfig({
   // the key screens' pictures: Chromium at 375x812, motion reduced, on the fixed clock
   ...themes.map((theme) => ({
     name: `snap-${theme}`,
-    testMatch: 'snap.spec.ts',
+    testMatch: /(snap|a11y)\.spec\.ts$/, // and the a11y check, on the same screens and clock
     use: {
       ...devices['Pixel 7'],
       viewport: phones[0].viewport,

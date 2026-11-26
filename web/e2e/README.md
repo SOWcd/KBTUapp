@@ -33,9 +33,21 @@ cd web && npm run build && npm run e2e:snap -- --update-snapshots
 
 Look at the new pictures before committing them. A new screen: a `test` in `snap.spec.ts` that calls `shot()`.
 
+## Accessibility
+
+`a11y.spec.ts` runs axe-core on the Afisha, Clubs, Forum and Me tabs and the event, ticket and person sheets, in the
+same `snap-*` projects (375 px, both themes, the fixed clock), with the app in English. Serious and critical
+violations only; a new one fails the test. What the app had when the check came in is listed in `a11y-allow.txt`, one
+line per element (`<theme> <screen> <rule> <element>`). Fixed one? Strike its line: the test names lines that no
+longer occur in its annotations (`a11y fixed: ...`). Never add a line for something new.
+
+```bash
+npx playwright test e2e/a11y.spec.ts --project=snap-dark --project=snap-light   # no Docker needed
+```
+
 ## CI
 
 `.github/workflows/ci.yml`, job `e2e`, on every PR that touches `web/` or `server/`: the flows in Chromium 375 dark in
-two shards, and the snapshots beside them, all through `linux.sh`. When it fails, the run's artifact `e2e-<n>` has
+two shards, and the snapshots and the a11y check beside them, all through `linux.sh`. When it fails, the run's artifact `e2e-<n>` has
 `results/` (for a snapshot: `*-expected.png`, `*-actual.png`, `*-diff.png`; a trace per failed test) and the HTML
 report.
