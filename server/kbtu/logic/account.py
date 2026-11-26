@@ -1489,6 +1489,8 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         con.execute("UPDATE comments SET user_id = :p WHERE user_id = :u", me_)
         for (msg,) in rows(con, "SELECT tg_msg FROM fchan_posts WHERE user_id = ? AND status = 'live' AND anon = 0 AND tg_msg > 0", v.id):
             con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, '1')", (f"fch_resign:{msg}",))
+        # my edits of my posts (no user id: through the posts), waiting or kept for the pace: gone with me, their photos too
+        con.execute("DELETE FROM fchan_edits WHERE post_id IN (SELECT id FROM fchan_posts WHERE user_id = ?)", (v.id,))
         # who came to my asks for help: a list for my eyes alone, nobody's once I'm gone
         con.execute("DELETE FROM fchan_coming WHERE post_id IN (SELECT id FROM fchan_posts WHERE user_id = ?)", (v.id,))
         # and my asks for help end now (the next round takes them down): nobody is left to come to

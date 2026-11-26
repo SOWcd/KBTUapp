@@ -15,7 +15,10 @@
   export type Pic = Media & { id?: Id; file?: Blob; failed?: boolean };
   /** why: a refusal by the rules, said above the words until I change them; tip: the AI's reason and advice from a
    *  refusal (Edit), kept the same way */
-  export type Draft = { body: string; anon: boolean; photos?: Pic[]; why?: string; tip?: ForumWhy | null; help?: number | null };
+  export type Draft = { body: string; anon: boolean; photos?: Pic[]; why?: string; tip?: ForumWhy | null; help?: number | null; edit?: Editing };
+  /** my live post being edited: its id, its signature as the card shows it, its words and photos as they are now (an
+   *  edit replaces photos one for one: as many as it has) */
+  export type Editing = { id: Id; sign: string; was: string; ids: Id[] };
   // the words (and photos) not posted yet: closing the window keeps them, posting clears them. ponytail: in memory
   // only, as the feed (the posts' words stay out of storage): a relaunch starts empty; localStorage if students ask.
   // next: when the pace lets me post again (the server's word, from the last refusal or the window's open)
@@ -99,12 +102,13 @@
   import ChannelRefused from './ChannelRefused.svelte';
 
   let { overlay, draft }: { overlay: Overlay; draft?: Draft } = $props();
+  const edit = untrack(() => draft?.edit);  // editing my live post: no mode switch, the same photos' count, the new-post draft untouched
   let body = $state(untrack(() => draft?.body ?? kept.body)), anon = $state(untrack(() => draft?.anon ?? kept.anon));
   // the photos (up to 4): each uploads as it's picked, its preview at once (the phone's own) till the server's comes
   let pics = $state<Pic[]>(untrack(() => draft?.photos ?? kept.photos));
   // an ask for help (the third mode): signed, with "I'm coming", gone from the feed after `hours`
   let asking = $state(untrack(() => (draft ? !!draft.help : kept.asking))), hours = $state(untrack(() => draft?.help ?? kept.hours));
-  const PICS = 4;
+  const PICS = edit ? edit.ids.length : 4;
   let revealed = $state<number | null>(null), next = $state<number | null>(kept.next), clock = $state(nowTs());
   onMount(() => {
     for (const p of pics) if (!p.id && !p.failed && p.file) void upload(p.url, p.file);  // left uploading when the window closed
@@ -112,8 +116,8 @@
     const tick = setInterval(() => { clock = nowTs(); }, 10_000);
     return () => clearInterval(tick);
   });
-  $effect(() => { kept.body = body; kept.anon = anon; kept.photos = pics; kept.asking = asking; kept.hours = hours; });
-  $effect(() => { overlay.title = t('fc.new'); overlay.icon = SquarePen; });
+  $effect(() => { if (!edit) { kept.body = body; kept.anon = anon; kept.photos = pics; kept.asking = asking; kept.hours = hours; } });
+  $effect(() => { overlay.title = t(edit ? 'fc.editTitle' : 'fc.new'); overlay.icon = SquarePen; });
   const why = $derived(draft?.why && body === draft.body ? draft.why : null);  // gone once I change the words
   const tip = $derived(draft?.tip && body === draft.body ? draft.tip : null);
   const MAX = $derived(pics.length ? 900 : 1000);  // under photos: a caption (the server's CAPTION_MAX)
@@ -123,7 +127,8 @@
   // what holds Send, the first said on a tap: the words' rules (said as I type), too long, empty, too short, a photo
   // still uploading, the pace. short is said only once I tap (a first word is not a mistake yet)
   const hold = $derived<Key | null>(rules.length ? HINT[rules[0]] : body.length > MAX ? 'fc.long' : !body.trim() ? 'fc.empty'
-    : !meaningful(body) ? 'fc.short' : pics.some((p) => !p.id) ? 'fc.uploading' : null);
+    : !meaningful(body) ? 'fc.short' : pics.some((p) => !p.id) ? 'fc.uploading' : edit && pics.length !== edit.ids.length ? 'fc.editPhotos'
+    : edit && body.trim() === edit.was && pics.every((p, i) => p.id === edit.ids[i]) ? 'fc.editSame' : null);
   const ready = $derived(!hold && !wait);
   // the reason a tap on Send got, shown until the words or the photos change
   let tapped = $state<{ key: Key; body: string; n: number } | null>(null);
@@ -201,6 +206,7 @@
 
   // where the pill is, against the window's resting place (its layout box: read with no motion on it)
   function pill(): { dy: number; h: number } | null {
+    if (edit) return null;  // an edit opens over its card, not out of the pill (a fade)
     const p = document.querySelector('[data-compose]')?.getBoundingClientRect();
     if (!p?.width || p.left < -1 || p.right > innerWidth + 1 || p.bottom < 0 || p.top > innerHeight) return null;
     return { dy: p.top - win.getBoundingClientRect().top, h: Math.min(p.height, win.offsetHeight) };
@@ -291,38 +297,66 @@
       else compose({ body: text, anon: was, photos, help, why: e instanceof ApiErr && e.code === 'rate_limited' && kept.next ? undefined : reason(e) });
     }
   }
+  // my live post's new words (and photos): on the card at once; the AI's yes keeps them (the bot edits the channel's
+  // message), a moderator's look puts the live words back meanwhile, a refusal too, and the window comes back saying why
+  async function save(e: Editing) {
+    if (!ready) { haptic.error(); tapped = hold ? { key: hold, body, n: pics.length } : null; return; }
+    if (sent) return;
+    sent = true;
+    const text = body.trim(), photos = $state.snapshot(pics) as Pic[];
+    const was = channel.feed?.find((x) => x.id === e.id);
+    const back = (extra: Partial<ChannelFeedPost> = {}) => updatePosts((posts) => posts.map((x) => (x.id === e.id && was ? { ...was, ...extra } : x)));
+    updatePosts((posts) => posts.map((x) => (x.id === e.id ? { ...x, body: text, photos, edited: true, edit: undefined } : x)));
+    haptic.select(); close(overlay.id);
+    try {
+      const r = await api.editChannelPost(e.id, text, photos.map((x) => x.id!));
+      touched();
+      if (r.state === 'done') { haptic.ok(); say(t('fc.editedSay'), 'raising_hands_3d_default'); }
+      else if (r.state === 'held') { back({ edit: 'held' }); say(t('fc.editHeldSay'), 'thinking_face_3d'); }
+      else back();
+    } catch (err) {
+      back(); haptic.error();
+      const d = err instanceof ApiErr ? err.data : {};
+      if (err instanceof ApiErr && err.code === 'rate_limited' && typeof d.retry === 'number') kept.next = d.retry;
+      const why: Key | null = !(err instanceof ApiErr) ? null : err.message === 'noise' ? 'fc.editNoise' : err.message === 'ad' ? 'fc.editAd'
+        : err.message === 'same' ? 'fc.editSame' : err.message === 'photos' ? 'fc.editPhotos' : err.message === 'editing' ? 'fc.editBusy' : null;
+      if (err instanceof ApiErr && err.code === 'not_found') say(t('fc.gone'), 'thinking_face_3d');
+      else compose({ body: text, anon, photos, edit: e, why: why ? t(why) : err instanceof ApiErr && err.code === 'rate_limited' && kept.next ? undefined : reason(err) });
+    }
+  }
   // Ctrl/Cmd+Enter sends (a computer); a plain Enter is a new line
-  const key = (e: KeyboardEvent) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); post(); } };
+  const send = () => (edit ? save(edit) : post());
+  const key = (e: KeyboardEvent) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); send(); } };
 </script>
 
 <div class="scrim" class:out onclick={() => close(overlay.id, true)} ontouchmove={() => close(overlay.id, true)} role="presentation"></div>
 <!-- the window ends above the keyboard (keyboard.h: the app's one number for it); its scroller keeps its own room
      (data-kb-own): a spacer the keyboard code put under the words slid them down and back while it came up -->
-<div class="cw" class:out bind:this={win} style:--kb="{keyboard.h}px" onpointerdowncapture={touch} onpointerupcapture={touch} role="dialog" aria-modal="true" aria-label={t('fc.new')}>
+<div class="cw" class:out bind:this={win} style:--kb="{keyboard.h}px" onpointerdowncapture={touch} onpointerupcapture={touch} role="dialog" aria-modal="true" aria-label={t(edit ? 'fc.editTitle' : 'fc.new')}>
 <div class="pane glass glass-sheet" use:glass bind:this={pane}>
 <div class="in" bind:this={inner}>
   <!-- the pill's own row, the same places: my face, then who it goes out as (the pill's words fade into it), Send -->
   <div class="top">
     {#key anon || !session.me}<span class="face">{#if anon || !session.me}<span class="av" aria-hidden="true"><VenetianMask size={18} strokeWidth={2} /></span>
     {:else}<Avatar person={session.me} size={36} tappable={false} />{/if}</span>{/key}
-    <span class="who" aria-live="polite"><b class="ellipsis">{anon ? t('fc.nickNew') : sign}</b><span class="sub" class:sos={asking}>{asking ? t('fc.help') : t('fc.toChannel')}</span></span>
+    <span class="who" aria-live="polite"><b class="ellipsis">{edit ? edit.sign : anon ? t('fc.nickNew') : sign}</b><span class="sub" class:sos={asking}>{asking ? t('fc.help') : t('fc.toChannel')}</span></span>
     <span class="ghost ellipsis" aria-hidden="true">{t('fc.share')}</span>
     <!-- one round button: folded, the pill's pen (the same secondary IconButton); open, Send, primary once it can
          send. Never disabled: held, a tap says why (the hints are a live region) -->
-    <span class="send" class:held={!ready && !out}><Button kind={ready && !out ? 'primary' : 'gray'} size="s" round label={t('fc.post')} onclick={post}>
+    <span class="send" class:held={!ready && !out}><Button kind={ready && !out ? 'primary' : 'gray'} size="s" round label={t('fc.post')} onclick={send}>
       {#snippet icon()}<span class="ic pen" aria-hidden="true"><SquarePen size={18} strokeWidth={2} /></span>
         <span class="ic go" aria-hidden="true"><ArrowUp size={18} strokeWidth={2.4} /></span>{/snippet}
     </Button></span>
   </div>
   <div class="body">
   <div class="rest scroll" data-kb-own>
-    <!-- who it goes out as, said outright; the tap keeps the keyboard and the caret -->
-    <div class="mode" onpointerdown={keep} onmousedown={(e) => e.preventDefault()} role="presentation">
+    <!-- who it goes out as, said outright; the tap keeps the keyboard and the caret (an edit keeps the post's) -->
+    {#if !edit}<div class="mode" onpointerdown={keep} onmousedown={(e) => e.preventDefault()} role="presentation">
       <Segmented label={t('fc.anon')} value={asking ? 'help' : anon ? 'anon' : 'name'} onchange={mode}
         items={[{ value: 'name', label: t('fc.named') }, { value: 'anon', label: t('fc.anon') }, { value: 'help', label: t('fc.helpMode') }]} />
-    </div>
+    </div>{/if}
     <!-- an ask for help: how long it stays up (then it leaves the feed and the channel by itself) -->
-    {#if asking}
+    {#if asking && !edit}
       <div class="hours" onpointerdown={keep} onmousedown={(e) => e.preventDefault()} role="presentation">
         <span class="hl">{t('fc.helpFor')}</span>
         {#each HELP_HOURS as h (h)}<Chip selected={hours === h} onclick={() => { hours = h; mode('help'); }}>{t('fc.hours', { n: h })}</Chip>{/each}
@@ -356,11 +390,11 @@
   <div class="footer">
     <!-- A named attachment control belongs to the editor, without a separate empty toolbar. -->
     <div class="tools">
-      <label class="photo-tool" class:disabled={pics.length >= PICS}>
+      {#if PICS}<label class="photo-tool" class:disabled={pics.length >= PICS}>
         <ImagePlus size={20} strokeWidth={2} aria-hidden="true" /><span>{t('fc.addPhoto')}</span>
         {#if pics.length}<span class="n">{pics.length}/{PICS}</span>{/if}
         <input type="file" accept="image/*" multiple aria-label={t('fc.addPhoto')} onchange={pick} disabled={pics.length >= PICS} />
-      </label>
+      </label>{/if}
       {#if wait}<span class="wait" role="status">{t('fc.wait', { n: wait })}</span>{/if}
       {#if body.length > MAX - 100}<span class="count" class:full={body.length >= MAX}>{MAX - body.length}</span>{/if}
     </div>

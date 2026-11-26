@@ -22,6 +22,7 @@
   import Lightbulb from '@lucide/svelte/icons/lightbulb';
   import SquarePen from '@lucide/svelte/icons/square-pen';
   import Trash2 from '@lucide/svelte/icons/trash-2';
+  import Pencil from '@lucide/svelte/icons/pencil';
   import Ellipsis from '@lucide/svelte/icons/ellipsis';
   import Heart from '@lucide/svelte/icons/heart';
   import Flag from '@lucide/svelte/icons/flag';
@@ -59,7 +60,7 @@
   import PullSearch, { PULL } from '../../ui/PullSearch.svelte';
   const TOP = inTelegram ? PULL : 0; // the pull-down search field above the feed is Telegram's only (PullSearch)
   import { hit } from '../../lib/search';
-  import { compose, keyOf } from './ChannelCompose.svelte';
+  import { compose, keyOf, type Pic } from './ChannelCompose.svelte';
 
   // A card (or the "N new" line, the pill) comes and goes in place by opacity and a touch of scale, the compositor's
   // work; the others glide to their new places (flip). A height slide relaid the whole feed every frame and, with
@@ -197,7 +198,8 @@
   // ("Mine" by a mask outs its author to whoever looks at the screen)
   const mark = (p: ChannelFeedPost) => p.id < 0 ? { tone: 'quiet', key: 'fc.checking' } as const
     : p.status === 'held' ? (p.human ? { tone: 'warning', key: 'fc.human' } as const : { tone: 'quiet', key: 'fc.checking' } as const)
-    : p.status === 'hidden' ? { tone: 'quiet', key: 'fc.hidden' } as const : !p.msg ? { tone: 'quiet', key: 'fc.publishing' } as const : null;
+    : p.status === 'hidden' ? { tone: 'quiet', key: 'fc.hidden' } as const : !p.msg ? { tone: 'quiet', key: 'fc.publishing' } as const
+    : p.edit === 'held' ? { tone: 'warning', key: 'fc.editHeld' } as const : p.edit === 'declined' ? { tone: 'quiet', key: 'fc.editDeclined' } as const : null;
   // my held post's why, to me alone: I sent it to a moderator, it has photos and a mask, or the AI's words (kept by the
   // server: a reload keeps them; channel.why: this session's, as soon as they come)
   const heldWhy = (p: ChannelFeedPost) => p.review?.kind === 'appeal' ? { reason: t('fc.appealedWhy'), fix: null }
@@ -264,11 +266,19 @@
     catch (e) { undo(); if (focused?.id === p.id && !focusedPost) focusedPost = focused; fail(e); }
   }
 
+  // my live post's words (and photos) again, in the writing window: the same checks as a new post
+  function edit(p: ChannelFeedPost) {
+    haptic.tap();
+    compose({ body: p.body, anon: p.anon, photos: p.photos.map((x): Pic => ({ ...x })),
+      edit: { id: p.id, sign: p.anon ? nickName(p.nick) ?? p.sign : p.sign, was: p.body, ids: p.photos.map((x) => x.id ?? 0) } });
+  }
+
   // every post in the channel: ⋯, the same on every card. Someone else's: Report (into the admin's queue, whose it is
   // stays hidden); mine: answer as the mask (an anonymous one) and Delete, inside it, so nothing on the card says whose
   function more(e: MouseEvent, p: ChannelFeedPost) {
     menu(e.currentTarget as Element, p.mine ? [
       ...(p.anon ? [{ label: t('fcr.entry'), icon: MessageCircleReply, onselect: () => sheets.channelReply({ id: p.id, body: p.body }) }] : []),
+      { label: t('fc.editPost'), icon: Pencil, onselect: () => edit(p) },
       { label: t('fc.delete'), icon: Trash2, destructive: true, onselect: () => drop(p) },
     ] : [{ label: t('cm.report'), icon: Flag, destructive: true, onselect: () => sheets.report('fpost', p.id, p.body.slice(0, 120)) }], 'end');
   }
@@ -348,7 +358,7 @@
             <span class="who">
               {#if p.person}<button class="name" onclick={() => { haptic.tap(); sheets.person(p.person!.id); }}><b class="ellipsis">{p.person.name}</b></button>
               {:else}<b class="ellipsis">{nickName(p.nick) ?? p.sign}</b>{/if}
-              <span class="meta"><span>{ago(p.at)}</span>
+              <span class="meta"><span>{ago(p.at)}{#if p.edited} · {t('fc.edited')}{/if}</span>
                 {#if m}<span class="mk {m.tone}">{t(m.key)}</span>
                 {:else if p.hot && live}<span class="mk hot">{t('fc.hot')}</span>{/if}
                 {#if p.help}<span class="mk left">{left(p.help.until)}</span>{/if}</span>

@@ -531,6 +531,15 @@ CREATE TABLE fchan_comments (
       at      INTEGER NOT NULL,
       gone    INTEGER NOT NULL DEFAULT 0
     ) STRICT;
+CREATE TABLE fchan_edits (
+      id         INTEGER PRIMARY KEY,
+      post_id    INTEGER NOT NULL REFERENCES fchan_posts(id) ON DELETE CASCADE,
+      body       TEXT NOT NULL,
+      photos     TEXT,
+      status     TEXT NOT NULL CHECK (status IN ('check', 'held', 'done', 'refused', 'declined', 'gone')),
+      why        TEXT,
+      created_at INTEGER NOT NULL
+    ) STRICT;
 CREATE TABLE fchan_feed_pages (
       token TEXT PRIMARY KEY,
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -553,7 +562,7 @@ CREATE TABLE fchan_photos (
       height     INTEGER NOT NULL,
       color      TEXT,
       msg        INTEGER,
-      created_at INTEGER NOT NULL) STRICT;
+      created_at INTEGER NOT NULL, edit_id INTEGER REFERENCES fchan_edits(id) ON DELETE CASCADE, sync INTEGER NOT NULL DEFAULT 0 CHECK (sync IN (0, 1))) STRICT;
 CREATE TABLE fchan_posts (
       id         INTEGER PRIMARY KEY,
       user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -563,7 +572,7 @@ CREATE TABLE fchan_posts (
       why        TEXT,                                  -- held: 'check' (no AI answer yet), 'ai', 'person', 'busy'; hidden: 'moderator'
       tg_msg     INTEGER,                               -- the channel message, once sent
       created_at INTEGER NOT NULL
-    , rules_for INTEGER, rules_msg INTEGER, comments INTEGER NOT NULL DEFAULT 0, sign TEXT, reactions TEXT, nick_a INTEGER, nick_n INTEGER, appealed_at INTEGER, refused TEXT, explained INTEGER, ai_reason TEXT, posted_at INTEGER, ai_fix TEXT, ai_quote TEXT, help_until INTEGER) STRICT;
+    , rules_for INTEGER, rules_msg INTEGER, comments INTEGER NOT NULL DEFAULT 0, sign TEXT, reactions TEXT, nick_a INTEGER, nick_n INTEGER, appealed_at INTEGER, refused TEXT, explained INTEGER, ai_reason TEXT, posted_at INTEGER, ai_fix TEXT, ai_quote TEXT, help_until INTEGER, edited_at INTEGER, edit_sync INTEGER) STRICT;
 CREATE TABLE fchan_replies (
       id          INTEGER PRIMARY KEY,
       post_id     INTEGER NOT NULL REFERENCES fchan_posts(id) ON DELETE CASCADE,
@@ -1645,15 +1654,19 @@ CREATE INDEX events_upcoming ON events(status, starts_at);
 CREATE INDEX fchan_coming_by_user ON fchan_coming(user_id);
 CREATE INDEX fchan_comments_by_post ON fchan_comments(post_id, at);
 CREATE INDEX fchan_comments_by_user ON fchan_comments(user_id);
+CREATE INDEX fchan_edits_by_post ON fchan_edits(post_id, created_at);
+CREATE INDEX fchan_edits_waiting ON fchan_edits(status) WHERE status IN ('check', 'held');
 CREATE INDEX fchan_feed_pages_by_user ON fchan_feed_pages(user_id, sort, expires_at DESC);
 CREATE INDEX fchan_feed_pages_expiry ON fchan_feed_pages(expires_at);
 CREATE INDEX fchan_hearts_by_user ON fchan_hearts(user_id);
+CREATE INDEX fchan_photos_by_edit ON fchan_photos(edit_id) WHERE edit_id IS NOT NULL;
 CREATE INDEX fchan_photos_by_msg ON fchan_photos(msg) WHERE msg > 0;
 CREATE INDEX fchan_photos_by_post ON fchan_photos(post_id, n);
 CREATE INDEX fchan_photos_by_user ON fchan_photos(user_id);
 CREATE INDEX fchan_posts_by_message ON fchan_posts(status, tg_msg, id);
 CREATE INDEX fchan_posts_by_status ON fchan_posts(status, id);
 CREATE INDEX fchan_posts_by_user ON fchan_posts(user_id, created_at);
+CREATE INDEX fchan_posts_edit_sync ON fchan_posts(edit_sync) WHERE edit_sync IS NOT NULL;
 CREATE INDEX fchan_posts_help ON fchan_posts(help_until) WHERE help_until IS NOT NULL;
 CREATE INDEX fchan_replies_by_msg ON fchan_replies(tg_msg) WHERE tg_msg > 0;
 CREATE INDEX fchan_replies_by_post ON fchan_replies(post_id, created_at);

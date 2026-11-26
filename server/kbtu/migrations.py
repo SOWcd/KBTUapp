@@ -2595,4 +2595,25 @@ MIGRATIONS: list[tuple[int, str]] = [
     ) STRICT;"""),
     # Help given by running our tasks with the contributor's own AI subscription; the credit's words stay as written.
     (251, "ALTER TABLE credits ADD COLUMN via_ai INTEGER NOT NULL DEFAULT 0 CHECK (via_ai IN (0, 1));"),
+    # Editing my own live channel post (logic/fchannel.py edit_*): an edit waits here while the AI or a moderator looks
+    # (no user id: through its post, as a reply); kept a day either way, the pace counts it as a post. Once it passes,
+    # the post takes its words and photos and edit_sync asks the bot's round to edit the channel message in place
+    # (a photo's sync: its file goes into its own album message); edited_at: the card's "edited" mark
+    (252, """CREATE TABLE fchan_edits (
+      id         INTEGER PRIMARY KEY,
+      post_id    INTEGER NOT NULL REFERENCES fchan_posts(id) ON DELETE CASCADE,
+      body       TEXT NOT NULL,
+      photos     TEXT,
+      status     TEXT NOT NULL CHECK (status IN ('check', 'held', 'done', 'refused', 'declined', 'gone')),
+      why        TEXT,
+      created_at INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX fchan_edits_by_post ON fchan_edits(post_id, created_at);
+    CREATE INDEX fchan_edits_waiting ON fchan_edits(status) WHERE status IN ('check', 'held');
+    ALTER TABLE fchan_posts ADD COLUMN edited_at INTEGER;
+    ALTER TABLE fchan_posts ADD COLUMN edit_sync INTEGER;
+    CREATE INDEX fchan_posts_edit_sync ON fchan_posts(edit_sync) WHERE edit_sync IS NOT NULL;
+    ALTER TABLE fchan_photos ADD COLUMN edit_id INTEGER REFERENCES fchan_edits(id) ON DELETE CASCADE;
+    ALTER TABLE fchan_photos ADD COLUMN sync INTEGER NOT NULL DEFAULT 0 CHECK (sync IN (0, 1));
+    CREATE INDEX fchan_photos_by_edit ON fchan_photos(edit_id) WHERE edit_id IS NOT NULL;"""),
 ]

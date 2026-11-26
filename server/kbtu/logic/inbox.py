@@ -25,6 +25,8 @@ def inbox(con, v: Viewer) -> dict:
     m = fchannel.mod_queue(con, v)
     for p in m["held"]:
         items.append(_item("fpost", p["id"], p["at"], True, p))
+    for p in m["edits"]:  # an edit of a live post: the post's card with its new words, the live ones beside them
+        items.append(_item("fpost", f"e{p['edit']['id']}", p["at"], False, p))
     for r in m["replies"]["held"]:
         items.append(_item("freply", r["id"], r["at"], True, r))
     for r in m["replies"]["live"]:
@@ -72,6 +74,8 @@ def count(con, v: Viewer) -> int:
         AND c.author_id IS NOT ? AND NOT EXISTS (SELECT 1 FROM tgc_reports r WHERE r.comment_id = c.id AND r.reporter_id = ?)
         AND EXISTS (SELECT 1 FROM tgc_reports r WHERE r.comment_id = c.id)""", v.id, v.id)[0]  # tgcomments.queue_items' rule
     n += one(con, "SELECT COUNT(*) FROM fchan_posts WHERE status = 'held' AND (why != 'check' OR created_at < ?)", now() - 60)[0]
+    n += one(con, """SELECT COUNT(*) FROM fchan_edits e JOIN fchan_posts p ON p.id = e.post_id AND p.status = 'live'
+        WHERE e.status = 'held' OR e.status = 'check' AND e.created_at < ?""", now() - 60)[0]  # fchannel.edit_mod_queue's rule
     n += one(con, """SELECT COUNT(*) FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id WHERE r.status = 'held' AND (r.why != 'check' OR r.created_at < ?)
         OR r.status = 'live' AND p.status = 'live' AND EXISTS (SELECT 1 FROM fchan_reply_reports x WHERE x.reply_id = r.id)""", now() - 60)[0]
     n += one(con, "SELECT COUNT(*) FROM chats WHERE status = 'pending'")[0]

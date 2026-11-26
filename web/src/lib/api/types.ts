@@ -99,7 +99,10 @@ export interface ChannelFeedPost extends ChannelHeart { id: Id; body: string; st
   /** Telegram's top reactions on the channel post; a custom emoji as "custom:<id>", a paid one as "paid" */
   reactions: { emoji: string; n: number }[]
   hot: boolean /* being discussed: 5+ students' comments in the last hour, or 3+ people besides its author in the last day */
-  photos: Media[] /* up to 4, in order (an album in the channel) */
+  photos: (Media & { id?: Id /* on my own posts: Edit names them */ })[] /* up to 4, in order (an album in the channel) */
+  /** changed by its author since it went out (a mark, never when); edit: my own edit waiting for a moderator, or one a
+   *  moderator declined lately (to me alone) */
+  edited?: boolean; edit?: 'held' | 'declined'
   /** an ask for help: up until `until` (then out of the feed), how many said "I'm coming", whether I did; who: to
    *  its author alone */
   help?: ChannelHelp
@@ -107,9 +110,11 @@ export interface ChannelFeedPost extends ChannelHeart { id: Id; body: string; st
   review?: { kind: 'appeal' | 'photo' | 'tg' | 'ai'; explain: ForumWhy | null } }
 /** The moderators' list: held posts (why: 'ai', 'person', 'check', 'busy') and this week's live ones. An anonymous
  *  post's author is null for everyone; the owner's reveal is separate and audited. */
-export type ChannelModPost = ChannelPost & { own?: boolean /* mine, and I'm not the founder: another moderator decides */; why: string | null; aiWhy?: string | null /* the AI's own reason, once asked */; author: PersonRef | null; undo?: boolean };
+export type ChannelModPost = ChannelPost & { own?: boolean /* mine, and I'm not the founder: another moderator decides */; why: string | null; aiWhy?: string | null /* the AI's own reason, once asked */; author: PersonRef | null; undo?: boolean
+  /** an edit of a live post waiting for a moderator (body, photos: the new ones; was: the live words) */
+  edit?: { id: Id; was: string } };
 /** removed: taken down by a moderator this week; undo: its channel message still up (the first minute), Undo keeps it */
-export interface ChannelMod { held: ChannelModPost[]; live: ChannelModPost[]; removed: ChannelModPost[]
+export interface ChannelMod { held: ChannelModPost[]; live: ChannelModPost[]; removed: ChannelModPost[]; edits: ChannelModPost[]
   replies: { held: ChannelModReply[]; live: ChannelModReply[]; removed: ChannelModReply[] } }
 /** My reply, as the anonymous author, in my post's comments (server fchannel.reply_*): comment, the comment answered
  *  (its message id; null: the thread); state where it stands. Only I see these as mine. */
