@@ -116,7 +116,7 @@ async def _tg(cfg: Config, http: httpx.AsyncClient, method: str, body: dict, fil
 
 
 async def _send(cfg: Config, http: httpx.AsyncClient, body: dict) -> httpx.Response:
-    return await _tg(cfg, http, "sendMessage", body)
+    return await _tg(cfg, http, "sendPhoto" if "photo" in body else "sendMessage", body)  # a photo: an event's share card (_share_start)
 
 
 def _student(con, tg_id: int | None) -> sqlite3.Row | None:
@@ -165,6 +165,9 @@ def inline_answer(cfg: Config, con, q: dict) -> dict:
     app. A student: my friend link, each club whose team link is live and that I may share (the "team" right; a typing
     pop-up never makes one), my recent signed forum posts live in the channel, and the afisha's upcoming events as an anonymous student sees them. Anyone else: one button."""
     tg = (q.get("from") or {}).get("id")
+    if held := re.fullmatch(r"sh_([\w-]{22})", str(q.get("query") or "").strip()):  # _share_start's button: that card alone, to its maker alone
+        card = logic.share_card(con, tg, held[1])
+        return {"inline_query_id": q["id"], "results": [card] if card else [], "is_personal": True, "cache_time": 0}
     me = _student(con, tg)
     lang = me["lang"] if me else str((q.get("from") or {}).get("language_code") or "")[:2]
     body: dict = {"inline_query_id": q["id"], "results": [], "is_personal": True, "cache_time": 10}

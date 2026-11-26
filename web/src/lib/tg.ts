@@ -229,9 +229,10 @@ export function shareMessage(preparedId: string): Promise<boolean | null> {
 
 /** Everything shared into chats is our bot's card, made by the server from its own templates (never the client's words).
  *  In Telegram: the card itself, text and a button (savePreparedInlineMessage, initData-checked), in Telegram's chat
- *  picker. Where there are no cards (a browser, the Android and iPhone apps, Telegram older than Bot API 8.0 or on a
- *  computer): the same card's words with its button's link under them, in the phone's share sheet or Telegram's share
- *  link. A failure throws (the caller says so), never a bare link. */
+ *  picker. Outside Telegram (a browser, the Android and iPhone apps): the server holds the same card for our bot, and
+ *  Telegram opens on the bot's chat with it and a "Send to a chat" button. Where there are no cards at all (Telegram
+ *  older than Bot API 8.0 or on a computer, an account with no Telegram): the same card's words with its button's link
+ *  under them, in the phone's share sheet or Telegram's share link. A failure throws (the caller says so), never a bare link. */
 /** ready: the card is made and the picker opens now (the caller's "making the link" ends there, not when a chat is picked) */
 /** the capsule's "Making the link…" for every share (ui.svelte.ts sets it: tg.ts can't import the state) */
 let shareBusy: (on: boolean) => void = () => {};
@@ -268,7 +269,19 @@ async function shareVia(card: Record<string, string | number | boolean | null>, 
     // a client without cards (Telegram Desktop says so only now): the words below, from a fresh card (a one-time link's
     // first copy was never sent and runs out unused)
   }
-  const { link, text } = await cardOf({ ...card, link: true });
+  let made: Record<string, unknown> = {};
+  if (!inTelegram) {
+    // a browser, the phone apps: the server holds the same card for our bot and gives its start link; Telegram opens on
+    // the bot's chat with the card and a "Send to a chat" button (bot_dm.py _share_start). An account with no Telegram:
+    // the card's words and its button's link (an award or club link is minted there), as below
+    made = await cardOf({ ...card, handoff: true });
+    if (typeof made.open === 'string') {
+      ready();
+      openLink(made.open);
+      return false; // the card goes out in Telegram: we never learn whether it was sent
+    }
+  }
+  const { link, text } = typeof made.link === 'string' ? made : await cardOf({ ...card, link: true });
   if (typeof link !== 'string' || typeof text !== 'string') throw new Error('share');
   ready();
   // a phone outside Telegram (a browser, the Android app's Chrome, the iPhone app's web view): its own share sheet, any

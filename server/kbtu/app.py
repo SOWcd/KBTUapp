@@ -3120,9 +3120,14 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                       "reply_markup": {"inline_keyboard": [[{"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp=fp_{ref}"}]]}}
         else:
             raise ApiError("bad_input")
-        if body.get("link") is True:  # no card here (a browser, the phone apps, an old Telegram): its words, the button's link under them
-            words = result["caption"] if result["type"] == "photo" else result["input_message_content"]["message_text"]
-            return {"link": result["reply_markup"]["inline_keyboard"][0][0]["url"], "text": texts.plain(words)}
+        url = result["reply_markup"]["inline_keyboard"][0][0]["url"]
+        words = texts.plain(result["caption"] if result["type"] == "photo" else result["input_message_content"]["message_text"])
+        if body.get("handoff") is True:  # outside Telegram (a browser, the phone apps): the card waits for the bot, which hands it
+            # to Telegram's chat picker (bot_dm._share_start); an account with no Telegram gets the words and the button's link
+            tg = request.state.tg.get("id")
+            return {"open": f"https://t.me/{cfg.bot_username}?start=sh_{logic.share_hold(con, v.id, tg, result)}"} if tg else {"link": url, "text": words}
+        if body.get("link") is True:  # no card here (an old Telegram, an older web build): its words, the button's link under them
+            return {"link": url, "text": words}
         try:
             async with httpx.AsyncClient(timeout=10) as http:
                 r = (await bot._tg(cfg, http, "savePreparedInlineMessage", {
