@@ -214,9 +214,13 @@
   // the newest answer, the light's place while nothing is on its way (thinking: it is beside the word)
   const top = $derived.by(() => { if (busy) return -1; for (let i = chat.turns.length - 1; i >= 0; i--) if (chat.turns[i].role === 'assistant') return i; return -1; });
   let left = $state(-1); // the answer the light has just left: it closes the gap in a glide, not a jump
+  // the first question from the empty opening: the big light stays and thinks (the starter's line says so) until the
+  // answer comes, then the conversation shows, the question with it. No room for the light (keyboard): the plain way
+  let wait = $state(false);
   async function ask(q: string, glide = true) {
     q = q.trim();
     if (!q || busy) return;
+    wait = !chat.turns.length && !tight;
     left = glide ? top : -1;
     const history = chat.turns.filter((m) => m.text).slice(-6).map(({ role, text }) => ({ role, text }));
     chat.turns.push({ role: 'user', text: q });
@@ -231,7 +235,7 @@
         q, err: why !== 'rate_limited' && why !== 'forbidden' });
       haptic.error();
       if (why === 'forbidden') sheets.consent(); // the new policy first: here it is
-    } finally { chat.busy = false; }
+    } finally { chat.busy = false; wait = false; }
   }
   // labels from our own strings and store, never the model's words
   const SET = { school: 'look.school', course: 'pd.course', notify: 'me.notifications' } as const;
@@ -308,20 +312,24 @@
 
 <Sheet {overlay} {opener} icon={Sparkles} tall shut title={t('as.title')}>
   <div class="list" class:flown={!!from} bind:this={list}>
-    {#if !chat.turns.length}
+    {#if !chat.turns.length || wait}
       <div class={['mid', { up: kb > 0, tight }]} style:--kb="{kb}px">
         <i class="lt" class:hid={flying} class:land={!from} class:gl={live} bind:this={orb} aria-hidden="true"><Orb size={168}><span class="glyph"><Sparkles strokeWidth={2} /></span></Orb><LiveOrb
           start={!flying} energy={busy ? 1 : draft.trim() ? 0.5 : 0} hold={tight || overlays.some((o) => o.id > overlay.id && !o.closing)} bind:on={live} /></i>
-        <h2 class="greeting clamp-2" style:--n={words.length}>{#each words as w, i (i)}{i ? ' ' : ''}<span class="w" style:--w={i}><span>{#each w as p, k (k)}{#if p.b}<b>{p.s}</b>{:else}{p.s}{/if}{/each}</span></span>{/each}</h2>
-        <!-- every question in one cell: the tallest holds the height, a change moves nothing -->
+        <h2 class="greeting clamp-2" class:named={!!first && !chat.ctx} style:--n={words.length}>{#each words as w, i (i)}{i ? ' ' : ''}<span class="w" style:--w={i}><span>{#each w as p, k (k)}{#if p.b}<b>{p.s}</b>{:else}{p.s}{/if}{/each}</span></span>{/each}</h2>
+        <!-- every question in one cell: the tallest holds the height, a change moves nothing. The one on show goes up
+             out of the line as the next rises into it; asked, "thinking" rises in its place (a tap then does nothing: busy) -->
         <button class="rot" onclick={() => pick(SUGGEST[qi])}>
-          {#each SUGGEST as k, i (k)}<span class:on={i === qi} aria-hidden={i !== qi}>{t(k)}<ArrowUpRight size={18} strokeWidth={1.75} /></span>{/each}
+          {#each SUGGEST as k, i (k)}<span class:on={!wait && i === qi} class:was={wait ? i === qi : i === (qi + SUGGEST.length - 1) % SUGGEST.length}
+            aria-hidden={wait || i !== qi}>{t(k)}<ArrowUpRight size={18} strokeWidth={1.75} /></span>{/each}
+          <span class="tk" class:on={wait} role="status">{wait ? t('as.thinking') : ''}</span>
         </button>
       </div>
     {:else if chat.ctx}
       <!-- engine: ui/Tag could truncate a long label with "…" (an event's title); till then this label is local -->
       <p class="ctx"><Sparkles size={13} strokeWidth={2.2} /><span class="ellipsis">{chat.ctx.title}</span></p>
     {/if}
+    {#if !wait}
     {#each chat.turns as m, i (i)}
       {#if m.role === 'user'}
         <ChatMessage mine text={m.text} fresh={i >= born} />
@@ -369,13 +377,15 @@
       {/if}
     {/each}
     {#if busy}<div class="think" role="status"><i class="orb live" aria-hidden="true"></i><span>{t('as.thinking')}</span></div>{/if}
+    {/if}
   </div>
 
   {#snippet footer()}
     {#if flying}<i class="lt fly" bind:this={fly} aria-hidden="true"><Orb size={168}><span class="glyph"><Sparkles strokeWidth={2} /></span></Orb></i>{/if}
-    {#if !chat.turns.length}
-      <!-- the starters in the footer: they ride over the keyboard with the field, nothing of the body has to scroll -->
-      <div class="over">
+    {#if !chat.turns.length || wait}
+      <!-- the starters in the footer: they ride over the keyboard with the field, nothing of the body has to scroll.
+           Asked: they fade but keep their room while the light thinks, so nothing over them moves -->
+      <div class="over" class:wait inert={wait}>
         {#if offer}
           <div class="gem" class:out={!asking} inert={!asking}>
             <p class="gt">{t('kri.gT')}</p>
@@ -411,22 +421,33 @@
   .mid.up .greeting, .mid.up .rot { transform: translateY(calc(var(--kb) * -1)); }
   .greeting { max-width: 100%; font: var(--fw-light) var(--fs-title)/1.06 var(--font-display); letter-spacing: -0.045em; overflow-wrap: anywhere; }
   .greeting b { font-weight: 600; }
-  /* the greeting's calm entrance: each word rises out of its own mask on a long ease-out, a beat after the last, no
-     overshoot (the padding keeps descenders and the bold's side bearings inside the mask; the margins take it back) */
+  /* Fable's two tones: the words round the name quieter, the name itself in full */
+  .greeting.named { color: var(--text-2); }
+  .greeting.named .w:has(b) { color: var(--text); } /* the name's whole word, its "!" with it */
+  /* the greeting's calm entrance (Fable's): each word rises out of its own mask on a long ease-out, a slow beat after
+     the last, no overshoot (the padding keeps descenders and the bold's side bearings inside the mask; the margins take it back) */
   .greeting .w { display: inline-block; overflow: hidden; vertical-align: top; max-width: 100%; padding: 0 0.06em 0.14em; margin: 0 -0.06em -0.14em; }
-  .greeting .w > span { display: inline-block; animation: mask 1100ms var(--calm) calc(var(--land, 0ms) + 60ms + var(--w) * 70ms) backwards; }
-  @keyframes mask { from { transform: translateY(125%); } }
+  .greeting .w > span { display: inline-block; animation: mask 1250ms var(--calm) calc(var(--land, 0ms) + 120ms + var(--w) * 120ms) backwards; }
+  @keyframes mask { from { transform: translateY(118%); } }
   .rot { display: grid; justify-items: start; max-width: 100%; margin-top: var(--s-1); padding: var(--s-1) 0; color: var(--text-3); text-align: left;
     font: var(--fw-light) var(--fs-sec)/1.2 var(--font-display); letter-spacing: -0.03em;
-    animation: soft 900ms var(--calm) calc(var(--land, 0ms) + 360ms + var(--n, 2) * 70ms) backwards; transition: opacity var(--t-fast), transform 250ms cubic-bezier(.2, .8, .3, 1); }
+    animation: soft 900ms var(--calm) calc(var(--land, 0ms) + 420ms + var(--n, 2) * 120ms) backwards; transition: opacity var(--t-fast), transform 250ms cubic-bezier(.2, .8, .3, 1);
+    overflow: hidden; }
   .rot:active { opacity: 0.6; }
-  /* one leaves, then the next comes up: the two are never read through each other */
-  .rot span { grid-area: 1 / 1; align-self: center; opacity: 0; transform: translateY(6px); transition: opacity 240ms ease-in, transform 240ms ease-in; }
-  .rot span.on { opacity: 1; transform: none; transition: opacity 420ms var(--ease) 220ms, transform 420ms var(--ease) 220ms; }
+  /* Fable's ticker in its clipped line: the one on show goes up and out as the next rises in from under it. The rest
+     wait below unseen, with no transition (the one that left drops back there without crossing the line) */
+  .rot span { grid-area: 1 / 1; align-self: center; opacity: 0; transform: translateY(100%); }
+  .rot span.on { opacity: 1; transform: none; transition: opacity 850ms var(--io), transform 850ms var(--io); }
+  .rot span.was { transform: translateY(-100%); transition: opacity 850ms var(--io), transform 850ms var(--io); }
+  /* thinking: the word breathes */
+  .rot .tk.on { animation: ebb 1.7s ease-in-out 0.9s infinite alternate; }
+  .rot .tk::after { content: '…'; }
+  @keyframes ebb { to { opacity: 0.45; } }
+  :global(html.lowfx) .rot .tk { animation: none; }
   /* the screen's one accent: the link's arrow */
   .rot :global(svg) { display: inline; margin-left: 6px; vertical-align: -1px; color: var(--accent-text); }
   .flown { --land: 380ms; } /* the light is flying in: the words wait until it is over them, not on them; no flight, no wait */
-  .mid { --calm: cubic-bezier(.16, 1, .3, 1); } /* the opening's one curve: a long, quiet settle */
+  .mid { --calm: cubic-bezier(.16, 1, .3, 1); --io: cubic-bezier(.65, 0, .35, 1); } /* the opening's curves: a long, quiet settle; the ticker's even glide */
   @keyframes soft { from { opacity: 0; transform: translateY(8px); } }
   @keyframes down { from { opacity: 0; transform: translateY(-12px); } }
   .ctx { align-self: center; display: inline-flex; align-items: center; gap: 6px; max-width: 86%; height: 28px; padding: 0 12px; border-radius: var(--r-full);
@@ -454,7 +475,8 @@
   .orb.live::before { animation: turn 7s linear infinite; animation-play-state: var(--sheet-loop, running); }
   @keyframes turn { to { transform: rotate(360deg); } }
   /* Gemini's card and the starters in one cell: one shows, the other keeps its place hidden */
-  .over { display: grid; margin-bottom: var(--s-2); }
+  .over { display: grid; margin-bottom: var(--s-2); transition: opacity 220ms var(--ease); }
+  .over.wait { opacity: 0; }
   .over > * { grid-area: 1 / 1; transition: opacity 220ms var(--ease), visibility 0s; }
   .over > .out { opacity: 0; visibility: hidden; transition: opacity 160ms ease-out, visibility 0s 160ms; }
   .gem { align-self: end; display: flex; flex-direction: column; gap: 4px; padding: var(--s-3); border-radius: var(--r-m); background: var(--fill); }
