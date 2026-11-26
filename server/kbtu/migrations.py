@@ -2617,4 +2617,7 @@ MIGRATIONS: list[tuple[int, str]] = [
     ALTER TABLE fchan_photos ADD COLUMN edit_id INTEGER;
     ALTER TABLE fchan_photos ADD COLUMN sync INTEGER NOT NULL DEFAULT 0 CHECK (sync IN (0, 1));
     CREATE INDEX fchan_photos_by_edit ON fchan_photos(edit_id) WHERE edit_id IS NOT NULL;"""),
+    # A club's open round by its club (issue #363): clubs.listed asks it for every club on each Clubs list, and the
+    # partial one_live_round (status != 'done') can't answer status = 'open', so each club walked every round.
+    (253, "CREATE INDEX IF NOT EXISTS rounds_by_org ON rounds(org_id, status);"),
 ]
