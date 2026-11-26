@@ -893,7 +893,7 @@ BOT = {
 }
 
 
-# why a receipt looks wrong, as the student reads it (the flags of logic._receipt_flags)
+# why a receipt looks wrong, as the student reads it (the flags of logic.seats._receipt_flags)
 # "Support the app" in Telegram Stars (logic/stars.py): the invoice's title (32 characters at most) and description (255)
 STARS_INVOICE = {
     "ru": ("Поддержка KBTU App", "Добровольная поддержка. Сумма и платёж сохраняются в твоём личном итоге для медали SPONSOR. Публикация имени — только с твоего согласия."),

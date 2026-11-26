@@ -2,7 +2,7 @@
 rules should never allow."""
 from __future__ import annotations
 
-from kbtu import auth, db, logic, roster
+from kbtu import auth, logic, roster
 from test_core import BOT, env, login, tma  # noqa: F401  (env: the fixture)
 from test_team_link import _club
 

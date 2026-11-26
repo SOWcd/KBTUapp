@@ -18,7 +18,7 @@ import subprocess
 import tempfile
 import threading
 import time
-from collections import OrderedDict, deque
+from collections import OrderedDict
 from contextlib import asynccontextmanager, contextmanager, nullcontext
 from contextvars import ContextVar
 from dataclasses import dataclass

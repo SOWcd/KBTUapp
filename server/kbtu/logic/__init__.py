@@ -14,7 +14,7 @@ from .core import (NAME, STUDENT_ID, ApiError, DOOR_AUTO, DOOR_LATE, door_at, do
     PROFILE_QR, RANK, Viewer, _may, _once, _qs, _rights, academic_year, add_photo, can, card, course_day, course_of,
     decided, log_action, need_student, now, one, organizes, overseer, person_ref, rights_of, role_in, rows, short_name,
     shown_name, share_card, share_hold, taken)  # noqa: F401
-from .seats import (_receipt_flags, _visible, add_receipt, add_seats, cal_feed, calendar_owner, cal_token,
+from .seats import (_visible, add_receipt, add_seats, cal_feed, calendar_owner, cal_token,
     reset_cal_token, channel_discussion, channel_due, channel_gone, chat_claim, chat_join, chat_set, chat_start, end_of, event,
     guard_join, guard_read, guard_token, event_ics, events, ics_sig, notify, notify_staff, past_events, promote, receipt_open,
     receipt_path, register, remove_seats, review_receipt, joined, refill, signup_open, team_ask, team_asks,
@@ -22,7 +22,7 @@ from .seats import (_receipt_flags, _visible, add_receipt, add_seats, cal_feed, 
     volunteer_leave, volunteers_list)  # noqa: F401
 from .queues import (AI_LIMIT, ai_failed, ai_next, ai_note, ai_save, my_video, new_video, next_video, stale_videos,
     video_done, video_shape, video_uploaded)  # noqa: F401
-from .account import (ARCHIVE, CONSENT, agreed, ai_on, _drop_unused, _hand_over, _qr_code, ask_delete, consent, delete_due,
+from .account import (ARCHIVE, CONSENT, agreed, ai_on, _qr_code, ask_delete, consent, delete_due,
     delete_info, replay_deletions, drain_deleted_files, dm_on, drop_my_photo, drop_my_schedule, id_clash, keep_me,
     lent_studio, me, ms_claim, ms_hold, ms_link, ms_pending, ms_release, ms_sweep, fix_identity, sid_tries, refer,
     roster_requests, save_schedule, schedule, set_photo, update_me)  # noqa: F401
@@ -43,7 +43,7 @@ from .oversight import (_owner, admin_create_org, admin_hide_org, admin_set_awar
     staff_mutes)  # noqa: F401
 from .moderation import (add_comment, close_gone, comments, delete_comment, purge_takedowns, report, report_queue,
     resolve_report, restore, set_comments_on)  # noqa: F401
-from .profiles import (ACHIEVEMENTS, GRANTABLE, ONE_BY_ONE, PRIVATE, _grant, _stranger_view, achievements,
+from .profiles import (ACHIEVEMENTS, GRANTABLE, ONE_BY_ONE, PRIVATE, _grant, achievements,
     anthem_heard, answer_friend, ask_friend, find_student, link_card, add_by_link, friend_joined, friends, claim_qr,
     grant, grant_link, grant_scan, open_qr, qr_code, BADGE_OF, award_counts, award_people, awards_of,
     badge_sessions, my_links, revoke_link, undo_batch, person, seen_unlock, sync_levels, take_back,

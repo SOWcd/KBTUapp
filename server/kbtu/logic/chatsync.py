@@ -322,10 +322,5 @@ def links(con) -> list:
         LEFT JOIN org_tags g ON g.id = c.tag_id ORDER BY o.slug, c.kind DESC, g.name""")
 
 
-def live(con) -> bool:
-    """Any link to hear: the bot asks Telegram for chat_member updates then."""
-    return bool(POLICY) and bool(one(con, "SELECT 1 FROM chat_sync LIMIT 1"))
-
-
 from .teams import _remove, banned, set_dept  # noqa: E402
 from .seats import joined  # noqa: E402

@@ -481,7 +481,6 @@ def test_prefill_rest_review_fixes(env, monkeypatch, capsys):
     back; a list the main import never ran is refused; two mail-less rows with one ID match by nothing; rows with neither
     mail nor ID go with the account whose name they have; a doubled displayName word is no Latin name."""
     import io
-    from pathlib import Path
     from kbtu import admin
     from kbtu.logic.account import latin_from_ms
     c, cfg = env

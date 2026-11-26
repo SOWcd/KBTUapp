@@ -15,13 +15,10 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 import shutil
 from pathlib import Path
 
 from . import media
-
-log = logging.getLogger("kbtu.video")
 
 MAX_BYTES = 500 * 1024 * 1024   # a minute of 4K from an iPhone is ~400 MB
 PIECE = 8 * 1024 * 1024         # the client's piece; the server takes up to twice that

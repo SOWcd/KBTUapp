@@ -12,7 +12,7 @@ from .. import ai
 from ..db import tx
 
 from .core import (ApiError, LEVEL_RIGHTS, PERSON, PERSON_COLS, RANK, RIGHTS, Viewer, _may, _org, _rights_from, can,
-    log_action, need_student, one, person_ref, rights_of, role_in, rows, short_name)
+    log_action, need_student, one, person_ref, role_in, rows, short_name)
 
 
 # ---------------------------------------------------------------- the club's own team (SPEC §2: the rank rule)

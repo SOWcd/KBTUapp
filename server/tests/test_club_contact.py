@@ -1,7 +1,7 @@
 """Nov 6: club socials without Telegram, "Message the club" to the President, no emoji in org names."""
 from __future__ import annotations
 
-from kbtu import db, logic, outbox
+from kbtu import logic, outbox
 from test_core import env, login, tma  # noqa: F401  (env: the fixture)
 from test_team_link import _club
 

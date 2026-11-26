@@ -10,7 +10,7 @@ import httpx
 import pytest
 from PIL import Image
 
-from kbtu import db, logic, outbox, texts, tgc
+from kbtu import db, logic, outbox
 from test_core import delete_now, env, login, set_clock, tma  # noqa: F401  (env: the fixture)
 from test_tgcomments import COPY, Telegram, hear, msg, report, setup, student, tick
 
