@@ -1,11 +1,11 @@
-"""The schedule page's student ID (bot._page_sid) against Settings, and the admin's correction of a club role's title."""
+"""The schedule page's student ID (bot_dm._page_sid) against Settings, and the admin's correction of a club role's title."""
 from __future__ import annotations
 
 import sqlite3
 
 import pytest
 
-from kbtu import admin, bot, config, db, logic
+from kbtu import admin, bot_dm, config, db, logic
 from kbtu.logic import account, queues
 from test_core import env, login  # noqa: F401  (env: the fixture)
 
@@ -22,7 +22,7 @@ def test_page_holds_the_lock_from_read_to_write(env, monkeypatch):
     """The ID moved by a PATCH between the year check and the write would make a 2nd-year a 1st-year: it has to wait."""
     cfg, con, uid, got = _ali(env)
     other = sqlite3.connect(cfg.db_path, isolation_level=None, timeout=0)
-    real, parallel = bot.one, []
+    real, parallel = bot_dm.one, []
 
     def one(*a):
         row = real(*a)
@@ -30,16 +30,16 @@ def test_page_holds_the_lock_from_read_to_write(env, monkeypatch):
             other.execute("UPDATE students SET student_id = '25B000009' WHERE user_id = ?", (uid,))
         parallel.append(1)
         return row
-    monkeypatch.setattr(bot, "one", one)
-    bot._page_sid(con, uid, "26B000001")
+    monkeypatch.setattr(bot_dm, "one", one)
+    bot_dm._page_sid(con, uid, "26B000001")
     assert parallel == [1] and got() == ("26B000001", 2, "student_id")
 
 
 def test_page_writes_only_as_the_one_correction(env):
     cfg, con, uid, got = _ali(env)
-    bot._page_sid(con, uid, "26B000001")                                 # the honest first fix: written, and it is the once
+    bot_dm._page_sid(con, uid, "26B000001")                                 # the honest first fix: written, and it is the once
     assert got() == ("26B000001", 2, "student_id")
-    bot._page_sid(con, uid, "26B000002")                                 # an edited page after it: left, a line for support
+    bot_dm._page_sid(con, uid, "26B000002")                                 # an edited page after it: left, a line for support
     assert got()[0] == "26B000001"
     assert con.execute("SELECT COUNT(*) FROM audit_log WHERE action = 'sid_page_fixed'").fetchone()[0] == 1
 
@@ -55,12 +55,12 @@ def test_one_counter_for_settings_and_page(env, monkeypatch):
         with pytest.raises(logic.ApiError):
             logic.update_me(con, v, {"studentId": "26B000002"})
     assert locked == [True] * 4
-    bot._page_sid(con, uid, "25B000001")                                 # the page's: the 5th
+    bot_dm._page_sid(con, uid, "25B000001")                                 # the page's: the 5th
     assert logic.sid_tries(con, uid) == 5
     with pytest.raises(logic.ApiError) as e:                             # Settings is out of tries too
         logic.update_me(con, v, {"studentId": "26B000002"})
     assert e.value.message == "sid_tries"
-    bot._page_sid(con, uid, "26B000001")                                 # and so is the page
+    bot_dm._page_sid(con, uid, "26B000001")                                 # and so is the page
     assert got()[0] == "26B000009" and logic.sid_tries(con, uid) == 5
 
 
@@ -79,7 +79,7 @@ def test_clash_alert_goes_with_the_account(env):
     other = login(c, 73, "oth")["id"]
     con.execute("UPDATE users SET is_founder = 1, role = 'admin' WHERE id = ?", (fon,))
     con.execute("UPDATE students SET student_id = '26B000002' WHERE user_id = ?", (other,))
-    bot._page_sid(con, uid, "26B000002")
+    bot_dm._page_sid(con, uid, "26B000002")
     alerts = lambda: con.execute("SELECT COUNT(*) FROM bot_outbox WHERE kind = 'sid_page_clash'").fetchone()[0]  # noqa: E731
     assert alerts() == 1
     logic.delete_me(con, logic.Viewer(uid, "user", True))

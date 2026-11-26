@@ -87,13 +87,13 @@ SHARE_AWARD = {
 }
 ACH_NAMES = {
     "ru": {"activist": "Главный активист", "regular": "Абонемент", "streak": "Серия", "first_in": "Ранняя пташка", "soul": "Душа тусовки", "season": "Сезон", "first50": "Первые 500",
-           "creator_laugh": "Стендапер", "creator_found": "Встреча века", "bugs": "Охотник за багами", "dmp": "Явка обязательна", "team": "Гроза тимбилдинга", "referral": "Зазывала",
+           "creator_laugh": "Стендапер", "creator_found": "Встреча века", "bugs": "Охотник за багами", "ideas": "Генератор идей", "coder": "Вайб-кодер", "dmp": "Явка обязательна", "team": "Гроза тимбилдинга", "referral": "Зазывала",
            "init26": "Волонтёр посвящения", "init26f": "Посвящение 2026", "init26p": "Выступающий на посвящении", "anthem": "Абсолютный слух", "critic": "Диванный критик", "supporter": "Топливо", "honor": "Почётная медаль", "club_founder": "Основатель клуба"},
     "kk": {"activist": "Бас белсенді", "regular": "Абонемент", "streak": "Серия", "first_in": "Ерте тұрған", "soul": "Ортаның сәні", "season": "Маусым", "first50": "Алғашқы 500",
-           "creator_laugh": "Стендапшы", "creator_found": "Ғасыр кездесуі", "bugs": "Баг аңшысы", "dmp": "Келу міндетті", "team": "Тимбилдинг шебері", "referral": "Шақырушы",
+           "creator_laugh": "Стендапшы", "creator_found": "Ғасыр кездесуі", "bugs": "Баг аңшысы", "ideas": "Идея генераторы", "coder": "Вайб-кодер", "dmp": "Келу міндетті", "team": "Тимбилдинг шебері", "referral": "Шақырушы",
            "init26": "Бағыштау волонтері", "init26f": "Бағыштау 2026", "init26p": "Бағыштауда өнер көрсетуші", "anthem": "Абсолюттік есту", "critic": "Диван сыншысы", "supporter": "Отын", "honor": "Құрмет медалі", "club_founder": "Клуб негізін қалаушы"},
     "en": {"activist": "Chief activist", "regular": "Season ticket", "streak": "Streak", "first_in": "Early bird", "soul": "Life of the party", "season": "Season", "first50": "First 500",
-           "creator_laugh": "Stand-up comic", "creator_found": "Meeting of the century", "bugs": "Bug hunter", "dmp": "Attendance required", "team": "Teambuilding thunder", "referral": "Recruiter",
+           "creator_laugh": "Stand-up comic", "creator_found": "Meeting of the century", "bugs": "Bug hunter", "ideas": "Idea generator", "coder": "Vibe coder", "dmp": "Attendance required", "team": "Teambuilding thunder", "referral": "Recruiter",
            "init26": "Initiation volunteer", "init26f": "Initiation 2026", "init26p": "Initiation performer", "anthem": "Perfect pitch", "critic": "Couch critic", "supporter": "Fuel", "honor": "Honor medal", "club_founder": "Club founder"},
 }
 SCHED_LANG = {  # a schedule's languages in the bot's words ({language} and {languages} in sched_same, sched_added)
@@ -167,6 +167,11 @@ def share_post(lang: str, body: str) -> tuple[str, str, str, str]:
 SHARE_POST_WORDS = 160
 
 
+def plain(text: str) -> str:
+    """A card's HTML as plain words (only <b>-like tags and escapes): the same card, shared outside Telegram."""
+    return html.unescape(re.sub(r"<[^>]*>", "", text))
+
+
 def when(ts: int, lang: str) -> str:
     """'4 октября, 18:00' in Almaty time (UTC+5, as lib/time.ts)."""
     t = time.gmtime(ts + 5 * 3600)
@@ -181,7 +186,7 @@ def when_span(ts: int, end: int, lang: str) -> str:
     return f"{when(ts, lang)}–{e.tm_hour:02d}:{e.tm_min:02d}"
 
 
-# Secret Santa's terms under an invite (bot._santa): the budget a number, the date the server's; each only when set
+# Secret Santa's terms under an invite (outbox._santa): the budget a number, the date the server's; each only when set
 SANTA_TERMS = {"ru": ("подарок до {budget}\u00a0₸", "вишлисты до {until}"), "kk": ("сыйлық {budget}\u00a0₸ дейін", "тілек тізімдері {until} дейін"),
                "en": ("gift up to {budget}\u00a0₸", "wishlists until {until}")}
 
@@ -271,6 +276,7 @@ BOT = {
         "santa_news": ("🎅 Тайный Санта уже в KBTU App\n🎁 Запусти для <b>{org}</b> одной кнопкой", "🎄 Запустить"),
         "app_home": ("📱 <b>KBTU App почти как отдельное приложение!</b>", "🎬 Смотреть"),
         "acoustic": ("🎸 <b>Acoustic Evening</b>: живая музыка в баре «Танцы»\n📅 26 ноября, 19:30 · 18+\n🔥 <b>Только сегодня с 20:00 до 22:00 билеты на 1000 ₸ дешевле</b>\nВ 22:00 скидка сгорит, успей забрать свой 👇", "🎟 Забрать билет со скидкой"),
+        "android_test": ("🤖 <b>KBTU App выходит в Google Play!</b>\nНужны тестировщики с Android: поставь приложение раньше всех и помоги с запуском 👇", "📲 Стать тестировщиком"),
         "vote_1": ("👍 Интересно", None), "vote_0": ("🔕 Не присылать", None),
         "santa_drawn": ("🎅 Жеребьёвка прошла: <b>{title}</b>\n🎁 Узнай, кому даришь", "🎁 Узнать"),
         "santa_open": ("🎅 <b>{org}</b> играет в Тайного Санту\n🎁 Напиши вишлист, и ты в игре{terms}", "🎄 Играть"),
@@ -386,7 +392,6 @@ BOT = {
         "backup_ok": ("✅ Копия базы снова дошла до облака (R2): резервное копирование работает.", None),
         "userbot_off": ("⚠️ Юзербот каналов молчит больше двух часов: посты из каналов клубов не копируются в новости. Посмотри логи сервера (строки «userbot»); если сессия слетела, войди заново: tools/userbot_login.py.", None),
         "userbot_ok": ("✅ Юзербот каналов снова на связи: посты из каналов клубов опять копируются.", None),
-        "prefill_no_match": ("⚠️ Список посвящения: пользователь #{user} вошёл через Microsoft с почтой из списка, но его имя не совпадает с именем в списке. Ничего из списка не подставлено, строка осталась: проверь, не опечатка ли в почте.", None),
         "prefill_other_id": ("⚠️ Список посвящения: пользователь #{user} вошёл через Microsoft с почтой из списка, но номер студенческого у него другой, чем в списке. Данные из списка всё равно подставлены: проверь, тот ли это человек.", None),
         "prefill_id_held": ("⚠️ Список посвящения: пользователь #{user} вошёл через Microsoft с почтой из списка, а номер студенческого из списка уже у пользователя #{holder}. Данные из списка подставлены: проверь, кто из них кто.", None),
         "auto_event": ("🗓 В канале <b>{org}</b> нашлось событие. Мы сделали черновик в Студии: проверь дату и место и опубликуй.", "Проверить"),
@@ -427,7 +432,7 @@ BOT = {
         "fch_reply_removed": ("🚫 Модератор снял этот ответ.", None),
         "fch_reply_deleted": ("🗑 Автор удалил этот ответ.", None),
         "fch_reply_queue": ("🛡 Анонимные ответы авторов в комментариях ждут модератора (жалобы или проверка): {n}.", "Открыть"),
-        # by Russian plural (bot._appeal_kind): exactly one; 21, 31…; 2–4; the rest
+        # by Russian plural (outbox._appeal_kind): exactly one; 21, 31…; 2–4; the rest
         "fch_appeal": ("🛡 {n} пост ждёт твоего решения: автор не согласен с ИИ. Открой и реши: выпустить его или нет.", "Открыть"),
         "fch_appeal_one": ("🛡 {n} пост ждёт твоего решения: авторы не согласны с ИИ. Открой и реши по каждому: выпустить или нет.", "Открыть"),
         "fch_appeal_few": ("🛡 {n} поста ждут твоего решения: авторы не согласны с ИИ. Открой и реши по каждому: выпустить или нет.", "Открыть"),
@@ -499,6 +504,7 @@ BOT = {
         "santa_news": ("🎅 Құпия Санта енді KBTU App-та\n🎁 <b>{org}</b> үшін бір батырмамен баста", "🎄 Бастау"),
         "app_home": ("📱 <b>KBTU App енді жеке қолданбаға ұқсас!</b>", "🎬 Көру"),
         "acoustic": ("🎸 <b>Acoustic Evening</b>: «Танцы» барында тірі музыка\n📅 26 қараша, 19:30 · 18+\n🔥 <b>Тек бүгін 20:00–22:00 билеттер 1000 ₸ арзан</b>\n22:00-де жеңілдік бітеді, үлгеріп қал 👇", "🎟 Жеңілдікпен алу"),
+        "android_test": ("🤖 <b>KBTU App Google Play-ге шығады!</b>\nAndroid-пен тестерлер керек: қолданбаны бәрінен бұрын орнатып, іске қосуға көмектес 👇", "📲 Тестер болу"),
         "vote_1": ("👍 Қызық", None), "vote_0": ("🔕 Жібермеу", None),
         "santa_drawn": ("🎅 Жеребе тартылды: <b>{title}</b>\n🎁 Кімге сыйлайтыныңды біл", "🎁 Білу"),
         "santa_open": ("🎅 <b>{org}</b> Құпия Санта ойынын ойнап жатыр\n🎁 Тілек тізіміңді жаз, сонда ойындасың{terms}", "🎄 Ойнау"),
@@ -613,7 +619,6 @@ BOT = {
         "backup_ok": ("✅ Дерекқор көшірмесі қайтадан бұлтқа (R2) жетті: резервтік көшіру жұмыс істеп тұр.", None),
         "userbot_off": ("⚠️ Арналар юзерботы екі сағаттан астам үнсіз: клуб арналарының посттары жаңалықтарға көшірілмей тұр. Сервер логтарын қара («userbot» жолдары); сессия үзілсе, қайта кір: tools/userbot_login.py.", None),
         "userbot_ok": ("✅ Арналар юзерботы қайта байланыста: клуб арналарының посттары қайтадан көшіріліп жатыр.", None),
-        "prefill_no_match": ("⚠️ Бағыштау тізімі: #{user} пайдаланушы тізімдегі поштамен Microsoft арқылы кірді, бірақ оның аты тізімдегі атқа сәйкес келмейді. Тізімдегі деректер енгізілмеді, жол сақталды: поштада қате жоқ па, тексер.", None),
         "prefill_other_id": ("⚠️ Бағыштау тізімі: #{user} пайдаланушы тізімдегі поштамен Microsoft арқылы кірді, бірақ оның студенттік билет нөмірі тізімдегіден басқа. Тізімдегі деректер бәрібір енгізілді: сол адам ба, тексер.", None),
         "prefill_id_held": ("⚠️ Бағыштау тізімі: #{user} пайдаланушы тізімдегі поштамен Microsoft арқылы кірді, ал тізімдегі студенттік билет нөмірі #{holder} пайдаланушыда тұр. Тізімдегі деректер енгізілді: кім кім екенін тексер.", None),
         "auto_event": ("🗓 <b>{org}</b> арнасынан іс-шара табылды. Студияда нобайын жасадық: күні мен орнын тексеріп, жарияла.", "Тексеру"),
@@ -721,6 +726,7 @@ BOT = {
         "santa_news": ("🎅 Secret Santa is now in KBTU App\n🎁 Start it for <b>{org}</b> with one button", "🎄 Start"),
         "app_home": ("📱 <b>KBTU App is now almost a real app!</b>", "🎬 Watch"),
         "acoustic": ("🎸 <b>Acoustic Evening</b>: live music at Tantsy bar\n📅 Nov 26, 19:30 · 18+\n🔥 <b>Today only, 20:00-22:00: tickets 1000 ₸ off</b>\nThe deal ends at 22:00, grab yours 👇", "🎟 Grab a discounted ticket"),
+        "android_test": ("🤖 <b>KBTU App is coming to Google Play!</b>\nWe need testers on Android: get the app before everyone and help us launch 👇", "📲 Become a tester"),
         "vote_1": ("👍 Interesting", None), "vote_0": ("🔕 Don't send", None),
         "santa_drawn": ("🎅 The draw is done: <b>{title}</b>\n🎁 See who you're giving to", "🎁 See"),
         "santa_open": ("🎅 <b>{org}</b> is playing Secret Santa\n🎁 Write your wishlist and you are in{terms}", "🎄 Play"),
@@ -835,7 +841,6 @@ BOT = {
         "backup_ok": ("✅ The database copy reaches the cloud (R2) again: backups are working.", None),
         "userbot_off": ("⚠️ The channels' userbot has been quiet for over two hours: club channel posts aren't being copied into the news. Check the server logs (the \"userbot\" lines); if the session ended, sign in again: tools/userbot_login.py.", None),
         "userbot_ok": ("✅ The channels' userbot is back: club channel posts are being copied again.", None),
-        "prefill_no_match": ("⚠️ Initiation list: user #{user} signed in with Microsoft using an email address from the list, but their name doesn't match the list's. Nothing from the list was used and the row stays: check the address for a typo.", None),
         "prefill_other_id": ("⚠️ Initiation list: user #{user} signed in with Microsoft using an email address from the list, but their student ID differs from the list's. The list's data was filled in anyway: check it's the same person.", None),
         "prefill_id_held": ("⚠️ Initiation list: user #{user} signed in with Microsoft using an email address from the list, and the list's student ID is held by user #{holder}. The list's data was filled in: check who is who.", None),
         "auto_event": ("🗓 We found an event in <b>{org}</b>'s channel and made a draft in Studio: check the date and place, then publish.", "Check"),
@@ -964,7 +969,7 @@ def broadcast_message(lang: str, name: str) -> tuple[str, str] | None:
     return (text, button) if button else None
 
 
-# a club's group moderated for swearing (bot._swear, logic/chatmod.py): warn and mute name nobody and count nothing in
+# a club's group moderated for swearing (bot_groups._swear, logic/chatmod.py): warn and mute name nobody and count nothing in
 # public (a "2 of 3" under a name shames); on, off: the President's or Vice's language, the rest: the sender's
 SWEAR = {
     "ru": {"on": "🧹 Фильтр мата включён. Сообщения с матом удаляются, за каждое — предупреждение. Три за неделю — час без сообщений.",
@@ -1008,7 +1013,7 @@ def chat_approved(lang: str, kind: str, title: str) -> tuple[str, str | None]:
 
 
 def chat_reply(lang: str, got: list[tuple[str, str, str]]) -> str:
-    """The bot's one answer to the chats a message linked (bot.suggest's (outcome, title, kind) each): what each is and
+    """The bot's one answer to the chats a message linked (bot_dm.suggest's (outcome, title, kind) each): what each is and
     its title from Telegram or the directory, never the sender's words; several: grouped by outcome, the rest counted."""
     said = pick(BOT, lang)
     item = lambda kind, title: chat_item(lang, kind, title)  # noqa: E731
@@ -1290,7 +1295,7 @@ def nick(a: int, n: int) -> str:
     """A post's nick in Russian, the channel's language: "Тихая Лиса"."""
     word, g = NICK_NOUN[n]
     return f"{NICK_ADJ[a][g]} {word}"
-# an event's Telegram group (bot.py _group): what the bot says there, in Russian (a group has no one language)
+# an event's Telegram group (bot_groups.py _group): what the bot says there, in Russian (a group has no one language)
 CHAT_LINKED = "✅ Чат привязан к событию «{title}». Записавшиеся найдут ссылку в приложении, бот пускает только их."
 CHAT_BAD = "Эта ссылка устарела или не твоя. Нажми «Создать чат» в приложении ещё раз."
 CHAT_NO_RIGHTS = "Мне нужны права админа «Пригласительные ссылки». Дай их и нажми «Создать чат» в приложении ещё раз."

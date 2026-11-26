@@ -101,7 +101,7 @@
   let qr = $state<string | null>(null); // '' while its token is on the way
   function sendLink() {
     haptic.tap();
-    shareCard({ kind: 'pres', id: String(org.id) }, 'https://t.me/KBTUappBot', org.name)
+    shareCard({ kind: 'pres', id: String(org.id) })
       .then((sent) => { if (sent) say(t('adm.presSent'), 'party_popper_3d'); })
       .catch(() => { haptic.error(); say(t('common.error'), 'warning_3d'); });
   }

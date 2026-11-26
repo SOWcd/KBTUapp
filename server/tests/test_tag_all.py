@@ -8,7 +8,7 @@ import stat
 import time
 import types
 
-from kbtu import bot, db, logic, tgc
+from kbtu import bot, bot_groups, db, logic, tgc
 from test_core import env, login, tma  # noqa: F401  (env: the fixture)
 
 
@@ -37,16 +37,16 @@ class _Http:
 
 
 def _setup(c, cfg, monkeypatch):
-    monkeypatch.setattr(bot, "TAG_GAP", 0)
-    monkeypatch.setattr(bot, "TAG_FAST", 0)
-    monkeypatch.setattr(bot, "ALL_NO_TTL", 0)
+    monkeypatch.setattr(bot_groups, "TAG_GAP", 0)
+    monkeypatch.setattr(bot_groups, "TAG_FAST", 0)
+    monkeypatch.setattr(bot_groups, "ALL_NO_TTL", 0)
     monkeypatch.setattr(bot, "SYNC_GAP", 0)
     monkeypatch.setattr(bot._call, "__defaults__", (0,))
-    monkeypatch.setattr(bot, "ALL_AGAIN", 0)
-    monkeypatch.setattr(bot, "_tagged", {})
-    monkeypatch.setattr(bot, "_denied", {})
-    monkeypatch.setattr(bot, "_tagging", set())
-    monkeypatch.setattr(bot, "_moved", {})
+    monkeypatch.setattr(bot_groups, "ALL_AGAIN", 0)
+    monkeypatch.setattr(bot_groups, "_tagged", {})
+    monkeypatch.setattr(bot_groups, "_denied", {})
+    monkeypatch.setattr(bot_groups, "_tagging", set())
+    monkeypatch.setattr(bot_groups, "_moved", {})
     _live(monkeypatch, None)  # no member list (not configured): the app's and the seen ones, as before
     for tg in (20, 21, 31, 32, 33, 34, 35, 36, 37, 99):
         login(c, tg, f"u{tg}")
@@ -68,8 +68,8 @@ def _msg(tg, chat=-100, text="/all", **kw):
 def _run(cfg, con, http, *msgs):
     async def go():
         for m in msgs:
-            bot._seen(con, m)  # as hear does, before the swear filter
-            await bot._group(cfg, http, con, m)
+            bot_groups._seen(con, m)  # as hear does, before the swear filter
+            await bot_groups._group(cfg, http, con, m)
         await asyncio.gather(*list(tgc._tasks))
     asyncio.run(go())
     return http.sent
@@ -77,7 +77,7 @@ def _run(cfg, con, http, *msgs):
 
 def _run_fresh(cfg, con, http, m, monkeypatch):
     """A run with the chat's wait after the last /all lifted."""
-    bot._tagged.clear()
+    bot_groups._tagged.clear()
     return _run(cfg, con, http, m)
 
 
@@ -89,13 +89,13 @@ def test_head_tags_in_fives(env, monkeypatch):
     assert ids == [[21, 31, 32, 33, 34], [35, 36]]                                   # the caller and the one who left skipped
     assert all(s["reply_parameters"]["message_id"] == 7 and s["chat_id"] == -100 for s in sent)
     # the caller's own words over each five (a push then says why), as plain text
-    assert all(x["text"].startswith("meeting at 6\n\n") for x in sent) and any(m in sent[0]["text"] for m in bot.TAG_MARKS)
+    assert all(x["text"].startswith("meeting at 6\n\n") for x in sent) and any(m in sent[0]["text"] for m in bot_groups.TAG_MARKS)
     sent = _run_fresh(cfg, con, _Http(gone={37}, admins={20}), _msg(20, text="/all <b>x</b> & co"), monkeypatch)
     assert sent[0]["text"].startswith("&lt;b&gt;x&lt;/\u2060b&gt; &amp; co\n\n")              # escaped, never markup
     sent = _run_fresh(cfg, con, _Http(gone={37}, admins={20}), _msg(20, text="/all ask @durov or t.me/kbtu #news /start"), monkeypatch)
     head = sent[0]["text"].split("\n\n")[0]                                             # their words: never a mention, link, tag, command
     assert head == "ask @\u2060durov or t.\u2060me/\u2060kbtu #\u2060news /\u2060start" and sent[0]["link_preview_options"] == {"is_disabled": True}
-    assert not bot._tagging
+    assert not bot_groups._tagging
     assert len(_run(cfg, con, _Http(gone={37}, admins={20}), _msg(20, text="@all come"))) == 2          # the plain word: ours where another bot has /all too
     for t in ("\u041a\u0430\u043b\u043b", "\u043a\u043e\u043b\u043b \u0432 6", "Call!"):                             # the words people type instead of a command
         assert len(_run(cfg, con, _Http(gone={37}, admins={20}), _msg(20, text=t))) == 2, t
@@ -126,7 +126,7 @@ def test_silence_for_others(env, monkeypatch):
          _msg(20, sender_chat={"id": -100}), {**_msg(1087968824), "from": {"id": 1087968824, "is_bot": True}},  # anonymous admin
          _msg(20, forward_origin={"type": "user"}), _msg(20, date=int(time.time()) - bot.FRESH - 5),
          _msg(99))                                                                      # banned in the app
-    assert http.sent == [] and not bot._tagging
+    assert http.sent == [] and not bot_groups._tagging
 
 
 def test_discussion_group_never_calls(env, monkeypatch):
@@ -139,7 +139,7 @@ def test_discussion_group_never_calls(env, monkeypatch):
     http = _Http()
     _run(forum, con, http, _msg(31, chat=-555),                                      # the forum's group
          _msg(31, reply_to_message={"message_id": 3, "is_automatic_forward": True}))   # a comment under a channel post
-    assert http.sent == [] and not bot._tagging and not bot._tagged
+    assert http.sent == [] and not bot_groups._tagging and not bot_groups._tagged
     assert _tagged(_run(forum, con, _Http(admins={31}), _msg(31))) == [20, 21, 32, 33, 34, 35, 36, 37, 500, 501]   # an ordinary group: as before
 
 
@@ -152,7 +152,7 @@ def test_call_requires_verification_and_current_group_or_club_authority(env, mon
     assert not _tagged(_run(cfg, con, _Http(), _msg(31))) and not reads
     assert not _tagged(_run(cfg, con, _Http(), _msg(20, chat=-555))) and not reads
     assert _tagged(_run(cfg, con, _Http(admins={31}), _msg(31))) == [20, 21, 32, 33, 34, 35, 36, 37]
-    bot._tagged.clear()
+    bot_groups._tagged.clear()
     http = _Http()
     assert _tagged(_run(cfg, con, http, _msg(800))) == []                     # not in the app: nobody is called, told why
     assert http.sent[0]["text"] == bot.texts.bot_message("ru", "all_app")[0]
@@ -167,7 +167,7 @@ def test_call_requires_verification_and_current_group_or_club_authority(env, mon
 def test_live_list_union_order_and_cap(env, monkeypatch):
     c, cfg = env
     con = _setup(c, cfg, monkeypatch)
-    monkeypatch.setattr(bot, "TAG_MAX", 50)
+    monkeypatch.setattr(bot_groups, "TAG_MAX", 50)
     _run(cfg, con, _Http(admins={20}), _msg(500, text="hi"))                                  # seen
     con.execute("UPDATE users SET banned_at = 1 WHERE tg_id = 36")
     caps = []
@@ -177,8 +177,8 @@ def test_live_list_union_order_and_cap(env, monkeypatch):
     ids = [int(p.split('">')[0]) for s in sent for p in s["text"].split("tg://user?id=")[1:]]
     assert ids == [21, 31, 33, 34, 35, 37, 500, 600, 601] and caps == [50]          # the app's, the seen, then the rest; each once
     assert sorted(http.asked) == [20, 21, 31, 34, 35, 37]                            # the caller once; whom Telegram just listed isn't asked
-    bot._tagged.clear()
-    monkeypatch.setattr(bot, "TAG_MAX", 8)
+    bot_groups._tagged.clear()
+    monkeypatch.setattr(bot_groups, "TAG_MAX", 8)
     assert [s["text"].count("tg://") for s in _run(cfg, con, _Http(admins={20}), _msg(20))] == [5, 3]   # the cap, the app's first
 
 
@@ -189,31 +189,31 @@ def test_caller_not_in_the_chat_and_hidden_members(env, monkeypatch):
     con = _setup(c, cfg, monkeypatch)
     http = _Http(gone={31})
     _run(cfg, con, http, _msg(31))
-    assert http.sent == [] and not bot._tagged and not bot._tagging
+    assert http.sent == [] and not bot_groups._tagged and not bot_groups._tagging
     _live(monkeypatch, [600, 601], hidden=True)
     assert 600 not in _tagged(_run(cfg, con, _Http(), _msg(20)))
-    bot._tagged.clear()
+    bot_groups._tagged.clear()
     assert {600, 601} <= set(_tagged(_run(cfg, con, _Http(admins={31}), _msg(31))))
 
 
 def test_nobody_to_call_answers_once(env, monkeypatch):
     c, cfg = env
     con = _setup(c, cfg, monkeypatch)
-    monkeypatch.setattr(bot, "ALL_NO_TTL", 0.5)
-    monkeypatch.setattr(bot, "ALL_AGAIN", 300)
+    monkeypatch.setattr(bot_groups, "ALL_NO_TTL", 0.5)
+    monkeypatch.setattr(bot_groups, "ALL_AGAIN", 300)
     reads = []
     _live(monkeypatch, [20], reads)                                                # alone there
     http = _Http(admins={20, 21})
 
     async def go():
         for m in (_msg(20, chat=-555), _msg(20, chat=-555, text="@all")):
-            await bot._group(cfg, http, con, m)
+            await bot_groups._group(cfg, http, con, m)
             await tgc._last["all:-555"]  # the run, not the answer's deletion (ALL_NO_TTL on)
         await asyncio.gather(*list(tgc._tasks))
     asyncio.run(go())
     assert http.sent == [{"chat_id": -555, "text": bot.texts.bot_message("ru", "all_none")[0], "parse_mode": "HTML",
                           "reply_parameters": {"message_id": 7, "allow_sending_without_reply": True}}, {"chat_id": -555, "message_id": 7}]
-    assert time.time() - bot._tagged[-555] >= 239 and not bot._tagging and len(reads) == 1   # a short wait: no rescan each message
+    assert time.time() - bot_groups._tagged[-555] >= 239 and not bot_groups._tagging and len(reads) == 1   # a short wait: no rescan each message
 
 
 class _Client:
@@ -295,7 +295,7 @@ def test_one_run_at_a_time_and_429(env, monkeypatch):
     soon = [s for s in sent if s.get("text") == bot.texts.bot_message("ru", "all_soon")[0]]
     assert len(soon) == 1 and soon[0]["reply_parameters"]["message_id"] == 7
     sent = _run(cfg, con, _Http(busy=9, admins={20}), _msg(20))                                  # still too fast: gives up, the chat free again
-    assert sent == [] and not bot._tagging
+    assert sent == [] and not bot_groups._tagging
 
 
 # ---------------------------------------------------------------- chat_seen: whom the bot saw in a club's chat
@@ -370,7 +370,7 @@ def test_seen_gone_with_account_bot_and_migration(env, monkeypatch):
     assert con.execute("SELECT COUNT(*) FROM chat_seen WHERE tg_id = 31").fetchone()[0] == 0
     _run(cfg, con, _Http(), _msg(800, text="", migrate_to_chat_id=-1009))        # group to supergroup: moved
     assert _seen(con, -100) == [] and _seen(con, -1009) == [800]
-    asyncio.run(bot._member(cfg, _Http(), con, {"chat": {"id": -1009, "type": "supergroup"}, "new_chat_member": {"status": "kicked"}}))
+    asyncio.run(bot_groups._member(cfg, _Http(), con, {"chat": {"id": -1009, "type": "supergroup"}, "new_chat_member": {"status": "kicked"}}))
     assert _seen(con, -1009) == []                                                # the bot removed: the chat's rows go
 
 
@@ -398,14 +398,14 @@ def test_all_again_waits_and_cap(env, monkeypatch):
     """A chat's next /all waits ALL_AGAIN after the last one ended (told so, then both go); one run calls TAG_MAX at most."""
     c, cfg = env
     con = _setup(c, cfg, monkeypatch)
-    monkeypatch.setattr(bot, "ALL_AGAIN", 300)
+    monkeypatch.setattr(bot_groups, "ALL_AGAIN", 300)
     assert len(_tagged(_run(cfg, con, _Http(admins={20}), _msg(20)))) == 8
     http = _Http(admins={20, 21})
     _run(cfg, con, http, _msg(21, text="/all"))                                    # a minute on: not again
     assert not _tagged(http.sent) and http.sent[0]["text"] == bot.texts.bot_message("ru", "all_soon")[0]
     assert {"chat_id": -100, "message_id": 7} in http.sent                         # the command and the answer deleted
-    bot._tagged[-100] -= 301
-    monkeypatch.setattr(bot, "TAG_MAX", 7)
+    bot_groups._tagged[-100] -= 301
+    monkeypatch.setattr(bot_groups, "TAG_MAX", 7)
     sent = _run(cfg, con, _Http(admins={20, 21}), _msg(21))
     assert [s["text"].count("tg://") for s in sent] == [5, 2]                      # the cap: the rest not called this run
 

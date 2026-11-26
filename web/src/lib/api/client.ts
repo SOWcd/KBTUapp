@@ -3,7 +3,7 @@ import type { ChatFill } from '../eventFill';
 // { error, message } and become ApiErr.
 import type { ResearchAnswers, ResearchSurvey, ResearchInput, ResearchRequest, Support, Sponsor, DonationReview, ApiError, Credits, ClubApplication, Id, OfficialPath, PersonCard, Video, AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, MemberPatch, Friends, Friendship, FoundStudent, LinkCard, PersonRef, Media, GalleryPage, AlbumPhoto, Attendee, DoorPerson, EventUpdate, PostInput, CheckinResult, ClassItem, JoinRequest, CohostInvite, CrewKind, CrewMember, EventReport, ReportPatch, EventCard, EventFull, EventInput, Me, Org, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, ChatSection, Chats, ClubApplicationInput, OfficialRequest, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, LentStudio, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp, TeamAsk, TeamPick, TeamInvite, TeamsBoard, ShortLink, StudioChat, ChatTree, WaitingChat, SwearRow, ChatRoles, RosterRequest, Skill, ForumMe, ForumCard, Ask, AskInput, Contact, ForumMod, AssistReply, Fixable, TgComment, TgcRule, VolLedger, VolPerson, VolDoor, Appeal, AppealHelp, AppealTopic, AppealStatus, SgQueue, Solved, Subjects, SubjectCard, RejectWhy } from './types';
 import type { BracketMatch, BracketSeed, EventBracket, EventGroups, EventMatch, MatchScore } from './types';
-import type { ReportLogEntry, ReportMarkPatch, ReviewReason, SantaChats, SantaMsg, SantaReport } from './types';
+import type { Archived, ReportLogEntry, ReportMarkPatch, ReviewReason, SantaChats, SantaMsg, SantaReport } from './types';
 import type { Graph } from '../route';
 import { splitVariants } from '../awards';
 import { ApiErr } from './errors';
@@ -17,10 +17,11 @@ const authHeaders = (webWrite = false): Record<string, string> => ({
   ...(!tg.initData || webWrite ? { 'X-KBTU': '1' } : {}),
 });
 export const WEB_SESSION_CHANGE = 'kb-web-session-change';
+type ApplePass = { token: string; nonce: string; consent: string; lang?: string };
 
-async function changeWebSession(path: '/web/login' | '/web/logout' | '/web/logout-all', body?: unknown): Promise<void> {
+async function changeWebSession(path: '/web/login' | '/web/demo' | '/web/apple' | '/web/logout' | '/web/logout-all' | '/me/logins/telegram', body?: unknown): Promise<void> {
   await call('POST', path, body);
-  if (!tg.initData && path !== '/web/login') dispatchEvent(new Event('kb:signedOut'));
+  if (!tg.initData && (path === '/web/logout' || path === '/web/logout-all')) dispatchEvent(new Event('kb:signedOut'));
   try { localStorage.setItem(WEB_SESSION_CHANGE, crypto.randomUUID()); } catch { /* storage may be blocked */ }
 }
 
@@ -33,6 +34,10 @@ function first(path: string): Promise<Response> | undefined {
   delete f.r[path];
   return f.auth === tg.initData && Date.now() - f.at < 20_000 ? p : undefined;
 }
+
+// the waits between tries of /me while the server restarts (call), and the answers that mean it is restarting
+const RESTART = [500, 1000, 2000, 4000];
+const RESTARTING = new Set([502, 503, 504]);
 
 /** Events the admin opened from Admin: their own routes go as their organizers' (server app.viewer, X-Staff-Event),
  *  each write in the owner's log. Only Admin adds to it. */
@@ -68,15 +73,25 @@ async function call<T>(method: string, path: string, body?: unknown, staffEvent?
     account.addEventListener('abort', cancel, { once: true });
     timeout.addEventListener('abort', cancel, { once: true });
   }
+  const send = () => fetch('/api' + path, {
+    method,
+    headers: { ...authHeaders(path.startsWith('/web/')), ...staffOf(method, path, staffEvent), ...(body === undefined ? {} : { 'Content-Type': raw ? body.type || 'application/octet-stream' : 'application/json' }) },
+    body: body === undefined ? undefined : raw ? body : JSON.stringify(body),
+    // a lost answer (a deploy's restart, iOS backgrounding the app) would spin forever: Cloudflare gives up at 100 s
+    // anyway; files are spared (a slow upload takes longer). No AbortSignal.timeout before iOS 16: no limit there
+    signal: timeout ? (fallback?.signal ?? AbortSignal.any([account, timeout])) : account,
+  });
   try {
-    r = await ((method === 'GET' && body === undefined && first(path)) || fetch('/api' + path, {
-      method,
-      headers: { ...authHeaders(path.startsWith('/web/')), ...staffOf(method, path, staffEvent), ...(body === undefined ? {} : { 'Content-Type': raw ? body.type || 'application/octet-stream' : 'application/json' }) },
-      body: body === undefined ? undefined : raw ? body : JSON.stringify(body),
-      // a lost answer (a deploy's restart, iOS backgrounding the app) would spin forever: Cloudflare gives up at 100 s
-      // anyway; files are spared (a slow upload takes longer). No AbortSignal.timeout before iOS 16: no limit there
-      signal: timeout ? (fallback?.signal ?? AbortSignal.any([account, timeout])) : account,
-    }));
+    let p = (method === 'GET' && body === undefined && first(path)) || send();
+    // /me decides whether the app opens at all: a deploy's restart (the proxy's 502-504, or a dropped line for a few
+    // seconds) is waited out, ~8 s in all, instead of the failure screen. Reads only, so a repeat is harmless
+    if (method === 'GET' && /^\/me(?:\?|$)/.test(path)) for (const ms of RESTART) {
+      const x = await p.catch(() => null);
+      if (x && !RESTARTING.has(x.status) || account.aborted) break;
+      await new Promise((ok) => setTimeout(ok, ms));
+      p = send();
+    }
+    r = await p;
     if (r.status !== 204) data = await r.json().catch(() => null);
   } catch {
     throw new ApiErr('unavailable', 'network');
@@ -178,15 +193,27 @@ export const server = {
   donationQueue: (): Promise<DonationReview[]> => call('GET', '/admin/donations'),
   reviewDonation: (id: Id, revision: number, action: 'confirm' | 'reject' | 'undo', amount?: number): Promise<void> => call('POST', `/admin/donations/${id}/review`, { revision, action, amount }),
   donationImage: (id: Id): Promise<string> => receiptImage(`/api/donate/receipts/${id}/image`),
-  me: (withReportLog = false): Promise<Me & { reportLog?: ReportLogEntry[] }> => call('GET', withReportLog ? '/me' : '/me?reportLog=false'),
+  // the device kind rides along (the server keeps it at most once a day, for a broadcast to one platform)
+  me: (withReportLog = false): Promise<Me & { reportLog?: ReportLogEntry[] }> => call('GET', `/me?platform=${tg.kind}${withReportLog ? '' : '&reportLog=false'}`),
   webLogin: (widget: unknown): Promise<void> => changeWebSession('/web/login', widget),
+  webDemo: (code: string): Promise<void> => changeWebSession('/web/demo', { code }), // the stores' reviewers (android/README.md)
   webLogout: (): Promise<void> => changeWebSession('/web/logout'),
   webLogoutAll: (): Promise<void> => changeWebSession('/web/logout-all'),
+  // the iPhone app (logic/apple.py): Apple's identity token for this tap's nonce, with the consent of the policy's clause
+  appleLogin: (p: ApplePass): Promise<void> => changeWebSession('/web/apple', p),
+  linkApple: (p: ApplePass): Promise<void> => call('POST', '/me/logins/apple', p),
+  unlinkApple: (): Promise<void> => call('DELETE', '/me/logins/apple'),
+  // Telegram's sign-in page, back with #tgAuthResult (app: to the iPhone app's sign-in sheet through /tg-back)
+  telegramSignInStart: (state: string): Promise<{ url: string }> => call('GET', '/web/telegram' + query({ state })), // the iPhone app's entrance
+  telegramLinkStart: (state: string, app?: boolean): Promise<{ url: string }> => call('GET', '/me/logins/telegram' + query({ state, ios: app ? 1 : undefined })),
+  linkTelegram: (widget: unknown): Promise<void> => changeWebSession('/me/logins/telegram', widget), // a new session: the old one ends
+  pushDevice: (token: string, consent: string): Promise<void> => call('POST', '/me/devices', { token, consent }),
+  dropPushDevice: (): Promise<void> => call('DELETE', '/me/devices'), // notifications off in iOS Settings
   msStart: (): Promise<{ url: string }> => call('POST', '/ms/start'), // the KBTU Microsoft sign-in link, opened outside Telegram
   dmpHi: (): Promise<void> => call('POST', '/me/dmp-hi'), // DMP's one-time hello left (me.dmpHi): never again
   msClaim: (claim: string): Promise<{ ok: true }> => call('POST', '/ms/claim', { claim }), // back from /ms.html (startapp=ms_<claim>): only the Telegram that started it takes it
   manualLogin: (i: { firstName: string; lastName: string; studentId: string; course: number }, consentVersion: string): Promise<Me> => call('POST', '/kbtu/manual', { ...i, consentVersion }), // only while it isn't
-  updateMe: (patch: Partial<Settings> & { bio?: string; showcase?: string[]; nick?: string | null; avatarTg?: boolean; skin?: Id | 'sower' | null; frame?: string | null; phone?: string | null; school?: string | null; course?: number; city?: string | null; cityHidden?: boolean }
+  updateMe: (patch: Partial<Settings> & { bio?: string; showcase?: string[]; nick?: string | null; avatarTg?: boolean; skin?: Id | 'sower' | Archived | null; frame?: string | null; phone?: string | null; school?: string | null; course?: number; city?: string | null; cityHidden?: boolean; notifyVia?: 'app' | 'telegram' }
     & { [k in Exclude<Fixable, 'course' | 'school'>]?: string }): Promise<Me> => call('PATCH', '/me', patch), // phone, city: null deletes it; a Fixable: once each (the server says `fixed` after)
   uploadMyPhoto: (file: Blob): Promise<Me> => call('POST', '/me/photo', file), // my own photo: "Photo from Telegram" goes off
   deleteMyPhoto: (): Promise<Me> => call('DELETE', '/me/photo'), // gone from the server too; Telegram's is back
@@ -524,7 +551,7 @@ export const server = {
   channelReplyWhy: (id: Id): Promise<{ explain: import('./types').ForumWhy | null }> => call('POST', `/forum-replies/${id}/why`), // the same for my held reply
   deleteChannelPost: (id: Id): Promise<void> => call('DELETE', `/forum-posts/${id}`), // mine: the bot takes it out of the channel
   channelMod: (): Promise<import('./types').ChannelMod> => call('GET', '/forum-posts/mod'), // moderators: held, and this week's live
-  channelModDecide: (id: Id, ok: boolean): Promise<void> => call('POST', `/forum-posts/${id}/mod`, { ok }), // held: out or removed; live: only removed
+  channelModDecide: (id: Id, ok: boolean, again: boolean = false): Promise<void> => call('POST', `/forum-posts/${id}/mod`, { ok, again }), // held: out or removed; live: only removed; again: a lost send, re-sent
   channelModRestore: (id: Id): Promise<void> => call('POST', `/forum-posts/${id}/restore`), // a moderator's take-down undone: published anew
   channelModRepublish: (id: Id): Promise<void> => call('POST', `/forum-posts/${id}/republish`), // a live post sent anew (its message lost in Telegram)
   revealChannelPost: (id: Id): Promise<PersonRef> => call('POST', `/forum-posts/${id}/reveal`), // the owner alone; audited

@@ -1,6 +1,8 @@
 // The API contract (SPEC §6), as the server (server/kbtu) answers it: screens only ever see these shapes. JSON fields are camelCase; time is unix seconds (UTC).
 
 export type Id = number;
+/** an archived lanyard (web awards.ts ARCHIVE_LOOKS, server logic.ARCHIVE): the creator's alone to wear */
+export type Archived = 'dota_ancient' | 'dota_clash' | 'dota_rune';
 export type Ts = number;
 export type Lang = 'ru' | 'kk' | 'en';
 export type OrgRole = 'member' | 'head' | 'vice' | 'president';
@@ -262,13 +264,13 @@ export interface PersonRef { id: Id; name: string; nick?: string | null; realNam
  *  own (nothing says two of them are one person's), nothing else comes */
 export type CreditKind = 'idea' | 'find' | 'code';
 export interface CreditItem { kind: CreditKind; text: Record<Lang, string>; on: string /* YYYY-MM-DD it shipped */ }
-export interface CreditPerson { honor?: boolean; person: PersonRef | null; gh?: string /* a GitHub login: a nameless card's lines together under it, or a named person's own (their yes ties them) */; items: CreditItem[] }
+export interface CreditPerson { honor?: boolean; person: PersonRef | null; gh?: string /* a GitHub login: a nameless card's lines together under it, or a named person's own */; name?: string /* no account yet: the name the team gave, no face */; items: CreditItem[] }
 export interface Credits {
   founder: PersonRef | null;
   idea: CreditPerson | null;       // the idea's author (named after her own yes); null: nobody marked
-  team: (CreditPerson & { person: PersonRef })[];  // the core developers the creator picked, first added first; only who said yes
+  team: (CreditPerson & { person: PersonRef })[];  // the core developers the creator picked, first added first; who didn't hide
   people: CreditPerson[];          // newest shipped first, a named person's lines together
-  /** what is mine there; consent: my yes, my no, or null (never answered); null: nothing of mine, nothing is asked */
+  /** what is mine there; consent: my yes, my no (hidden), or null (never answered: shown); null: nothing of mine, nothing is asked */
   mine: { honor?: boolean; consent: boolean | null; rev: number | null /* my latest answer: a yes names it, so a late one never undoes a no */; idea: boolean; team?: boolean; items: CreditItem[]; gh?: string /* the GitHub login my named card would show */ } | null;
   version: string;                 // the consent text's version a yes sends back (server credits.CONSENT)
 }
@@ -337,6 +339,7 @@ export interface Me {
   msOnly?: boolean;             // the creator's staff (kbtu.admin staff-ok): Microsoft and the policy, no student ID
   msPending?: { first: string; last: string; email: string; prefill?: { studentId: string } | null } | null; // signed in with Microsoft, the student ID still to type (prefill: an organizers' check-in list has it)
   consentNow?: string; // GET /api/me only: the policy version in force
+  logins?: { telegram: boolean; apple: boolean }; // GET /api/me outside Telegram: which sign-ins reach this account (logic/apple.py)
   board?: boolean;     // GET /api/me only: the policy's section 12 is in force for me (the assistant, the event questions; the server's BOARD switch)
   forumChannel?: boolean; // GET /api/me only: the forum channel is on (FORUM_CHANNEL): the Forum tab
   subjects?: boolean;  // GET /api/me only: the subjects' cards are on (SUBJECTS_FILE): the Forum tab's row, the timetable's way in
@@ -349,6 +352,7 @@ export interface Me {
   relink?: boolean; // typed in before Oct 20 (no Microsoft): signed out until Microsoft confirms that row
   role: PlatformRole;
   canDm: boolean;               // the bot may write (Telegram's "allow messages", or the chat opened)
+  notify: { via: 'app' | 'telegram'; app: boolean }; // one channel for my notifications (server push.py): my pick; app: a live app token of mine
   founder: boolean;
   mark?: 'idea' | null;
   no: number | null;            // the card number: the order of first KBTU sign-in, the Creator's 0; null for guests
@@ -369,9 +373,9 @@ export interface Me {
   office?: OrgRef | null;       // an office I'm in, before my KBTU sign-in (no memberships yet): for its one greeting
   dmpHi?: OrgRef | null;        // on DMP's list (server kbtu.admin dmp), not signed in, not greeted yet: its hello, then Microsoft
   counters: { tickets: number; unreadBroadcasts: number; friendRequests: number; inbox: number /* staff: everything waiting in Admin → Inbox (server logic/inbox.py) */ };
-  /** The badge I show: a club's (an official club I'm in), 'sower' (the creator's own), null: the KBTU one.
-   *  Badges as skins; never picked, a new club's comes by itself. */
-  skin: Id | 'sower' | null;
+  /** The badge I show: a club's (an official club I'm in), 'sower' (the creator's own), an archived look (the
+   *  creator's alone), null: the KBTU one. Badges as skins; never picked, a new club's comes by itself. */
+  skin: Id | 'sower' | Archived | null;
   /** The frame over my photo on the lanyard (public/frames/<id>.svg), apart from the lanyard; null: none. */
   frame: string | null;
   /** "Delete my account" asked: when it goes (a week later); null: not asked, or changed my mind. */
@@ -853,11 +857,13 @@ export interface PersonCard extends PersonRef {
   friendship: 'none' | 'requested' | 'incoming' | 'friends';
   friendsSince: Ts | null;
   going: EventCard[];           // only when friends and they allow it
-  skin?: Id | 'sower' | null;   // the badge they show (Me.skin)
+  invited?: Id[];               // upcoming events I already invited them to ("Bring a friend"), only when friends
+  skin?: Id | 'sower' | Archived | null;   // the badge they show (Me.skin)
   frame?: string | null;        // the frame over their photo (Me.frame)
   username?: string | null;     // their Telegram @username, only to their own club's team: "Message on Telegram"
   limited?: boolean;            // a stranger's view (audit M2): no clubs, past roles or event badges
-  closed?: boolean;             // they take no friend requests (their setting): no "Add friend"
+  closed?: boolean;             // they take no friend requests (their setting, or a block either way): no "Add friend"
+  blocked?: boolean;            // I blocked them (the card's Unblock)
 }
 
 /** A friend, or a person in a friend request, on the Friends page. `fullName`: the full one for friends only (§3), the
@@ -979,7 +985,7 @@ export interface Support {
   version: string; amountVersion: string; receiptConsent: string; show: boolean; showAmount: boolean; rev: number | null;
   receipts: { id: Id; status: 'pending' | 'confirmed' | 'rejected'; amount: number | null; at: Ts }[];
 }
-/** amount: the confirmed total, only when they agreed to show it (sa1) */
+/** amount: the confirmed total, unless they hid it (server donations.listing) */
 export interface Sponsor { name: string; tier: number; amount?: number }
 export interface DonationReview {
   id: Id; name: string; status: 'pending' | 'confirmed' | 'rejected'; amount: number | null;

@@ -3,7 +3,7 @@
 import { openLink } from './tg';
 
 export const OWNER = 'Sowers';
-/** the app's open code (Profile's GitHub row, the end of People of the app) */
+/** the app's open code (Profile's GitHub row, the end of Made together) */
 export const CODE = 'https://github.com/SOWcd/KBTUapp';
 /** the app's topics group in Telegram (BUGS / IDEAS / QUESTIONS) */
 export const TALK = 'https://t.me/KBTUappTop';

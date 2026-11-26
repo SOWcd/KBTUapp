@@ -27,7 +27,8 @@ function detect(): Lang {
     const saved = localStorage.getItem(KEY) as Lang | null;
     if (saved && LANGS.includes(saved)) return saved;
   } catch { /* storage blocked */ }
-  const code = (tg.user?.language_code || '').slice(0, 2) as Lang;
+  // outside Telegram (the Android and iPhone apps, a browser) the phone's language: a store reviewer reads English
+  const code = (tg.user?.language_code || navigator.language || '').slice(0, 2) as Lang;
   return LANGS.includes(code) ? code : 'ru';
 }
 

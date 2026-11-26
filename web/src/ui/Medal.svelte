@@ -15,6 +15,7 @@
   const coin = $derived(coinOf(a));
   const medal = $derived(isMedal(a));
   const vb = $derived(artOf(a).startsWith('layer_vb_')); // the temporary vector set: round, no shield
+  const glyph = $derived(artOf(a).startsWith('layer_ac_')); // the emoji itself on a field and rim (Chief activist, People of the app's)
   const zn = $derived(vb ? undefined : ZNAKI[a.emoji]);
   const layers = $derived(layersOf(artOf(a)));
   const legend = $derived(size >= 160 && a.level > 0 ? legendOf(artOf(a)) : null);
@@ -46,7 +47,7 @@
 {:else if layers && !hidden}<span class="medal lay" class:shield={!!zn && PIN_SHAPE === 'shield'} class:none={a.level === 0} style="width:{size}px;height:{size}px">
   {#if size >= 96 && !vb && !(zn && PIN_SHAPE === 'shield')}<img class="rib" src={`medals/ribbon-${zn?.metal ?? metalLetter(a)}.svg`} alt="" draggable="false" />{/if}
   {#each layers as [n, z] (n)}
-    {#if a.code === 'activist' && z === 0}
+    {#if glyph && z === 0}
       <span class="glyph z" style:--z={(size * 0.015).toFixed(1)}><Emoji name={a.emoji} size={Math.round(size * 0.48)} /></span>
     {/if}
     <img class:z={z !== 0} style:--z={z ? (z * size * 0.03).toFixed(1) : null} src={`medals/${n}.svg`} alt="" draggable="false" />

@@ -88,6 +88,13 @@ class Config:
     rooms_file: str = ""
     # SUBJECTS_FILE: the subjects' cards (tools/subjects.py: names, codes, credits, school only), next to the database by default; no file: off
     subjects_file: str = ""
+    # IOS_BUNDLE_ID: the iPhone app's bundle ID (kz.sow.kbtu, ios/README.md), the audience its Apple identity tokens
+    # must name; empty: Sign in with Apple and iPhone push are off. APNS_KEY_ID, APNS_TEAM_ID, APNS_KEY (the .p8's text, \n allowed): push
+    # through Apple (apns.py); any empty: no push, the bot alone
+    ios_bundle: str = ""
+    apns_key_id: str = ""
+    apns_team_id: str = ""
+    apns_key: str = field(default="", repr=False)
     seed: bool = True         # KBTU's schools at start (logic.seed_schools); tests seed only where they look at them
     # PLAY_DEMO: Google Play's reviewer signs in at /play-demo?k=<this> (logic/web_auth.py, android/README.md); empty: off,
     # and every demo session with it. 32+ random characters, or off
@@ -205,6 +212,10 @@ def load() -> Config:
         ig_token=env.get("IG_TOKEN", "").strip(),
         rooms_file=env.get("ROOMS_FILE") or str(Path(db_path).parent / "rooms.json"),
         subjects_file=env.get("SUBJECTS_FILE") or str(Path(db_path).parent / "subjects.json"),
+        ios_bundle=env.get("IOS_BUNDLE_ID", "").strip(),
+        apns_key_id=env.get("APNS_KEY_ID", "").strip(),
+        apns_team_id=env.get("APNS_TEAM_ID", "").strip(),
+        apns_key=env.get("APNS_KEY", "").strip().replace("\\n", "\n"),
         play_demo=_play_demo(env.get("PLAY_DEMO", "").strip()),
         android_certs=_certs(env.get("ANDROID_CERT_SHA256", "")),
         wallet_cert=env.get("WALLET_PASS_CERT", "").strip(),

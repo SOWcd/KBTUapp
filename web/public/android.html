@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#F2F2F7" media="(prefers-color-scheme: light)">
+<title>KBTU App: Android</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+/* kbtu.sow.kz/android: an Android tester's way from a link to the app from Google Play (closed testing): three links,
+   in order. Self-contained like install.html; the colours are ui/tokens.css's. */
+:root {
+  --bg: #000000; --line: rgba(255,255,255,.13); --fill: rgba(235,238,255,.12); --text: #F4F6FF; --text-2: rgba(240,243,255,.68); --text-3: rgba(232,236,255,.52);
+  --accent: #3B6BFF; --accent-text: #8FA8FF; --accent-soft: rgba(59,107,255,.18); --glass: rgba(36,36,38,.74); --hi: rgba(255,255,255,.16); --o1: .5; --o2: .42; --o3: .16;
+  --ease: cubic-bezier(.32,.72,0,1);
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #F2F2F7; --line: rgba(11,20,51,.13); --fill: rgba(11,20,51,.075); --text: #0B1433; --text-2: rgba(11,20,51,.66); --text-3: rgba(11,20,51,.5);
+    --accent-text: #2F5BE6; --accent-soft: rgba(59,107,255,.12); --glass: rgba(255,255,255,.78); --hi: #fff; --o1: .3; --o2: .26; --o3: .14;
+  }
+}
+* { box-sizing: border-box; margin: 0; }
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; background: var(--bg); }
+body { min-height: 100vh; min-height: 100dvh; color: var(--text); font: 450 15px/1.4 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent; overflow-x: hidden; }
+/* the boot screen's lights (index.html), standing still */
+.lights { position: fixed; inset: 0; overflow: hidden; pointer-events: none; }
+.lights b { --u: min(1vmin, 6px); position: absolute; left: calc(50% + (var(--x) - 70) * var(--u)); top: calc(38% + (var(--y) - 70) * var(--u)); width: calc(140 * var(--u)); height: calc(140 * var(--u)); background: radial-gradient(closest-side, var(--c), transparent); opacity: var(--o); }
+.lights b:nth-child(1) { --c: #3B6BFF; --o: var(--o1); --x: -45; --y: -70; }
+.lights b:nth-child(2) { --c: #7C4DFF; --o: var(--o2); --x: 50; --y: 80; }
+.lights b:nth-child(3) { --c: #30B0C7; --o: var(--o3); --x: 45; --y: -20; }
+main { position: relative; display: flex; flex-direction: column; align-items: center; gap: 20px; max-width: 420px; min-height: 100vh; min-height: 100dvh; margin: 0 auto;
+  padding: calc(env(safe-area-inset-top, 0px) + 36px) 20px calc(env(safe-area-inset-bottom, 0px) + 28px); text-align: center; animation: in .7s var(--ease) backwards; }
+@keyframes in { from { opacity: 0; transform: translate3d(0, 12px, 0); } }
+.mark { display: block; width: 80px; height: 80px; border-radius: 26%; box-shadow: 0 0 0 .5px var(--line), 0 14px 30px -12px rgba(59,107,255,.6); }
+h1 { font-size: 28px; font-weight: 700; line-height: 1.12; letter-spacing: -.025em; text-wrap: balance; }
+.sub { margin-top: 8px; color: var(--text-2); text-wrap: pretty; }
+
+/* the three steps: each a glass button that opens its link; the next one to tap is the blue one */
+.steps { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+.step { display: flex; align-items: center; gap: 14px; min-height: 72px; padding: 12px 16px 12px 14px; border-radius: 26px; color: var(--text); text-align: left; text-decoration: none;
+  background: var(--glass); -webkit-backdrop-filter: blur(18px) saturate(1.6); backdrop-filter: blur(18px) saturate(1.6);
+  box-shadow: inset 0 .5px 0 var(--hi), 0 0 0 .5px var(--line), 0 12px 28px -14px rgba(0,0,0,.45); transition: transform .12s ease, background-color .4s ease, color .4s ease; }
+.step:active { transform: scale(.975); }
+.step .n { flex: none; display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%; background: var(--fill); color: var(--text-2); font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.step .tx { flex: 1; min-width: 0; }
+.step b { display: block; font-size: 17px; font-weight: 600; line-height: 1.2; letter-spacing: -.01em; }
+.step small { display: block; margin-top: 2px; color: var(--text-2); font-size: 13px; line-height: 1.25; }
+.step svg { flex: none; width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.step .go { color: var(--text-3); }
+.step .n svg, .step.done .n i { display: none; }
+.step .n i { font-style: normal; }
+.step.done .n { background: var(--accent-soft); color: var(--accent-text); }
+.step.done .n svg { display: block; }
+.step.now { background: var(--accent); color: #fff; box-shadow: inset 0 1px 1px rgba(255,255,255,.22), inset 0 -8px 14px -8px rgba(0,0,0,.3), 0 12px 26px -12px rgba(59,107,255,.8); }
+.step.now .n { background: rgba(255,255,255,.2); color: #fff; }
+.step.now small, .step.now .go { color: rgba(255,255,255,.8); }
+.note { color: var(--text-3); font-size: 13px; line-height: 1.4; text-wrap: pretty; }
+
+/* not an Android phone: a short note first */
+.other { width: 100%; padding: 16px; border-radius: 26px; background: var(--glass); -webkit-backdrop-filter: blur(18px) saturate(1.6); backdrop-filter: blur(18px) saturate(1.6);
+  box-shadow: inset 0 .5px 0 var(--hi), 0 0 0 .5px var(--line), 0 12px 28px -14px rgba(0,0,0,.45); color: var(--text-2); text-wrap: pretty; }
+.btn { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 50px; margin-top: 14px; padding: 0 20px; border-radius: 999px; background: var(--accent); color: #fff; font-size: 17px; font-weight: 600; letter-spacing: -.01em; text-decoration: none;
+  box-shadow: inset 0 1px 1px rgba(255,255,255,.22), inset 0 -8px 14px -8px rgba(0,0,0,.3), 0 10px 22px -12px rgba(59,107,255,.8); transition: transform .12s ease; }
+.btn:active { transform: scale(.965); }
+@media (prefers-reduced-motion: reduce) { main { animation: none; } }
+</style>
+</head>
+<body>
+<div class="lights" aria-hidden="true"><b></b><b></b><b></b></div>
+<main>
+  <img class="mark" src="/icon-512.png" alt="" width="80" height="80">
+  <div>
+    <h1 data-t="h"></h1>
+    <p class="sub" id="sub" data-t="sub"></p>
+  </div>
+
+  <div class="other" id="other" hidden>
+    <p id="other-t"></p>
+    <a class="btn" id="ios" href="/install" data-t="ios.go" hidden></a>
+  </div>
+
+  <div class="steps" id="steps">
+    <a class="step" target="_blank" rel="noopener"><span class="n"><i>1</i><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span class="tx"><b data-t="s1"></b><small data-t="s1.d"></small></span><svg class="go" viewBox="0 0 24 24"><path d="M8 16l8-8M9 8h7v7"/></svg></a>
+    <a class="step" target="_blank" rel="noopener"><span class="n"><i>2</i><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span class="tx"><b data-t="s2"></b><small data-t="s2.d"></small></span><svg class="go" viewBox="0 0 24 24"><path d="M8 16l8-8M9 8h7v7"/></svg></a>
+    <a class="step" target="_blank" rel="noopener"><span class="n"><i>3</i><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span class="tx"><b data-t="s3"></b><small data-t="s3.d"></small></span><svg class="go" viewBox="0 0 24 24"><path d="M8 16l8-8M9 8h7v7"/></svg></a>
+  </div>
+  <p class="note" id="note" data-t="note"></p>
+</main>
+<script>
+(function () {
+  // the three links, in the order they are tapped
+  var GROUP = 'https://groups.google.com/g/kbtu-app-testers';
+  var OPTIN = 'https://play.google.com/apps/testing/kz.sow.kbtu';
+  var PLAY = 'https://play.google.com/store/apps/details?id=kz.sow.kbtu';
+
+  var T = {
+    ru: {
+      h: 'KBTU App для Android', sub: 'Закрытый тест в Google Play. Три шага, пара минут.',
+      s1: 'Вступи в группу тестеров', 's1.d': 'С аккаунтом Google, который на телефоне',
+      s2: 'Стань тестером', 's2.d': 'Одна кнопка на странице Google Play',
+      s3: 'Установи из Google Play', 's3.d': 'Обычная установка, как у любого приложения',
+      note: 'После шага 2 Google Play может показать приложение не сразу: подожди пару минут и открой шаг 3 ещё раз. Во всех шагах нужен один и тот же аккаунт Google.',
+      ios: 'Эта страница для Android. На iPhone KBTU App ставится по-другому, и ещё быстрее.', 'ios.go': 'Установить на iPhone',
+      desk: 'Эта страница для Android. Открой kbtu.sow.kz/android на телефоне или пройди шаги здесь с тем же аккаунтом Google.'
+    },
+    kk: {
+      h: 'Android-қа арналған KBTU App', sub: 'Google Play-дегі жабық тест. Үш қадам, бір-екі минут.',
+      s1: 'Тестерлер тобына қосыл', 's1.d': 'Телефондағы Google аккаунтымен',
+      s2: 'Тестер бол', 's2.d': 'Google Play бетіндегі бір батырма',
+      s3: 'Google Play-ден орнат', 's3.d': 'Кез келген қолданба сияқты орнатылады',
+      note: '2-қадамнан кейін Google Play қолданбаны бірден көрсетпеуі мүмкін: бір-екі минут күтіп, 3-қадамды қайта аш. Барлық қадамда бір Google аккаунты керек.',
+      ios: 'Бұл бет Android-қа арналған. iPhone-да KBTU App басқаша орнатылады, одан да тез.', 'ios.go': 'iPhone-ға орнату',
+      desk: 'Бұл бет Android-қа арналған. kbtu.sow.kz/android бетін телефонда аш немесе қадамдарды осында сол Google аккаунтымен өт.'
+    },
+    en: {
+      h: 'KBTU App for Android', sub: 'A closed test on Google Play. Three steps, a couple of minutes.',
+      s1: 'Join the testers group', 's1.d': 'With the Google account on your phone',
+      s2: 'Become a tester', 's2.d': 'One button on the Google Play page',
+      s3: 'Install from Google Play', 's3.d': 'A regular install, like any other app',
+      note: 'After step 2 Google Play may take a few minutes to show the app: wait a little and open step 3 again. Use the same Google account in every step.',
+      ios: 'This page is for Android. On iPhone KBTU App installs another way, and even faster.', 'ios.go': 'Install on iPhone',
+      desk: 'This page is for Android. Open kbtu.sow.kz/android on your phone, or go through the steps here with the same Google account.'
+    }
+  };
+  // ?lang= first, then the browser's language; Russian otherwise
+  var q = /[?&]lang=(ru|kk|en)\b/.exec(location.search), nl = (navigator.language || 'ru').toLowerCase();
+  var lang = q ? q[1] : nl.indexOf('kk') === 0 ? 'kk' : nl.indexOf('en') === 0 ? 'en' : 'ru', d = T[lang];
+  document.documentElement.lang = lang;
+  document.title = d.h;
+  document.querySelectorAll('[data-t]').forEach(function (el) { el.textContent = d[el.getAttribute('data-t')]; });
+
+  // the device, read as install.html reads it (an iPad says it is a Mac, with touch points)
+  var ua = navigator.userAgent, ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+  if (!/Android/.test(ua)) {
+    document.getElementById('other').hidden = false;
+    document.getElementById('other-t').textContent = ios ? d.ios : d.desk;
+    document.getElementById('ios').hidden = !ios;
+    // an iPhone can't install it at all: the steps go; a computer can do them with the phone's account
+    document.getElementById('sub').hidden = document.getElementById('steps').hidden = document.getElementById('note').hidden = ios;
+  }
+
+  // the tester leaves for Google and comes back: the page remembers how far they got and lights the next step
+  var steps = document.querySelectorAll('.step'), done = 0;
+  try { done = +localStorage.getItem('android.step') || 0; } catch (e) {}
+  function paint() {
+    steps.forEach(function (a, i) { a.classList.toggle('done', i < done); a.classList.toggle('now', i === Math.min(done, 2)); });
+  }
+  [GROUP, OPTIN, PLAY].forEach(function (url, i) {
+    steps[i].href = url;
+    steps[i].addEventListener('click', function () {
+      if (i < done) return;
+      done = i + 1;
+      try { localStorage.setItem('android.step', done); } catch (e) {}
+      setTimeout(paint, 400);  // after the tap has left the page, not under the finger
+    });
+  });
+  paint();
+})();
+</script>
+</body>
+</html>

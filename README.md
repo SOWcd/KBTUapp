@@ -178,9 +178,13 @@ Ideas and fixes are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Security is
 - `REPORTS=1`: clubs' event reports in Studio and the member's own log in their profile (`logic/evreports.py`). Off by default. Separate consent covers attendance marks and comments under section 3 of the privacy policy.
 - `ROOMS_FILE`: the map's "Free now", the timetable's busy rooms (`server/tools/rooms.py`, default `rooms.json` next to the database); no file: off.
 - `SUBJECTS_FILE`: the subjects' cards, "find people to study it with" (`server/tools/subjects.py` from the portal's course list scrape, default `subjects.json` next to the database; `logic/subjects.py`: a listing is a find-people request on a subject); no file: off.
-- `PLAY_DEMO=<32+ random characters>`: Google Play's reviewer signs in at the link `admin play-demo` prints, as one
-  made-up, read-only account that is never a student or staff (`android/README.md`). Unset: the link is a 404 and every
-  demo session ends. Only while a review is due.
+- `IOS_BUNDLE_ID`: the iPhone app's bundle ID, `kz.sow.kbtu` ([ios/README.md](ios/README.md)); set, Sign in with Apple and its push
+  tokens are on (`logic/apple.py`). `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_KEY` (the APNs .p8's text, `\n` allowed): push
+  through Apple instead of the bot's message for people with the app's notifications on (`kbtu/apns.py`); any empty: the bot alone.
+- `PLAY_DEMO=<32+ random characters>`: the store reviewers' code (Google Play and the App Store): typed in "Sign in with
+  a code" on the sign-in page, or the link `admin play-demo` prints, it opens one made-up, read-only account that is
+  never a student or staff (`android/README.md`); `admin play-demo seed <event id>...` gives it tickets. Unset: a 404
+  and every demo session ends. Only while a review is due.
 - `ANDROID_CERT_SHA256=<AA:BB:...>[,...]`: the Android app's signing certificates for `/.well-known/assetlinks.json`
   (the upload key's and Play's app signing key's); unset: no file, the app shows a browser bar.
 - `WALLET_PASS_CERT` + `WALLET_PASS_KEY` + `WALLET_PASS_TYPE_ID` + `APPLE_TEAM_ID`: "Add to Apple Wallet" under My QR

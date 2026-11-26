@@ -1,0 +1,6 @@
+/* OfflineView: the site can't load */
+"offline.title" = "Нет соединения";
+"offline.text" = "Проверьте интернет и попробуйте снова.";
+"offline.retry" = "Повторить";
+"offline.tickets" = "Мои билеты";
+"offline.ticketsHint" = "Покажите QR на входе: он работает и без интернета.";

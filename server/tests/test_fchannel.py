@@ -15,7 +15,7 @@ import types
 import httpx
 from fastapi.testclient import TestClient
 
-from kbtu import ai, app as server, bot, db, logic, texts, tgc
+from kbtu import ai, app as server, bot, db, logic, outbox, texts, tgc
 from test_core import delete_now, env, login, set_clock, tma  # noqa: F401  (env: the fixture)
 from test_tgcomments import Telegram, hear, msg, postman
 
@@ -1004,6 +1004,7 @@ def test_comments_notify_only_the_author_per_post(env, monkeypatch):
     t = (int(time.time()) // 10800 + 1) * 10800 - 2
     set_clock(monkeypatch, lambda: t)
     monkeypatch.setattr(bot, "now", lambda: t)
+    monkeypatch.setattr(outbox, "now", lambda: t)
     tg = Telegram()
     posts = []
     for anon, body in [(True, "My anonymous post"), (False, "My signed post")]:
@@ -1018,7 +1019,7 @@ def test_comments_notify_only_the_author_per_post(env, monkeypatch):
         return {"message": msg(mid, who, text="Private commenter words", message_thread_id=root)}
 
     def pending():
-        return [m for m in bot._due(con) if m["kind"] == "fch_comments"]
+        return [m for m in outbox._due(con) if m["kind"] == "fch_comments"]
 
     first = comment(61)
     hear(cfg, tg, comment(60, who=411), comment(70, root=88), {"edited_message": first["message"]})
@@ -1027,8 +1028,8 @@ def test_comments_notify_only_the_author_per_post(env, monkeypatch):
     assert len(pending()) == 2
     for m in pending():
         assert m["user_id"] == owner["id"] and m["payload"] == "{}"
-        assert bot._render(con, dict(m) | {"user_id": other["id"]}) is None
-        assert bot._render(con, dict(m) | {"tg_id": 522}) is None
+        assert outbox._render(con, dict(m) | {"user_id": other["id"]}) is None
+        assert outbox._render(con, dict(m) | {"tg_id": 522}) is None
     # Both posts waited in the queue across a three-hour boundary. One DM each, measured from actual delivery.
     t += 10801
     hear(cfg, tg, comment(63))
@@ -1053,7 +1054,7 @@ def test_comments_notify_only_the_author_per_post(env, monkeypatch):
     assert alert["ref"] == f"fc:{posts[0]}"
 
     assert c.patch("/api/me", headers=tma(411), json={"nForumComments": False}).json()["settings"]["nForumComments"] is False
-    assert bot._render(con, alert) is None and not pending()
+    assert outbox._render(con, alert) is None and not pending()
     hear(cfg, tg, comment(67))
     assert not pending()
     assert c.patch("/api/me", headers=tma(411), json={"nForumComments": True}).json()["settings"]["nForumComments"] is True
@@ -1061,13 +1062,13 @@ def test_comments_notify_only_the_author_per_post(env, monkeypatch):
     hear(cfg, tg, comment(68))
     alert, = pending()
     assert c.delete(f"/api/forum-posts/{posts[0]}", headers=tma(411)).status_code == 204
-    assert bot._render(con, alert) is None
+    assert outbox._render(con, alert) is None
     assert not logic.one(con, "SELECT 1 FROM bot_outbox WHERE kind = 'fch_comments' AND ref = ?", alert["ref"])
     # Another message reused the retired row id while a postman still held the deleted post's alert.
     con.execute("INSERT INTO bot_outbox (id, user_id, kind, ref, send_after) VALUES (?, ?, 'delete_soon', 'del:1', ?)",
                 (alert["id"], other["id"], t))
-    assert bot._take(con, alert, True) is None
-    bot._mark(con, alert, True)
+    assert outbox._take(con, alert, True) is None
+    outbox._mark(con, alert, True)
     assert logic.one(con, "SELECT sent_at, send_after FROM bot_outbox WHERE id = ?", alert["id"])[:] == (None, t)
     delete_now(c, cfg, tma(411))
     hear(cfg, tg, comment(69, root=51))
@@ -1090,20 +1091,20 @@ def test_post_author_told(env, monkeypatch):
     tick(cfg, tg, con)
     (m,) = told("fch_posted")
     assert m["user_id"] == ann["id"] and m["ref"] == f"fp:{p['id']}"
-    assert bot._render(con, m) == (*texts.bot_message("ru", "fch_posted"), f"fp_{p['id']}")
+    assert outbox._render(con, m) == (*texts.bot_message("ru", "fch_posted"), f"fp_{p['id']}")
     later = int(time.time()) + 700
     set_clock(monkeypatch, lambda: later)
     q = c.post("/api/forum-posts", headers=tma(1), json={"body": "Another thing to say today"}).json()
     assert c.post(f"/api/forum-posts/{q['id']}/mod", headers=tma(3), json={"ok": False}).status_code == 204
     (d,) = told("fch_declined")
     assert d["user_id"] == ann["id"] and d["send_after"] >= later + 60                       # after the undo minute
-    assert bot._render(con, d) == (*texts.bot_message("ru", "fch_declined"), f"fp_{q['id']}")
+    assert outbox._render(con, d) == (*texts.bot_message("ru", "fch_declined"), f"fp_{q['id']}")
     assert c.post(f"/api/forum-posts/{q['id']}/restore", headers=tma(3)).status_code == 204
-    assert bot._render(con, d) is None                                                         # undone: not said
+    assert outbox._render(con, d) is None                                                         # undone: not said
     tick(cfg, tg, con)                                                                         # out after all: told so
-    assert bot._render(con, told("fch_posted")[1]) and len(told("fch_posted")) == 2
+    assert outbox._render(con, told("fch_posted")[1]) and len(told("fch_posted")) == 2
     assert c.post(f"/api/forum-posts/{q['id']}/mod", headers=tma(3), json={"ok": False}).status_code == 204
-    assert bot._render(con, d) is None                                                         # taken down after it went out: no "declined"
+    assert outbox._render(con, d) is None                                                         # taken down after it went out: no "declined"
     assert c.delete(f"/api/forum-posts/{p['id']}", headers=tma(1)).status_code == 204
     assert [m["ref"] for m in told("fch_posted")] == [f"fp:{q['id']}"]                          # deleted: its note leaves the outbox
     con.close()

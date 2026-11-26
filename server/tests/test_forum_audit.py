@@ -10,7 +10,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from kbtu import ai, app as server, bot, db, logic, tgc
+from kbtu import ai, app as server, db, logic, outbox, tgc
 from test_core import env, login, set_clock, tma  # noqa: F401
 from test_fchan_replies import Tg, gate, note, sent_reply, world
 from test_fchannel import G
@@ -303,6 +303,6 @@ def test_forum_notifications_do_not_forward_custom_skills(env):
     for kind in ("ask_match", "contact_ask"):
         m = dict(con.execute("SELECT * FROM bot_outbox WHERE kind = ?", (kind,)).fetchone())
         for lang in ("ru", "kk", "en"):
-            rendered = bot._render(con, {**m, "lang": lang})
+            rendered = outbox._render(con, {**m, "lang": lang})
             assert rendered and "campus photo walks" not in rendered[0]
     con.close()

@@ -1,4 +1,5 @@
-"""Sponsor payments, private receipts and publication consent through the real HTTP boundary.
+"""Sponsor payments, private receipts and the Sponsors list (shown by default, hidden by the donor's own switch)
+through the real HTTP boundary.
 
 All people, payment identifiers and receipt images here are made up. CI runs these tests.
 """
@@ -16,7 +17,7 @@ from threading import Barrier
 import pytest
 from fastapi.testclient import TestClient
 
-from kbtu import app as server, bot, db, logic, media, receipt, texts
+from kbtu import admin, app as server, db, logic, media, outbox, receipt, texts
 from kbtu.logic import donations, seats, stars
 from test_core import delete_now, env, login, set_clock, tma  # noqa: F401
 from test_review_seats import _paid, _shot
@@ -87,7 +88,7 @@ def test_only_telegram_confirmation_counts_once_and_upgrades(support):
     assert con.execute("SELECT level FROM achievement_levels WHERE user_id = ? AND code = 'sponsor'", (ids[7],)).fetchone()[0] == 3
     assert {tuple(r) for r in con.execute("SELECT star_rate, consent FROM donations")} == {(donations.STAR_KZT, stars.CONSENT)}
     assert not con.execute("SELECT 1 FROM bot_outbox WHERE user_id = ?", (ids[7],)).fetchone()
-    assert c.get("/api/sponsors", headers=tma(8)).json() == []
+    assert c.get("/api/sponsors", headers=tma(8)).json() == [{"name": "Aidar T", "tier": 3, "amount": 20000}]  # shown by default
 
 
 def test_old_invoices_keep_the_old_anonymous_promise(support):
@@ -139,7 +140,7 @@ def test_tier_boundaries(amount, level):
 def test_clean_kaspi_receipt_is_confirmed_and_granted_in_the_upload(support, monkeypatch):
     c, _, con, ids, clock = support
     got = upload(support, monkeypatch, fields(clock[0]))
-    assert (got["total"], got["tier"], got["show"]) == (2500, 1, False)
+    assert (got["total"], got["tier"], got["show"], got["showAmount"]) == (2500, 1, True, True)
     [r] = got["receipts"]
     assert r["status"] == "confirmed" and r["amount"] == 2500
     stored = con.execute("SELECT * FROM donations WHERE id = ?", (r["id"],)).fetchone()
@@ -284,6 +285,7 @@ def test_confirmation_requires_a_positive_integer_amount(support, monkeypatch, a
 def test_receipts_and_amounts_are_private_even_from_other_staff(support, monkeypatch):
     c, _, _, ids, clock = support
     did = upload(support, monkeypatch, fields(clock[0]))["receipts"][0]["id"]
+    assert consent(support, False).status_code == 200  # hidden: the medal leaves other people's view too
     for tg in (8, 63, 64):
         assert c.get("/api/admin/donations", headers=tma(tg)).status_code == 403
         assert decide(support, did, "reject", tg=tg).status_code == 403
@@ -302,29 +304,25 @@ def test_receipts_and_amounts_are_private_even_from_other_staff(support, monkeyp
     assert c.post("/api/share", headers=tma(7), json={"kind": "aw", "code": "sponsor"}).status_code == 400
 
 
-def test_publication_needs_current_explicit_consent_and_withdrawal_wins(support, monkeypatch):
+def test_shown_by_default_and_a_hide_wins(support, monkeypatch):
     c, _, con, ids, clock = support
     did = upload(support, monkeypatch, fields(clock[0], amount=5107))["receipts"][0]["id"]
     assert decide(support, did, "confirm", 5107).status_code == 204
     c.patch("/api/me", headers=tma(7), json={"showcase": ["sponsor"]})
-    assert c.get("/api/sponsors", headers=tma(8)).json() == []
-    assert consent(support, True, consent="old").status_code == 400
-    assert consent(support, "yes").status_code == 400
-    assert consent(support, True).status_code == 200
-    assert c.get("/api/sponsors", headers=tma(8)).json() == [{"name": "Aidar T", "tier": 2}]
+    assert c.get("/api/sponsors", headers=tma(8)).json() == [{"name": "Aidar T", "tier": 2, "amount": 5107}]
     card = c.get(f"/api/users/{ids[7]}", headers=tma(8)).json()
     medal = next(a for a in card["awards"]["achievements"] if a["code"] == "sponsor")
     assert medal["count"] == medal["level"] == 2 and medal["at"] is None and medal["rarity"] == 0
-    assert "5107" not in str(card)
+    assert "5107" not in str(card)  # never on a profile
+    assert consent(support, True, consent="old").status_code == 400
+    assert consent(support, "yes").status_code == 400
     rev = mine(support)["rev"]
-    assert consent(support, False, consent="old", rev=None).status_code == 200
-    assert consent(support, True, rev=rev).status_code == 409
-    assert c.get("/api/sponsors", headers=tma(8)).json() == []
-    assert "sponsor" not in str(c.get(f"/api/users/{ids[7]}", headers=tma(8)).json())
-    assert consent(support, True).status_code == 200
-    monkeypatch.setattr(donations, "CONSENT", "sp2")
+    assert consent(support, False, consent="old", rev=None).status_code == 200  # an old app's hide: never refused
+    assert consent(support, True, rev=rev).status_code == 409  # a late show never undoes it
     assert mine(support)["show"] is False and c.get("/api/sponsors", headers=tma(8)).json() == []
-    assert consent(support, True).status_code == 200
+    assert "sponsor" not in str(c.get(f"/api/users/{ids[7]}", headers=tma(8)).json())
+    assert consent(support, True).status_code == 200  # shown again, the total stays hidden until its own switch
+    assert c.get("/api/sponsors", headers=tma(8)).json() == [{"name": "Aidar T", "tier": 2}]
     con.execute("UPDATE users SET banned_at = 1 WHERE id = ?", (ids[7],))
     assert c.get("/api/sponsors", headers=tma(8)).json() == []
 
@@ -338,43 +336,32 @@ def board(support):
     return [(p["tier"], p.get("amount")) for p in support[0].get("/api/sponsors", headers=tma(64)).json()]
 
 
-def test_amount_is_a_second_opt_in_shown_only_beside_the_name(support, monkeypatch):
+def test_amount_is_shown_beside_the_name_and_hides_on_its_own(support, monkeypatch):
     c, _, con, ids, clock = support
     did = upload(support, monkeypatch, fields(clock[0], amount=5107))["receipts"][0]["id"]
     assert decide(support, did, "confirm", 5107).status_code == 204
-    assert mine(support)["showAmount"] is False and mine(support)["amountVersion"] == donations.AMOUNT_CONSENT
-    assert shown(support, True).status_code == 409  # the name is off: no figure beside nobody
-    assert consent(support, True).status_code == 200
-    assert board(support) == [(2, None)]  # the name alone never brings the amount
+    assert mine(support)["showAmount"] is True and board(support) == [(2, 5107)]
+    assert shown(support, False).status_code == 200
+    assert mine(support)["showAmount"] is False and board(support) == [(2, None)]
     assert shown(support, True, consent=donations.CONSENT).status_code == 400
     assert shown(support, "yes").status_code == 400
-    assert shown(support, True).status_code == 200
-    assert mine(support)["showAmount"] is True and board(support) == [(2, 5107)]
-    # a second donor: a smaller shown total sorts below; a hidden one sorts after the shown ones of its tier
+    assert shown(support, True).status_code == 200 and board(support) == [(2, 5107)]
+    # a second donor, shown by default: a smaller total sorts below; a hidden total after the shown ones of its tier
     bek = upload(support, monkeypatch, fields(clock[0], amount=2500, no="222222222222222222"), tg=8, shade=120)["receipts"][0]["id"]
     assert decide(support, bek, "confirm", 2500).status_code == 204
-    rev = mine(support, 8)["rev"]
-    assert c.put("/api/donate/consent", headers=tma(8), json={"show": True, "consent": donations.CONSENT, "rev": rev}).status_code == 200
-    assert board(support) == [(2, 5107), (1, None)]
-    assert shown(support, True, tg=8).status_code == 200
     assert board(support) == [(2, 5107), (1, 2500)]
-    # a stale yes loses; a withdrawal always wins
+    assert shown(support, False, tg=8).status_code == 200 and board(support) == [(2, 5107), (1, None)]
+    # a stale show loses; a hide always wins
     rev = mine(support)["rev"]
     assert shown(support, False, rev=None, consent="old").status_code == 200
     assert shown(support, True, rev=rev).status_code == 409
-    assert board(support) == [(2, None), (1, 2500)]
+    assert board(support) == [(2, None), (1, None)]
     assert shown(support, True).status_code == 200
-    # hiding the name hides the amount; showing the name again never brings the figure back unasked
-    assert consent(support, False).status_code == 200 and board(support) == [(1, 2500)]
+    # hiding the name hides the amount; showing the name again never brings the figure back by itself
+    assert consent(support, False).status_code == 200 and board(support) == [(1, None)]
+    assert shown(support, True).status_code == 409  # no figure beside nobody
     assert consent(support, True).status_code == 200
-    assert mine(support)["showAmount"] is False and board(support) == [(2, None), (1, 2500)]
-    # a new name version hides the amount with the name (everyone's: both agreed to sp1)
-    assert shown(support, True).status_code == 200
-    monkeypatch.setattr(donations, "CONSENT", "sp2")
-    assert mine(support)["showAmount"] is False and board(support) == []
-    monkeypatch.undo()
-    con.execute("UPDATE users SET tg_id = 800 WHERE id = ?", (ids[8],))
-    assert board(support) == [(2, 5107)]
+    assert mine(support)["showAmount"] is False and board(support) == [(2, None), (1, None)]
     assert con.execute("SELECT amount FROM sponsor_consents WHERE user_id = ? ORDER BY id DESC", (ids[8],)).fetchone()[0] is None
 
 
@@ -394,7 +381,7 @@ def test_upload_requires_receipt_consent_and_enabled_destination_before_reading(
     for suffix in ("", "?consent=old"):
         assert c.post("/api/donate/receipt" + suffix, headers=tma(7), content=_shot()).status_code == 403
     off = TestClient(server.create(dataclasses.replace(cfg, donate_phone="")))
-    assert off.post("/api/donate/receipt?consent=dn1", headers=tma(7), content=_shot()).status_code == 404
+    assert off.post("/api/donate/receipt?consent=dn2", headers=tma(7), content=_shot()).status_code == 404
 
 
 def test_five_per_rolling_day_even_after_decisions(support, monkeypatch):
@@ -402,7 +389,7 @@ def test_five_per_rolling_day_even_after_decisions(support, monkeypatch):
     for i in range(5):
         did = upload(support, monkeypatch, {}, shade=200 + i)["receipts"][0]["id"]
         assert decide(support, did, "reject").status_code == 204
-    r = c.post("/api/donate/receipt?consent=dn1", headers=tma(7), content=_shot())
+    r = c.post("/api/donate/receipt?consent=dn2", headers=tma(7), content=_shot())
     assert r.status_code == 429 and r.json()["error"] == "rate_limited"
     clock[0] += 86401
     assert upload(support, monkeypatch, {})["receipts"][0]["status"] == "pending"
@@ -416,8 +403,8 @@ def test_failed_uploads_share_the_event_processing_limit(support, monkeypatch):
         raise media.BadImage("invalid")
     monkeypatch.setattr(receipt, "take", bad)
     for _ in range(logic.core.UPLOAD_LIMIT["receipt"]):
-        assert c.post("/api/donate/receipt?consent=dn1", headers=tma(7), content=b"bad").status_code == 400
-    assert c.post("/api/donate/receipt?consent=dn1", headers=tma(7), content=b"bad").status_code == 429
+        assert c.post("/api/donate/receipt?consent=dn2", headers=tma(7), content=b"bad").status_code == 400
+    assert c.post("/api/donate/receipt?consent=dn2", headers=tma(7), content=b"bad").status_code == 429
     assert len(attempts) == logic.core.UPLOAD_LIMIT["receipt"]
     assert con.execute("SELECT value FROM meta WHERE key = ?", (f"upload:{ids[7]}:receipt",)).fetchone()
     assert mine(support)["receipts"] == []
@@ -434,7 +421,7 @@ def test_parallel_uploads_cannot_exceed_the_row_cap_or_erase_the_winners_image(s
         return {}
     monkeypatch.setattr(receipt, "read", read)
     def send(shade):
-        return c.post("/api/donate/receipt?consent=dn1", headers=tma(7), content=_shot(shade)).status_code
+        return c.post("/api/donate/receipt?consent=dn2", headers=tma(7), content=_shot(shade)).status_code
     with ThreadPoolExecutor(2) as pool:
         assert sorted(pool.map(send, [210, 210 if same_file else 211])) == [200, 429]
     assert con.execute("SELECT COUNT(*) FROM donations").fetchone()[0] == 5
@@ -449,7 +436,7 @@ def test_ban_during_ocr_prevents_persistence(support, monkeypatch):
         con.execute("UPDATE users SET banned_at = 1 WHERE id = ?", (ids[7],))
         return fields(clock[0])
     monkeypatch.setattr(receipt, "read", ban)
-    assert c.post("/api/donate/receipt?consent=dn1", headers=tma(7), content=_shot()).status_code == 403
+    assert c.post("/api/donate/receipt?consent=dn2", headers=tma(7), content=_shot()).status_code == 403
     assert not con.execute("SELECT 1 FROM donations").fetchone()
     assert not list((Path(cfg.db_path).parent / "receipts").rglob("*.webp"))
 
@@ -567,10 +554,52 @@ def test_bot_uses_only_localized_templates_and_suppresses_stale_decisions(suppor
     for lang in ("ru", "kk", "en"):
         con.execute("UPDATE users SET lang = ? WHERE id = ?", (lang, ids[7]))
         row = con.execute("SELECT b.*, ? AS lang FROM bot_outbox b WHERE kind = 'donation_confirmed'", (lang,)).fetchone()
-        assert bot._render(con, row) == (*texts.bot_message(lang, "donation_confirmed"), "donate")
+        assert outbox._render(con, row) == (*texts.bot_message(lang, "donation_confirmed"), "donate")
     assert decide(support, did, "reject").status_code == 204
-    assert bot._render(con, row) is None
+    assert outbox._render(con, row) is None
     rejected = con.execute("SELECT b.*, 'en' AS lang FROM bot_outbox b WHERE kind = 'donation_rejected'").fetchone()
-    assert bot._render(con, rejected) == (*texts.bot_message("en", "donation_rejected"), "donate")
+    assert outbox._render(con, rejected) == (*texts.bot_message("en", "donation_rejected"), "donate")
     assert decide(support, did, "undo").status_code == 204
-    assert bot._render(con, rejected) is None
+    assert outbox._render(con, rejected) is None
+
+
+def test_admin_donation_add_by_hand_grants_the_medal_shown_by_default(support, monkeypatch, capsys):
+    """`admin donation add`: a confirmed manual row and the medal; shown unless hidden; no twin that day without --again;
+    unknown people and silly amounts refused; `donation list` names nobody."""
+    c, cfg, con, ids, clock = support
+    monkeypatch.setattr(admin.config, "load", lambda: cfg)
+    admin.main(["donation", "add", "7", "6000", "2026-11-20"])
+    assert capsys.readouterr().out.strip().endswith("tier 2, public")
+    assert mine(support)["tier"] == 2 and board(support) == [(2, 6000)]
+    for bad in (["donation", "add", "7", "6000", "2026-11-20"], ["donation", "add", "999", "100"],
+                ["donation", "add", "7", "0"], ["donation", "add", "7", "10000001"]):
+        with pytest.raises(SystemExit):
+            admin.main(bad)
+    admin.main(["donation", "add", "7", "6000", "2026-11-20", "--again"])
+    assert mine(support)["total"] == 12000
+    assert con.execute("SELECT COUNT(*) FROM donations WHERE flags = 'manual' AND status = 'confirmed'").fetchone()[0] == 2
+    capsys.readouterr()
+    admin.main(["donation", "list"])
+    out = capsys.readouterr().out
+    assert out.count("manual") == 2 and "2026-11-20" in out and "public yes" in out and "Aidar" not in out
+    assert f"user {ids[7]}" in out and "tg 7" not in out
+    for did, in con.execute("SELECT id FROM donations WHERE flags = 'manual'").fetchall():
+        admin.main(["donation", "remove", str(did)])
+    assert mine(support)["tier"] == 0 and mine(support)["total"] == 0
+    assert not con.execute("SELECT 1 FROM achievement_levels WHERE user_id = ? AND code = 'sponsor'", (ids[7],)).fetchone()
+    with pytest.raises(SystemExit):
+        admin.main(["donation", "remove", str(did)])
+
+
+def test_an_account_move_hides_a_donor_who_never_answered(support, monkeypatch, capsys):
+    """Shown by default: a move puts another name and face on the account, so it always writes a hide row (migration 247),
+    answer or not."""
+    c, cfg, con, ids, clock = support
+    monkeypatch.setattr(admin.config, "load", lambda: cfg)
+    admin.main(["donation", "add", "7", "6000"])
+    assert not con.execute("SELECT 1 FROM sponsor_consents WHERE user_id = ?", (ids[7],)).fetchone()
+    assert board(support) == [(2, 6000)]
+    c.get("/api/me", headers=tma(9, "Fresh"))
+    admin.main(["move", "7", "9"])
+    assert board(support) == []
+    assert {tuple(r) for r in con.execute("SELECT show, amount FROM sponsor_consents WHERE user_id = ?", (ids[7],))} == {(0, None)}

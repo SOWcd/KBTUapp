@@ -10,7 +10,7 @@
   // (aiche-medal.svg), Choice's logo cut square on its navy. StudEx's and Moments' official logos, bundled
   // (their wordmarks trimmed onto their own ground, .claude/reports/club-lanyards/src/prod-logos), not our drawn marks.
   // Shade's own avatar (their prod upload), not our brush. Knights' official logo (.claude/reports/club-lanyards/knights-official.png) on white in a blue steel rim.
-  import { clubLook, isSchool, type Look } from '../lib/awards';
+  import { ARCHIVE_LOOKS, clubLook, isSchool, type Look } from '../lib/awards';
   import LookMark from './LookMark.svelte';
   import KbtuMark from './KbtuMark.svelte';
   import aicheMedal from '../assets/lanyards/aiche-medal.svg?url';
@@ -31,7 +31,9 @@
   // the official logos we ship: this file whatever the org's avatar is
   const OFFICIAL: Partial<Record<Look, string>> = { studex: studexLogo, moments: momentsLogo, knights: knightsLogo, shadekbtu: shadeLogo,
     teentertainmentkbtu: oteLogo, kbtumag: magLogo, cybersportkbtu: cyberLogo, diceanddestinykbtu: ddLogo,
-    thebayharborsociety: bhLogo, qoloner: qolonerLogo };
+    thebayharborsociety: bhLogo, qoloner: qolonerLogo,
+    // the archive's Dota medallions, drawn with their scenes (the same files are the QR's mark)
+    ...Object.fromEntries(Object.entries(ARCHIVE_LOOKS).map(([k, c]) => [k, c.mark])) };
   const own = $derived(logo && !DRAWN.includes(look) && !isSchool(look) ? logo : null);
 </script>
 
@@ -63,6 +65,10 @@
   .moments { --rim: linear-gradient(145deg, rgb(246, 231, 214), rgb(196, 109, 71) 45%, rgb(242, 222, 200) 62%, rgb(110, 51, 34)); }
   .faces { --rim: linear-gradient(145deg, rgb(110, 123, 255), rgb(192, 75, 255) 40%, rgb(255, 79, 154) 70%, rgb(255, 164, 61)); }
   .club { --rim: linear-gradient(145deg, rgba(255, 255, 255, 0.95), var(--s2) 42%, var(--h1) 62%, var(--s1)); }
+  /* the archive's Dota rims: old gold, jade into ember, ice into indigo */
+  .dota_ancient { --rim: linear-gradient(145deg, rgb(255, 240, 200), rgb(199, 138, 44) 42%, rgb(246, 213, 140) 62%, rgb(110, 26, 14)); }
+  .dota_clash { --rim: linear-gradient(145deg, rgb(223, 255, 240), rgb(47, 174, 134) 40%, rgb(255, 246, 230) 50%, rgb(224, 69, 28) 60%, rgb(90, 14, 10)); }
+  .dota_rune { --rim: linear-gradient(145deg, rgb(244, 254, 255), rgb(122, 223, 255) 40%, rgb(232, 253, 255) 55%, rgb(90, 108, 255) 75%, rgb(30, 22, 102)); }
   /* SOWER (.claude/reports/sower-badge, card C): a plain white tile, the colonnade in black, no metal rim */
   .sower { padding: 0; border-radius: var(--r-s); background: rgb(245, 245, 247); box-shadow: 0 6px 14px rgba(0, 0, 0, 0.5); }
   .sower .face { display: grid; place-items: center; border-radius: inherit; background: none; color: rgb(11, 11, 12); }

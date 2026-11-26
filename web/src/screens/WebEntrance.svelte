@@ -9,6 +9,7 @@
   import LoaderCircle from '@lucide/svelte/icons/loader-circle';
   import SquareArrowUp from '@lucide/svelte/icons/square-arrow-up';
   import LockKeyhole from '@lucide/svelte/icons/lock-keyhole';
+  import Send from '@lucide/svelte/icons/send';
   import App from '../App.svelte';
   import Button from '../ui/Button.svelte';
   import KbtuMark from '../ui/KbtuMark.svelte';
@@ -16,9 +17,11 @@
   import { api, ApiErr } from '../lib/api';
   import { WEB_SESSION_CHANGE } from '../lib/api/client';
   import { i18n, t } from '../lib/i18n/index.svelte';
-  import { loadMe } from '../lib/state/session.svelte';
+  import { loadMe, session } from '../lib/state/session.svelte';
   import { onComputer, onIos } from '../lib/tg';
   import { bootOut, bootOver, bootUnder } from '../lib/boot';
+  import { APPLE_CONSENT, TG_LINK, appleToken, native, nonce, pushToken, telegramProof, tgAuthResult } from '../lib/native';
+  import { say } from '../lib/state/ui.svelte';
   import { dropTickets, keptTickets, type OfflineTicket } from '../lib/offlineTickets';
 
   const installed = matchMedia('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone;
@@ -32,6 +35,51 @@
     const me = api.me(true);
     await loadMe(false, true, await (limit ? Promise.race([me, new Promise<never>((_, no) => setTimeout(() => no(new Error('timeout')), limit))]) : me));
     entered = true;
+    void telegramBack();
+    void syncPush();
+  }
+
+  // the iPhone app: Apple's own prompt once, then this phone's token each launch and return (it can change), for this
+  // session only; notifications turned off in iOS Settings take the token off the server
+  async function syncPush() {
+    try {
+      const r = await pushToken();
+      if (r && 'token' in r) await api.pushDevice(r.token, APPLE_CONSENT);
+      else if (r?.denied) await api.dropPushDevice();
+    } catch { /* again at the next return to the app */ }
+  }
+
+  // back from Telegram's sign-in page (Settings → Link Telegram, logic/apple.py): its proof in #tgAuthResult, linked
+  // only when this tab started it (Settings' one-time state, for this account, within 10 minutes): a link carrying
+  // someone else's proof links nothing
+  async function telegramBack() {
+    const m = location.hash.match(/tgAuthResult=([\w+/=-]+)/);
+    if (!m) return;
+    const state = new URLSearchParams(location.search).get('state');
+    history.replaceState(null, '', location.pathname);
+    let mine: { state?: unknown; uid?: unknown; at?: unknown } = {};
+    try { mine = JSON.parse(sessionStorage.getItem(TG_LINK) ?? '{}'); sessionStorage.removeItem(TG_LINK); } catch { /* no storage: no link */ }
+    const age = Date.now() - Number(mine.at);
+    if (!state || mine.state !== state || mine.uid !== session.me?.id || !(age >= 0 && age < 600_000)) return;
+    try {
+      await api.linkTelegram(tgAuthResult(m[1]));
+      await loadMe();
+      say(t('logins.tgDone'), 'sparkles_3d');
+    } catch (e) {
+      say(t(e instanceof ApiErr && e.message === 'telegram_taken' ? 'logins.tgTaken' : 'common.error'), 'warning_3d');
+    }
+  }
+
+  // Sign in with Apple (the iPhone app only, App Store 4.8): Apple's sheet, then our session; closed: nothing happens
+  async function apple() {
+    if (busy) return;
+    busy = true;
+    loginFailed = false;
+    try {
+      const n = nonce(), token = await appleToken(n);
+      if (token) { await api.appleLogin({ token, nonce: n, consent: APPLE_CONSENT, lang: i18n.lang }); await enter(); }
+    } catch { loginFailed = true; }
+    finally { busy = false; }
   }
 
   // while the session is checked the page draws nothing: index.html's boot screen (its emblem) carries on
@@ -48,6 +96,31 @@
   // the last signed-in account's own upcoming tickets, for the door without the network (lib/offlineTickets)
   let kept = $state<OfflineTicket[]>([]);
 
+  // the iPhone app: Telegram's page in the system's sign-in sheet (its popup inside the web view loses window.opener on
+  // iOS 17.5+), its proof checked against this tap's state (native.ts telegramProof); closed: nothing happens
+  async function telegramSheet() {
+    if (busy) return;
+    loginFailed = false;
+    try {
+      const state = nonce(), { url } = await api.telegramSignInStart(state);
+      const proof = await telegramProof(url, state);
+      if (proof) await login(proof);
+    } catch { loginFailed = true; }
+  }
+
+  // the stores' reviewers have no Telegram: a code from the review notes opens the demo account (android/README.md).
+  // In plain sight, never hidden (App Review 2.5.19); for everyone else a wrong code just says so
+  let coding = $state(false), code = $state(''), codeFailed = $state(false);
+  async function byCode(e: SubmitEvent) {
+    e.preventDefault();
+    if (busy || !code.trim()) return;
+    busy = true;
+    codeFailed = false;
+    try { await api.webDemo(code.trim()); await enter(); }
+    catch { codeFailed = true; }
+    finally { busy = false; }
+  }
+
   async function login(user: unknown) {
     if (busy) return;
     busy = true;
@@ -61,9 +134,15 @@
     void check();
     const ended = () => { if (entered) location.reload(); };
     const switched = (e: StorageEvent) => { if (e.key === WEB_SESSION_CHANGE) location.reload(); };
+    const back = () => { if (entered && document.visibilityState === 'visible') void syncPush(); };
     addEventListener('kb:web-session-ended', ended);
     addEventListener('storage', switched);
-    return () => { removeEventListener('kb:web-session-ended', ended); removeEventListener('storage', switched); };
+    document.addEventListener('visibilitychange', back);
+    return () => {
+      removeEventListener('kb:web-session-ended', ended);
+      removeEventListener('storage', switched);
+      document.removeEventListener('visibilitychange', back);
+    };
   });
 
   // the app is up and painted under the boot screen: it fades away over it
@@ -140,7 +219,12 @@
                its slot too: one size before, while and after the button loads, so nothing under it moves. It floats
                (sticky) at the bottom of a short window, the page passing under it: the way in is always in sight -->
           <div class="enter in" class:stuck style:--i={8} {@attach float}>
-            {#if !widgetFailed}
+            {#if native.has('tglink')}
+              <div class="dock glass glass-pill">
+                <button class="apple tg fs-body" onclick={telegramSheet} disabled={busy}><Send size={18} />{t('logins.telegram')}</button>
+                {#if busy}<span class="spinner" role="status" aria-label={t('web.loading')}><LoaderCircle size={20} /></span>{/if}
+              </div>
+            {:else if !widgetFailed}
               <div class="dock glass glass-pill">
                 {#key retry}<div class="widget" class:ready class:busy {@attach attachWidget} inert={busy}></div>{/key}
                 {#if busy}<span class="spinner" role="status" aria-label={t('web.loading')}><LoaderCircle size={20} /></span>{/if}
@@ -149,11 +233,32 @@
               <p class="fs-sub" role="alert">{t('web.widgetFailed')}</p>
               <Button kind="plain" onclick={() => { widgetFailed = false; retry++; }}>{t('common.retry')}</Button>
             {/if}
+            {#if native.has('apple')}
+              <!-- the same dock and size as Telegram's button: neither way in is the lesser one (App Store 4.8) -->
+              <div class="dock glass glass-pill">
+                <button class="apple fs-body" onclick={apple} disabled={busy}>
+                  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"/></svg>
+                  {t('logins.apple')}
+                </button>
+              </div>
+              <p class="fs-cap dim">{t('logins.appleNote')}</p>
+            {/if}
             {#if loginFailed}<p class="fs-sub" role="alert">{t('web.signInFailed')}</p>{/if}
           </div>
           <p class="fine fs-cap in" style:--i={9}>{t('web.cookie')} <a href="/privacy?lang={i18n.lang}" target="_blank" rel="noopener">{t('web.policy')}</a></p>
           {#if onIos && !installed}<p class="fine hint fs-cap in" style:--i={10}><SquareArrowUp size={14} /><span>{t('web.install')}</span></p>{/if}
           {#if onComputer}<a class="fine fs-cap in" style:--i={10} href="/show">{t('tgo.show')}</a>{/if}
+          {#if coding}
+            <form class="code" onsubmit={byCode}>
+              <!-- svelte-ignore a11y_autofocus -->
+              <input class="fs-body" bind:value={code} autofocus autocomplete="off" autocapitalize="off" spellcheck="false"
+                aria-label={t('web.code')} placeholder={t('web.code')} disabled={busy} />
+              <Button kind="secondary" type="submit" loading={busy} disabled={!code.trim()}>{t('web.codeGo')}</Button>
+            </form>
+            {#if codeFailed}<p class="fine fs-cap" role="alert">{t('web.codeWrong')}</p>{/if}
+          {:else}
+            <button class="fine link fs-cap in" style:--i={11} type="button" onclick={() => (coding = true)}>{t('web.codeLink')}</button>
+          {/if}
         {/if}
       </div>
     {/if}
@@ -208,6 +313,12 @@
   .widget::before { content: ''; position: absolute; inset: 0; border-radius: inherit; background: var(--fill); animation: breathe 1400ms ease-in-out infinite alternate; }
   .widget.ready::before { display: none; }
   .widget.busy { opacity: 0.35; }
+  /* Apple's own look: black on a light page, white on a dark one (its guidelines), Telegram's button's size */
+  .apple { display: flex; align-items: center; justify-content: center; gap: var(--s-2); width: 238px; max-width: 100%; height: 40px;
+    border-radius: var(--r-full); background: var(--text); color: var(--bg); font-weight: 600; }
+  .apple:disabled { opacity: 0.35; }
+  /* the iPhone app's Telegram button (the system's sign-in sheet, not Telegram's iframe): the app's own blue */
+  .tg { background: var(--accent); color: var(--on-accent); }
   /* color-scheme: else Chromium paints white corners behind the button in dark */
   .widget :global(iframe) { position: relative; display: block; max-width: 100%; border-radius: var(--r-full); color-scheme: light;
     opacity: 0; transition: opacity var(--t-slow) var(--ease); }
@@ -217,6 +328,13 @@
   .fine { max-width: 36ch; margin-top: var(--s-4); color: var(--text-3); font-weight: 450; line-height: 1.4; text-wrap: balance; }
   .fine a, a.fine { color: var(--text-2); text-decoration: underline; text-decoration-color: var(--line-2); text-underline-offset: 3px; }
   .hint { margin-top: var(--s-3); }
+  .link { padding: 0; border: 0; background: none; color: var(--text-2); text-decoration: underline;
+    text-decoration-color: var(--line-2); text-underline-offset: 3px; cursor: pointer; }
+  /* the reviewer's code: a field and its button on one line, the dock's width */
+  .code { display: flex; gap: var(--s-2); width: 100%; margin-top: var(--s-4); }
+  .code input { flex: 1; min-width: 0; height: 44px; padding: 0 var(--s-4); border: 0; border-radius: var(--r-full); background: var(--fill);
+    color: var(--text); outline: none; }
+  .code input:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
   .hint :global(svg) { display: inline; margin-inline-end: var(--s-1); vertical-align: -2px; }
 
   .spinner { position: absolute; display: flex; color: var(--text); animation: turn 900ms linear infinite; }

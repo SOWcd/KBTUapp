@@ -127,7 +127,7 @@
     if (!e) return;
     haptic.tap();
     // the event's own card (server /api/share kind ev): a member opens the game; anyone else sees what a team-only event shows them
-    shareCard({ kind: 'ev', id: String(id) }, 'https://t.me/KBTUappBot?startapp=ev_' + id, e.title)
+    shareCard({ kind: 'ev', id: String(id) })
       .then((sent) => { if (sent) say(phrase('say.shared'), 'party_popper_3d'); })
       .catch(() => { haptic.error(); say(t('common.error'), 'warning_3d'); });
   }

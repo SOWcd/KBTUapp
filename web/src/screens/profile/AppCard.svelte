@@ -1,9 +1,8 @@
 <script lang="ts">
   // The app's own block, last on Profile (only these): its channel, the bugs-and-ideas group, GitHub and
-  // the people who made it (the creator and the idea's author; a tap: everyone, People.svelte; his contact is there). One group of rows like every other on the page: a label, a grey value, an arrow out.
-  // The voluntary support row stays and opens Settings' donate page, the Sponsors row its honour board; the main admin is not here, Admin knows him.
+  // the people who made it (the creator and the idea's author; a tap: Made together, People.svelte; his contact is there). One group of rows like every other on the page: a label, a grey value, an arrow out.
+  // The voluntary support row stays and opens Settings' donate page (the sponsors are on Made together); the main admin is not here, Admin knows him.
   import HandHeart from '@lucide/svelte/icons/hand-heart';
-  import Award from '@lucide/svelte/icons/award';
   import HeartHandshake from '@lucide/svelte/icons/heart-handshake';
   import MessageCircleWarning from '@lucide/svelte/icons/message-circle-warning';
   import Megaphone from '@lucide/svelte/icons/megaphone';
@@ -41,8 +40,6 @@
     <Row icon={HeartHandshake} title={t('help.row')} value={t('help.rowSub')} accessory="chevron" onclick={() => { haptic.tap(); sheets.helpUs(); }} />
     <Row icon={MessageCircleWarning} title={t('fb.title')} value={t('fb.rowSub')} accessory="chevron" onclick={() => { haptic.tap(); sheets.feedback(); }} />
     {#if session.donate}<Row icon={HandHeart} title={t('app.donateRow')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('donate'); }} />{/if}
-    <!-- the honour board, one tap from Profile once anyone is on it -->
-    {#if data.sponsors?.length}<Row icon={Award} title={t('sp.sponsors')} value={String(data.sponsors.length)} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('sponsors'); }} />{/if}
     <!-- who made it: the creator and the idea's author (named after her own yes), and the way to everyone else -->
     <Row title={t('cr.title')} subtitle={names} accessory="chevron" onclick={() => { haptic.tap(); sheets.credits(); }}>
       {#snippet lead()}<span class="two">{#if creator}<Avatar person={plain(creator)} size={36} tappable={false} />{/if}{#if muse}<span class="b"><Avatar person={plain(muse)} size={36} tappable={false} /></span>{/if}{#if !creator && !muse}<span class="none"><UsersRound size={20} /></span>{/if}</span>{/snippet}

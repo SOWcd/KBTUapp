@@ -10,7 +10,7 @@ import time
 
 from PIL import Image
 
-from kbtu import bot, logic
+from kbtu import logic, outbox
 from test_core import env, login, tma  # noqa: F401  (env is a fixture)
 from test_event_teams import _event, _go, _list, _mine, _people, _sheet
 from test_paid_teams import _pay, _receipt, _team
@@ -71,7 +71,7 @@ def test_single_removal_frees_the_seat_and_can_sign_up_again(env):
     assert _status(con, eid, 11)[0] == "going"  # the waitlist moved in
     assert _removed_msgs(con, 10) == 1
     m = con.execute("SELECT * FROM bot_outbox WHERE kind = 'seat_removed'").fetchone()
-    text, _, to = bot._render(con, {**dict(m), "lang": "en"})
+    text, _, to = outbox._render(con, {**dict(m), "lang": "en"})
     assert "Case" in text and "IT Club" in text and to == f"ev_{eid}"  # the template, a button into the event
     a = con.execute("SELECT actor_id, target, data FROM audit_log WHERE action = 'seat_remove'").fetchone()
     assert a[0] == _uid(con, 20) and json.loads(a[2])["user"] == _uid(con, 10)

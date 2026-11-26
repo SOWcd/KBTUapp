@@ -7,7 +7,7 @@ import time
 
 import pytest
 
-from kbtu import auth, bot, config, db, logic
+from kbtu import auth, config, db, logic, outbox
 from test_core import BOT, delete_now, env, login, set_clock, tma  # noqa: F401  (env: the fixture)
 
 
@@ -60,7 +60,7 @@ def test_roster_load_and_join(env):
              {**row(full_name="New Club Person", tg="nobody_here"), "sheet": "Chess sheet"}]
     orgmap = {"Open Mic sheet": "mic", "Chess sheet": {"new": {"name": "Chess Club KBTU", "short": "CC", "emoji": "game_die_3d"}}}
     got = roster.load(con, items, orgmap)
-    assert (got["added"], got["orgs_made"], got["joined"]) == (4, ["Chess Club KBTU"], 2)
+    assert (got["added"], got["orgs_made"], got["joined"]) == (4, ["Chess Club KBTU"], 1)
     assert roster.load(con, items, orgmap)["added"] == 0                                   # again: nothing new
     assert con.execute("SELECT official FROM orgs WHERE name = 'Chess'").fetchone()[0] == 1          # no "KBTU" in a name
 
@@ -80,8 +80,9 @@ def test_roster_load_and_join(env):
     welcome = c.get("/api/me", headers=h(73)).json()["roster"]                         # not signed in with Microsoft
     assert welcome == {"welcome": [{"org": welcome["welcome"][0]["org"], "title": None, "role": "vice"}]} and welcome["welcome"][0]["org"]["slug"] == "mic"
 
-    me = c.get("/api/me", headers=h(72)).json()                                         # Bek: the username, another name: in all the same
-    assert [(m["role"], m["title"]) for m in me["memberships"]] == [("head", "Head of HR")] and me["city"]["name"] == "Aktau"
+    me = c.get("/api/me", headers=h(72)).json()  # A handle alone requires the President's confirmation.
+    assert not me["memberships"] and me["city"] is None
+    assert roster.asks(con, bek["id"]) and not con.execute("SELECT phone FROM students WHERE user_id = ?", (bek["id"],)).fetchone()[0]
 
 
 def test_roster_app_wins(env):
@@ -194,7 +195,7 @@ def test_freshmen_prefill(env, monkeypatch, capsys):
     assert not con.execute("SELECT 1 FROM prefill WHERE email = 'a_one@kbtu.kz'").fetchone()
     assert ach(uid[2])["init26f"] == 1 and ach(uid[2])["init26"] == 0 and alerts() == []
     out = con.execute("SELECT * FROM bot_outbox WHERE user_id = ? AND ref = 'ach:init26f:1'", (uid[2],)).fetchone()
-    assert bot._render(con, {**dict(out), "lang": "kk"})                                    # the bot's card has its name
+    assert outbox._render(con, {**dict(out), "lang": "kk"})                                    # the bot's card has its name
     # a typo'd mail, another person's name: nothing from the row, no badge, the row stays, no alert
     r = c.post("/api/kbtu/manual", headers=tma(3), json={"studentId": "25B010099", "consentVersion": logic.CONSENT})
     assert r.status_code == 200, r.text
@@ -213,7 +214,7 @@ def test_freshmen_prefill(env, monkeypatch, capsys):
     assert not con.execute("SELECT 1 FROM prefill WHERE email = 'j_ten@kbtu.kz'").fetchone()
     for kind, ref in alerts():
         out = con.execute("SELECT * FROM bot_outbox WHERE kind = ? AND ref = ?", (kind, ref)).fetchone()
-        text = bot._render(con, {**dict(out), "lang": "en"})[0]
+        text = outbox._render(con, {**dict(out), "lang": "en"})[0]
         assert f"#{ref.split(':')[1]}" in text and "kbtu.kz" not in text and "B0" not in text and "Serikov" not in text
     # deleting an account before it linked: its row goes too
     logic.ms_remember(con, uid[4], who(4, "b_two@kbtu.kz", "Bek", "Twoev"))

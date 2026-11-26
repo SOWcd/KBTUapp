@@ -65,7 +65,7 @@
   import { session } from '../../lib/state/session.svelte';
   import { may, withNick, inner, onTeam, RANK } from '../../lib/perms';
   import { t, tn, money, friendsLine, fmtNum, type Key, placeOf, subjectOf } from '../../lib/i18n/index.svelte';
-  import { relDay, time, nowTs, dayMonth, dayMonthShort, parts, at, duration, ago, multiDay, daySpan, endTime } from '../../lib/time';
+  import { relDay, time, nowTs, dayMonthShort, parts, at, duration, ago, multiDay, daySpan, endTime } from '../../lib/time';
   import Megaphone from '@lucide/svelte/icons/megaphone';
   import { openLink, haptic, shareCard } from '../../lib/tg';
   import { sheets, registration } from '../../lib/state/sheets';
@@ -333,8 +333,7 @@
   function share() {
     if (!e) return; // the Button gives the tap
     // absolute date: the card is read later, when "tomorrow" is wrong
-    shareCard({ kind: 'ev', id: String(id), title: e.title, when: `${dayMonth(e.startsAt)}, ${time(e.startsAt)}`, place: placeOf(e.place, e.online), img: coverFor(e.cover, 'card')?.url ?? e.video?.poster?.url ?? '' },
-      'https://t.me/KBTUappBot?startapp=ev_' + id, e.title).then((sent) => { if (sent) say(phrase('say.shared'), 'party_popper_3d'); })
+    shareCard({ kind: 'ev', id: String(id) }).then((sent) => { if (sent) say(phrase('say.shared'), 'party_popper_3d'); })
       .catch(() => { haptic.error(); say(t('common.error'), 'warning_3d'); });
   }
   // "My link": the same card with my badge code in its button, so who signs up by it counts for me (EventManage's "Who brought")
@@ -347,7 +346,7 @@
   function shareMine() {
     if (!e) return;
     haptic.tap();
-    shareCard({ kind: 'ev', id: String(id), mine: '1' }, `https://t.me/KBTUappBot?startapp=ev_${id}${session.me?.evRef ? '_' + session.me.evRef : ''}`, e.title)
+    shareCard({ kind: 'ev', id: String(id), mine: '1' })
       .then((sent) => { if (sent) say(t('event.myLinkSent'), 'party_popper_3d'); })
       .catch(() => { haptic.error(); say(t('common.error'), 'warning_3d'); });
   }

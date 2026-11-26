@@ -2,6 +2,8 @@
 // WebApp methods exist but THROW (WebAppMethodUnsupported), and one uncaught throw at start
 // leaves a blank screen. Nothing in the app calls window.Telegram directly.
 
+import { inApp, native, scan as nativeScan, scanClose } from './native';
+
 type Inset = { top: number; bottom: number; left: number; right: number };
 export type InvoiceStatus = 'paid' | 'cancelled' | 'failed' | 'pending';
 type TgUser = { id: number; first_name: string; last_name?: string; username?: string; language_code?: string; photo_url?: string };
@@ -78,9 +80,12 @@ export function tgTry(fn: (w: WebApp) => void): void {
 export const tg = {
   initData: W?.initData ?? '',
   user: inTelegram ? W?.initDataUnsafe?.user ?? null : null,
-  // a link Telegram opened as a plain URL (the guard bot's join request app: web_app_url) carries it in the query
-  startParam: inTelegram ? W?.initDataUnsafe?.start_param || new URLSearchParams(location.search).get('startapp') || '' : '',
+  // a link Telegram opened as a plain URL (the guard bot's join request app: web_app_url) carries it in the query; so
+  // does the iPhone app's launch from a notification (ios/: the push's "start")
+  startParam: inTelegram || inApp ? W?.initDataUnsafe?.start_param || new URLSearchParams(location.search).get('startapp') || '' : '',
   platform: W?.platform ?? 'unknown',
+  /** the coarse device kind the server keeps (a Telegram computer client is desktop; its web clients and a plain browser, web) */
+  kind: onAndroid ? 'android' : onIos ? 'ios' : inTelegram && !/^web/.test(W!.platform) ? 'desktop' : 'web',
   // outside Telegram its script says 'light' whatever the phone uses: the system's own scheme there
   colorScheme: (): 'light' | 'dark' => (inTelegram ? W?.colorScheme : null) ?? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'),
   can,
@@ -195,14 +200,16 @@ export function openLink(url: string, web = false): void {
   else window.open(url, '_blank', 'noopener');
 }
 
-/** QR scanner (phones only). `onText` returns true to close the popup. Returns false when unavailable. */
+/** QR scanner (phones only): the iPhone app's own, else Telegram's popup. `onText` returns true to close it.
+ *  Returns false when unavailable. */
 export function scanQr(text: string, onText: (value: string) => boolean): boolean {
+  if (native.has('scan')) { nativeScan(text, onText); return true; }
   if (!can('6.4') || !W?.showScanQrPopup) return false;
   tgTry((w) => w.showScanQrPopup!({ text }, (v) => onText(v)));
   return true;
 }
 
-export function closeScanner(): void { if (can('6.4')) tgTry((w) => w.closeScanQrPopup?.()); }
+export function closeScanner(): void { scanClose(); if (can('6.4')) tgTry((w) => w.closeScanQrPopup?.()); }
 
 /** Telegram's own payment window can take Stars here: they came with Bot API 7.4, an older client hides the option. */
 export const canStars = (): boolean => can('7.4') && !!W?.openInvoice;
@@ -220,18 +227,19 @@ export function shareMessage(preparedId: string): Promise<boolean | null> {
   });
 }
 
-/** Everything shared into chats is our bot's card — text and a button, never a bare link: the server
- *  prepares it from its own templates (savePreparedInlineMessage, initData-checked), then Telegram shows the chat
- *  picker. A failure throws (the caller says so) instead of falling back to a link; a plain t.me share link only
- *  where there are no cards at all (Telegram older than Bot API 8.0, a plain browser). */
+/** Everything shared into chats is our bot's card, made by the server from its own templates (never the client's words).
+ *  In Telegram: the card itself, text and a button (savePreparedInlineMessage, initData-checked), in Telegram's chat
+ *  picker. Where there are no cards (a browser, the Android and iPhone apps, Telegram older than Bot API 8.0 or on a
+ *  computer): the same card's words with its button's link under them, in the phone's share sheet or Telegram's share
+ *  link. A failure throws (the caller says so), never a bare link. */
 /** ready: the card is made and the picker opens now (the caller's "making the link" ends there, not when a chat is picked) */
 /** the capsule's "Making the link…" for every share (ui.svelte.ts sets it: tg.ts can't import the state) */
 let shareBusy: (on: boolean) => void = () => {};
 export function onShareBusy(f: (on: boolean) => void): void { shareBusy = f; }
 
-export async function shareCard(card: Record<string, string | number | boolean | null>, link: string, text: string, ready?: () => void): Promise<boolean> {
+export async function shareCard(card: Record<string, string | number | boolean | null>, ready?: () => void): Promise<boolean> {
   shareBusy(true);
-  try { return await shareVia(card, link, text, () => { shareBusy(false); ready?.(); }); }
+  try { return await shareVia(card, () => { shareBusy(false); ready?.(); }); }
   finally { shareBusy(false); }
 }
 
@@ -240,25 +248,35 @@ export function tgShare(link: string, text: string) {
   openLink(`https://t.me/share/url?url=${encodeURIComponent(`${text}\n${link}`)}`);
 }
 
-async function shareVia(card: Record<string, string | number | boolean | null>, link: string, text: string, ready: () => void): Promise<boolean> {
+/** The server's answer for a card: in Telegram signed by initData (the dev server still reads it from the body), in a
+ *  browser or the phone apps by the session cookie and the app's header (client.ts authHeaders; without it the CSRF
+ *  check refused the call and the bare bot link went out: the owner's award, Nov 25) */
+async function cardOf(card: Record<string, string | number | boolean | null>): Promise<Record<string, unknown>> {
+  const r = await fetch('/api/share', { method: 'POST', headers: { ...(inTelegram ? { Authorization: `tma ${W!.initData}` } : { 'X-KBTU': '1' }), 'Content-Type': 'application/json' },
+    body: JSON.stringify(inTelegram ? { ...card, initData: W!.initData } : card) });
+  if (!r.ok) throw new Error('share');
+  return r.json();
+}
+
+async function shareVia(card: Record<string, string | number | boolean | null>, ready: () => void): Promise<boolean> {
   if (inTelegram && can('8.0') && W?.shareMessage) {
-    // the server reads initData from the header like every API call; the dev server still reads it from the body
-    const r = await fetch('/api/share', { method: 'POST', headers: { Authorization: `tma ${W.initData}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...card, initData: W.initData }) });
-    const { id } = await r.json();
-    if (!id) throw new Error('share');
+    const { id } = await cardOf(card);
+    if (typeof id !== 'string') throw new Error('share');
     ready();
     const sent = await shareMessage(id); // true once the user picked a chat
     if (sent !== null) return sent;
-    // a client without cards (a user on Telegram Desktop): Telegram's own picker with the link instead
+    // a client without cards (Telegram Desktop says so only now): the words below, from a fresh card (a one-time link's
+    // first copy was never sent and runs out unused)
   }
-  if (!inTelegram) {
-    // the web app: the server makes the same link its card's button would carry (an award or club link is minted there)
-    const r = await fetch('/api/share', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...card, link: true }) });
-    const made = r.ok ? (await r.json()).link : null;
-    if (typeof made === 'string') link = made;
-  }
+  const { link, text } = await cardOf({ ...card, link: true });
+  if (typeof link !== 'string' || typeof text !== 'string') throw new Error('share');
   ready();
+  // a phone outside Telegram (a browser, the Android app's Chrome, the iPhone app's web view): its own share sheet, any
+  // messenger; it refuses when the tap's moment has passed (Safari's is short): Telegram's share link then
+  if (!inTelegram && !onComputer && navigator.share) {
+    try { await navigator.share({ text: `${text}\n${link}` }); return true; }
+    catch (e) { if ((e as Error)?.name === 'AbortError') return false; } // closed the sheet
+  }
   tgShare(link, text);
   return false; // the link opens Telegram's own picker: we never learn whether it was sent
 }

@@ -4,6 +4,7 @@ from __future__ import annotations
 import csv
 import hmac
 import json
+import re
 from collections.abc import Iterable
 
 from ..db import tx
@@ -69,8 +70,8 @@ def _carry_door(con, g, uid: int) -> None:
     con.execute("UPDATE registrations SET door_team = COALESCE(door_team, ?) WHERE event_id = ? AND user_id = ?",
                 (g["team"], g["event_id"], uid))
     if g["came_at"] is not None:
-        con.execute("""UPDATE registrations SET checked_in_at = COALESCE(checked_in_at, ?), checkin_manual = 1
-            WHERE event_id = ? AND user_id = ?""", (g["came_at"], g["event_id"], uid))
+        con.execute("""UPDATE registrations SET checked_in_at = ?, checkin_manual = 1
+            WHERE event_id = ? AND user_id = ? AND checked_in_at IS NULL""", (g["came_at"], g["event_id"], uid))
 
 
 def import_csv(con, eid: int, source: Iterable[str]) -> tuple[int, int, int, int]:
@@ -358,9 +359,10 @@ def walk_in(con, eid: int, name: object, team: object, adult: int | None, t: int
         raise ApiError("bad_input")
     if one(con, "SELECT COUNT(*) FROM event_guests WHERE event_id = ? AND walk_in = 1", eid)[0] >= WALK_INS:
         raise ApiError("rate_limited", "walk_ins")
-    key = f"x{_next_key(con, eid)}"
+    sid = f"x{_next_key(con, eid)}"
     con.execute("""INSERT INTO event_guests (event_id, student_id, adult, name, team, came_at, walk_in)
-        VALUES (?, ?, ?, ?, ?, ?, 1)""", (eid, key, adult, name, team, t))
+        VALUES (?, ?, ?, ?, ?, ?, 1)""", (eid, sid, adult, name, team, t))
+    key = one(con, "SELECT door_key FROM event_guests WHERE event_id = ? AND student_id = ?", eid, sid)[0]  # set by trigger event_guests_key
     return {"key": key, "name": name, "adult": None if adult is None else bool(adult), "came": True, "at": t, "team": team,
             "walkIn": True, **pending_count(con, eid)}
 
@@ -371,20 +373,21 @@ def export(con, eid: int) -> list[dict]:
             for r in rows(con, "SELECT name, team, came_at, walk_in FROM event_guests WHERE event_id = ? AND name IS NOT NULL ORDER BY name", eid)]
 
 
-def door_list(con, eid: int) -> list[dict]:
-    return [{"key": r["student_id"], "name": r["name"], "adult": None if r["adult"] is None else bool(r["adult"]), "came": bool(r["came_at"]), "at": r["came_at"], "team": r["team"],
-             **({"walkIn": True} if r["walk_in"] else {})}
-            for r in rows(con, "SELECT student_id, name, adult, came_at, team, walk_in FROM event_guests WHERE event_id = ? AND name IS NOT NULL ORDER BY name", eid)]
+def door_list(con, eid: int, full: bool = False) -> list[dict]:
+    from ..checkin import _short
+    return [{"key": r["door_key"], "name": r["name"] if full else _short(r["name"]), "adult": None if r["adult"] is None else bool(r["adult"]),
+             "came": bool(r["came_at"]), "at": r["came_at"], "team": r["team"], **({"walkIn": True} if r["walk_in"] else {})}
+            for r in rows(con, "SELECT door_key, name, adult, came_at, team, walk_in FROM event_guests WHERE event_id = ? AND name IS NOT NULL ORDER BY name", eid)]
 
 
 def tick(con, eid: int, key: object, t: int, adult: object = None, came: bool = True) -> dict:
     """The door taps a name on its list: let in (the door saw the ID card), 18+ there if given."""
-    if not isinstance(key, str) or not 0 < len(key) <= 20 or (adult is not None and not isinstance(adult, bool)):
+    if not isinstance(key, str) or not re.fullmatch(r"[0-9a-f]{32}", key) or (adult is not None and not isinstance(adult, bool)):
         raise ApiError("bad_input")
-    g = one(con, "SELECT * FROM event_guests WHERE event_id = ? AND student_id = ? AND name IS NOT NULL", eid, key)
+    g = one(con, "SELECT * FROM event_guests WHERE event_id = ? AND door_key = ? AND name IS NOT NULL", eid, key)
     if not g:
         raise ApiError("not_found")
-    con.execute("UPDATE event_guests SET came_at = CASE WHEN ? THEN COALESCE(came_at, ?) END, adult = COALESCE(?, adult) WHERE event_id = ? AND student_id = ?",
+    con.execute("UPDATE event_guests SET came_at = CASE WHEN ? THEN COALESCE(came_at, ?) END, adult = COALESCE(?, adult) WHERE event_id = ? AND door_key = ?",
                 (int(came), t, None if adult is None else int(adult), eid, key))
     return pending_count(con, eid)
 
