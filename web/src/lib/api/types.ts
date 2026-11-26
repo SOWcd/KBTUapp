@@ -371,6 +371,8 @@ export interface Me {
   appeals?: { consent: boolean; sg: boolean }; // appeals to SG are on for me (APPEALS); agreed to its section; SG's queue mine
   ask?: { consent: boolean; staff: boolean };  // the help desk (KRI's "Ask a person", ASK) is on for me; its own consent; its queue mine
   vol?: VolMe;                  // GET /api/me only: the volunteers ledger's club (server logic/vol.py, VOLUNTEERS); absent: nothing of it for me
+  inChannel?: boolean;          // in the app's Telegram channel / topics group (server logic/appchats.py): Profile hides their rows
+  inGroup?: boolean;
   bigScreen?: 'pair' | 'qr' | null; // Profile's "Big screen" row: scan a computer's QR (who runs events), or a helper's own QR
   bio: string;
   showcase: string[];
