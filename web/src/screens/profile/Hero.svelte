@@ -348,6 +348,9 @@
   .clip { position: absolute; z-index: 2; top: -1px; left: 50%; width: 36px; height: 15px; margin-left: -18px; border-radius: 5px;
     background: linear-gradient(180deg, #F4F6FB, #9AA4B8); box-shadow: 0 2px 5px rgba(0, 0, 0, 0.4), inset 0 1px 0 #fff; }
   .swing { position: relative; width: min(340px, 100%); transform-origin: 50% -52px; perspective: 1100px; } /* the card's turn in depth */
+  /* centred on a whole pixel: 340 px in an odd width (343 at 375) sat at x.5, and its text and crest came out one of two
+     ways as the card went in and out of its own layer (e2e profile.png, 513 px). Engines without round() keep the line above */
+  .swing { width: calc(100% - 2 * max(0px, round(up, (100% - 340px) / 2, 1px))); }
 
   /* the two-sided card: the face and the back share one 3D turn; each hides its own back side */
   /* WebKit hit-tests the 3D context's root flat at z = 0: on a tilted card the half leaning back fell behind it and its
