@@ -66,6 +66,7 @@
   import Group from '../../ui/Group.svelte';
   import Row from '../../ui/Row.svelte';
   import Orb from '../../ui/Orb.svelte';
+  import LiveOrb from './LiveOrb.svelte';
   import { keyboard as kbd } from '../../lib/state/keyboard.svelte';
   import { resting, rest, setKriGoogle } from '../../lib/kriGoogle';
 
@@ -131,7 +132,8 @@
     const b = src.getBoundingClientRect(), w = orb.offsetWidth, el = orb.cloneNode(true) as HTMLElement;
     const glyph = el.querySelector<HTMLElement>('.glyph')!;
     const m = 1 - Number(getComputedStyle(src.querySelector('.glyph')!).opacity);
-    el.classList.remove('hid', 'land');
+    el.classList.remove('hid', 'land', 'gl');
+    el.querySelector('.live')?.remove(); // the copy is the CSS light: a canvas is not copied with its picture
     el.style.cssText = `position:fixed;left:${b.left + b.width / 2 - w / 2}px;top:${b.top + b.height / 2 - w / 2}px;margin:0;z-index:calc(var(--z-sheet) + 4);pointer-events:none;visibility:visible`;
     orb.style.visibility = 'hidden'; if (fly) fly.style.visibility = 'hidden'; // one light on the screen
     document.body.append(el);
@@ -153,6 +155,22 @@
   }
   const first = $derived((session.me?.student?.firstName || session.me?.tg.firstName || '').trim());
   const hello = $derived(t('as.hello', { name: '\n' }).split('\n')); // the words round the name: it is set in its own weight
+  // the greeting word by word, each rising in its own mask (the name in the heavier weight); a word's parts with no
+  // space between them (the name and its "!") stay one word, so a line never breaks inside it
+  type Part = { s: string; b?: boolean };
+  const words = $derived.by(() => {
+    const segs: Part[] = chat.ctx ? [{ s: t('as.about', { title: chat.ctx.title }) }] : [{ s: hello[0] + (first ? ', ' : '') }, { s: first, b: true }, { s: hello[1] }];
+    const out: Part[][] = [];
+    let glue = false;
+    for (const g of segs) for (const m of g.s.split(/(\s+)/)) {
+      if (!m) continue;
+      if (/^\s/.test(m)) { glue = false; continue; }
+      if (glue && out.length) out[out.length - 1].push({ s: m, b: g.b }); else out.push([{ s: m, b: g.b }]);
+      glue = true;
+    }
+    return out;
+  });
+  let live = $state(false); // the shader's light is showing over the CSS one
   let draft = $state(untrack(() => keyboard?.value ?? ''));
   const busy = $derived(chat.busy);
   let list = $state<HTMLDivElement>();
@@ -292,8 +310,9 @@
   <div class="list" class:flown={!!from} bind:this={list}>
     {#if !chat.turns.length}
       <div class={['mid', { up: kb > 0, tight }]} style:--kb="{kb}px">
-        <i class="lt" class:hid={flying} class:land={!from} bind:this={orb} aria-hidden="true"><Orb size={168}><span class="glyph"><Sparkles strokeWidth={2} /></span></Orb></i>
-        <h2 class="greeting clamp-2">{#if chat.ctx}{t('as.about', { title: chat.ctx.title })}{:else}{hello[0]}{#if first}, <b>{first}</b>{/if}{hello[1]}{/if}</h2>
+        <i class="lt" class:hid={flying} class:land={!from} class:gl={live} bind:this={orb} aria-hidden="true"><Orb size={168}><span class="glyph"><Sparkles strokeWidth={2} /></span></Orb><LiveOrb
+          start={!flying} energy={busy ? 1 : draft.trim() ? 0.5 : 0} hold={tight || overlays.some((o) => o.id > overlay.id && !o.closing)} bind:on={live} /></i>
+        <h2 class="greeting clamp-2" style:--n={words.length}>{#each words as w, i (i)}{i ? ' ' : ''}<span class="w" style:--w={i}><span>{#each w as p, k (k)}{#if p.b}<b>{p.s}</b>{:else}{p.s}{/if}{/each}</span></span>{/each}</h2>
         <!-- every question in one cell: the tallest holds the height, a change moves nothing -->
         <button class="rot" onclick={() => pick(SUGGEST[qi])}>
           {#each SUGGEST as k, i (k)}<span class:on={i === qi} aria-hidden={i !== qi}>{t(k)}<ArrowUpRight size={18} strokeWidth={1.75} /></span>{/each}
@@ -390,11 +409,16 @@
   .lt, .greeting, .rot { transition: transform 250ms cubic-bezier(.2, .8, .3, 1); }
   .mid.up .lt { transform: translateY(calc(var(--kb) / -2)) scale(0.45); }
   .mid.up .greeting, .mid.up .rot { transform: translateY(calc(var(--kb) * -1)); }
-  .greeting { max-width: 100%; font: var(--fw-light) var(--fs-title)/1.06 var(--font-display); letter-spacing: -0.045em; overflow-wrap: anywhere; animation: down 480ms var(--ease) var(--land, 0ms) backwards; }
+  .greeting { max-width: 100%; font: var(--fw-light) var(--fs-title)/1.06 var(--font-display); letter-spacing: -0.045em; overflow-wrap: anywhere; }
   .greeting b { font-weight: 600; }
+  /* the greeting's calm entrance: each word rises out of its own mask on a long ease-out, a beat after the last, no
+     overshoot (the padding keeps descenders and the bold's side bearings inside the mask; the margins take it back) */
+  .greeting .w { display: inline-block; overflow: hidden; vertical-align: top; max-width: 100%; padding: 0 0.06em 0.14em; margin: 0 -0.06em -0.14em; }
+  .greeting .w > span { display: inline-block; animation: mask 1100ms var(--calm) calc(var(--land, 0ms) + 60ms + var(--w) * 70ms) backwards; }
+  @keyframes mask { from { transform: translateY(125%); } }
   .rot { display: grid; justify-items: start; max-width: 100%; margin-top: var(--s-1); padding: var(--s-1) 0; color: var(--text-3); text-align: left;
     font: var(--fw-light) var(--fs-sec)/1.2 var(--font-display); letter-spacing: -0.03em;
-    animation: down 480ms var(--ease) calc(var(--land, 0ms) + 50ms) backwards; transition: opacity var(--t-fast), transform 250ms cubic-bezier(.2, .8, .3, 1); }
+    animation: soft 900ms var(--calm) calc(var(--land, 0ms) + 360ms + var(--n, 2) * 70ms) backwards; transition: opacity var(--t-fast), transform 250ms cubic-bezier(.2, .8, .3, 1); }
   .rot:active { opacity: 0.6; }
   /* one leaves, then the next comes up: the two are never read through each other */
   .rot span { grid-area: 1 / 1; align-self: center; opacity: 0; transform: translateY(6px); transition: opacity 240ms ease-in, transform 240ms ease-in; }
@@ -402,14 +426,19 @@
   /* the screen's one accent: the link's arrow */
   .rot :global(svg) { display: inline; margin-left: 6px; vertical-align: -1px; color: var(--accent-text); }
   .flown { --land: 380ms; } /* the light is flying in: the words wait until it is over them, not on them; no flight, no wait */
+  .mid { --calm: cubic-bezier(.16, 1, .3, 1); } /* the opening's one curve: a long, quiet settle */
+  @keyframes soft { from { opacity: 0; transform: translateY(8px); } }
   @keyframes down { from { opacity: 0; transform: translateY(-12px); } }
   .ctx { align-self: center; display: inline-flex; align-items: center; gap: 6px; max-width: 86%; height: 28px; padding: 0 12px; border-radius: var(--r-full);
     background: var(--fill); color: var(--text-2); font: 600 var(--fs-cap)/1 var(--font-text); }
 
   /* the light of the opening: the orb (ui/Orb) in a box of its own, which is what flies, lands and hides */
   .lt { position: relative; flex: none; display: block; align-self: center; width: 168px; height: 168px; margin: auto; }
-  .lt.land { animation: land 520ms var(--ease) backwards; } /* no button to fly from: it comes up in its place */
-  @keyframes land { from { opacity: 0; transform: scale(0.6); } }
+  .lt.land { animation: land 1100ms var(--calm) backwards; } /* no button to fly from: it comes up in its place */
+  @keyframes land { from { opacity: 0; transform: scale(0.86); } }
+  /* the shader's light over the CSS one (LiveOrb): the CSS one goes once the other is nearly in, and is back at once
+     when it leaves (it fades out over it) */
+  .lt.gl > :global(.orb) { opacity: 0; transition: opacity 500ms 400ms; }
   .lt.hid { visibility: hidden; }
   .lt.fly { position: absolute; z-index: 1; margin: 0; visibility: hidden; pointer-events: none; }
   /* the button's own glyph inside the glass, its size there (24 of 54) when the light is the button's size: seen only in flight */
