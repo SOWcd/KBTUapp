@@ -475,7 +475,7 @@
       out.push(`${JSON.stringify(k)}:${json}`);
     }
     writeCache(`{${out.join(',')}}`);
-    keepTickets(data.events); // the door's copy: outlives the snapshot's week (lib/offlineTickets)
+    void keepTickets(data.events, !data.offline); // the door's copy: outlives the snapshot's week (lib/offlineTickets)
   };
   $effect(() => {
     void [data.kept, ...Object.values(snap()), ...Object.values(data.studio), ...Object.values(data.team)]; // a club's list loaded: a new key

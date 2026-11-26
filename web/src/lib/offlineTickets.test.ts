@@ -1,22 +1,30 @@
-import { describe, expect, it } from 'vitest';
-import type { EventCard, MyRegistration } from './api';
-import { ApiErr } from './api/errors';
-import { endOf, sanitize, ticketsOf, unreachable } from './offlineTickets';
+import { describe, expect, it, vi } from 'vitest';
+import type { EventCard, MyRegistration, OrgRef } from './api';
+import { ApiErr, unreachable } from './api/errors';
+import { endOf, sanitize, ticketsOf } from './offlineTickets';
+
+vi.mock('./state/data.svelte', () => ({ data: { orgs: [] } })); // awards reads the clubs for badges
 
 const NOW = 1_800_000_000;
 const my = (over: Partial<MyRegistration> = {}): MyRegistration =>
   ({ status: 'going', cancelReason: null, ticketCode: 'AB7K', holdUntil: null, checkedInAt: null, receipt: 'none', ...over });
+const org: OrgRef = { id: 3, slug: 'club', name: 'Club', short: 'C', emoji: '', cover: 0, kind: 'club', official: false };
 // an event card as the server sends it, with the things about other people a ticket must never carry
 const ev = (id: number, over: Partial<EventCard> = {}): EventCard => ({
   id, title: `Event ${id}`, startsAt: NOW + 3600, endsAt: NOW + 7200, place: 'Hall 1', online: false, status: 'published', my: my(),
-  friends: [{ id: 9, name: 'A friend' }], org: { id: 3, name: 'Club' }, description: 'secret plan', ...over,
+  friends: [{ id: 9, name: 'A friend' }], org, description: 'secret plan', ...over,
 } as unknown as EventCard);
 
 describe('ticketsOf', () => {
   it('keeps my going tickets with a code, and only the fields the QR and its card need', () => {
-    expect(ticketsOf([ev(1)], NOW)).toEqual([{ id: 1, title: 'Event 1', startsAt: NOW + 3600, endsAt: NOW + 7200, place: 'Hall 1', online: false, code: 'AB7K' }]);
+    expect(ticketsOf([ev(1)], NOW)).toEqual([{ id: 1, title: 'Event 1', startsAt: NOW + 3600, endsAt: NOW + 7200, place: 'Hall 1', online: false, code: 'AB7K', look: 'kbtu', logo: null }]);
     const json = JSON.stringify(ticketsOf([ev(1)], NOW));
     for (const s of ['friend', 'Club', 'secret', 'receipt', 'holdUntil']) expect(json).not.toContain(s);
+  });
+
+  it('takes the look from the organizer, including illustrated and inline marks', () => {
+    const events = [ev(1, { org: { ...org, slug: 'qoloner' } }), ev(2, { org: { ...org, slug: 'studex' } })];
+    expect(ticketsOf(events, NOW).map((t) => t.look)).toEqual(['qoloner', 'studex']);
   });
 
   it('skips what isn\'t a ticket of mine: a hold, a waitlist, cancelled, no code, no sign-up, a cancelled event', () => {
@@ -46,10 +54,25 @@ describe('endOf', () => {
 });
 
 describe('sanitize', () => {
-  const ok = { id: 1, title: 'T', startsAt: NOW + 10, endsAt: null, place: 'P', online: false, code: 'AB7K' };
+  const old = { id: 1, title: 'T', startsAt: NOW + 10, endsAt: null, place: 'P', online: false, code: 'AB7K' };
+  const ok = { ...old, look: 'kbtu', logo: null };
 
   it('reads back what was kept', () => {
     expect(sanitize(JSON.parse(JSON.stringify([ok])), NOW)).toEqual([ok]);
+  });
+
+  it('keeps old tickets and falls back to the app look for unknown keys', () => {
+    for (const look of [undefined, 'removed', '__proto__']) expect(sanitize([{ ...old, look }], NOW)).toEqual([ok]);
+  });
+
+  it('only retains small PNG data URLs for looks with an image', () => {
+    const logo = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aGp0AAAAASUVORK5CYII=';
+    const branded = { ...ok, look: 'qoloner' };
+    expect(sanitize([{ ...branded, logo }], NOW)).toEqual([{ ...branded, logo }]);
+    expect(sanitize([{ ...ok, logo }], NOW)).toEqual([ok]);
+    for (const invalid of ['/assets/mark.webp', 'https://example.com/mark.png', 'data:image/svg+xml,<svg/>', logo + 'A'.repeat(32_768)]) {
+      expect(sanitize([{ ...branded, logo: invalid }], NOW)).toEqual([branded]);
+    }
   });
 
   it('takes nothing that isn\'t a list', () => {
@@ -67,7 +90,7 @@ describe('sanitize', () => {
 
   it('carries no field it wasn\'t told about, and bounds the texts', () => {
     const [t] = sanitize([{ ...ok, friends: ['x'], __proto__: { polluted: 1 }, title: 'T'.repeat(500), place: 'P'.repeat(500) }], NOW);
-    expect(Object.keys(t).sort()).toEqual(['code', 'endsAt', 'id', 'online', 'place', 'startsAt', 'title']);
+    expect(Object.keys(t).sort()).toEqual(['code', 'endsAt', 'id', 'logo', 'look', 'online', 'place', 'startsAt', 'title']);
     expect(t.title.length).toBe(200);
     expect(t.place.length).toBe(200);
   });
