@@ -30,7 +30,7 @@
   let busy = $state(false);
   async function send() {
     haptic.tap(); busy = true;
-    try { await shareInvite(code, () => (busy = false)); }
+    try { await shareInvite(() => (busy = false)); }
     catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
     finally { busy = false; }
   }

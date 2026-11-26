@@ -69,3 +69,4 @@ def test_share_link_for_the_web_app(env):
     login(c, 63, "cy")
     r = c.post("/api/share", headers=tma(63), json={"kind": "rf", "link": True}).json()
     assert r["link"].startswith("https://t.me/") and "startapp=r_" in r["link"] and "id" not in r
+    assert r["text"] and "<" not in r["text"] and r["link"] not in r["text"]  # the card's words; the link goes under them

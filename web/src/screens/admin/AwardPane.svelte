@@ -97,7 +97,7 @@
   async function send() {
     sending = true; haptic.tap();
     try {
-      if (await shareCard({ kind: 'gl', id: '0', code, uses: uses || null, days }, 'https://t.me/KBTUappBot', manualName(code))) { haptic.ok(); say(t('give.sent'), 'party_popper_3d'); mode = null; }
+      if (await shareCard({ kind: 'gl', id: '0', code, uses: uses || null, days })) { haptic.ok(); say(t('give.sent'), 'party_popper_3d'); mode = null; }
       void loadLinks();
     } catch { fail(); } finally { sending = false; }
   }

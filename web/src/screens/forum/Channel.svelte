@@ -248,7 +248,7 @@
   // pass a post on: our bot's card (its opening words, a button into it by id only: never whose), as an event's
   const share = (p: ChannelFeedPost) => {
     haptic.tap();
-    shareCard({ kind: 'fp', id: String(p.id) }, `https://t.me/KBTUappBot?startapp=fp_${p.id}`, t('fc.sharedPost'))
+    shareCard({ kind: 'fp', id: String(p.id) })
       .then((sent) => { if (sent) say(phrase('say.shared'), 'party_popper_3d'); })
       .catch(() => { haptic.error(); say(t('common.error'), 'warning_3d'); });
   };

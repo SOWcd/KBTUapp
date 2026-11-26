@@ -34,7 +34,7 @@
   async function shareIt() {
     if (!it.ach) return;
     sharing = true; haptic.tap();
-    try { if (await shareCard({ kind: 'aw', code: it.ach.code }, 'https://t.me/KBTUappBot?startapp=aw_' + it.ach.code, t('aw.shareText', { name: it.name }))) say(phrase('say.shared'), 'party_popper_3d'); }
+    try { if (await shareCard({ kind: 'aw', code: it.ach.code })) say(phrase('say.shared'), 'party_popper_3d'); }
     catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
     finally { sharing = false; }
   }
@@ -44,7 +44,7 @@
   async function invite() {
     if (!ref) return;
     inviting = true; haptic.tap();
-    try { await shareInvite(ref.code, () => (inviting = false)); }
+    try { await shareInvite(() => (inviting = false)); }
     catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
     finally { inviting = false; }
   }
