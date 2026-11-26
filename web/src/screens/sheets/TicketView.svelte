@@ -20,6 +20,7 @@
   import Ticket from '@lucide/svelte/icons/ticket';
   import { relDay, time, nowTs, multiDay, daySpan } from '../../lib/time';
   import { haptic, openLink } from '../../lib/tg';
+  import { count } from '../../lib/stats';
   import { calendarUrl } from '../../lib/calendar';
   import CalendarPlus from '@lucide/svelte/icons/calendar-plus';
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
@@ -150,7 +151,7 @@
     {#if valid && !started && session.me && !session.me.canDm}<button class="pill glass glass-pill" use:glass onclick={() => askDm(id, true)}><Bell size={17} />{t('tk.dmOn')}</button>{/if}
     <div class="acts">
       {#if valid && !started}
-        <button class="pill glass glass-pill round" use:glass aria-label={t('tk.calendar')} onclick={() => openLink(calendarUrl(e))}><CalendarPlus size={20} /></button>
+        <button class="pill glass glass-pill round" use:glass aria-label={t('tk.calendar')} onclick={() => { count('do.calendar'); openLink(calendarUrl(e)); }}><CalendarPlus size={20} /></button>
         <button class="pill glass glass-pill danger" use:glass disabled={pending} onclick={cancelReg}>{t('event.cancelReg')}</button>
       {:else if valid && e?.lateSignup && !my?.checkedInAt && (e.endsAt ?? e.startsAt + 3 * 3600) > nowTs()}<!-- late sign-up: one may step out until the end -->
         <button class="pill glass glass-pill danger" use:glass disabled={pending} onclick={cancelReg}>{t('event.cancelReg')}</button>

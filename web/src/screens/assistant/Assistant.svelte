@@ -56,6 +56,7 @@
   import type { AssistAction } from '../../lib/api/types';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic, openLink } from '../../lib/tg';
+  import { count } from '../../lib/stats';
   import { PSYCHOLOGIST } from '../../lib/academic';
   import Sheet from '../../ui/Sheet.svelte';
   import Sparkles from '@lucide/svelte/icons/sparkles';
@@ -228,7 +229,7 @@
     try {
       const a = await api.assistant(q, history, chat.ctx ? { kind: chat.ctx.kind, id: chat.ctx.id } : undefined);
       chat.turns.push({ role: 'assistant', ...a, q });
-      haptic.soft();
+      haptic.soft(); count('do.kri');
     } catch (e) {
       const why = e instanceof ApiErr ? e.code : '';
       chat.turns.push({ role: 'assistant', text: t(why === 'rate_limited' ? 'as.limit' : why === 'unavailable' ? 'as.busy' : why === 'forbidden' ? 'as.consent' : 'common.error'),

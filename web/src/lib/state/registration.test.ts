@@ -12,7 +12,7 @@ vi.mock('./session.svelte', () => ({
 vi.mock('./ui.svelte', () => ({ close: vi.fn(), overlays: [], say: vi.fn() }));
 vi.mock('../i18n/index.svelte', () => ({ t: (k: string) => k, tn: (k: string) => k, i18n: { lang: 'en' } }));
 vi.mock('../tg', () => ({ tg: { initData: '' }, haptic: { tap: vi.fn(), ok: vi.fn(), warn: vi.fn(), error: vi.fn(), soft: vi.fn() } }));
-vi.mock('../stats', () => ({ count: vi.fn() }));
+vi.mock('../stats', () => ({ count: vi.fn(), timed: vi.fn() }));
 vi.mock('../../ui/burst', () => ({ burst: vi.fn() }));
 vi.mock('./sheets', () => ({ sheets: {} }));
 vi.mock('../teamConsent', () => ({ TEAM_CONSENT: 'test', teamConsentOk: vi.fn() }));

@@ -11,7 +11,7 @@ vi.mock('./session.svelte', () => ({ session: { me: null }, loadMe: vi.fn(), asS
 vi.mock('./ui.svelte', () => ({ close: vi.fn(), overlays: [], say: vi.fn() }));
 vi.mock('../i18n/index.svelte', () => ({ t: (k: string) => k, tn: (k: string) => k, i18n: { lang: 'en' }, subjectOf: (s: string) => s }));
 vi.mock('../tg', () => ({ tg: { initData: '' }, haptic: {}, requestWriteAccess: vi.fn() }));
-vi.mock('../stats', () => ({ count: vi.fn() }));
+vi.mock('../stats', () => ({ count: vi.fn(), timed: vi.fn() }));
 vi.mock('../../ui/burst', () => ({ burst: vi.fn() }));
 vi.mock('./sheets', () => ({ sheets: {} }));
 vi.mock('./staffAccess.svelte', () => ({ onStaffLoss: vi.fn(), staffStill: vi.fn() }));

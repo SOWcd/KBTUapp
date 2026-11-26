@@ -26,7 +26,8 @@ vi.mock('./session.svelte', () => ({
   loadMe: () => Promise.resolve(),
   asStudent: (action: () => void, ...again: unknown[]) => { h.log.push(['asStudent', ...again]); action(); },
 }));
-vi.mock('./ui.svelte', () => ({ ui: h.ui, say: h.rec('say'), open: h.rec('open') }));
+// open's tap time (its 5th argument, for the counters) is left out: only what opens matters here
+vi.mock('./ui.svelte', () => ({ ui: h.ui, say: h.rec('say'), open: (...a: unknown[]) => h.rec('open')(...a.slice(0, 4)) }));
 vi.mock('./subjects.svelte', () => ({ loadSubjects: () => Promise.resolve() }));
 vi.mock('./channel.svelte', () => ({ channel: h.channel }));
 vi.mock('./data.svelte', () => ({
@@ -41,7 +42,7 @@ vi.mock('../teamConsent', () => ({ setTeamConsent: h.rec('setTeamConsent') }));
 vi.mock('../perms', () => ({ may: (m: { role: string } | undefined) => m?.role === 'president' }));
 vi.mock('../awards', () => ({ achItem: (a: { code: string }) => `item:${a.code}` }));
 vi.mock('../map', () => ({ warmMap: () => {} }));
-vi.mock('../stats', () => ({ count: () => {} }));
+vi.mock('../stats', () => ({ count: () => {}, timed: () => {} }));
 vi.mock('../../ui/burst', () => ({ burst: () => {} }));
 
 import { openDeepLink } from './openers';

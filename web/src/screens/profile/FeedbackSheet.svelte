@@ -6,6 +6,7 @@
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
+  import { count } from '../../lib/stats';
   import { writeSupport } from '../../lib/feedback';
   import Sheet from '../../ui/Sheet.svelte';
   import Field from '../../ui/Field.svelte';
@@ -19,7 +20,7 @@
     busy = true;
     try {
       await api.helpAnon(text.trim());
-      haptic.ok(); say(t('fb.sent'), 'blue_heart_3d'); close(overlay.id);
+      haptic.ok(); count('do.anon'); say(t('fb.sent'), 'blue_heart_3d'); close(overlay.id);
     } catch (e) {
       haptic.error(); say(t(e instanceof ApiErr && e.code === 'rate_limited' ? 'fb.many' : 'common.error'), 'warning_3d');
     }

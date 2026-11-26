@@ -692,6 +692,7 @@ export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void, team?: Team
     const mine = before.my?.status;
     const leaving = mine === 'going' || mine === 'hold' || mine === 'waitlist';
     if (!leaving && onTeam(before, session.me?.memberships)) { haptic.tap(); say(t('event.team'), 'raising_hands_3d_default'); return; }
+    if (!leaving) count('signup.tap'); // the questions below may each lose it: the funnel's tap -> done
     // a team event's sign-up is its teams consent: one who hasn't agreed (or took it back) is asked
     // first, every way in; a no signs nobody up. The waitlist isn't a sign-up yet: asked when it is a ticket.
     const fullNow = before.seats != null && before.taken >= before.seats;
@@ -732,7 +733,7 @@ export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void, team?: Team
     taps++;
     try {
       const after = leaving ? await api.unregister(id) : await api.register(id, refs()[id], phone, answers, joins, wish, agrees ? TEAM_CONSENT : undefined);
-      if (!leaving) count('do.signup');
+      if (!leaving) { count('do.signup'); count('signup.done'); }
       if (phone && session.me?.student) session.me.student.phone = phone;
       if (after.teamsConsent !== undefined && session.me?.teams) session.me.teams.consent = after.teamsConsent; // the server's word
       put(after);
@@ -744,6 +745,7 @@ export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void, team?: Team
       if (!leaving && st !== 'hold') setTimeout(() => void askDm(id), 1300);
     } catch (e) {
       if (sure) { before.my = was.my; before.taken = was.taken; }
+      if (!leaving) count('signup.fail');
       haptic.error();
       say(errorText(e), 'pleading_face_3d');
     } finally { goingBusy.delete(id); goingPending.delete(id); taps++; }
@@ -789,6 +791,7 @@ export function toggleJoin(id: Id): void {
   asStudent(() => writing(async () => {
     const o = [...data.orgs, ...data.small].find((x) => x.id === id); if (!o) return;
     const on = o.myRequest !== 'pending';
+    if (on) count('join.tap');
     if (on && o.joinQuestions?.length) { sheets.joinApply(id); return; } // the club's own questions first
     // the only way in without a form of its own, and it pings the club's president: one question (a president's report)
     if (on && !(await sheets.ask({ title: t('join.applyAsk', { name: o.name }), ok: t('join.apply'), cancel: t('common.cancel') }))) return;
@@ -797,10 +800,12 @@ export function toggleJoin(id: Id): void {
     haptic.tap();
     try {
       Object.assign(o, await (on ? api.apply(id) : api.withdraw(id))); data.kept++;
+      if (on) count('join.sent');
       say(phrase(on ? 'say.applied' : 'say.withdrawn'), on ? 'raising_hands_3d_default' : 'waving_hand_3d_default');
     } catch (e) {
       const closed = e instanceof ApiErr && e.code === 'closed';
       o.myRequest = on ? null : 'pending';
+      if (on) count('join.fail');
       if (closed) o.recruiting = false;
       say(t(closed ? 'join.closed' : 'common.error'), 'pleading_face_3d');
     }

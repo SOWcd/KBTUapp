@@ -7,6 +7,7 @@
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
+  import { count } from '../../lib/stats';
   import Sheet from '../../ui/Sheet.svelte';
   import Button from '../../ui/Button.svelte';
   import Field from '../../ui/Field.svelte';
@@ -48,7 +49,7 @@
     busy = true; haptic.tap();
     try {
       await answerResearch(current, Object.fromEntries(answers), anonymous, CONSENT);
-      sent = true; answers.clear(); haptic.ok();
+      sent = true; answers.clear(); haptic.ok(); count('do.research');
     } catch (e) {
       haptic.error();
       const code = e instanceof ApiErr ? e.code : null;

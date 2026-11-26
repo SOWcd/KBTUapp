@@ -85,6 +85,20 @@ describe('usage counters', () => {
     expect(sent()).toEqual([{ 'sheet.event': 1, 'uniq.sheet.event': 1 }]);
   });
 
+  it('counts a crash, a failed call and a screen\'s time by class only', async () => {
+    vi.stubGlobal('requestAnimationFrame', (f: () => void) => setTimeout(f, 16));
+    const { count, crashed, timed, flush } = await launch(null);
+    crashed('tab.forum', new TypeError('x of undefined'));
+    crashed('tab.forum', new Error('Failed to fetch dynamically imported module: https://x/Map.js'));
+    crashed('tab.forum', 'weird');
+    crashed('tab.forum', Object.assign(new Error('full'), { code: 'full', data: {} })); // an ApiErr: counted as the call
+    count('api.sheet.pay.network');
+    timed('sheet.event', performance.now() - 300);
+    vi.advanceTimersByTime(40);
+    flush();
+    expect(sent()).toEqual([{ 'js.tab.forum.type': 1, 'js.tab.forum.chunk': 1, 'js.tab.forum.other': 1, 'api.sheet.pay.network': 1, 'tti.sheet.event.ios.2': 1 }]);
+  });
+
   it('a visit over midnight is split between the two days', async () => {
     vi.setSystemTime(noon + 12 * 3600_000 - 10 * MIN); // 23:50 in Almaty
     const store: Record<string, string> = {};

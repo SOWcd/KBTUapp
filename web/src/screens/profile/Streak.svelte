@@ -7,6 +7,8 @@
   import { achItem } from '../../lib/awards';
   import { sheets } from '../../lib/state/sheets';
   import { haptic } from '../../lib/tg';
+  import { count } from '../../lib/stats';
+  import { onMount } from 'svelte';
   import Avatar from '../../ui/Avatar.svelte';
   import Emoji from '../../ui/Emoji.svelte';
 
@@ -16,10 +18,12 @@
   const tier = $derived(now ? Math.min(a.level ?? 0, a.levels.length) : 0);
   // the longest runs first, three at most: the card stays one line on a 320 px phone
   const lit = $derived(friends.filter((f) => (f.streak ?? 0) > 0).sort((x, y) => y.streak! - x.streak!).slice(0, 3));
+  // my own flame drawn, by its tier, once a mount (the counters: which tiers people reach, and who taps it)
+  onMount(() => { if (mine && (now > 0 || lit.length)) count(`streak.t${tier as 0 | 1 | 2 | 3 | 4}`); });
 </script>
 
 {#if now > 0 || lit.length}
-  <button class="streak surface" data-away data-tier={tier} onclick={() => { haptic.tap(); sheets.award(achItem(a), mine); }}
+  <button class="streak surface" data-away data-tier={tier} onclick={() => { haptic.tap(); if (mine) count('streak.tap'); sheets.award(achItem(a), mine); }}
     aria-label={`${t('ach.streak.name')}: ${now} ${tn('streak.weeks', now)}${lit.length ? ` · ${t('streak.friends')}: ${lit.map((f) => f.streak).join(', ')}` : ''}`}>
     <span class="me" class:off={!now}>
       <span class="fl" aria-hidden="true"><Emoji name="fire_3d" size={30} /></span>

@@ -5,5 +5,5 @@ import { server } from './client';
 
 export * from './types';
 export { ApiErr } from './errors';
-export { localize, original, staffEvents, staffOrg, translated } from './client';
+export { localize, onFail, original, staffEvents, staffOrg, translated } from './client';
 export const api = server;

@@ -3,7 +3,7 @@
 import { untrack, type Component } from 'svelte';
 import { haptic, onShareBusy } from '../tg';
 import { t } from '../i18n/index.svelte';
-import { count, type Screen } from '../stats';
+import { count, timed, type Screen } from '../stats';
 import { queue } from '../moments';
 import { switching } from './theme.svelte';
 import { returnToSheet, type SheetKey } from './sheets';
@@ -47,8 +47,9 @@ export interface Overlay { id: number; component: Component<any>; props: Record<
 export const overlays: Overlay[] = $state([]);
 let seq = 0;
 
-/** Same component and entity id return to the live view. A key can distinguish modes or identify a contextual view. */
-export function open<P extends Record<string, unknown>>(component: Component<P>, props: Omit<P, 'overlay'>, stat?: Screen, key?: SheetKey | null): number {
+/** Same component and entity id return to the live view. A key can distinguish modes or identify a contextual view.
+ *  `at`: when it was asked for (a chunk loaded first: the tap's time, openers.ts lazy), for its time to the screen. */
+export function open<P extends Record<string, unknown>>(component: Component<P>, props: Omit<P, 'overlay'>, stat?: Screen, key?: SheetKey | null, at = performance.now()): number {
   const target = (props as Record<string, unknown>).id;
   if (key === undefined && (typeof target === 'string' || typeof target === 'number')) key = target;
   if (key != null) {
@@ -56,7 +57,7 @@ export function open<P extends Record<string, unknown>>(component: Component<P>,
     if (existing != null) return existing;
   }
   const id = ++seq;
-  if (stat) count(stat);
+  if (stat) { count(stat); timed(stat, at); }
   overlays.push({ id, component: component as Component<any>, props, closing: false, stat, key });
   return id;
 }
@@ -88,6 +89,9 @@ export function hideChrome(): () => void {
  *  the policy's gate is down, 600 ms after the last one (lib/moments.ts). A tap or a deep link opens at once. */
 export const moment = queue(() => ui.gate || overlays.some((o) => !o.closing));
 
+/** The screen in front, as the counters name it: the top overlay that has a name, else the tab. */
+export const here = (): Screen => untrack(() => [...overlays].reverse().find((o) => !o.closing && o.stat)?.stat ?? (`tab.${ui.tab}` as const));
+
 export function removeOverlay(id: number): void {
   const i = overlays.findIndex((x) => x.id === id);
   if (i >= 0) overlays.splice(i, 1);
@@ -102,7 +106,7 @@ export function say(text: string, emoji = 'sparkles_3d', undo?: () => void, togg
   // a toast born mid-switch came solid and cleared up after: it waits for the switch to end
   const vt = switching();
   if (vt) { vt.then(() => say(text, emoji, undo, toggle, low)); return; }
-  untrack(() => { if (text === t('common.error')) count(`err.${[...overlays].reverse().find((o) => !o.closing && o.stat)?.stat ?? (`tab.${ui.tab}` as const)}`); });
+  untrack(() => { if (text === t('common.error')) count(`err.${here()}`); });
   toast.text = text; toast.emoji = emoji; toast.undo = undo ?? null; toast.toggle = toggle ?? null; toast.low = low; toast.id++;
   hideToast(undo ? 5000 : 2600); // an Undo stays long enough to reach
 }

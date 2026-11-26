@@ -482,9 +482,9 @@
   </div>
   {#if filtering || coming.length > 1}
     <div class="chips" role="group" aria-label={t('list.f.label')} use:showPicked>
-      {#each chips.types as k (k)}<Chip selected={afishaFilter.type === k} onclick={() => { haptic.select(); pick('type', k); }}>{t(`list.f.${k}`)}</Chip>{/each}
+      {#each chips.types as k (k)}<Chip selected={afishaFilter.type === k} onclick={() => { haptic.select(); count('do.filter'); pick('type', k); }}>{t(`list.f.${k}`)}</Chip>{/each}
       {#if chips.types.length && chips.schools.length}<i class="sep" aria-hidden="true"></i>{/if}
-      {#each chips.schools as s (s)}<Chip selected={afishaFilter.school === s} onclick={() => { haptic.select(); pick('school', s); }}>{schoolName(s)}</Chip>{/each}
+      {#each chips.schools as s (s)}<Chip selected={afishaFilter.school === s} onclick={() => { haptic.select(); count('do.filter'); pick('school', s); }}>{schoolName(s)}</Chip>{/each}
     </div>
   {/if}
   {#if filtering && !matched}
@@ -543,7 +543,7 @@
   {#if past.length}
     <!-- what happened on campus: the last month's events, newest first, the ones I was at marked (their albums, my
          rating); folded into one row until tapped (owner, Nov 15: the main tab is what is ahead) -->
-    <div class="pastrow"><Group><Row title={t('list.past')} value={String(past.length)} accessory="disclosure" open={pastOpen} onclick={() => { haptic.select(); pastOpen = !pastOpen; }} /></Group></div>
+    <div class="pastrow"><Group><Row title={t('list.past')} value={String(past.length)} accessory="disclosure" open={pastOpen} onclick={() => { haptic.select(); pastOpen = !pastOpen; if (pastOpen) count('do.past'); }} /></Group></div>
     {#if pastOpen}
     <div class="past">
       {#each allPast ? past : past.slice(0, 5) as e (e.id)}<EventRow {e} showDate dateLine={dayMonth(e.startsAt)} wasThere />{/each}

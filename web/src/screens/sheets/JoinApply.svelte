@@ -10,6 +10,7 @@
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
+  import { count } from '../../lib/stats';
   import { burst } from '../../ui/burst';
   import Sheet from '../../ui/Sheet.svelte';
   import Button from '../../ui/Button.svelte';
@@ -57,11 +58,13 @@
       Object.assign(o, await api.apply(org, Object.fromEntries(qs.map((q) => [String(q.id), answers[q.id] ?? '']))));
       draft.discard(sentAt);
       data.kept++;
+      count('join.sent');
       haptic.ok(); burst();
       say(phrase('say.applied'), 'raising_hands_3d_default');
       close(overlay.id);
     } catch (x) {
       haptic.error();
+      count('join.fail');
       const code = x instanceof ApiErr ? x.code : '';
       if (code === 'closed' && o) o.recruiting = false;
       say(code === 'closed' ? t('join.closed') : code === 'bad_input' ? t('jr.qsChanged') : t('common.error'), 'warning_3d');

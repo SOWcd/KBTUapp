@@ -84,6 +84,54 @@ def test_web_names_match_the_allowlist():
     assert {"uniq.do.qr", "uniq.tab.club", "sess.6", "time.6"} <= stats.KEYS and "uniq.from.qr" not in stats.KEYS and "sess.7" not in stats.KEYS
 
 
+def test_web_flows_errors_and_timings_match_the_allowlist():
+    web = Path(__file__).parents[2] / "web/src"
+    src = (web / "lib/stats.ts").read_text(encoding="utf-8")
+    names = set(re.findall(r"'((?:signup|paid|post|edit|join|streak)\.[a-z0-9]+)'", src))
+    assert names == {k for k in (*stats.FLOW_KEYS, *stats.STREAK) if k.startswith(("signup.", "paid.", "post.", "edit.", "join.", "streak."))}
+    union = lambda name: re.findall(r"'([a-z_]+)'", re.search(rf"type {name} = (.*?);", src, re.S).group(1))  # noqa: E731
+    assert tuple(union("JsKind")) == stats.JS_KINDS and tuple(union("ApiKind")) == stats.API_KINDS
+    codes = re.search(r"interface ApiError \{ error: (.*?);", (web / "lib/api/types.ts").read_text(encoding="utf-8")).group(1)
+    assert set(re.findall(r"'([a-z_]+)'", codes)) == set(stats.API_KINDS) - {"network", "server"}  # the server's codes, all of them
+    assert len(re.search(r"TTI_EDGES = \[(.*?)\]", src).group(1).split(",")) + 1 == len(stats.TTI)
+    for steps, ends in stats.FUNNELS.values():                              # every step is a key someone can count
+        assert all(k in stats.KEYS or k.startswith("andr.") for k in (*steps, *ends))
+
+
+def test_errors_timings_and_flows_counted_by_class_only(env):
+    c, _ = env
+    stats._spent.clear()
+    con = db.connect(DB[0])
+    post(c, 9, {"tti.sheet.event.ios.2": 1, "tti.tab.forum.android.5": 3, "js.tab.forum.type": 1, "api.sheet.pay.network": 2,
+                "signup.tap": 1, "post.drop": 1, "streak.t2": 1, "do.share": 1,
+                "js.tab.forum.Cannot read properties": 1, "api.sheet.admin.network": 1, "tti.sheet.event.ios.9": 1, "andr.play": 1})
+    assert totals(con) == {"tti.sheet.event.ios.2": 1, "tti.tab.forum.android.5": 3, "js.tab.forum.type": 1, "api.sheet.pay.network": 2,
+                           "signup.tap": 1, "post.drop": 1, "streak.t2": 1, "do.share": 1}  # a message, the admin sheet, a page step: dropped
+
+
+def test_week_digest(env):
+    _, cfg = env
+    con = db.connect(cfg.db_path)
+    con.execute("DELETE FROM usage_days")
+    last = MONDAY - 1
+    con.executemany("INSERT INTO usage_days (day, key, n) VALUES (?, ?, ?)", [
+        (last, "sheet.event", 200), (last, "signup.tap", 50), (last, "signup.done", 40), (last, "signup.fail", 3),
+        (last - 7, "sheet.event", 100), (last - 7, "signup.tap", 40), (last - 7, "signup.done", 36),  # the week before
+        (last, "sheet.map", 12), (last - 7, "sheet.map", 60),
+        (last, "tti.sheet.studio.android.4", 8), (last, "tti.sheet.studio.android.0", 1), (last - 7, "tti.sheet.studio.android.2", 6),
+        (last, "tti.sheet.event.ios.0", 30), (last, "tti.sheet.news.ios.5", 2),   # under 5 samples: not ranked
+        (last, "api.tab.forum.network", 7), (last - 7, "api.tab.forum.network", 2), (last, "do.share", 4),
+        (MONDAY, "sheet.event", 999)])                                      # today isn't a whole day yet
+    w = stats.week(con, MONDAY).split("\n")
+    assert w[0].startswith("📊 ") and all(line[:1] in "📊📈🪜🐢💥🆕 " for line in w)
+    assert "  ▼ sheet.map 12 (−80%)" in w and "  ▲ sheet.event 200 (+100%)" in w
+    assert "  🎟 signup: event 200 → tap 50 (25%) → done 40 (80%) · fail 3 · 🔻event→tap 25%, −15 pts" in w
+    assert "  📮 appeal: —" in w
+    slow = w.index("🐢 Slowest (p75, tap → first frame)")
+    assert w[slow + 1:slow + 3] == ["  sheet.studio android ≤2s (9, was ≤500ms)", "  sheet.event ios ≤100ms (30)"]
+    assert "  api.tab.forum.network 7 (+250%)" in w and w[-1].startswith("🆕 Since Nov 20: share 4 · ")
+
+
 def test_usage_numbers(env):
     c, _ = env
     con = db.connect(DB[0])

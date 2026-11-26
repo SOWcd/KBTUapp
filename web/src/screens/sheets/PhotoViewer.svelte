@@ -103,7 +103,7 @@
   // follows, a tick per photo, a fling coasts and settles), a tap jumps. The centred thumbnail widens to the photo's
   // own shape. Only the ones on screen exist (an album may hold hundreds); every move is a transform.
   const STEP = 32, TH = 40, NARROW = 30; // px: a thumbnail's slot, its height, its width when not centred
-  let pos = $state(untrack(() => start)), fw = $state(0), scrubbing = $state(false), scrubFrom = -1;
+  let pos = $state(untrack(() => start)), fw = $state(0), scrubbing = $state(false), scrubFrom = $state(-1);
   let owned = false, near = -1, swallow = false, raf = 0, vel = 0, lastMv = { x: 0, t: 0 };
   let scrub: { x: number; p: number; id: number; moved: boolean } | null = null;
   const wideOf = (p: AlbumPhoto) => Math.max(22, Math.min(84, p.w && p.h ? (TH * p.w) / p.h : TH));
