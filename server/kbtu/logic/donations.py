@@ -2,7 +2,9 @@
 
 Shown by default (the owner, Nov 26): no answer is shown, name and total; only the donor's own switch hides (the
 latest `sponsor_consents` row: show 0 hides all, show 1 with amount NULL hides the total). Receipts and single
-payments stay private.
+payments stay private. By default only for a donor who gave under a text that says so (BY_DEFAULT): a receipt under
+dn1 said the name is published only on a separate yes, and the Stars invoice and Support page (stars.CONSENT ds1,
+sp.starsData) still say it; those donors stay hidden until their own switch shows them.
 
 Amounts never enter achievement counts: those carry only the tier. Stars' anonymous
 charge table remains the replay guard even after an account and its ledger are erased.
@@ -30,7 +32,11 @@ PENDING_KEEP = 90 * 86400
 MAX_AMOUNT = 100_000_000
 _LAST = "LEFT JOIN sponsor_consents c ON c.id = (SELECT id FROM sponsor_consents WHERE user_id = u.id ORDER BY id DESC LIMIT 1)"
 _NAMES = "u.nick, u.tg_first_name, s.first_name, s.last_name"
-_SHOWN = "(c.id IS NULL OR c.show = 1)"  # over _LAST: no answer, or a show
+# the donation texts that say the name is shown unless hidden (dn2's receipt consent; the creator's own manual rows):
+# a reworded Stars invoice that says so too adds its version here
+BY_DEFAULT = ("dn2", "manual")
+_DEFAULT = f"EXISTS (SELECT 1 FROM donations d WHERE d.user_id = u.id AND d.consent IN ({', '.join(repr(x) for x in BY_DEFAULT)}))"
+_SHOWN = f"((c.id IS NULL AND {_DEFAULT}) OR c.show = 1)"  # over _LAST: no answer and shown by default, or a show
 
 
 def tier(amount: int) -> int:
@@ -44,6 +50,11 @@ def total(con, uid: int) -> int:
 def public(con, uid: int) -> bool:
     return bool(one(con, f"""SELECT 1 FROM users u {_LAST} WHERE u.id = ? AND u.tg_id > 0
         AND u.banned_at IS NULL AND {_SHOWN}""", uid))
+
+
+def _named(con, uid: int, last) -> bool:
+    """The name on the list as things stand: the latest answer, else the default its donations' texts gave."""
+    return bool(last["show"]) if last else bool(one(con, f"SELECT {_DEFAULT} FROM users u WHERE u.id = ?", uid)[0])
 
 
 def owner(con, v: Viewer) -> bool:
@@ -73,7 +84,7 @@ def mine(con, v: Viewer) -> dict:
     with tx(con, write=False):
         amount = total(con, v.id)
         consent = one(con, "SELECT * FROM sponsor_consents WHERE user_id = ? ORDER BY id DESC LIMIT 1", v.id)
-        show = not consent or bool(consent["show"])
+        show = _named(con, v.id, consent)
         return {"total": amount, "tier": tier(amount), "thresholds": TIERS, "starRate": STAR_KZT,
                 "version": CONSENT, "amountVersion": AMOUNT_CONSENT, "receiptConsent": RECEIPT_CONSENT,
                 "show": show, "showAmount": show and (not consent or consent["amount"] is not None),
@@ -104,7 +115,7 @@ def answer(con, v: Viewer, payer: int, body: dict, field: str = "show") -> dict:
         if not one(con, "SELECT 1 FROM users WHERE id = ? AND tg_id = ? AND banned_at IS NULL", v.id, payer):
             raise ApiError("forbidden")
         last = one(con, "SELECT * FROM sponsor_consents WHERE user_id = ? ORDER BY id DESC LIMIT 1", v.id)
-        named = not last or bool(last["show"])
+        named = _named(con, v.id, last)
         if on:
             if body.get("consent") != version or not (body.get("rev") is None or type(body["rev"]) is int):
                 raise ApiError("bad_input", "consent")
