@@ -618,13 +618,14 @@
   .hero::before { content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none; opacity: var(--halo);
     box-shadow: 0 0 14px 0 var(--c, transparent), 0 16px 38px -10px var(--c, transparent); animation: bloom 2.2s var(--ease) 0.2s backwards; }
   /* the halo always shows against the theme (owner: a pale cover's light vanished on the light ground): the cover's hue,
-     but at least this much colour, lifted on black and deepened on light. Where relative colour isn't known (older
-     iOS) none of it applies and the cover's own colour stays */
+     lifted on black and deepened on light, its colour strengthened in proportion (owner: a cream cover glowed yellow
+     when a floor of colour was forced onto its near-grey). Where relative colour isn't known (older iOS) none of it
+     applies and the cover's own colour stays */
   :global(:root[data-theme='light']) .hero { --halo: 0.5; }
   @supports (color: oklch(from red l c h)) {
     .hero::before { box-shadow: 0 0 14px 0 var(--cg), 0 16px 38px -10px var(--cg); }
-    .hero { --cg: oklch(from var(--c, transparent) max(l, 0.66) max(c, 0.14) h); }
-    :global(:root[data-theme='light']) .hero { --halo: 0.62; --cg: oklch(from var(--c, transparent) min(l, 0.58) max(c, 0.16) h); }
+    .hero { --cg: oklch(from var(--c, transparent) max(l, 0.66) min(calc(c * 2.5), 0.2) h); }
+    :global(:root[data-theme='light']) .hero { --halo: 0.62; --cg: oklch(from var(--c, transparent) min(l, 0.58) min(calc(c * 2.5), 0.2) h); }
   }
   @keyframes bloom { from { opacity: 0; } 40% { opacity: calc(var(--halo) * 1.5); } }
   .art, .shade, .rim { position: absolute; inset: 0; }
