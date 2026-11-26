@@ -423,7 +423,7 @@
   .greeting b { font-weight: 600; }
   /* Fable's two tones: the words round the name quieter, the name itself in full */
   .greeting.named { color: var(--text-2); }
-  .greeting.named b { color: var(--text); }
+  .greeting.named .w:has(b) { color: var(--text); } /* the name's whole word, its "!" with it */
   /* the greeting's calm entrance (Fable's): each word rises out of its own mask on a long ease-out, a slow beat after
      the last, no overshoot (the padding keeps descenders and the bold's side bearings inside the mask; the margins take it back) */
   .greeting .w { display: inline-block; overflow: hidden; vertical-align: top; max-width: 100%; padding: 0 0.06em 0.14em; margin: 0 -0.06em -0.14em; }
