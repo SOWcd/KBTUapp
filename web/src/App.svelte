@@ -81,7 +81,7 @@
   // a club's Studio pane and its Team are chunks: fetch them ahead, so they open in the tap's frame;
   // the Feed, News, Friends and the settings list too (pages once, sheets now), so they open in the tap's frame
   $effect(() => { if (data.events.some((e) => e.teamMax) || data.past.some((e) => e.teamMax)) void eventTeamChunk().catch(() => {}); });
-  const warmPages = () => { [chunks.feed, chunks.news, chunks.clubList, chunks.friends, settingsList, chunks.people, chunks.photos, chunks.album, chunks.gallery].forEach(warm); if (session.me?.bigScreen) warm(chunks.screen); if (!session.me?.memberships.length) return; warm(chunks.studio); warm(chunks.team); };
+  const warmPages = () => { [chunks.feed, chunks.news, chunks.friends, settingsList, chunks.people, chunks.photos, chunks.album, chunks.gallery].forEach(warm); if (session.me?.bigScreen) warm(chunks.screen); if (!session.me?.memberships.length) return; warm(chunks.studio); warm(chunks.team); };
   // the forum's chunk and its feed with the app, so the tab opens full (the speed rule)
   const warmChannel = () => { if (!session.channel) return; void loadPage('forum').catch(() => {}); warmChannelFeeds(); warm(chunks.research); warm(chunks.researchForm); warm(chunks.researchPropose); };
   // the subjects' list with the app (the Forum tab's row, my timetable's classes open their card in the tap's frame)
