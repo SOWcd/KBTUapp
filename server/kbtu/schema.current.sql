@@ -1736,6 +1736,7 @@ CREATE UNIQUE INDEX roster_pending_door_key ON roster_pending(door_key);
 CREATE INDEX round_apps_by_user ON round_apps (user_id);
 CREATE INDEX slots_by_round ON round_slots(round_id, starts_at);
 CREATE UNIQUE INDEX one_live_round ON rounds(org_id) WHERE status != 'done';
+CREATE INDEX rounds_by_org ON rounds(org_id, status);
 CREATE INDEX santa_msgs_giver ON santa_msgs (giver_id);
 CREATE INDEX santa_msgs_thread ON santa_msgs (event_id, giver_id, to_id);
 CREATE INDEX santa_msgs_to ON santa_msgs (to_id);
