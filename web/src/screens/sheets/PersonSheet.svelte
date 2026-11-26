@@ -7,6 +7,7 @@
   import UserRound from '@lucide/svelte/icons/user-round';
   import CalendarPlus from '@lucide/svelte/icons/calendar-plus';
   import Hero from '../profile/Hero.svelte';
+  import Streak from '../profile/Streak.svelte';
   import Medal from '../../ui/Medal.svelte';
   import Pin from '../../ui/Pin.svelte';
   import Button from '../../ui/Button.svelte';
@@ -194,7 +195,10 @@
     <!-- everything they have earned, right under the card: achievements with their level, then badges; what they haven't earned yet stays on their own Awards page -->
     {@const earned = showcaseFirst(p.awards.achievements.filter((a) => a.level > 0), (a) => a.code)}
     {@const badges = showcaseFirst(p.awards.badges, (b) => 'b' + b.eventId)}
+    {@const streak = p.awards.achievements.find((a) => a.code === 'streak')}
     <div class="below">
+      <!-- their weeks in a row: the server sends the run to friends only -->
+      {#if streak?.now}<Streak a={streak} mine={me} />{/if}
       {#if p.going.length}
         <Section title={t('person.goes')}>
           <div class="going">{#each p.going as e (e.id)}<EventRow {e} />{/each}</div>

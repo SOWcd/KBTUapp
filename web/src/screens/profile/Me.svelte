@@ -44,6 +44,7 @@
   import { myShown } from '../../lib/state/looks.svelte';
   import { isArchived } from '../../lib/awards';
   import Invite from './Invite.svelte';
+  import Streak from './Streak.svelte';
   import AppCard from './AppCard.svelte';
   import Button from '../../ui/Button.svelte';
   import IconButton from '../../ui/IconButton.svelte';
@@ -68,6 +69,7 @@
 
   // the Friends row: a few faces, how many, and the requests waiting (the tab's dot too)
   const friends = $derived(data.friends?.friends ?? []);
+  const streak = $derived(card?.awards.achievements.find((a) => a.code === 'streak'));
   const asked = $derived(me?.counters.friendRequests ?? 0);
   // the faces' cluster: [width, left, top] in % of its box (132 × 104; ~130 px wide on a phone, so a face is ~1.3 × width px), the first face the biggest, the rest around it
   // packed so seventeen faces fill the box without holes (as many faces as fit, the whole tile above its name); fewer friends take the biggest
@@ -285,6 +287,8 @@
     <!-- my photo: settings, or in them the photo's menu at it -->
     {#if shown}<div class="lift" bind:this={lift}><Hero p={shown} qr={me.qr} live={ui.tab === 'profile'}
       onphoto={(el) => { if (phase === 'idle') enter(); else if (phase === 'on' && !edit) list?.photoMenu(el); }} /></div>{/if}
+    <!-- my weeks in a row, my friends' beside it (both already loaded with the app) -->
+    {#if rest && streak}<Streak a={streak} mine {friends} />{/if}
     <!-- two squares: my friends as a cluster of faces, and my invite -->
     {#if rest}<div class="duo" data-away>
       <button class="sq fr surface" onclick={() => { haptic.tap(); sheets.friends(); }} aria-label={asked ? `${t('page.friends')}, ${t('fr.requests')}: ${asked}` : t('page.friends')}>

@@ -880,8 +880,9 @@ export interface PersonCard extends PersonRef {
 }
 
 /** A friend, or a person in a friend request, on the Friends page. `fullName`: the full one for friends only (§3), the
- *  short one in a request. `at`: friends since, or when the request was made. */
-export interface FriendRow { person: PersonRef; fullName: string; course: number | null; school: string | null; at: Ts }
+ *  short one in a request. `at`: friends since, or when the request was made. `streak`: a friend's current weeks in a
+ *  row (0: none; never on a request). */
+export interface FriendRow { person: PersonRef; fullName: string; course: number | null; school: string | null; at: Ts; streak?: number }
 /** The Friends page (§4.7): requests both ways, and the coming events friends go to (only those who let friends see
  *  it; each card's `friends` says who). A quietly declined request of mine stays in `outgoing` for 30 days. */
 /** People you may know: a clubmate who turned it on too; `clubs` is how many we share, never which (server logic/pymk.py). */

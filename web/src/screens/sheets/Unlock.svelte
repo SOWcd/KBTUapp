@@ -19,6 +19,8 @@
   const GLOW = ['#7C4DFF', '#E0A06A', '#C8D2E6', '#FFD45E', '#B07CFF']; // one-level, bronze, silver, gold, legend
   const glow = $derived(a.levels.length > 1 ? GLOW[metalOf(a.level, a.levels.length) + 1] : GLOW[0]);
   const tier = $derived(a.levels.length > 1 ? tierName(a) : '');
+  // a new streak tier is a moment to be proud of: a warm word instead of the rule it took
+  const cheer = $derived(a.code === 'streak' && a.level > 0 ? t(`ach.streak.cheer.${Math.min(a.level, 4)}` as 'ach.streak.cheer.1') : '');
   const rare = $derived.by(() => { const x = a.levels[Math.max(0, a.level - 1)]?.rarity ?? a.rarity; return x > 0 && x < 0.01 ? '<1' : String(Math.round(x * 100)); });
   $effect(() => { overlay.title = t('unlock.kicker'); overlay.icon = Trophy; });
 
@@ -64,7 +66,7 @@
   {#if tier}<p class="tier up">{t('aw.level', { tier })}</p>{/if}
   <h2 class="name up">{achName(a)}</h2>
   {#if a.variant}<p class="tier up">{variantName(a.code, a.variant)}</p>{/if}
-  <p class="how up">{achHow(a)}</p>
+  <p class="how up">{cheer || achHow(a)}</p>
   <p class="rare up">{t('person.rarity', { p: rare })}</p>
   <div class="acts up">
     <button class="pill glass glass-pill main" use:glass disabled={sharing} onclick={share}>{t('aw.share')}</button>
