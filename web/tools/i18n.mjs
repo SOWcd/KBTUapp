@@ -43,7 +43,7 @@ for (const f of files) if (!f.at.has(after)) fail(`${after} is not in ${f.l}.ts`
 
 for (const f of files) {
   let i = f.at.get(after);
-  while (!f.lines[i].trimEnd().endsWith(',') && i < f.lines.length - 1) i++; // an entry spread over lines
+  while (!/,\s*(\/\/[^'"]*)?$/.test(f.lines[i]) && i < f.lines.length - 1) i++; // an entry spread over lines; a trailing // comment is fine
   f.lines.splice(i + 1, 0, `  '${key}': ${JSON.stringify(opt[f.l])},`);
 }
 for (const f of files) writeFileSync(new URL(`${f.l}.ts`, dir), f.lines.join('\n'));
