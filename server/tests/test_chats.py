@@ -231,7 +231,7 @@ def test_event_chat_paste(env):
         assert put(20, bad).status_code == 400
     con.execute("UPDATE events SET chat_id = -100, chat_token = 'tok' WHERE id = ?", (e["id"],))
     assert put(20, "https://t.me/joinchat/AbCdEfGh123").json() == {"chat": "https://t.me/+AbCdEfGh123"}
-    assert con.execute("SELECT chat_id, chat_token FROM events WHERE id = ?", (e["id"],)).fetchone() == (None, None)
+    assert tuple(con.execute("SELECT chat_id, chat_token FROM events WHERE id = ?", (e["id"],)).fetchone()) == (None, None)
     assert seen(20) == "https://t.me/+AbCdEfGh123" and seen(21) is None           # the organizer; not yet going
     assert c.post(f"/api/events/{e['id']}/registration", headers=tma(21)).status_code == 200
     assert seen(21) == "https://t.me/+AbCdEfGh123" and seen(22) is None           # going; a stranger never
