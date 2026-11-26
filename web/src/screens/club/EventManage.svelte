@@ -27,6 +27,7 @@
   import { t, money, placeOf } from '../../lib/i18n/index.svelte';
   import { relDay, time, nowTs, dayNo, dayMonthShort } from '../../lib/time';
   import { haptic, openLink } from '../../lib/tg';
+  import { count } from '../../lib/stats';
   import Notice from '../../ui/Notice.svelte';
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import { inner, may } from '../../lib/perms';
@@ -161,6 +162,7 @@
     haptic.tap();
     const link = await sheets.askText({ title: t('chat.paste'), text: t('chat.pasteText'), placeholder: 't.me/+AbCdEf…', value: chat ?? '', max: 200, line: true, ok: t('common.save'), cancel: t('common.cancel') });
     if (!link || link === chat) return;
+    count('do.chatlink');
     await saveChat(link, t('chat.saved'));
   }
   async function dropChat() {

@@ -1,7 +1,12 @@
-"""Anonymous usage counters: what students open, what nobody opens, how long the app takes to open. One table of daily
-totals, (day, key, n), with no person in it (no user id, Telegram id, hash, IP or session); that is what keeps it out
-of the privacy policy. The app sends batches (web/src/lib/stats.ts). The owner reads the totals with `admin stats-usage`."""
+"""Anonymous usage counters: what students open, what nobody opens, how long the app and each screen take to open, where
+people drop out of the key flows, which errors they hit (by class only). One table of daily totals, (day, key, n), with
+no person in it (no user id, Telegram id, hash, IP or session); that is what keeps it out of the privacy policy. The app
+sends batches (web/src/lib/stats.ts). The owner reads the totals with `admin stats-usage` and the week's changes with
+`admin stats-week`."""
 from __future__ import annotations
+
+import math
+import time
 
 from ..db import maybe
 from . import core
@@ -12,8 +17,12 @@ from .core import one, rows
 SCREENS = ("tab.afisha", "tab.forum", "tab.club", "tab.profile",
            "sheet.event", "sheet.club", "sheet.ticket", "sheet.person", "sheet.friends", "sheet.compose", "sheet.comments",
            "sheet.map", "sheet.week", "sheet.awards", "sheet.studio", "sheet.news", "sheet.feed", "sheet.assistant",
-           "sheet.scanner", "sheet.doorpeople", "sheet.attendees", "sheet.manage", "sheet.editor", "sheet.team", "sheet.member", "sheet.joininbox")
-ACTIONS = ("do.signup", "do.follow", "do.forum", "do.casting", "do.qr", "do.donate")
+           "sheet.scanner", "sheet.doorpeople", "sheet.attendees", "sheet.manage", "sheet.editor", "sheet.team", "sheet.member", "sheet.joininbox",
+           "sheet.pay", "sheet.people", "sheet.sponsors", "sheet.teams")
+# what shipped since Nov 20, each counted where it's used (the second row on): `stats-week` shows them as "new"
+NEW_ACTIONS = ("do.coming", "do.heart", "do.comment", "do.research", "do.pymk", "do.pymkon", "do.share", "do.filter", "do.past",
+               "do.calendar", "do.photo", "do.helpus", "do.anon", "do.chatlink", "do.kri")
+ACTIONS = ("do.signup", "do.follow", "do.forum", "do.casting", "do.qr", "do.donate", *NEW_ACTIONS)
 SOURCES = ("from.none", "from.event", "from.club", "from.friend", "from.qr", "from.other")  # the startapp's class, never its value
 # the appeals' funnel (logic/appeals.py): opened the composer, started typing, asked the AI, sent, closed without
 # sending, deleted one; counts only, never a word (the draft stays on the phone)
@@ -27,12 +36,32 @@ ANDROID_APP = ("andr.sheet", "andr.go")
 ANDROID_PAGE = ("page", "join", "optin", "play", "retry")
 ANDROID = (*ANDROID_APP, *(f"andr.{k}" for k in ANDROID_PAGE))
 PAGE_CAP = 5000  # a key's day ceiling for the signed-out page: far above real use, so a script can't run it up
+# the key flows, step by step (each step's key in order), then what ends one short: where people drop, counts only
+FUNNELS = {
+    "signup": (("sheet.event", "signup.tap", "signup.done"), ("signup.fail",)),     # a free or paid event's Going
+    "paid": (("sheet.pay", "paid.file", "paid.sent"), ("paid.fail", "paid.bot")),    # the receipt, here or by the bot
+    "post": (("post.open", "post.typed", "post.sent"), ("post.fail", "post.drop")),  # a new forum post
+    "edit": (("edit.open", "edit.saved"), ("edit.fail",)),                           # my live post edited
+    "join": (("sheet.club", "join.tap", "join.sent"), ("join.fail",)),               # applying to a club
+    "android": (("andr.sheet", "andr.go", "andr.page", "andr.join", "andr.optin", "andr.play"), ("andr.retry",)),  # app, then page
+    "appeal": (("apl.open", "apl.typed", "apl.sent"), ("apl.ai", "apl.drop")),
+}
+STREAK = (*(f"streak.t{i}" for i in range(5)), "streak.tap")  # my flame drawn, by its tier (0..4), and tapped
+JS_KINDS = ("type", "ref", "range", "syntax", "chunk", "other")  # an uncaught error's class, never its message
+API_KINDS = ("network", "server", "unauthorized", "need_student", "forbidden", "not_found", "full", "closed", "conflict",
+             "guest_list", "rate_limited", "bad_input", "unavailable")  # a failed call: no answer, a 5xx, or the server's code
 PLATFORMS = ("ios", "android", "desktop", "web")
 BUCKETS = ("≤1", "≤2", "≤3", "≤5", "≤8", "8+")  # seconds from navigation start to the first useful paint
+TTI = ("≤100ms", "≤250ms", "≤500ms", "≤1s", "≤2s", "2s+")  # a tab's or a sheet's tap to its first frame
 SESSIONS = ("≤30s", "≤1m", "≤3m", "≤5m", "≤10m", "≤20m", "20m+")  # one visit's visible time, ended by 30 s or more hidden
 DAY_TIMES = ("≤1m", "≤5m", "≤10m", "≤20m", "≤40m", "≤60m", "60m+")  # one device's visible time over a calendar day
 USES = (*SCREENS, *ACTIONS)  # uniq.<key>: at most once a day per device (a flag kept on the device), for "N% of those active used it"
-KEYS = frozenset((*SCREENS, *ACTIONS, *SOURCES, *APPEALS, *HERO, *ANDROID_APP,*(f"err.{s}" for s in SCREENS), *(f"uniq.{k}" for k in USES),
+FLOW_KEYS = tuple(k for steps, ends in FUNNELS.values() for k in (*steps, *ends))
+KEYS = frozenset((*SCREENS, *ACTIONS, *SOURCES, *APPEALS, *HERO, *ANDROID_APP, *STREAK,
+                  *(k for k in FLOW_KEYS if not k.startswith("andr.")),  # the page's own come by page_hit only
+                  *(f"err.{s}" for s in SCREENS), *(f"uniq.{k}" for k in USES),
+                  *(f"js.{s}.{k}" for s in SCREENS for k in JS_KINDS), *(f"api.{s}.{k}" for s in SCREENS for k in API_KINDS),
+                  *(f"tti.{s}.{p}.{b}" for s in SCREENS for p in PLATFORMS for b in range(len(TTI))),
                   *(f"open.{p}.{b}" for p in PLATFORMS for b in range(len(BUCKETS))),
                   *(f"sess.{b}" for b in range(len(SESSIONS))), *(f"time.{b}" for b in range(len(DAY_TIMES)))))
 ONE_A_BATCH = ("open.", "uniq.", "sess.", "time.")  # samples, not taps
@@ -40,7 +69,7 @@ ONE_A_BATCH = ("open.", "uniq.", "sess.", "time.")  # samples, not taps
 KEEP_DAYS = 180
 WINDOW = 30  # what `visits` keeps
 MAX_IN_BATCH = 30   # of one key in one batch
-BATCH_COST, DAY_BUDGET = 5, 600  # one person's whole day: far above a real one, so one client can't skew the totals much
+BATCH_COST, DAY_BUDGET = 5, 1500  # one person's whole day: far above a real one, so one client can't skew the totals much
 # ponytail: per worker and in memory only (user id -> counts spent today, never stored), so the ceiling is the budget
 # times WEB_CONCURRENCY; a shared table would put a person into this feature's data, the one thing it must not have
 _spent: dict[int, int] = {}
@@ -147,3 +176,73 @@ def fields(con, days: int, upto: int | None = None) -> dict:
             "hero": "\n".join(f"{k} {got.get(f'hero.tap.{k}', 0)}/{got.get(f'hero.show.{k}', 0)}" for k in HERO_KINDS),
             "android": " → ".join(f"{k[5:]} {got.get(k, 0)}" for k in ANDROID),
             "opens": "\n".join(opens) or "—"}
+
+
+# ---- the weekly digest (`admin stats-week`): the last 7 whole days against the 7 before ----
+FLOW_MARK = {"signup": "🎟", "paid": "💳", "post": "✍️", "edit": "✏️", "join": "🤝", "android": "🤖", "appeal": "📮"}
+TAPS = tuple(dict.fromkeys((*SCREENS, *ACTIONS, *SOURCES, *HERO, *FLOW_KEYS, *STREAK)))  # compared week on week (no samples)
+MOVED_FLOOR = 10  # a key under this in both weeks is noise, not a change
+
+
+def _sums(con, lo: int, hi: int) -> dict:
+    return {r[0]: r[1] for r in rows(con, "SELECT key, SUM(n) FROM usage_days WHERE day >= ? AND day < ? GROUP BY key", lo, hi)}
+
+
+def _vs(a: int, b: int) -> str:
+    return "=" if a == b else "new" if not b else f"{'+' if a > b else '−'}{round(abs(a - b) * 100 / b)}%"
+
+
+def _rates(got: dict, steps: tuple) -> list:
+    """Each step's share of the step before it (None: nobody reached the one before)."""
+    return [got.get(b, 0) / got[a] if got.get(a) else None for a, b in zip(steps, steps[1:])]
+
+
+def week(con, upto: int | None = None) -> str:
+    """Short, emoji-led lines for the owner: what moved most, each funnel's biggest drop, the slowest screens, the
+    errors, and how much the newest features are used. `upto`: the day after the week (default today, so whole days)."""
+    upto = _today() if upto is None else upto
+    now, was = _sums(con, upto - 7, upto), _sums(con, upto - 14, upto - 7)
+    date = lambda d: time.strftime("%d %b", time.gmtime(d * 86400))  # noqa: E731  (an Almaty day number's date)
+    active, before = _active(con, upto - 7, upto), _active(con, upto - 14, upto - 7)
+    out = [f"📊 {date(upto - 7)} – {date(upto - 1)}: {active} active ({_vs(active, before)})"]
+
+    moved = [k for k in TAPS if max(now.get(k, 0), was.get(k, 0)) >= MOVED_FLOOR]
+    moved.sort(key=lambda k: -abs(math.log((now.get(k, 0) + 5) / (was.get(k, 0) + 5))))
+    out.append("📈 Moved most")
+    out += [f"  {'▲' if now.get(k, 0) >= was.get(k, 0) else '▼'} {k} {now.get(k, 0)} ({_vs(now.get(k, 0), was.get(k, 0))})" for k in moved[:6]] or ["  —"]
+
+    out.append("🪜 Funnels (step's share of the one before; 🔻 the biggest drop, pts vs the week before)")
+    short = lambda k: k.split(".", 1)[1]  # noqa: E731
+    for name, (steps, ends) in FUNNELS.items():
+        if not any(now.get(k) for k in steps):
+            out.append(f"  {FLOW_MARK[name]} {name}: —")
+            continue
+        rate, old = _rates(now, steps), _rates(was, steps)
+        chain = f"{short(steps[0])} {now.get(steps[0], 0)}" + "".join(
+            f" → {short(s)} {now.get(s, 0)}" + (f" ({round(100 * r)}%)" if r is not None else "") for s, r in zip(steps[1:], rate))
+        tail = "".join(f" · {short(k)} {now[k]}" for k in ends if now.get(k))
+        seen = [(r, i) for i, r in enumerate(rate) if r is not None]
+        if seen:
+            r, i = min(seen)
+            pts = f", {'+' if r >= old[i] else '−'}{round(abs(r - old[i]) * 100)} pts" if old[i] is not None else ""
+            tail += f" · 🔻{short(steps[i])}→{short(steps[i + 1])} {round(100 * r)}%{pts}"
+        out.append(f"  {FLOW_MARK[name]} {name}: {chain}{tail}")
+    out.append("  🔥 streak: " + " · ".join(f"{short(k)} {now.get(k, 0)}" for k in STREAK))
+
+    slow = []
+    for s in SCREENS:
+        for p in PLATFORMS:
+            bars = [now.get(f"tti.{s}.{p}.{b}", 0) for b in range(len(TTI))]
+            if sum(bars) >= 5:  # fewer samples say nothing
+                old = [was.get(f"tti.{s}.{p}.{b}", 0) for b in range(len(TTI))]
+                p75 = _percentile(bars, .75, TTI)
+                slow.append((-TTI.index(p75), -sum(bars), s, p, p75, _percentile(old, .75, TTI) if sum(old) >= 5 else None))
+    out.append("🐢 Slowest (p75, tap → first frame)")
+    out += [f"  {s} {p} {p75} ({-n}{f', was {o}' if o and o != p75 else ''})" for _, n, s, p, p75, o in sorted(slow)[:6]] or ["  —"]
+
+    errs = sorted((k for k in now if k.startswith(("js.", "api.", "err."))), key=lambda k: -now[k])
+    out.append("💥 Errors (js: a crash, api: a failed call, err: the error toast)")
+    out += [f"  {k} {now[k]} ({_vs(now[k], was.get(k, 0))})" for k in errs[:6]] or ["  —"]
+
+    out.append("🆕 Since Nov 20: " + " · ".join(f"{k[3:]} {now.get(k, 0)}" for k in sorted(NEW_ACTIONS, key=lambda k: -now.get(k, 0))))
+    return "\n".join(out)

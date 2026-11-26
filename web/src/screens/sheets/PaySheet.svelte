@@ -24,6 +24,7 @@
   import { t, money } from '../../lib/i18n/index.svelte';
   import { time, nowTs } from '../../lib/time';
   import { haptic, on } from '../../lib/tg';
+  import { count } from '../../lib/stats';
   import { shrink } from '../../lib/photo';
   import { fmtPhone } from '../../lib/phone';
   import Sheet from '../../ui/Sheet.svelte';
@@ -63,6 +64,7 @@
     const el = ev.currentTarget as HTMLInputElement, file = el.files?.[0];
     el.value = '';
     if (!file) return;
+    count('paid.file');
     if (file.size > 30 * 1024 * 1024) { say(t('ed.photoBig'), 'pleading_face_3d'); return; }
     const job = shrink(file, 2400).then((f) => api.uploadReceipt(id, f)); // a PDF goes as it is (shrink can't draw it); OCR wants the detail
     going.set(id, job);
@@ -73,11 +75,13 @@
     try {
       const c = await job;
       if (owner.get(id) !== me) return;
+      count('paid.sent');
       put(c);
       if (c.my?.receiptFlags?.length) haptic.warn(); // the sheet now says why
       else paid();
     } catch (x) {
       if (owner.get(id) !== me) return;
+      count('paid.fail');
       haptic.error();
       say(x instanceof ApiErr && x.code === 'closed' ? t('pay.expired') : x instanceof ApiErr && x.code === 'rate_limited' ? t('pay.tooMany') : x instanceof ApiErr && x.message === 'not_receipt' ? t('pay.notReceipt') : x instanceof ApiErr && x.code === 'bad_input' ? t('ed.photoBad') : t('common.error'), 'warning_3d');
     } finally { busy = false; if (going.get(id) === job) going.delete(id); }
@@ -90,7 +94,7 @@
     if (busy || document.hidden || eventById(id)?.my?.status !== 'hold') return;
     try {
       const x = await api.event(id);
-      if (x.my?.status === 'going') { put(x); paid(); }
+      if (x.my?.status === 'going') { count('paid.bot'); put(x); paid(); }
     } catch { /* offline: the next return checks again */ }
   }
   // the newest sheet for this event answers the upload; one closed before it lands still does if none came after

@@ -7,6 +7,7 @@ import type { Archived, ReportLogEntry, ReportMarkPatch, ReviewReason, SantaChat
 import type { Graph } from '../route';
 import { splitVariants } from '../awards';
 import { ApiErr } from './errors';
+import type { ApiKind } from '../stats';
 import { sheets } from '../state/sheets';
 import { tg } from '../tg';
 import { accountClosed, accountRequest } from '../state/recovery';
@@ -60,6 +61,9 @@ const staffOf = (method: string, path: string, event?: Id): Record<string, strin
   return {};
 };
 
+/** told of each failed call by its class only (App counts it against the screen in front, lib/stats.ts) */
+export const onFail: { fn: ((kind: ApiKind) => void) | null } = { fn: null };
+
 async function call<T>(method: string, path: string, body?: unknown, staffEvent?: Id): Promise<T> {
   if (accountClosed()) throw new ApiErr('forbidden', 'init_data');
   const account = accountRequest();
@@ -94,6 +98,7 @@ async function call<T>(method: string, path: string, body?: unknown, staffEvent?
     r = await p;
     if (r.status !== 204) data = await r.json().catch(() => null);
   } catch {
+    if (!account.aborted) onFail.fn?.('network');
     throw new ApiErr('unavailable', 'network');
   } finally {
     if (fallback && timeout) {
@@ -109,6 +114,7 @@ async function call<T>(method: string, path: string, body?: unknown, staffEvent?
   if (r.status === 403 && (data as ApiError | null)?.message === 'banned') dispatchEvent(new CustomEvent('kb:banned', { detail: data }));
   // held for the policy in force: the gate asks now, in place (App: sheets.consent), never on opening the app
   if (!r.ok && (data as ApiError | null)?.error === 'forbidden' && (data as ApiError | null)?.message === 'consent') sheets.consent();
+  if (!r.ok) onFail.fn?.(r.status >= 500 ? 'server' : (data as ApiError | null)?.error ?? 'unavailable');
   if (!r.ok) throw new ApiErr((data as ApiError | null)?.error ?? 'unavailable', (data as ApiError | null)?.message || undefined, (data as Record<string, unknown> | null) ?? {});
   // an event the creator made in the Studio: its routes go as the club's from here on
   if (staffOrg.full && method === 'POST' && path === `/orgs/${staffOrg.id}/events`) staffOrg.events.add((data as { id: Id }).id);

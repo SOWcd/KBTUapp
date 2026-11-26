@@ -3,7 +3,7 @@
   // top, the nav at the bottom, one overlay stack for sheets. Telegram's Back button closes the top overlay.
   import { onMount, untrack, type Component } from 'svelte';
   import { setLucideProps } from '@lucide/svelte/context';
-  import { ui, TABS, overlays, open, close, say, moment, backTo, goTab, type Tab } from './lib/state/ui.svelte';
+  import { ui, TABS, overlays, open, close, say, moment, backTo, goTab, here, type Tab } from './lib/state/ui.svelte';
   import { native, nativeTabs, nativeTickets } from './lib/native';
   import { may } from './lib/perms';
   import { fresh } from './lib/state/assistant.svelte';
@@ -25,7 +25,7 @@
   import { classesLeft } from './lib/classes';
   import { backButton, haptic, inTelegram, on, onAndroid, onComputer, onIos, openLink, requestWriteAccess, tg } from './lib/tg';
   import { deskRegistry } from './lib/desk';
-  import { api, ApiErr, localize } from './lib/api';
+  import { api, ApiErr, localize, onFail } from './lib/api';
   import { dayNo, nowTs, time, at } from './lib/time';
   import LoaderCircle from '@lucide/svelte/icons/loader-circle';
   import Ban from '@lucide/svelte/icons/ban';
@@ -42,7 +42,7 @@
   import { warmMap } from './lib/map';
   // after lib/map: imported before it, the map's place names (i18n/spots) became a chunk of their own at the start
   import { chunks, dropLazy, lazy, openCheckin, openDeepLink, warm } from './lib/state/openers';
-  import { count, launchedFrom, painted } from './lib/stats';
+  import { count, crashed, failed, launchedFrom, painted, timed } from './lib/stats';
 
   let { standaloneBar: StandaloneBar }: { standaloneBar?: Component<{ back: boolean; tint?: string | null }> } = $props();
   setLucideProps({ size: 22, strokeWidth: 2 }); // stroke 2 everywhere (the design system, Oct 30; was 1.9)
@@ -196,7 +196,17 @@
     // a tab in its own chunk is drawn unseen once the chunk is in (else the first tap would lay it out)
     if (pageReady(k)) draw(); else loadPage(k).then(draw, draw);
   }
-  $effect(() => { count(`tab.${ui.tab}`); });
+  // a tab switched to: its time to the screen (the first one is the app's open time, below)
+  let firstTab = true;
+  $effect(() => {
+    const k = ui.tab, at = performance.now();
+    count(`tab.${k}`);
+    if (firstTab) { firstTab = false; return; }
+    untrack(() => loadPage(k)).then(() => timed(`tab.${k}`, at), () => {});
+  });
+  onFail.fn = (kind) => failed(here(), kind);
+  addEventListener('error', (e) => crashed(here(), e.error ?? e.message));
+  addEventListener('unhandledrejection', (e) => crashed(here(), e.reason));
   // the app's open time ends at the first frame drawn with the first tab built and something to show (the copy or the server)
   let measured = false;
   $effect(() => { if (measured || !built[ui.tab] || !pageReady(ui.tab) || !session.ready || !data.eventsReady) return; measured = true; requestAnimationFrame(() => setTimeout(painted)); });

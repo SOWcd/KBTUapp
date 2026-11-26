@@ -16,6 +16,7 @@
   import { nickName } from '../../lib/i18n/nicks';
   import { broken, type Rule } from '../../lib/forumRules';
   import { haptic, openLink } from '../../lib/tg';
+  import { count } from '../../lib/stats';
   import { ago, nowTs } from '../../lib/time';
   import Sheet from '../../ui/Sheet.svelte';
   import Avatar from '../../ui/Avatar.svelte';
@@ -61,7 +62,7 @@
     try {
       const r = await api.newChannelComment(pid, text);
       items = (items ?? []).map((c) => (c.id === temp.id ? { ...temp, id: r.id, state: r.state } : c));
-      haptic.ok();
+      haptic.ok(); count('do.comment');
       if (r.state === 'held') say(t('fcr.heldSay'), 'thinking_face_3d');
       else if (!closed) { clearTimeout(again); again = setTimeout(load, 22_000); } // one timer, cleared as the sheet closes
     } catch (e) {

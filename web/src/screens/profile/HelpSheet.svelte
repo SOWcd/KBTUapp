@@ -14,6 +14,7 @@
   import { session } from '../../lib/state/session.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic, openLink } from '../../lib/tg';
+  import { count } from '../../lib/stats';
   import { CODE, TALK } from '../../lib/feedback';
   import Sheet from '../../ui/Sheet.svelte';
   import Group from '../../ui/Group.svelte';
@@ -35,7 +36,7 @@
     busy = true;
     try {
       await api.helpOffer(picked, note.trim(), CONSENT);
-      haptic.ok(); say(t('help.sent'), 'raising_hands_3d_default'); close(overlay.id);
+      haptic.ok(); count('do.helpus'); say(t('help.sent'), 'raising_hands_3d_default'); close(overlay.id);
     } catch (e) {
       haptic.error(); say(t(e instanceof ApiErr && e.code === 'rate_limited' ? 'fb.many' : 'common.error'), 'warning_3d');
     }

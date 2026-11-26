@@ -48,6 +48,7 @@
   import { t, tn } from '../../lib/i18n/index.svelte';
   import { nickName } from '../../lib/i18n/nicks';
   import { haptic, inTelegram, on, openLink, shareCard } from '../../lib/tg';
+  import { count } from '../../lib/stats';
   import { phrase, loadResearch } from '../../lib/state/data.svelte';
   import { ago, nowTs } from '../../lib/time';
   import { compact } from '../../lib/chats';
@@ -236,7 +237,7 @@
 
   // an ask for help: "I'm coming" (a confirmed student, as for writing), on at once; time left in the head
   function coming(p: ChannelFeedPost) {
-    haptic.tap();
+    haptic.tap(); count('do.coming');
     const go = () => { void toggleComing(p).catch(fail); };
     if (!me?.student) asStudent(go);
     else if (me.student.manual) sheets.login();
@@ -248,7 +249,7 @@
   }
 
   function heart(p: ChannelFeedPost) {
-    haptic.tap();
+    haptic.tap(); count('do.heart');
     asStudent(() => { void toggleHeart(p).catch((e) => { fail(e); void loadChannel(); }); });
   }
 
@@ -285,7 +286,7 @@
 
   // pass a post on: our bot's card (its opening words, a button into it by id only: never whose), as an event's
   const share = (p: ChannelFeedPost) => {
-    haptic.tap();
+    haptic.tap(); count('do.share');
     shareCard({ kind: 'fp', id: String(p.id) })
       .then((sent) => { if (sent) say(phrase('say.shared'), 'party_popper_3d'); })
       .catch(() => { haptic.error(); say(t('common.error'), 'warning_3d'); });

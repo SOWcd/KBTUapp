@@ -45,6 +45,8 @@
   .venv/bin/python -m kbtu.admin stats                                  usage in numbers (counts only), e.g. for a pitch
   .venv/bin/python -m kbtu.admin stats-usage [days]                     anonymous usage (default 7 days, today included): screens,
                                 sources, errors, open time; the numbers of the Monday message to the creator
+  .venv/bin/python -m kbtu.admin stats-week                             the last 7 whole days against the 7 before: what moved
+                                most, each funnel's biggest drop, the slowest screens, errors, the newest features' use
   .venv/bin/python -m kbtu.admin achstats                               each achievement's counter over the students (counts
                                 only): the share reaching every level and the typical values, to set the levels by
   .venv/bin/python -m kbtu.admin roster load <rows.json> <map.json> | --gz <b64 of gzip {"rows", "map"}>   the clubs' rosters from DMP's sheet (PLAN 95): rows from
@@ -1201,6 +1203,9 @@ def main(args: list[str]) -> None:
                 for uid in to:
                     notify(con, uid, "photo_call", f"ph2:{e['id']}")
         print(f"{e['title']!r}: came and not called yet {len(to)}" + (" (queued)" if args[2:] else " (dry run; --send queues)"))
+    elif cmd == "stats-week" and len(args) == 1:
+        from .logic import stats
+        print(stats.week(con))
     elif cmd == "stats-usage" and len(args) <= 2 and all(a.isdigit() for a in args[1:]):
         from .logic import stats
         print(texts.bot_message("en", "usage_week", **stats.fields(con, int(args[1]) if args[1:] else 7))[0])

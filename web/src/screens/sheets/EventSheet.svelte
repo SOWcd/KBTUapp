@@ -64,6 +64,7 @@
   import { relDay, time, nowTs, dayMonthShort, parts, at, duration, ago, multiDay, daySpan, endTime } from '../../lib/time';
   import Megaphone from '@lucide/svelte/icons/megaphone';
   import { openLink, haptic, shareCard } from '../../lib/tg';
+  import { count } from '../../lib/stats';
   import { sheets, registration } from '../../lib/state/sheets';
   import { coverFor, focusPos } from '../../lib/photo';
   import { nameOf, schoolName, shortOf } from '../../lib/short';
@@ -289,7 +290,7 @@
     let added = 0;
     adding = files.length;
     for (const file of files) {
-      try { detail = await api.addAlbumPhoto(id, await shrink(file)); added++; }
+      try { detail = await api.addAlbumPhoto(id, await shrink(file)); added++; count('do.photo'); }
       catch (err) {
         haptic.error();
         if (err instanceof ApiErr && err.code === 'forbidden') { say(t('album.full'), 'pleading_face_3d'); break; }
@@ -326,6 +327,7 @@
 
   function share() {
     if (!e) return; // the Button gives the tap
+    count('do.share');
     // absolute date: the card is read later, when "tomorrow" is wrong
     shareCard({ kind: 'ev', id: String(id) }).then((sent) => { if (sent) say(phrase('say.shared'), 'party_popper_3d'); })
       .catch(() => { haptic.error(); say(t('common.error'), 'warning_3d'); });
@@ -339,7 +341,7 @@
   const tooled = $derived(!!e && ((crew && (!e.guestHost || head)) || myLink || coCrew || coLead || !!helper));
   function shareMine() {
     if (!e) return;
-    haptic.tap();
+    haptic.tap(); count('do.share');
     shareCard({ kind: 'ev', id: String(id), mine: '1' })
       .then((sent) => { if (sent) say(t('event.myLinkSent'), 'party_popper_3d'); })
       .catch(() => { haptic.error(); say(t('common.error'), 'warning_3d'); });

@@ -26,10 +26,10 @@ const loaded = new Map<() => Promise<unknown>, { default: Component<any> }>();
 // (the promise settles once it's open or given up: a queued moment waits for it, lib/moments.ts)
 export function lazy<P extends Record<string, unknown>>(load: () => Promise<{ default: Component<P> }>, props: Omit<P, 'overlay'>, stat?: Screen, key?: SheetKey | null): Promise<void> {
   if (session.revoked || session.banned) return Promise.resolve();
-  const mine = ++want, got = loaded.get(load);
+  const mine = ++want, got = loaded.get(load), at = performance.now();
   if (got) { open(got.default, props, stat, key); return Promise.resolve(); }
   const slow = setTimeout(() => { if (mine === want) say(t('common.offline'), 'pleading_face_3d'); }, 2000);
-  return load().then((m) => { clearTimeout(slow); loaded.set(load, m); if (mine === want && !session.revoked && !session.banned) open(m.default, props, stat, key); }).catch(() => { clearTimeout(slow); if (mine === want) say(t('common.offline'), 'pleading_face_3d'); });
+  return load().then((m) => { clearTimeout(slow); loaded.set(load, m); if (mine === want && !session.revoked && !session.banned) open(m.default, props, stat, key, at); }).catch(() => { clearTimeout(slow); if (mine === want) say(t('common.offline'), 'pleading_face_3d'); });
 }
 // One full-screen place at a time (owner): the map, the gallery, the feed, all posts. Opening one over another closes
 // that one and whatever was opened over it, so closing the new one lands where the first was opened from.
@@ -130,7 +130,7 @@ export const openers = {
   /** a saved draft as students will see it once it's published: the editor's preview of the draft as the server has it */
   draftPreview: (id: Id): void => void api.event(id).then((e) => sheets.preview({ ...e, status: 'published' }), () => say(t('common.error'), 'warning_3d')),
   ticket: (id: Id) => lazy(chunks.ticket, { id }, 'sheet.ticket'),
-  pay: (id: Id) => lazy(() => import('../../screens/sheets/PaySheet.svelte'), { id }), // a held seat of a paid event: the Kaspi details and the receipt (§4.3)
+  pay: (id: Id) => lazy(() => import('../../screens/sheets/PaySheet.svelte'), { id }, 'sheet.pay'), // a held seat of a paid event: the Kaspi details and the receipt (§4.3)
   receipt: (receipt: AttendeeReceipt, name: string, ondone?: () => void) => lazy(() => import('../../screens/club/ReceiptSheet.svelte'), { receipt, name, ondone }), // the organizer's look at one receipt
   /** an album full screen, from photo `start`; `onremove` takes one out and answers with what is left */
   //   from: the thumbnail it grows out of and shrinks back into (one element, or one per photo: the grid's, the mosaic's)
@@ -210,7 +210,7 @@ export const openers = {
   roundSetup: (org: Id, round?: Round | null, onsaved?: () => void) => lazy(() => import('../../screens/club/RoundSetup.svelte'), { org, round, onsaved }),
   roundBoard: (org: Id) => lazy(() => import('../../screens/club/RoundBoard.svelte'), { org }),
   /** Made together: the screen (at 'support': opened at its Support section); my own "name me?" sheet */
-  credits: (at?: 'support') => lazy(chunks.people, { at }),
+  credits: (at?: 'support') => lazy(chunks.people, { at }, at ? 'sheet.sponsors' : 'sheet.people'),
   creditAsk: () => lazy(() => import('../../screens/profile/CreditAsk.svelte'), {}),
   /** students make the app: the ways to help and the signed offer; what is wrong (anonymous or in Telegram); the admin's list of both */
   helpUs: () => asStudent(() => lazy(chunks.help, {})),
@@ -332,12 +332,12 @@ export const openers = {
   /** a captain's invite link (startapp=et_<token>): the team, one tap to join */
   teamInvite: (token: string) => asStudent(() => lazy(() => import('../../screens/sheets/TeamInviteSheet.svelte'), { token }), `et_${token}`),
   /** the organizer's teams: every team, those with none, Form teams */
-  teams: (id: Id) => lazy(() => import('../../screens/club/TeamsSheet.svelte'), { id }),
+  teams: (id: Id) => lazy(() => import('../../screens/club/TeamsSheet.svelte'), { id }, 'sheet.teams'),
   bracket: (id: Id, manage: boolean, seed: EventBracket, onchange: (b: EventBracket) => void) =>
-    lazy(() => import('../../screens/sheets/BracketSheet.svelte'), { id, manage, seed, onchange }, undefined, `${id}:${!!manage}`),
+    lazy(() => import('../../screens/sheets/BracketSheet.svelte'), { id, manage, seed, onchange }, 'sheet.teams', `${id}:${!!manage}`),
   /** a team event's group stage: the tables and matches for everyone; manage: the organizers' draw and scores; seed: already loaded; onchange: the opener's copy follows */
   groups: (id: Id, manage?: boolean, seed?: EventGroups, onchange?: (g: EventGroups) => void, replacesBracket?: boolean) =>
-    lazy(() => import('../../screens/sheets/GroupsSheet.svelte'), { id, manage, seed, onchange, replacesBracket }, undefined, `${id}:${!!manage}:${!!replacesBracket}`),
+    lazy(() => import('../../screens/sheets/GroupsSheet.svelte'), { id, manage, seed, onchange, replacesBracket }, 'sheet.teams', `${id}:${!!manage}:${!!replacesBracket}`),
 };
 Object.assign(sheets, openers);
 

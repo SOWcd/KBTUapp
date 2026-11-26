@@ -20,6 +20,7 @@
   import { t, tn } from '../../lib/i18n/index.svelte';
   import { dayNo, nowTs, relDay } from '../../lib/time';
   import { haptic } from '../../lib/tg';
+  import { count } from '../../lib/stats';
   import { burst } from '../../ui/burst';
   import Avatar from '../../ui/Avatar.svelte';
   import Button from '../../ui/Button.svelte';
@@ -72,7 +73,7 @@
   async function suggestAdd(s: Suggestion) {
     const was = data.friends; if (!was?.suggest) return;
     const at = was.suggest.findIndex((x) => x.person.id === s.person.id);
-    data.friends = asked(was, s, nowTs()); haptic.tap();
+    data.friends = asked(was, s, nowTs()); haptic.tap(); count('do.pymk');
     try {
       const r = await api.askFriend(s.person.id);
       if (r.friendship === 'friends') { haptic.ok(); burst(); say(t('fr.accepted', { name: s.person.name }), 'partying_face_3d'); friendsChanged(); }
@@ -91,7 +92,7 @@
   }
   async function turnOn() {
     const was = data.friends; if (!was) return;
-    data.friends = { ...was, suggest: [] }; haptic.ok();
+    data.friends = { ...was, suggest: [] }; haptic.ok(); count('do.pymkon');
     try { await saveSwitch('suggestMe', true); say(t('pymk.turnedOn'), 'sparkles_3d'); void loadFriends(); }
     catch { const c = data.friends; if (c) data.friends = { ...c, suggest: null }; haptic.error(); say(t('common.error'), 'warning_3d'); }
   }

@@ -225,6 +225,7 @@
   function leave() {
     if (gone) return;
     gone = true; out = true;
+    if (!sent && !edit && body.trim()) count('post.drop');
     const from = [win, pane, inner].map((el) => getComputedStyle(el).transform), shown = getComputedStyle(win).opacity;
     // the keyboard going down must not grow the window under the exit: its last frame still matches the pill
     win.style.height = win.style.maxHeight = `${win.offsetHeight}px`;
@@ -240,7 +241,12 @@
   }
   $effect(() => { if (overlay.closing) untrack(leave); });  // Back, the scrim, a send: the draft stays, nothing to ask
 
+  // the funnels: a fresh window (not one back after a failure) opened, then typed in
+  const fresh = untrack(() => !draft?.why), typedFrom = untrack(() => body);
+  let typed = false;
+  $effect(() => { if (!typed && !edit && fresh && body.trim() && body !== typedFrom) { typed = true; count('post.typed'); } });
   onMount(() => {
+    if (fresh) count(edit ? 'edit.open' : 'post.open');
     channel.writing++;
     const chrome = hideChrome();
     restore = () => { restore = () => {}; channel.writing--; chrome(); };
@@ -275,7 +281,7 @@
     const temp = stand(text, was, false, photos, help); haptic.select(); kept.body = ''; kept.photos = []; kept.asking = false; close(overlay.id);
     try {
       const p = await api.newChannelPost(text, was, photos.map((x) => x.id!), help);
-      count('do.forum');
+      count('do.forum'); count('post.sent');
       const photo = p.status === 'held' && was && photos.length > 0;
       land(temp, p, p.status === 'held' && (!!p.ai || photo), photo ? { kind: 'photo', explain: null } : undefined);
       haptic.ok();
@@ -289,7 +295,7 @@
         if (p.ai) api.channelPostWhy(p.id, text).then((x) => { if (x.explain) channel.why[p.id] = x.explain; }).catch(() => {});
       }
     } catch (e) {
-      unstand(temp); haptic.error(); kept.body = text; kept.anon = was; kept.photos = photos; kept.asking = !!help;  // not gone: the words wait in the window
+      unstand(temp); haptic.error(); count('post.fail'); kept.body = text; kept.anon = was; kept.photos = photos; kept.asking = !!help;  // not gone: the words wait in the window
       const d = e instanceof ApiErr ? e.data : {};
       if (e instanceof ApiErr && e.code === 'rate_limited' && typeof d.retry === 'number') kept.next = d.retry;
       if (e instanceof ApiErr && (e.message === 'noise' || e.message === 'ad') && typeof d.post === 'number')
@@ -310,12 +316,12 @@
     haptic.select(); close(overlay.id);
     try {
       const r = await api.editChannelPost(e.id, text, photos.map((x) => x.id!));
-      touched();
+      touched(); count('edit.saved');
       if (r.state === 'done') { haptic.ok(); say(t('fc.editedSay'), 'raising_hands_3d_default'); }
       else if (r.state === 'held') { back({ edit: 'held' }); say(t('fc.editHeldSay'), 'thinking_face_3d'); }
       else back();
     } catch (err) {
-      back(); haptic.error();
+      back(); haptic.error(); count('edit.fail');
       const d = err instanceof ApiErr ? err.data : {};
       if (err instanceof ApiErr && err.code === 'rate_limited' && typeof d.retry === 'number') kept.next = d.retry;
       const why: Key | null = !(err instanceof ApiErr) ? null : err.message === 'noise' ? 'fc.editNoise' : err.message === 'ad' ? 'fc.editAd'
