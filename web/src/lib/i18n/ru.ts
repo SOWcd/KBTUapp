@@ -1060,6 +1060,8 @@ const ru = {
   'tk.none': "Билета нет",
   'tk.loading': "Получаем билет…",
   'tk.calendar': "В календарь",
+  'tk.calApple': "Календарь Apple",
+  'tk.calGoogle': "Google Календарь",
   'tk.cancelAsk': "Отменить запись?",
   'tk.cancelText': "Место освободится для других.",
   'tk.cancelGo': "Да, отменить",

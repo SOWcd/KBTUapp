@@ -1039,6 +1039,8 @@ const kk: Dict = {
   'tk.none': "Билет жоқ",
   'tk.loading': "Билетті алып жатырмыз…",
   'tk.calendar': "Күнтізбеге",
+  'tk.calApple': "Apple күнтізбесі",
+  'tk.calGoogle': "Google Күнтізбе",
   'tk.cancelAsk': "Жазылудан бас тартасың ба?",
   'tk.cancelText': "Орын басқаларға босайды.",
   'tk.cancelGo': "Иә, бас тарту",

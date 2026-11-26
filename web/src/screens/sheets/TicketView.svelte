@@ -9,7 +9,7 @@
   // in their colour on a security print. The stub tears off at notches and a perforation; its QR is a finer 33×33
   // (Qr minVersion), as dense as the badge's.
   import { onMount } from 'svelte';
-  import type { Id } from '../../lib/api';
+  import type { EventCard, Id } from '../../lib/api';
   import { close, removeOverlay, hideChrome, type Overlay } from '../../lib/state/ui.svelte';
   import { data, eventById, toggleGoing, goingPending, declineInvite, askDm } from '../../lib/state/data.svelte';
   import WifiOff from '@lucide/svelte/icons/wifi-off';
@@ -19,7 +19,8 @@
   import Ticket from '@lucide/svelte/icons/ticket';
   import { relDay, time, nowTs, multiDay, daySpan } from '../../lib/time';
   import { haptic, openLink } from '../../lib/tg';
-  import { calendarUrl } from '../../lib/calendar';
+  import { appleCalendarUrl, googleCalendarUrl } from '../../lib/calendar';
+  import { menu } from '../../ui/menu';
   import CalendarPlus from '@lucide/svelte/icons/calendar-plus';
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
   import Bell from '@lucide/svelte/icons/bell';
@@ -99,6 +100,12 @@
     if (!yes) return;
     toggleGoing(id);
   }
+  // Apple devices: Apple's Calendar or Google's (a student's Google account lives there too); elsewhere Google's at once
+  function toCalendar(at: Element, e: EventCard) {
+    const apple = appleCalendarUrl(e), google = googleCalendarUrl(e);
+    if (!apple) return openLink(google);
+    menu(at, [{ label: t('tk.calApple'), onselect: () => openLink(apple) }, { label: t('tk.calGoogle'), onselect: () => openLink(google) }]);
+  }
 </script>
 
 <div class="scrim" bind:this={scrim} style="--tint:{e?.tint ?? '#3B6BFF'}" onclick={() => close(overlay.id)} role="presentation"></div>
@@ -149,7 +156,7 @@
     {#if valid && !started && session.me && !session.me.canDm}<button class="pill glass glass-pill" use:glass onclick={() => askDm(id, true)}><Bell size={17} />{t('tk.dmOn')}</button>{/if}
     <div class="acts">
       {#if valid && !started}
-        <button class="pill glass glass-pill" use:glass onclick={() => openLink(calendarUrl(e))}><CalendarPlus size={18} />{t('tk.calendar')}</button>
+        <button class="pill glass glass-pill" use:glass onclick={(ev) => toCalendar(ev.currentTarget, e)}><CalendarPlus size={18} />{t('tk.calendar')}</button>
         <button class="pill glass glass-pill danger" use:glass disabled={pending} onclick={cancelReg}>{t('event.cancelReg')}</button>
       {:else if valid && e?.lateSignup && !my?.checkedInAt && (e.endsAt ?? e.startsAt + 3 * 3600) > nowTs()}<!-- late sign-up: one may step out until the end -->
         <button class="pill glass glass-pill danger" use:glass disabled={pending} onclick={cancelReg}>{t('event.cancelReg')}</button>
