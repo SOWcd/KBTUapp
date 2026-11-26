@@ -47,6 +47,52 @@ screen per PR, never slower than before, checked on a phone in both themes.
 | Deep links | parsed in `web/src/App.svelte` (`deepLink`): `ev_<id>`, `cl_<id>`, ... |
 | iPhone app | `ios/` (a web view shell, built only by `.github/workflows/ios.yml`), its bridge `web/src/lib/native.ts`; Sign in with Apple and linked sign-ins `server/kbtu/logic/apple.py`, push `server/kbtu/apns.py` |
 
+## `server/kbtu` at a glance
+
+One line per top-level module (`logic/` is in the table above). Each module's docstring says more.
+
+| Module | What it is (and what it is not) |
+| --- | --- |
+| `app.py` | the HTTP routes, the app's setup and error handlers; no rules of its own |
+| `config.py` | settings from the environment |
+| `db.py` | SQLite pool, `tx` (BEGIN IMMEDIATE), `init` running the migrations |
+| `migrations.py` | `MIGRATIONS`, append only (read with `tail`); `schema.sql` is the base, `schema.current.sql` today's tables |
+| `auth.py` | who is calling: Telegram initData and Login Widget checks (not `msauth`, not `logic/web_auth`) |
+| `msauth.py` | signing in with the KBTU Microsoft account (PKCE) |
+| `admin.py` | the owner's CLI (`python -m kbtu.admin ...`), not the in-app Admin sheet's API |
+| `bot.py` | the bot's plumbing: the Telegram call `_tg`, polling, the ears, the postman's loop |
+| `bot_dm.py` | private chats with the bot: `/start`, receipts sent to the bot, button taps |
+| `bot_groups.py` | group chats: an event's or club's group card, swear filter, `/all`, video replies |
+| `outbox.py` | the postman: `bot_outbox` rows into messages (templates from `texts.py`) |
+| `push.py` | picks one channel per person: app push or bot message |
+| `apns.py` | the iPhone app's push through Apple |
+| `chores.py` | the postman's chores: nightly retention sweep, backup, chat cards, userpics, channel posts |
+| `offsite.py` | the encrypted nightly backup to R2 |
+| `texts.py` | the server's own texts (bot messages, share cards) in ru/kk/en |
+| `tgc.py` | the bot's side of the forum channel's discussion group (rules in `logic/tgcomments.py`; posts in `logic/fchannel.py`) |
+| `mtbot.py` | `/all`'s member list over MTProto, signed in as the bot (not the userbot) |
+| `userbot.py` | a person's Telegram account that reads clubs' channels (Telegram side only) |
+| `mirror.py` | the rules that turn what the userbot saw into a club's posts (database side only) |
+| `instagram.py` | clubs' Instagram posts into their news (Graph API) |
+| `youtube.py` | clubs' YouTube videos into their news (public feed) |
+| `tiktok.py` | group replies with the video for TikTok, Shorts, Instagram links |
+| `download.py` | bounded HTTPS downloads for those media providers |
+| `video.py` | event videos uploaded in the editor, compressed one at a time |
+| `media.py` | photos: decode, strip, re-encode, store by hash |
+| `pdfpages.py` | an event document's PDF pages rendered in a sandboxed child process |
+| `receipt.py` | Kaspi receipts: OCR and field reading (the seat rules are in `logic/seats.py`) |
+| `llm.py` | the AI provider chain (one OpenAI-shaped client, strongest first) |
+| `ai.py` | translating event and club texts through `llm.py` (not the assistant: `logic/assistant.py`) |
+| `docs.py` | the university documents' search for the assistant, in its own SQLite file |
+| `swear.py` | the swear-word list and matcher, no AI |
+| `casting.py` | a club's recruitment rounds (not `logic/clubs.py` join requests) |
+| `checkin.py` | QR check-in on a big screen (`/show`); the door's ticket scan is `logic/organizing.py` |
+| `roster.py` | clubs' rosters from the Student Union sheet, a one-off import |
+| `portal.py` | a student's week parsed from a saved portal schedule page |
+| `calpage.py` | the page that hands the calendar feed to the phone |
+| `wallet.py` | the Apple Wallet pass (the badge QR) |
+| `xlsx.py` | reading .xlsx with the standard library |
+
 ## Run and check
 
 ```bash
@@ -79,10 +125,10 @@ tab freezes animations and `requestAnimationFrame`: look with it visible.
 - **Personal data**: never in the repo, logs or screenshots. One policy by data categories, one consent
   version for everyone (`CONSENT` in `logic/account.py`), whatever the flags. A new category of personal data: the
   policy says so first (Codex writes it), and the feature asks its own consent inside itself (like `appeals.CONSENT`),
-  never a suffix on the version.
+  never a suffix on the version (`CONSENT_VOL = "+vol1"` in `logic/account.py` is a legacy exception: don't copy it).
   Deleting an account must cover every new table (`_DEL_GONE` in `logic/account.py`; a test checks the schema).
 - **Limits**: a per-day cap counts the table's own rows in the last 86400 s inside `db.tx` and raises
-  `ApiError("rate_limited", "<why>")` (e.g. `logic/mapflaws.py`).
+  `ApiError("rate_limited", "<why>")` (e.g. `offer` in `logic/helpus.py`).
 - **Speed**: a tap answers in the same frame (optimistic UI); a page never waits for its data when it opens (the
   store loads it with the app, `lib/state/data.svelte.ts`); heavy screens are lazy chunks; lists read each fact
   once for all rows, never card by card.
