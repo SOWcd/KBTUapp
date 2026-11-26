@@ -11,6 +11,9 @@
   export const statusOf = (a: Appeal): string => (a.overdue && a.status !== 'closed' ? t('apl.overdue') : t(`apl.st.${a.status}`));
   export const lineOf = (a: Appeal): string => `${a.topic ? t(`apl.t.${a.topic}`) + ' · ' : ''}${dayMonth(a.at)}`;
   export const headOf = (a: Appeal): string => { const s = a.text.split('\n')[0]; return s.length > 70 ? s.slice(0, 68) + '…' : s; };
+  // a send outlives its sheet: closed and opened again meanwhile, the new sheet waits on the same send (it showed the
+  // words as unsent with Send free, and a second tap sent them twice)
+  const going: Partial<Record<Desk, { body: string; job: Promise<unknown> }>> = {};
 </script>
 
 <script lang="ts">
@@ -43,7 +46,7 @@
   import Solved from './Solved.svelte';
 
   let { overlay, desk = 'sg', q }: { overlay: Overlay; desk?: Desk; q?: string } = $props();
-  const sg = untrack(() => desk === 'sg');
+  const sg = untrack(() => desk === 'sg'), which: Desk = sg ? 'sg' : 'help';
   const k = (key: 'text' | 'ph' | 'anonOn' | 'anonOff' | 'who' | 'sent' | 'consentT' | 'consentText' | 'mine') => t(sg ? `apl.${key}` : `ask.${key}`);
 
   type Draft = { text: string; topic: AppealTopic | null };
@@ -69,6 +72,8 @@
     anon = on;
   }
   onMount(() => {
+    const was = going[which];
+    if (was) void settle(was.body, was.job);
     if (!sg) { void loadAsks(); return; }
     count('apl.open');
     void loadAppeals();
@@ -112,21 +117,31 @@
     const consent = await agree();
     if (consent === null) return;
     const sentAt = draft.stamp();
-    sending = true;
     const key = crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    try {
-      const a = sg ? await api.sendAppeal({ text: body, topic, anon, key, consent })
-        : await api.sendAsk({ text: body, anon, key, consent });
+    // what the send itself does happens once, whichever sheet is open when it lands
+    const job = (sg ? api.sendAppeal({ text: body, topic, anon, key, consent }) : api.sendAsk({ text: body, anon, key, consent })).then((a) => {
       agreed(); if (sg) count('apl.sent');
       setList([a, ...list()]);
       draft.discard(sentAt);
-      if (text.trim() === body) { text = ''; topic = null; } // words typed while it went stay
-      tips = []; care = null; down = false; typed = false;
       haptic.ok(); say(k('sent'), 'raising_hands_3d_default');
-    } catch (e) {
+    }, (e) => {
       haptic.error();
       say(t(e instanceof ApiErr && e.code === 'rate_limited' ? (sg ? 'apl.slow' : 'ask.slow') : e instanceof ApiErr && e.code === 'unavailable' ? 'common.offline' : 'common.error'), 'pleading_face_3d');
-    } finally { sending = false; }
+      throw e;
+    });
+    going[which] = { body, job };
+    await settle(body, job);
+  }
+  async function settle(body: string, job: Promise<unknown>) {
+    sending = true;
+    try {
+      await job;
+      if (text.trim() === body) { text = ''; topic = null; } // words typed while it went stay
+      tips = []; care = null; down = false; typed = false;
+    } catch { /* said by the send: every word stays */ } finally {
+      sending = false;
+      if (going[which]?.job === job) delete going[which];
+    }
   }
 </script>
 
