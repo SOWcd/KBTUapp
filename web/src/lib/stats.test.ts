@@ -87,12 +87,12 @@ describe('usage counters', () => {
 
   it('counts a crash, a failed call and a screen\'s time by class only', async () => {
     vi.stubGlobal('requestAnimationFrame', (f: () => void) => setTimeout(f, 16));
-    const { crashed, failed, timed, flush } = await launch(null);
+    const { count, crashed, timed, flush } = await launch(null);
     crashed('tab.forum', new TypeError('x of undefined'));
     crashed('tab.forum', new Error('Failed to fetch dynamically imported module: https://x/Map.js'));
     crashed('tab.forum', 'weird');
     crashed('tab.forum', Object.assign(new Error('full'), { code: 'full', data: {} })); // an ApiErr: counted as the call
-    failed('sheet.pay', 'network');
+    count('api.sheet.pay.network');
     timed('sheet.event', performance.now() - 300);
     vi.advanceTimersByTime(40);
     flush();

@@ -27,7 +27,7 @@ const loaded = new Map<() => Promise<unknown>, { default: Component<any> }>();
 export function lazy<P extends Record<string, unknown>>(load: () => Promise<{ default: Component<P> }>, props: Omit<P, 'overlay'>, stat?: Screen, key?: SheetKey | null): Promise<void> {
   if (session.revoked || session.banned) return Promise.resolve();
   const mine = ++want, got = loaded.get(load), at = performance.now();
-  if (got) { open(got.default, props, stat, key); return Promise.resolve(); }
+  if (got) { open(got.default, props, stat, key, at); return Promise.resolve(); }
   const slow = setTimeout(() => { if (mine === want) say(t('common.offline'), 'pleading_face_3d'); }, 2000);
   return load().then((m) => { clearTimeout(slow); loaded.set(load, m); if (mine === want && !session.revoked && !session.banned) open(m.default, props, stat, key, at); }).catch(() => { clearTimeout(slow); if (mine === want) say(t('common.offline'), 'pleading_face_3d'); });
 }

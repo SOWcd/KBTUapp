@@ -120,16 +120,11 @@ export function timed(screen: Screen, since: number): void {
 /** An uncaught error or rejection on `screen`: its class only; the message is looked at here and never sent. */
 export function crashed(screen: Screen, e: unknown): void {
   if (e && typeof e === 'object' && 'code' in e && 'data' in e) return; // an ApiErr: already counted as a failed call
-  const name = e instanceof Error ? e.name : '', text = e instanceof Error ? e.message : String(e ?? '');
-  const kind: JsKind = /dynamically imported module|module script failed|Unable to preload/i.test(text) ? 'chunk'
-    : name === 'TypeError' ? 'type' : name === 'ReferenceError' ? 'ref' : name === 'RangeError' ? 'range' : name === 'SyntaxError' ? 'syntax' : 'other';
+  const kind = /dynamically imported module|module script failed|Unable to preload/i.test(e instanceof Error ? e.message : String(e)) ? 'chunk'
+    : JS[(e as Error)?.name] ?? 'other';
   count(`js.${screen}.${kind}`);
 }
-
-/** A failed API call on `screen`, by its class (api/client.ts). */
-export function failed(screen: Screen, kind: ApiKind): void {
-  count(`api.${screen}.${kind}`);
-}
+const JS: Record<string, JsKind> = { TypeError: 'type', ReferenceError: 'ref', RangeError: 'range', SyntaxError: 'syntax' };
 
 let shownAt = 0; // 0: not on the screen now
 

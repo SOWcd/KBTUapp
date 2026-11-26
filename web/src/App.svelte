@@ -42,7 +42,7 @@
   import { warmMap } from './lib/map';
   // after lib/map: imported before it, the map's place names (i18n/spots) became a chunk of their own at the start
   import { chunks, dropLazy, lazy, openCheckin, openDeepLink, warm } from './lib/state/openers';
-  import { count, crashed, failed, launchedFrom, painted, timed } from './lib/stats';
+  import { count, crashed, launchedFrom, painted, timed } from './lib/stats';
 
   let { standaloneBar: StandaloneBar }: { standaloneBar?: Component<{ back: boolean; tint?: string | null }> } = $props();
   setLucideProps({ size: 22, strokeWidth: 2 }); // stroke 2 everywhere (the design system, Oct 30; was 1.9)
@@ -204,7 +204,7 @@
     if (firstTab) { firstTab = false; return; }
     untrack(() => loadPage(k)).then(() => timed(`tab.${k}`, at), () => {});
   });
-  onFail.fn = (kind) => failed(here(), kind);
+  onFail.fn = (kind) => count(`api.${here()}.${kind}`);
   addEventListener('error', (e) => crashed(here(), e.error ?? e.message));
   addEventListener('unhandledrejection', (e) => crashed(here(), e.reason));
   // the app's open time ends at the first frame drawn with the first tab built and something to show (the copy or the server)
