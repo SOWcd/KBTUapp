@@ -50,7 +50,7 @@ def test_edit_in_place_keeps_comments_and_hearts(env, monkeypatch):
     assert len(ed) == 1 and ed[0]["message_id"] == msg and ed[0]["chat_id"] == CH
     assert ed[0]["text"] == "Lost a black umbrella in the library, room 301\n\n<i>— Ann T</i>"
     assert not tg.of("sendMessage")[1:] and not tg.of("deleteMessage")                         # the same message, never anew
-    assert con.execute("SELECT tg_msg, edit_sync FROM fchan_posts WHERE id = ?", (pid,)).fetchone() == (msg, None)
+    assert tuple(con.execute("SELECT tg_msg, edit_sync FROM fchan_posts WHERE id = ?", (pid,)).fetchone()) == (msg, None)
     tick(cfg, tg, con)
     assert len(tg.of("editMessageText")) == 1                                                  # once
     con.close()
@@ -156,5 +156,5 @@ def test_take_down_drops_a_waiting_edit(env, monkeypatch):
     assert c.post(f"/api/forum-posts/{pid}/mod", headers=tma(4), json={"ok": False}).status_code == 204
     assert not c.get("/api/forum-posts/mod", headers=tma(4)).json()["edits"]
     assert c.post(f"/api/forum-edits/{eid}/mod", headers=tma(4), json={"ok": True}).status_code in (404, 409)
-    assert con.execute("SELECT status, body FROM fchan_edits WHERE id = ?", (eid,)).fetchone() == ("gone", "")
+    assert tuple(con.execute("SELECT status, body FROM fchan_edits WHERE id = ?", (eid,)).fetchone()) == ("gone", "")
     con.close()

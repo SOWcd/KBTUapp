@@ -562,7 +562,7 @@ CREATE TABLE fchan_photos (
       height     INTEGER NOT NULL,
       color      TEXT,
       msg        INTEGER,
-      created_at INTEGER NOT NULL, edit_id INTEGER REFERENCES fchan_edits(id) ON DELETE CASCADE, sync INTEGER NOT NULL DEFAULT 0 CHECK (sync IN (0, 1))) STRICT;
+      created_at INTEGER NOT NULL, edit_id INTEGER, sync INTEGER NOT NULL DEFAULT 0 CHECK (sync IN (0, 1))) STRICT;
 CREATE TABLE fchan_posts (
       id         INTEGER PRIMARY KEY,
       user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

@@ -641,7 +641,7 @@ def test_post_feed(env, monkeypatch):
     assert feed[2]["nick"] is None
     assert feed[2]["sign"] == "Ann T" and not feed[2]["mine"]
     for p in feed:
-        assert set(p) - {"review"} == {"id", "body", "status", "at", "msg", "anon", "nick", "sign", "person", "mine", "comments", "thread", "faces", "reactions", "hearts", "hearted", "hot", "human", "photos"}  # no user id
+        assert set(p) - {"review"} == {"id", "body", "status", "at", "msg", "anon", "nick", "sign", "person", "mine", "comments", "thread", "faces", "reactions", "hearts", "hearted", "hot", "human", "photos", "edited"}  # no user id
         assert "review" not in p or p["mine"]                                                    # why mine waits: to me alone
     assert feed[2]["person"]["name"] == "Ann T" and feed[2]["person"]["id"] == 1 and feed[0]["person"]["id"] == 3
     # the anonymous row: no person, no avatar, nothing of its author's, to staff too (the Admin sheet's reveal is the one way)
@@ -953,7 +953,7 @@ def test_post_discussed(env, monkeypatch):
     con.execute("UPDATE fchan_posts SET comments = ? WHERE id = ?", (logic.fchannel.HOT, busy))
     assert busy in hot()
     row = next(x for x in c.get("/api/forum-posts/feed", headers=tma(7)).json() if x["id"] == five)
-    assert set(row) == {"id", "body", "status", "at", "msg", "anon", "nick", "sign", "person", "mine", "comments", "thread", "faces", "reactions", "hearts", "hearted", "hot", "human", "photos"}
+    assert set(row) == {"id", "body", "status", "at", "msg", "anon", "nick", "sign", "person", "mine", "comments", "thread", "faces", "reactions", "hearts", "hearted", "hot", "human", "photos", "edited"}
     assert row["anon"] and row["person"] is None and row["hot"] is True
     con.close()
 
