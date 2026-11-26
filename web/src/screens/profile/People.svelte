@@ -1,8 +1,8 @@
 <script lang="ts">
   // "Made together": one page that says the app is built and supported by many students, by the kind of what they
-  // gave. The creator, modestly; then Code (the Team first), Ideas and finds (the idea's author first), Support (the
+  // gave. The creator, modestly; then Ideas (the idea's author first), Bugs found, Code (the Team first), Support (the
   // sponsors who agreed to be named, biggest first as the server orders them; the total only with its own yes).
-  // A person with lines of both kinds stands in both sections, each with its own lines.
+  // A person with lines of several kinds stands in each of those sections, each with that section's lines.
   // A name and a face unless that person hid them (server credits.py); a hidden person's line goes in its section's
   // last row, "Students": no face, nothing to tap, nothing that ties two such lines together. No account yet: the
   // name the team gave, with initials. A pull request's lines stand under its GitHub login, its row opens the profile
@@ -13,11 +13,9 @@
   import UsersRound from '@lucide/svelte/icons/users-round';
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
-  import Lightbulb from '@lucide/svelte/icons/lightbulb';
-  import Bug from '@lucide/svelte/icons/bug';
   import Award from '@lucide/svelte/icons/award';
   import HandHeart from '@lucide/svelte/icons/hand-heart';
-  import type { CreditItem, CreditPerson, PersonRef } from '../../lib/api';
+  import type { CreditItem, CreditKind, CreditPerson, PersonRef } from '../../lib/api';
   import type { Overlay } from '../../lib/state/ui.svelte';
   import { data, loadCredits } from '../../lib/state/data.svelte';
   import { sheets } from '../../lib/state/sheets';
@@ -48,23 +46,31 @@
   const realOf = (p: PersonRef) => p.realName ?? p.name;
 
   type Entry = CreditPerson & { role?: string };
-  const lists = $derived.by(() => {
-    const code: Entry[] = [], ideas: Entry[] = [], anonCode: CreditItem[] = [], anonIdeas: CreditItem[] = [];
+  // the sections in their order, each one kind
+  const KINDS = ['idea', 'find', 'code'] as const;
+  const CAP = { idea: 'cr.n.idea', find: 'cr.n.find', code: 'cr.n.code' } as const;
+  const sections = $derived.by(() => {
     if (!c) return null;
-    // role: the Team's label (always in Code) or the idea's author's (always first in Ideas and finds)
-    const put = (r: CreditPerson, role?: string, home?: 'code' | 'ideas') => {
-      const mine = r.items.filter((i) => i.kind === 'code'), rest = r.items.filter((i) => i.kind !== 'code');
-      if (!r.person && !r.gh && !r.name && !home) { anonCode.push(...mine); anonIdeas.push(...rest); return; }
-      const inCode = mine.length > 0 || home === 'code';
-      if (inCode) code.push({ ...r, role: home === 'code' ? role : undefined, items: mine });
-      // the medal's line once: with the code if they stand there
-      if (rest.length || !inCode) ideas[home === 'ideas' ? 'unshift' : 'push']({ ...r, role: home === 'ideas' ? role : undefined, honor: r.honor && !inCode, items: rest });
+    const rows: Record<CreditKind, Entry[]> = { idea: [], find: [], code: [] };
+    const anon: Record<CreditKind, CreditItem[]> = { idea: [], find: [], code: [] };
+    // role: the Team's label (always in Code) or the idea's author's (always first in Ideas)
+    const put = (r: CreditPerson, role?: string, home?: CreditKind) => {
+      const of = (k: CreditKind) => r.items.filter((i) => i.kind === k);
+      if (!r.person && !r.gh && !r.name && !home) { for (const k of KINDS) anon[k].push(...of(k)); return; }
+      // no lines and no role yet (a medal alone): in the first section
+      const nowhere = !home && !r.items.length;
+      let honor = r.honor;
+      for (const k of KINDS) {
+        const items = of(k);
+        if (!items.length && k !== home && !(nowhere && k === 'idea')) continue;
+        rows[k][home === 'idea' && k === 'idea' ? 'unshift' : 'push']({ ...r, role: k === home ? role : undefined, honor, items });
+        honor = false; // the medal's line once: in the first section they stand in
+      }
     };
     for (const r of c.team) put(r, t('cr.team'), 'code');
     for (const r of c.people) put(r);
-    if (c.idea) put(c.idea, t('cr.idea'), 'ideas');
-    const n = (rows: Entry[], anon: CreditItem[]) => rows.reduce((s, r) => s + r.items.length, anon.length);
-    return { code, ideas, anonCode, anonIdeas, codeN: n(code, anonCode), ideasN: n(ideas, anonIdeas) };
+    if (c.idea) put(c.idea, t('cr.idea'), 'idea');
+    return KINDS.map((k) => ({ k, rows: rows[k], anon: anon[k], n: rows[k].reduce((s, r) => s + r.items.length, anon[k].length) }));
   });
 
   // the `sponsors` link: as the Support section is drawn (the lists above it already are), it stands under the
@@ -75,15 +81,14 @@
   }
 </script>
 
-{#snippet lines(items: CreditItem[], marks: boolean)}
+{#snippet lines(items: CreditItem[])}
   {#each items as i, n (n)}
-    {@const K = i.kind === 'find' ? Bug : Lightbulb}
-    <span class="ln">{#if marks}<span class="ki"><K size={14} /></span>{/if}<span>{lineOf(i)}{#if i.via_ai} <span class="ai">{t('cr.ai')}</span>{/if}</span></span>
+    <span class="ln"><span>{lineOf(i)}{#if i.via_ai} <span class="ai">{t('cr.ai')}</span>{/if}</span></span>
   {/each}
 {/snippet}
 
 <!-- a row a person (or a GitHub login, or the nameless "Students"): who, then their lines of this section's kind -->
-{#snippet who(e: Entry, marks: boolean)}
+{#snippet who(e: Entry)}
   {@const p = e.person}
   {@const login = e.gh}
   {@const go = p ? () => open(p) : login ? () => github(login) : undefined}
@@ -99,7 +104,7 @@
           <b class="nm">{p ? (e.role ? realOf(p) : p.name) : e.name || login || t(e.role ? 'cr.student' : 'cr.students')}</b>
           {#if e.role}<span class="rl">{e.role}</span>{/if}
           {#if e.honor}<span class="ln"><span class="ki"><Award size={14} /></span><span>{t('ach.honor.name')}</span></span>{/if}
-          {@render lines(e.items, marks)}
+          {@render lines(e.items)}
         </span>
         {#if p}<span class="mk"><ChevronRight size={18} /></span>{:else if login}<span class="mk"><ArrowUpRight size={18} /></span>{/if}
       </span>
@@ -114,7 +119,7 @@
 <Pane {overlay} title={t('cr.title')} icon={UsersRound} glow>
   <div class="mt">
     <p class="lead">{t('cr.lead')}</p>
-    {#if !c || !lists}
+    {#if !c || !sections}
       <Skeleton n={6} />
     {:else}
       <!-- I hid: my lines are here, my name isn't; showing it again one tap away (the sheet: what everyone would see) -->
@@ -133,23 +138,21 @@
         </Group></div>
       {/if}
 
-      <div class="up" style:--d="1"><Group caption={t('cr.n.code')} note={lists.codeN ? String(lists.codeN) : undefined}>
-        {#each lists.code as e, i (i)}{@render who(e, false)}{/each}
-        {#if lists.anonCode.length}{@render who({ person: null, items: lists.anonCode }, false)}{/if}
-        <Row icon={GitHubMark} title={t('cr.code')} accessory="external" onclick={() => { haptic.tap(); openLink(CODE); }} />
-      </Group></div>
-
-      {#if lists.ideas.length || lists.anonIdeas.length}
-        <div class="up" style:--d="2"><Group caption={t('cr.list')} note={lists.ideasN ? String(lists.ideasN) : undefined}>
-          {#each lists.ideas as e, i (i)}{@render who(e, true)}{/each}
-          {#if lists.anonIdeas.length}{@render who({ person: null, items: lists.anonIdeas }, true)}{/if}
-        </Group></div>
-      {/if}
+      <!-- Ideas, Bugs found, Code: one scroll. Code always (its GitHub row ends it); the others once they have someone -->
+      {#each sections as s, i (s.k)}
+        {#if s.k === 'code' || s.rows.length || s.anon.length}
+          <div class="up" style:--d={i + 1}><Group caption={t(CAP[s.k])} note={s.n ? String(s.n) : undefined}>
+            {#each s.rows as e, j (j)}{@render who(e)}{/each}
+            {#if s.anon.length}{@render who({ person: null, items: s.anon })}{/if}
+            {#if s.k === 'code'}<Row icon={GitHubMark} title={t('cr.code')} accessory="external" onclick={() => { haptic.tap(); openLink(CODE); }} />{/if}
+          </Group></div>
+        {/if}
+      {/each}
 
       <!-- everyone who supported, unless they hid (server donations.py), each with their medal and total unless hidden. The server
            orders it: tier, then the shown totals, so a place never hints at an amount someone hid -->
       {#if data.sponsors?.length || session.donate}
-        <div {@attach jump}><div class="up" style:--d="3">
+        <div {@attach jump}><div class="up" style:--d="4">
           <Group caption={t('cr.support')} note={data.sponsors?.length ? String(data.sponsors.length) : undefined} footnote={t('sp.listHint')}>
             {#each data.sponsors ?? [] as p, i (i)}
               <Row title={p.name} subtitle={`${t('ach.sponsor.name')} · ${tierLabel(p.tier, 3)}`} value={p.amount ? money(p.amount) : undefined} whole>
