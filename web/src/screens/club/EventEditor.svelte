@@ -69,7 +69,7 @@
   import { useDraft } from '../../lib/draft';
   import { sheets } from '../../lib/state/sheets';
   import { placeOf, t, tn } from '../../lib/i18n/index.svelte';
-  import { campusPlace } from '../../lib/campusPlace';
+  import { campusPlace, EVENT_BUILDINGS } from '../../lib/campusPlace';
   import CampusPlacePicker from './CampusPlacePicker.svelte';
   import { hit } from '../../lib/clubs';
   import { nowTs, time, relDay, dateInput, fromInputs, weekdayShort, dayMonthShort, multiDay, endTime } from '../../lib/time';
@@ -83,7 +83,7 @@
   import LookPick from '../../ui/LookPick.svelte';
   import Button from '../../ui/Button.svelte';
   import { may, RANK } from '../../lib/perms';
-  import { eventPlace, EVENT_BUILDINGS, GIS_LINK, isGisLink } from '../../lib/map';
+  import { eventPlace, GIS_LINK, isGisLink } from '../../lib/map';
   import { marked, missing, nextQuestion, updateDraft, type ChatFill, type Differs, type Marked } from '../../lib/eventFill';
   import { ONLINE_LINK } from '../../lib/meet';
 
@@ -143,7 +143,8 @@
   type PlaceChoice = keyof typeof PLACE_OPTIONS;
   const placeOptions = Object.keys(PLACE_OPTIONS) as PlaceChoice[];
   let placeChoice = $state<PlaceChoice | null>(null);
-  const placeKind = $derived(eventPlace(f.place, f.placeUrl)?.kind);
+  // a campus spot without a room ("Atrium") is the main building's
+  const placeKind = $derived.by(() => { const k = eventPlace(f.place, f.placeUrl)?.kind; return k === 'campus' ? 'room' : k; });
   const placeType = $derived(placeChoice ?? placeKind ?? 'room');
   const placeText = $derived(f.place.trim() || (f.placeUrl.trim() ? '2GIS' : ''));
   const badGis = $derived(!!f.placeUrl.trim() && (f.placeUrl.trim().length > 500 || !isGisLink(f.placeUrl.trim())));

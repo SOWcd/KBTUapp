@@ -135,7 +135,8 @@ test('a plain venue name opens 2GIS from the hero, timeline, event and ticket', 
   await row.getByRole('button', where).click();
   await expect.poll(links).toBe(2);
   await ali.look('venue in the timeline');
-  await row.getByRole('button', { name: FREE, exact: true }).click();
+  // the row's own tap by its poster: its middle is the venue's link now
+  await row.getByRole('button', { name: FREE, exact: true }).click({ position: { x: 24, y: 24 } });
   await ev.getByRole('button', { name: new RegExp('^PlatformA') }).click();
   await expect.poll(links).toBe(3);
   await ali.look('venue in the event');

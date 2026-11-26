@@ -99,8 +99,12 @@ export const bldg2Room = (place: string): string | null => place.trim().replace(
 export const GIS_LINK = /https:\/\/(?:[a-z]+\.)?2gis\.(?:kz|ru|com)\/\S*/i;
 export const isGisLink = (url: string): boolean => url.match(GIS_LINK)?.[0] === url;
 
-export const EVENT_BUILDINGS = { bldg2: 'Building 2', dorm: 'Dormitory' } as const;
+// kbtu (ru, kk), room, a secret location, campus, hall, atrium, coworking, foyer, auditorium, room, library, canteen, yard,
+// online, to be confirmed (ru, kk, en): the campus's own words, never searched in 2GIS ("Atrium" is not a venue in Almaty)
+const CAMPUS_WORDS = /kbtu|[\u043a\u049b]\u0431\u0442\u0443|room|secret|campus|\u043a\u0430\u043c\u043f\u0443\u0441|hall|\u0437\u0430\u043b|\u0445\u043e\u043b\u043b|atri|\u0430\u0442\u0440\u0438\u0443\u043c|cowork|\u043a\u043e\u0432\u043e\u0440\u043a|foyer|\u0444\u043e\u0439\u0435|\u0430\u0443\u0434\u0438\u0442|\u043a\u0430\u0431\u0438\u043d\u0435\u0442|library|\u0431\u0438\u0431\u043b\u0438\u043e\u0442|\u043a\u0456\u0442\u0430\u043f\u0445\u0430\u043d|canteen|\u0441\u0442\u043e\u043b\u043e\u0432|\u0430\u0441\u0445\u0430\u043d|yard|\u0434\u0432\u043e\u0440|\u0430\u0443\u043b\u0430|online|\u043e\u043d\u043b\u0430\u0439\u043d|\u0443\u0442\u043e\u0447\u043d|tba|\u0442\u0435\u0440\u0440\u0430\u0441/i;
 
+/** Where an event's place leads: a room on our map, the second building or the dorm in 2GIS, a place on campus the
+ *  map can't point at (plain text), else 2GIS (its link, or a search for the typed name). */
 export function eventPlace(place: string, url?: string | null) {
   const text = place.trim();
   if (atBldg2(text)) return { kind: 'bldg2', url: BLDG2_2GIS } as const;
@@ -108,6 +112,7 @@ export function eventPlace(place: string, url?: string | null) {
   const floor = floorOf(text);
   if (floor != null) return { kind: 'room', floor } as const;
   if (url && isGisLink(url)) return { kind: 'elsewhere', url } as const;
+  if (spotOf(text) || CAMPUS_WORDS.test(text)) return { kind: 'campus' } as const;
   if (text) return { kind: 'elsewhere', url: `https://2gis.kz/almaty/search/${encodeURIComponent(text)}` } as const;
   return null;
 }

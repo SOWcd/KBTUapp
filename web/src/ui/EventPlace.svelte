@@ -12,7 +12,9 @@
   import TwoGisMark from './TwoGisMark.svelte';
 
   let { e, row = false, pin = false }: { e: Pick<EventCard, 'place' | 'placeUrl' | 'online'>; row?: boolean; pin?: boolean } = $props();
-  const target = $derived(e.online ? null : eventPlace(e.place, e.placeUrl));
+  // a campus spot the map can't point at ("Atrium") stays plain text
+  const found = $derived(e.online ? null : eventPlace(e.place, e.placeUrl));
+  const target = $derived(found?.kind === 'campus' ? null : found);
   const hasText = $derived(!!e.place.trim());
   const label = $derived(target && !hasText ? t('event.route') : placeOf(e.place, e.online));
 

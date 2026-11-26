@@ -105,6 +105,8 @@ it('opens the campus map or 2GIS for every event venue', () => {
   expect(eventPlace('PlatformA', link)?.url).toBe(link);
   expect(eventPlace('', link)?.url).toBe(link);
   expect(eventPlace(' ')).toBeNull();
+  // the campus's own places the map can't point at stay plain, never a search across Almaty
+  for (const p of ['Atrium', '\u0410\u043a\u0442\u043e\u0432\u044b\u0439 \u0437\u0430\u043b', 'KBTU Atrium', 'Main Hall']) expect(eventPlace(p)).toEqual({ kind: 'campus' });
 });
 
 // Our map's SVGs are made from a floor's geometry and one style (tools/map): an edit to either without building

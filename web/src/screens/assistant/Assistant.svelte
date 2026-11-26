@@ -249,7 +249,7 @@
   // an off-campus event's way there: its 2GIS link, or 2GIS's search for its typed address (the event page's own rule)
   const gisOf = (id: number) => {
     const e = eventById(id), place = e && !e.online ? eventPlace(e.place, e.placeUrl) : null;
-    return place && place.kind !== 'room' ? place.url : null;
+    return place && 'url' in place ? place.url : null;
   };
   const shown = (a: AssistAction) => {
     if (a.type === 'club' && chat.ctx?.kind === 'club' && a.id === chat.ctx.id) return false;

@@ -3,8 +3,7 @@
 // no reload (a reload looks like a crash).
 import ru, { type Dict, type Key, type Plural } from './ru';
 import { tg } from '../tg';
-import { campusPlace, type CampusPlace } from '../campusPlace';
-import { EVENT_BUILDINGS } from '../map';
+import { campusPlace, EVENT_BUILDINGS, type CampusPlace } from '../campusPlace';
 
 export type Lang = 'ru' | 'kk' | 'en';
 export const LANGS: Lang[] = ['ru', 'kk', 'en'];
