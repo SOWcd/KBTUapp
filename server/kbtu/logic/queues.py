@@ -213,13 +213,13 @@ def _video(con, v: Viewer, body: dict, keep: int | None, key: str = "videoId") -
     must be my own upload for that slot that didn't fail."""
     if key not in body:
         return keep
-    if body[key] is None:
+    vid = body[key]
+    if vid is None:
         return None
-    try:
-        x = one(con, "SELECT id FROM videos WHERE id = ? AND owner_id = ? AND status != 'failed' AND wide = ?",
-                int(body[key]), v.id, int(key == "wideVideoId"))
-    except (TypeError, ValueError):
-        x = None
+    if type(vid) is not int or not 0 < vid < 2**63:
+        raise ApiError("bad_input")
+    x = one(con, "SELECT id FROM videos WHERE id = ? AND owner_id = ? AND status != 'failed' AND wide = ?",
+            vid, v.id, int(key == "wideVideoId"))
     if not x:
         raise ApiError("bad_input")
     return x["id"]

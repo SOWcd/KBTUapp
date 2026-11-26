@@ -2585,4 +2585,14 @@ MIGRATIONS: list[tuple[int, str]] = [
       PRIMARY KEY (post_id, user_id)
     ) STRICT;
     CREATE INDEX fchan_coming_by_user ON fchan_coming(user_id);"""),
+    # the app's own channel and topics group (logic/appchats.py): whether I am in them, for Profile's rows; checked_at:
+    # the last getChatMember look (once a day at most)
+    (250, """CREATE TABLE IF NOT EXISTS app_chats (
+      user_id    INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      channel    INTEGER NOT NULL DEFAULT 0 CHECK (channel IN (0, 1)),
+      grp        INTEGER NOT NULL DEFAULT 0 CHECK (grp IN (0, 1)),
+      checked_at INTEGER NOT NULL DEFAULT 0
+    ) STRICT;"""),
+    # Help given by running our tasks with the contributor's own AI subscription; the credit's words stay as written.
+    (251, "ALTER TABLE credits ADD COLUMN via_ai INTEGER NOT NULL DEFAULT 0 CHECK (via_ai IN (0, 1));"),
 ]

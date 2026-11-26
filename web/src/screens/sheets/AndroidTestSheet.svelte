@@ -1,6 +1,6 @@
 <script lang="ts">
-  // "Become a tester": the Android app's closed test on Google Play. Opened only by the link ?startapp=android (the
-  // bot's broadcast `android_test`); nobody is shown it on their own yet. The button opens /android.html (the three
+  // "Become a tester": the Android app's closed test on Google Play. Opened once on entry on Android (App.svelte)
+  // and by the link ?startapp=android. The button opens /android.html (the three
   // steps: the testers group, the opt-in, the install) in the phone's own browser, where the Google account lives.
   import { close, type Overlay } from '../../lib/state/ui.svelte';
   import { t } from '../../lib/i18n/index.svelte';

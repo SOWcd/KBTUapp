@@ -126,6 +126,7 @@ export default defineConfig({
     // iOS 15 still runs Telegram; syntax is lowered for it, the app stays modern otherwise
     target: ['es2020', 'safari15', 'chrome100'],
     assetsInlineLimit: 0,
+    manifest: true, // dist/.vite/manifest.json: the chunk graph tools/size.mjs measures the first screen by
   },
   // unit tests live beside the code; web/e2e is Playwright's (npm run e2e)
   test: { include: ['src/**/*.test.ts'] },

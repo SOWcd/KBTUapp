@@ -59,12 +59,14 @@
                                 @username or Telegram ID queues it for one person first; --platform: only people who
                                 opened the app on that kind of device in the last 90 days (a preview goes regardless)
   .venv/bin/python -m kbtu.admin team add|del <@username | telegram id>   People of the app's Team (core developers), audited
-  .venv/bin/python -m kbtu.admin credit add <telegram id | gh:login> <idea | find | code> "<ru>" "<kk>" "<en>" [--gh <login>] [--name "<name>"]   "People of the app"
+  .venv/bin/python -m kbtu.admin credit add <telegram id | gh:login> <idea | find | code> "<ru>" "<kk>" "<en>" [--gh <login>] [--name "<name>"] [--ai]   "People of the app"
                                 (logic/credits.py): a line in OUR words about what they gave (an account isn't needed;
                                 gh:login: a pull request's author, listed under the public login; --gh: the same person's
                                 login beside a Telegram id, on their named card; --name: what to call a Telegram id with
                                 no account yet, shown until they open the app; shown by default, a person can hide in Settings);
                                 credit gh <id> <login> puts a login on a line already written;
+                                --ai: help running our tasks with their own AI subscription, a quiet tag beside the line;
+                                credit ai <id> [0|1] toggles that tag, or sets it off/on explicitly; the line's words stay;
                                 gender-neutral, no name, handle, link or identifying detail: it is shown under "Student";
                                 credit ship <id> [YYYY-MM-DD] lists it (today), credit list, credit del <id>;
                                 `move ... --merge-credits` puts the target Telegram's lines under the moved account for good:
@@ -583,12 +585,25 @@ def main(args: list[str]) -> None:
             platform = rest.pop(at + 1)
             rest.pop(at)
         _broadcast(con, *rest, platform=platform)
-    elif cmd == "credit" and args[1:2] in (["add"], ["gh"], ["ship"], ["list"], ["del"], ["ask"]):  # the people of the app (logic/credits.py)
+    elif cmd == "credit" and args[1:2] in (["add"], ["ai"], ["gh"], ["ship"], ["list"], ["del"], ["ask"]):  # the people of the app (logic/credits.py)
         try:
-            if (args[1] == "add" and len(args) in (7, 9, 11) and len(opts := dict(zip(args[7::2], args[8::2]))) * 2 == len(args) - 7
-                    and opts.keys() <= {"--gh", "--name"}):
-                print(f"credit {credits.add(con, *args[2:7], gh=opts.get('--gh'), name=opts.get('--name'))} (suggested; `credit ship` lists it)")
+            if args[1] == "add" and len(args) >= 7:
+                opts, rest = {}, args[7:]
+                while rest:
+                    opt = rest.pop(0)
+                    if opt in opts:
+                        sys.exit(__doc__)
+                    if opt == "--ai":
+                        opts[opt] = True
+                    elif opt in ("--gh", "--name") and rest and not rest[0].startswith("--"):
+                        opts[opt] = rest.pop(0)
+                    else:
+                        sys.exit(__doc__)
+                print(f"credit {credits.add(con, *args[2:7], gh=opts.get('--gh'), name=opts.get('--name'), via_ai=opts.get('--ai', False))} (suggested; `credit ship` lists it)")
                 print(f"check before shipping: {credits.REMIND}")
+            elif args[1] == "ai" and len(args) in (3, 4) and (len(args) == 3 or args[3] in ("0", "1")):
+                on = credits.set_ai(con, int(args[2]), None if len(args) == 3 else args[3] == "1")
+                print(f"credit {int(args[2])}: ai {int(on)}")
             elif args[1] == "gh" and len(args) == 4:
                 credits.set_gh(con, int(args[2]), args[3])
                 print(f"credit {int(args[2])}: gh {args[3]}")
@@ -605,7 +620,7 @@ def main(args: list[str]) -> None:
                     tg = None if r["tg_id"] is None else f"tg {r['tg_id']}" + ("" if r["uid"] else " (no account)")
                     who = " + ".join(x for x in (tg, r["gh"] and f"gh {r['gh']}", r["name"] and f"name {r['name']}") if x) or "deleted account"
                     said = {None: "no answer", True: "yes", False: "no"}[credits._said(r)]
-                    print(f"#{r['id']}  {r['shipped_on'] or 'suggested'}  {r['kind']}  {who}, {said}  {r['ru']} | {r['kk']} | {r['en']}")
+                    print(f"#{r['id']}  {r['shipped_on'] or 'suggested'}  {r['kind']}{' [AI]' if r['via_ai'] else ''}  {who}, {said}  {r['ru']} | {r['kk']} | {r['en']}")
             else:
                 sys.exit(__doc__)
         except ValueError as exc:

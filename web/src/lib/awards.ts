@@ -46,6 +46,9 @@ import qolonerFrog from '../assets/lanyards/qoloner-mark.webp';
 import dtAncient from '../assets/lanyards/dt-ancient-medal.svg?url';
 import dtClash from '../assets/lanyards/dt-clash-medal.svg?url';
 import dtRune from '../assets/lanyards/dt-rune-medal.svg?url';
+import panther from '../assets/lanyards/panther-mark.webp';
+import aperture from '../assets/lanyards/moments-aperture.svg?url';
+import facesMark from '../assets/lanyards/faces-mark.webp';
 
 /** a badge's variant by name ("Performer"); its meaning ("Performed on stage at ...") */
 export const variantName = (badge: string, code: string): string => t(`ach.${badge}.v.${code}` as 'ach.init26.v.init26');
@@ -426,6 +429,9 @@ export const isArchived = (x: unknown): x is Archived => typeof x === 'string' &
 /** a school's lanyard (ui/SchoolScene), not a club's */
 export const isSchool = (look: Look) => look in SCHOOL_LOOKS;
 export const clubLook = (look: Look): ClubLook | undefined => CLUBS[look];
+const handMarks: Partial<Record<Look, string>> = { cheer: panther, moments: aperture, faces: facesMark };
+/** The QR's image, shared by LookMark and the offline ticket copy; the other marks are inline SVG. */
+export const lookArt = (look: Look): string | undefined => clubLook(look)?.mark ?? handMarks[look];
 
 export type Skin = Hand | ClubSlug;
 /** a club's drawn look: by its slug, or by its name in letters and digits alone ("kbtu.mag" is `kbtumag`: Nov 4, the

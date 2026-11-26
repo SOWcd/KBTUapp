@@ -78,7 +78,7 @@
 {#snippet lines(items: CreditItem[], marks: boolean)}
   {#each items as i, n (n)}
     {@const K = i.kind === 'find' ? Bug : Lightbulb}
-    <span class="ln">{#if marks}<span class="ki"><K size={14} /></span>{/if}<span>{lineOf(i)}</span></span>
+    <span class="ln">{#if marks}<span class="ki"><K size={14} /></span>{/if}<span>{lineOf(i)}{#if i.via_ai} <span class="ai">{t('cr.ai')}</span>{/if}</span></span>
   {/each}
 {/snippet}
 
@@ -149,7 +149,7 @@
       <!-- everyone who supported, unless they hid (server donations.py), each with their medal and total unless hidden. The server
            orders it: tier, then the shown totals, so a place never hints at an amount someone hid -->
       {#if data.sponsors?.length || session.donate}
-        <div use:jump><div class="up" style:--d="3">
+        <div {@attach jump}><div class="up" style:--d="3">
           <Group caption={t('cr.support')} note={data.sponsors?.length ? String(data.sponsors.length) : undefined} footnote={t('sp.listHint')}>
             {#each data.sponsors ?? [] as p, i (i)}
               <Row title={p.name} subtitle={`${t('ach.sponsor.name')} · ${tierLabel(p.tier, 3)}`} value={p.amount ? money(p.amount) : undefined} whole>
@@ -184,6 +184,7 @@
   .nm { font: 600 var(--fs-row)/1.25 var(--font-text); letter-spacing: -0.01em; overflow-wrap: anywhere; }
   .rl { font: 600 var(--fs-sub)/1.3 var(--font-text); color: var(--accent-text); }
   .ln { display: flex; gap: 6px; font: 450 var(--fs-body)/1.35 var(--font-text); letter-spacing: -0.008em; color: var(--text-2); overflow-wrap: anywhere; }
+  .ai { display: inline-block; padding: 0 var(--s-1); border-radius: var(--r-xs); background: var(--fill); color: var(--text-3); font: 500 var(--fs-cap)/1.5 var(--font-text); white-space: nowrap; vertical-align: baseline; }
   .ki { flex: none; display: inline-flex; align-items: center; height: 1.35em; color: var(--text-3); }
   .mk { flex: none; display: inline-flex; margin-right: -4px; color: var(--text-3); opacity: 0.6; }
   /* under the lines, from the text's edge; 44 to the finger */
@@ -191,7 +192,7 @@
     font: 450 var(--fs-sub)/1.2 var(--font-text); color: var(--text-3); }
 
   /* the open: the blocks rise from just below, one after another. Once, nothing loops; none when the phone asks for
-     less motion. The Support section's own box (use:jump) stays still: it is what the jump measures */
+     less motion. The Support section's own box (jump) stays still: it is what the jump measures */
   .up { animation: up 700ms var(--ease-spring) calc(var(--d) * 70ms + 60ms) both; }
   @keyframes up { from { opacity: 0; transform: translateY(12px); } }
   :global(html.lowfx) .up { animation: none; }

@@ -4,10 +4,12 @@
   // paint. On the Afisha when its events didn't reach the server, and outside Telegram on WebEntrance's offline page.
   import WifiOff from '@lucide/svelte/icons/wifi-off';
   import type { OfflineTicket } from '../lib/offlineTickets';
+  import { lookVars, QR_LOOK } from '../lib/awards';
   import { t, placeOf } from '../lib/i18n/index.svelte';
   import { relDay, time } from '../lib/time';
   import '../lib/qrnow'; // the encoder in this chunk: offline, there is no other to fetch
   import Qr from './Qr.svelte';
+  import LookMark from './LookMark.svelte';
 
   let { tickets }: { tickets: OfflineTicket[] } = $props();
 </script>
@@ -16,7 +18,7 @@
   <p class="note fs-sub" role="status"><WifiOff size={15} /><span>{t('tk.offlineNote')}</span></p>
   {#each tickets as k (k.id)}
     <article class="pass">
-      <div class="plate"><Qr text={'KBTU' + k.code} minVersion={4} /></div>
+      <div class="plate" style={lookVars(k.look)}><Qr text={'KBTU' + k.code} minVersion={4} tone={QR_LOOK[k.look]}><LookMark look={k.look} logo={k.logo} /></Qr></div>
       <b class="ttl">{k.title}</b>
       <span class="when fs-sub">{relDay(k.startsAt)} · {time(k.startsAt)} · {placeOf(k.place, k.online)}</span>
       <span class="code fs-cap"><i>{t('tk.code')}</i><b class="num">{k.code.replace(/^(\w{2})(\w{2})$/, '$1 $2')}</b></span>

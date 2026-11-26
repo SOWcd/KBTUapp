@@ -71,7 +71,7 @@ def _state(con, uid: int):
 # ------------------------------------------------------------ the list
 
 def _item(r) -> dict:
-    return {"kind": r["kind"], "text": {"ru": r["ru"], "kk": r["kk"], "en": r["en"]}, "on": r["shipped_on"]}
+    return {"kind": r["kind"], "text": {"ru": r["ru"], "kk": r["kk"], "en": r["en"]}, "on": r["shipped_on"], "via_ai": bool(r["via_ai"])}
 
 
 def _named(r) -> bool:
@@ -103,7 +103,7 @@ def listing(con, v: Viewer) -> dict:
         WHERE u.is_founder = 0 AND u.mark IS NOT 'idea' ORDER BY t.added_at, t.user_id""") if _named(r)]
     team_items: dict[int, list] = {r["tg_id"]: [] for r in team}
     me = _state(con, v.id)
-    got = rows(con, f"""SELECT c.id AS cid, c.tg_id AS whose, c.gh, c.kind, c.ru, c.kk, c.en, c.shipped_on, c.name AS given, {_COLS}
+    got = rows(con, f"""SELECT c.id AS cid, c.tg_id AS whose, c.gh, c.kind, c.ru, c.kk, c.en, c.shipped_on, c.via_ai, c.name AS given, {_COLS}
         FROM credits c LEFT JOIN users u ON u.tg_id = c.tg_id AND u.tg_id > 0 LEFT JOIN students s ON s.user_id = u.id {_LAST}
         WHERE c.shipped_on IS NOT NULL ORDER BY c.shipped_on DESC, c.id DESC""")
     people: dict[object, dict] = {}
@@ -242,9 +242,10 @@ def _login(gh: str) -> str:
     return gh
 
 
-def add(con, who: int | str, kind: str, ru: str, kk: str, en: str, gh: str | None = None, name: str | None = None) -> int:
+def add(con, who: int | str, kind: str, ru: str, kk: str, en: str, gh: str | None = None, name: str | None = None, via_ai: bool = False) -> int:
     """who: a Telegram id, or "gh:<login>" alone; gh: the same person's login beside a Telegram id (`--gh`), on their
-    named card; name: what to call a Telegram id with no account yet (`--name`), never used once it has one."""
+    named card; name: what to call a Telegram id with no account yet (`--name`), never used once it has one.
+    via_ai: help running our tasks with their own AI subscription (`--ai`), a tag beside the unchanged line."""
     lines = [" ".join(x.split()) for x in (ru, kk, en)]
     alone = isinstance(who, str) and who.startswith("gh:")
     if alone and gh is not None:
@@ -260,7 +261,17 @@ def add(con, who: int | str, kind: str, ru: str, kk: str, en: str, gh: str | Non
     if any(re.search(r"@\w|https?://|t\.me/|www\.|\d{5,}", x, re.I) for x in lines):
         raise ValueError(f"no handle, link or id in a line: {REMIND}")
     with tx(con):
-        return con.execute("INSERT INTO credits (tg_id, gh, kind, ru, kk, en, created_at, name) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (tg_id, gh, kind, *lines, core.now(), name)).lastrowid
+        return con.execute("INSERT INTO credits (tg_id, gh, kind, ru, kk, en, created_at, name, via_ai) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                           (tg_id, gh, kind, *lines, core.now(), name, int(via_ai))).lastrowid
+
+
+def set_ai(con, cid: int, on: bool | None = None) -> bool:
+    """`credit ai <id> [0|1]`: set the tag, or toggle it when no value is given. No words or visibility change."""
+    with tx(con):
+        r = con.execute("UPDATE credits SET via_ai = COALESCE(?, 1 - via_ai) WHERE id = ? RETURNING via_ai", (on, cid)).fetchone()
+        if not r:
+            raise ValueError(f"no credit {cid}")
+        return bool(r[0])
 
 
 def set_gh(con, cid: int, gh: str) -> None:

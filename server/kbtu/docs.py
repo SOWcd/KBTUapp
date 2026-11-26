@@ -23,6 +23,7 @@ import sys
 import threading
 import time
 import zipfile
+from contextlib import closing
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
@@ -501,7 +502,7 @@ class Index:
 
     def ready(self) -> bool:
         try:
-            with self._con() as con:
+            with closing(self._con()) as con:
                 self._load(con)
             return True
         except (OSError, sqlite3.Error, TypeError):  # no file, or not a docs file
@@ -532,7 +533,7 @@ class Index:
         """The k best chunks for a question: bm25's list and, with a question's vector of the file's length, cosine's,
         fused by rank. One edition per handbook (the question's language when it has hits there): the three say the same.
         `intake`: the student's year of entry, its curricula first when the question names no year."""
-        with self._con() as con:
+        with closing(self._con()) as con:
             _, ids, vecs, n = self._load(con)
             lists = self._fts(con, q, n, intake)
             qv = None if qvec is None else np.asarray(qvec, dtype=np.float32).ravel()

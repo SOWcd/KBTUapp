@@ -61,6 +61,27 @@ def test_build_redacts_and_searches(tmp_path):
     assert ix.search("zzzz qqqq") == []
 
 
+def test_index_closes_read_connections(tmp_path, monkeypatch):
+    _, out = _build(tmp_path)
+    ix = docs.Index(str(out))
+    connect, opened = ix._con, []
+
+    def tracked():
+        con = connect()
+        opened.append(con)
+        return con
+
+    monkeypatch.setattr(ix, "_con", tracked)
+    assert ix.ready()
+    assert ix.search("retake")
+    for con in opened:
+        try:
+            con.execute("SELECT 1")
+        except sqlite3.ProgrammingError:
+            continue
+        raise AssertionError("document search left its connection open")
+
+
 def test_hybrid_fuses_an_embedding_hit(tmp_path):
     _, out = _build(tmp_path)
     con = sqlite3.connect(out)

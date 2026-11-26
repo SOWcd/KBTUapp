@@ -1,3 +1,10 @@
+<script module lang="ts">
+  import type { EventCard, EventFull, Id } from '../../lib/api';
+  // a receipt on its way outlives its sheet: opened again meanwhile, the new sheet waits on the same upload and alone
+  // answers it (it offered an idle button for a second receipt, and the old one opened the ticket over it)
+  const going = new Map<Id, Promise<EventCard>>(), owner = new Map<Id, object>();
+</script>
+
 <script lang="ts">
   // Paying for a seat (SPEC §4.3): the money goes straight to the club by Kaspi, never through the app. "Going · N ₸"
   // holds the seat for 30 minutes; the receipt makes it a ticket at once (the organizer compares it with their Kaspi
@@ -10,7 +17,7 @@
   import { onMount } from 'svelte';
   import Copy from '@lucide/svelte/icons/copy';
   import ReceiptIcon from '@lucide/svelte/icons/receipt';
-  import { api, ApiErr, type EventFull, type Id } from '../../lib/api';
+  import { api, ApiErr } from '../../lib/api';
   import { close, overlays, say, type Overlay } from '../../lib/state/ui.svelte';
   import { eventById, put, toggleGoing } from '../../lib/state/data.svelte';
   import { sheets } from '../../lib/state/sheets';
@@ -57,16 +64,23 @@
     el.value = '';
     if (!file) return;
     if (file.size > 30 * 1024 * 1024) { say(t('ed.photoBig'), 'pleading_face_3d'); return; }
+    const job = shrink(file, 2400).then((f) => api.uploadReceipt(id, f)); // a PDF goes as it is (shrink can't draw it); OCR wants the detail
+    going.set(id, job);
+    await settle(job);
+  }
+  async function settle(job: Promise<EventCard>) {
     busy = true;
     try {
-      const c = await api.uploadReceipt(id, await shrink(file, 2400)); // a PDF goes as it is (shrink can't draw it); OCR wants the detail
+      const c = await job;
+      if (owner.get(id) !== me) return;
       put(c);
       if (c.my?.receiptFlags?.length) haptic.warn(); // the sheet now says why
       else paid();
     } catch (x) {
+      if (owner.get(id) !== me) return;
       haptic.error();
       say(x instanceof ApiErr && x.code === 'closed' ? t('pay.expired') : x instanceof ApiErr && x.code === 'rate_limited' ? t('pay.tooMany') : x instanceof ApiErr && x.message === 'not_receipt' ? t('pay.notReceipt') : x instanceof ApiErr && x.code === 'bad_input' ? t('ed.photoBad') : t('common.error'), 'warning_3d');
-    } finally { busy = false; }
+    } finally { busy = false; if (going.get(id) === job) going.delete(id); }
   }
   function release() { toggleGoing(id); close(overlay.id); }
   function keep() { close(overlay.id); sheets.ticket(id); }
@@ -79,7 +93,13 @@
       if (x.my?.status === 'going') { put(x); paid(); }
     } catch { /* offline: the next return checks again */ }
   }
+  // the newest sheet for this event answers the upload; one closed before it lands still does if none came after
+  const me = {};
+  // svelte-ignore state_referenced_locally
+  owner.set(id, me);
   onMount(() => {
+    const was = going.get(id);
+    if (was) void settle(was);
     document.addEventListener('visibilitychange', recheck);
     const off = on('activated', recheck);
     return () => { document.removeEventListener('visibilitychange', recheck); off(); };

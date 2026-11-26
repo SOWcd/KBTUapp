@@ -7,6 +7,8 @@
     "build": "vite build && ! grep -lE '\\(\\?<[=!]' dist/assets/*.js",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "test": "vitest run",
+    "size": "node tools/size.mjs",
+    "size:update": "node tools/size.mjs --update",
     "e2e": "npm run build && playwright test",
     "e2e:snap": "e2e/linux.sh --project=snap-dark --project=snap-light"
   },
