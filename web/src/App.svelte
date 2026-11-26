@@ -208,6 +208,8 @@
   // over the Feed the capsule turns into tinted dark glass (chrome.ts); a titled overlay over it (the map, a sheet) takes
   // the normal chrome (owner's video, Oct 25: the map's capsule kept the Feed's tint)
   $effect(() => { feedChrome(capOf?.feed ? 1 : 0, 'opacity 220ms ease'); });
+  // a full-screen overlay on top (the map): no capsule of ours over it (owner, Nov 26); it lets go at once on closing
+  const bare = $derived(!![...overlays].reverse().find((o) => !o.closing)?.bare);
 
   // ---- live capsule: an event today you're going to, or a class within the next hour ----
   let clock = $state(nowTs());
@@ -725,7 +727,7 @@
     <!-- the feed's posters go full height (the top's fade is the tab's own mask, .tab below) -->
     <div class="botfade" aria-hidden="true" use:unfeed></div>
     <div class="tgfade" aria-hidden="true"></div>
-    <div class="cap-theme {capOf?.theme ? `theme-${capOf.theme}` : ''}"><Capsule {live} title={capTitle} icon={capIcon} spin={!!ui.busy} mark={!ui.busy && !!capOf?.mark} tint={capOf?.tint} /></div>
+    <div class="cap-theme {capOf?.theme ? `theme-${capOf.theme}` : ''}" class:bare><Capsule {live} title={capTitle} icon={capIcon} spin={!!ui.busy} mark={!ui.busy && !!capOf?.mark} tint={capOf?.tint} /></div>
     <Nav {tabs} labels={tabs.map((k) => TAB_LABEL[k]())} dot={tabs.map((k) => TAB_DOT[k]())} />
     {#if StandaloneBar && !gated}<StandaloneBar back={showBack} tint={capOf?.tint} />{/if}
 
@@ -752,6 +754,7 @@
 
 <style>
   .cap-theme { display: contents; }
+  .cap-theme.bare :global(.cap) { visibility: hidden; }
   .turn { display: none; }
   @media (orientation: landscape) and (max-height: 500px) {
     :global(html[data-web]) .turn { position: absolute; inset: 0; z-index: 10001; display: flex; flex-direction: column; align-items: center;

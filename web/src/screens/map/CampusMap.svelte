@@ -33,7 +33,8 @@
   // numbers are its labels, at a size one can read at any zoom, as many as fit without touching, halls and bigger rooms
   // first, fading in and out (zoomed out, the map is never empty). Opened on a room, the whole floor shows
   // first, then it flies in. The main plans are black on white: the dark look inverts them (the
-  // colours keep their hue). The capsule says "Map · floor 3", or "Room 305 · floor 3" (SPEC §8.2). The magnifier at the top
+  // colours keep their hue). The whole screen is the map's: no capsule of ours over it (overlay.bare; Telegram's own
+  // Back and menu stay). The magnifier at the top
   // turns the whole top row into a search box (one row, not a big box), which finds a room by its number or a hall by its name (roomOf), goes to its floor and glides to it.
   // The sun/moon at the top right turns the map light or dark, picked right on the map,
   // the map only and for this look: the app keeps its own theme, and the map opens in it again next time (a
@@ -65,7 +66,7 @@
   import { api } from '../../lib/api';
   import { session } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
-  import { mapFrom, copyCap, type CapCopy } from '../../lib/state/sheets';
+  import { mapFrom } from '../../lib/state/sheets';
   import { roomNow, type RoomWeek } from '../../lib/rooms';
   import { nowTs } from '../../lib/time';
 
@@ -78,11 +79,8 @@
   const roomFloor = $derived(floorOf(room)); // 0: the basement's 1-99
   const onRoomFloor = $derived(!!room && cur === roomFloor);
   const title = $derived(cur === 0 ? t('map.basement') : t('map.title', { n: cur }));
-  // on the way: where from and where to, in the header
-  $effect(() => { overlay.title = rt.route && rt.ends ? `${rt.ends[0]} → ${rt.ends[1]}` : onRoomFloor ? (cur ? t('map.room', { room: room!, n: cur }) : t('map.roomBasement', { room: room! })) : title; overlay.icon = MapIcon; });
   let own = $state<Theme | null>(null); // the map's theme while it is open; null: the app's
   const look = $derived(own ?? theme.current);
-  $effect(() => { overlay.theme = own ?? undefined; }); // the capsule above the map goes along
   // which map (a list at the top left): ours, the newest and the default (owner, Nov 20), Uni-Q's, the 2023 plan.
   // Opened on a room or a place: Uni-Q's (its rooms are ringed there, the basement is only there)
   const VERS: Ver[] = ['kbtu', 'main', 'old'];
@@ -642,6 +640,10 @@
     undoChrome = hideChrome();
     if (!iris) {
       panel.animate([{ opacity: 0, transform: 'scale(0.97)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: 'cubic-bezier(.2,.9,.25,1)' });
+      // our capsule fades away with it, then steps aside (overlay.bare); held faded till then, no flash between
+      const fade = document.querySelector<HTMLElement>('.cap')?.animate({ opacity: [1, 0] }, { duration: 200, easing: 'ease-out', fill: 'forwards' });
+      if (!fade) overlay.bare = true;
+      else fade.finished.then(() => { overlay.bare = true; fade.cancel(); }, () => {});
       return;
     }
     const o = { duration: 560, easing: 'cubic-bezier(.32, .8, .3, 1)' }, far = reach(iris.at);
@@ -662,45 +664,31 @@
     // composited under the map the whole visit; it shows again the moment the map starts closing
     under?.finished.then(() => { if (!gone && underEl) underEl.style.visibility = 'hidden'; }, () => {});
     const h = halo(30, far, o, [1, 1, 1, 0]);
-    // the capsule is cut by the circle: inside it already says "Map", outside it's still the old one
-    if (iris.cap) split(h, iris.cap, false);
+    // the circle wipes our capsule away as it passes; once it has covered the screen the capsule steps aside
+    veil(h, iris.at, () => (overlay.bare = true));
   }
   let under: Animation | null = null, underEl: HTMLElement | null = null;
   // opened from the nav's round button (one with the bar): the map grows out of that circle and
   // shrinks back into it; clip-path only, the map under it is painted once
   const reach = ({ x, y }: { x: number; y: number }) => Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
   const iris = (() => {
-    const { at, cap, el } = mapFrom; mapFrom.at = mapFrom.cap = mapFrom.el = null;
+    const { at, el } = mapFrom; mapFrom.at = mapFrom.el = null;
     if (!at || matchMedia('(prefers-reduced-motion: reduce)').matches) return null;
-    return Object.assign((r: number) => `circle(${r}px at ${at.x}px ${at.y}px)`, { at, cap, el });
+    return Object.assign((r: number) => `circle(${r}px at ${at.x}px ${at.y}px)`, { at, el });
   })();
   const BACK_AFTER = 180; // ms into the iris: lands on the animation
   untrack(() => { if (iris) overlay.holdBack = true; }); // until a moment into the circle (appear); set before the first frame
-  // the map's own capsule, copied whenever it changes (the floor), for the way back: closing, the real one is the
-  // old page's at once, the copy shows inside the shrinking circle
-  let mapCap: CapCopy | null = null;
-  $effect(() => {
-    void overlay.title; void own;
-    if (iris && !gone) void tick().then(() => requestAnimationFrame(() => { if (!gone) mapCap = copyCap(); }));
-  });
-  // two capsules meet on the circle's edge: the real one and a still copy, each masked to its side, every frame
-  function split(h: HTMLElement, copy: CapCopy, copyInside: boolean, c: { x: number; y: number } = iris!.at) {
-    const real = document.querySelector<HTMLElement>('.cap');
-    const w = document.createElement('div');
-    w.className = copy.theme;
-    w.style.cssText = 'display:block;position:fixed;inset:0;z-index:9998;pointer-events:none';
-    w.setAttribute('aria-hidden', 'true');
-    w.append(copy.node);
-    document.body.append(w);
-    const side = (el: HTMLElement, inside: boolean, r: number) => {
-      const b = el.getBoundingClientRect(), [i, o] = inside ? ['#000', 'transparent'] : ['transparent', '#000'];
-      const m = `radial-gradient(circle at ${c.x - b.left}px ${c.y - b.top}px, ${i} ${r}px, ${o} ${r}px)`;
-      el.style.setProperty('mask', m); el.style.setProperty('-webkit-mask', m);
-    };
+  // no capsule of ours over the map (owner, Nov 26: the whole screen is the map's; Telegram's own buttons stay): the
+  // circle's edge cuts the page's capsule, gone inside, there outside, either way. One live mask a frame, its place read
+  // once (it doesn't move meanwhile): a cloned glass copy of the capsule masked beside it doubled the work and stuttered
+  function veil(h: HTMLElement, c: { x: number; y: number }, done?: () => void) {
+    const cap = document.querySelector<HTMLElement>('.cap');
+    if (!cap) { done?.(); return; }
+    const b = cap.getBoundingClientRect(), x = c.x - b.left, y = c.y - b.top;
     const frame = () => {
-      if (!h.isConnected || !real) { real?.style.removeProperty('mask'); real?.style.removeProperty('-webkit-mask'); w.remove(); return; }
-      const r = h.offsetWidth / 2;
-      side(real, !copyInside, r); side(copy.node, copyInside, r);
+      if (!h.isConnected) { done?.(); cap.style.removeProperty('mask'); cap.style.removeProperty('-webkit-mask'); return; }
+      const r = h.offsetWidth / 2, m = `radial-gradient(circle at ${x}px ${y}px, transparent ${r}px, #000 ${r}px)`;
+      cap.style.setProperty('mask', m); cap.style.setProperty('-webkit-mask', m);
       requestAnimationFrame(frame);
     };
     frame();
@@ -773,7 +761,7 @@
       if (shut && sb?.width) shut.animate({ transform: ['none', `translate(${c.x - sb.left - sb.width / 2}px, ${c.y - sb.top - sb.height / 2}px) scale(${(end * 2) / sb.width})`] }, { ...o, fill: 'forwards' });
       const circle = (r: number) => `circle(${r}px at ${c.x}px ${c.y}px)`;
       const h = halo(far, end, o, [1, 1, 1], c); // held to the end: the ripples take over from it at the button's size
-      if (mapCap) split(h, mapCap, true, c);
+      veil(h, c); // the page's capsule comes back as the circle uncovers it (overlay.bare lets go with closing)
       undoChrome(); undoChrome = () => {}; // the capsule and the nav come back now, the circle uncovers them
       stage.animate({ transform: ['none', 'scale(1.06)'] }, { ...o, fill: 'forwards' });
       underEl?.style.removeProperty('visibility');
@@ -808,7 +796,10 @@
           { transform: 'scale(.99)', offset: 0.8 }, { transform: 'scale(1)' },
         ], { duration: 680, easing: 'cubic-bezier(.3, .7, .4, 1)' });
       }, o.duration * 0.94);
-    } else a = panel.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200, easing: 'ease-in', fill: 'forwards' });
+    } else {
+      a = panel.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200, easing: 'ease-in', fill: 'forwards' });
+      document.querySelector<HTMLElement>('.cap')?.animate({ opacity: [0, 1] }, { duration: 200, easing: 'ease-out' });
+    }
     a.onfinish = () => removeOverlay(overlay.id);
   }
   $effect(() => { if (overlay.closing) leave(); });
@@ -1057,13 +1048,8 @@
   .bar { position: relative; flex: 1; min-width: 0; height: 60px; border-radius: 30px; display: flex; align-items: center; gap: 10px; padding: 0 16px; font: 600 16px/1 var(--font-text); color: var(--text-2); }
   .bar :global(svg) { color: var(--text); flex: none; }
   .exit { position: relative; width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; color: var(--success); flex: none; }
-  /* the same glass as its neighbours, lit from inside in the accent: this is where you are (the solid
-     white disc was too loud) */
-  .shut { position: relative; width: 54px; height: 54px; border-radius: 50%; display: grid; place-items: center; flex: none; color: var(--accent); }
-  .shut::before { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
-    background: radial-gradient(circle at 50% 60%, color-mix(in srgb, var(--accent) 28%, transparent), transparent 70%);
-    box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 55%, transparent); }
-  .shut > :global(svg) { position: relative; }
+  /* the same neutral glass as the other map controls (the accent-lit one read oddly blue: owner, Nov 26) */
+  .shut { position: relative; width: 54px; height: 54px; border-radius: 50%; display: grid; place-items: center; flex: none; color: var(--text); }
   .bar, .exit, .shut { transition: transform 0.45s var(--ease-bounce); }
   .bar:active, .exit:active, .shut:active { transform: scale(0.95); transition-duration: 80ms; }
   /* the room found: a short panel with the way to it */

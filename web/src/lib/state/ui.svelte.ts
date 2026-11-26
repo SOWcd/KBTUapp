@@ -37,8 +37,9 @@ export function goTab(tab: Tab): void {
 /** holdBack: Telegram's Back button waits while the overlay comes in (the map's iris, PLAN 80) */
 /** feed: the Feed in a row, under it the nav and capsule take its dark tinted glass (chrome.ts) */
 /** quiet: it has a large title of its own still in view (a Pane): the capsule shows the live status or nothing, and not
- *  the overlay below. mark: its title is in its own header (a Sheet's heading): the capsule shows its icon alone. */
-export interface Overlay { id: number; component: Component<any>; props: Record<string, unknown>; closing: boolean; key?: SheetKey | null; byUser?: boolean; title?: string; theme?: 'light' | 'dark'; icon?: Component<any>; holdBack?: boolean; feed?: boolean; quiet?: boolean; mark?: boolean;
+ *  the overlay below. mark: its title is in its own header (a Sheet's heading): the capsule shows its icon alone.
+ *  bare: the whole screen is the overlay's (the map): our capsule steps aside while it is the top; Telegram's buttons stay. */
+export interface Overlay { id: number; component: Component<any>; props: Record<string, unknown>; closing: boolean; key?: SheetKey | null; byUser?: boolean; title?: string; theme?: 'light' | 'dark'; icon?: Component<any>; holdBack?: boolean; feed?: boolean; quiet?: boolean; mark?: boolean; bare?: boolean;
   /** a tinted page (the event editor): its colour, which the sheets opened over it take (Sheet), and the capsule */
   tint?: string | null;
   /** what the anonymous counters call it (lib/stats.ts); a generic error toast is counted against the top one that has it */

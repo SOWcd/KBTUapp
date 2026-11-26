@@ -21,18 +21,8 @@ export function returnToSheet(stack: Overlay[], component: Overlay['component'],
 export type Ask = { title: string; text?: string; ok: string; cancel: string; danger?: boolean; wait?: number; link?: { label: string; url: string } };
 export type InviteLanding = { code: string; card: LinkCard; alreadyRegistered: boolean };
 
-/** a still copy of the top capsule and its theme wrapper's classes (the map's circle cuts between it and the live one) */
-export type CapCopy = { node: HTMLElement; theme: string };
-export function copyCap(): CapCopy | null {
-  const c = document.querySelector<HTMLElement>('.cap');
-  if (!c) return null;
-  const node = c.cloneNode(true) as HTMLElement;
-  node.removeAttribute('role');
-  return { node, theme: c.parentElement?.className ?? '' };
-}
-/** where the map was opened from (the nav's round button): it opens out of that circle and closes back into it, and
- *  the capsule as it was before the map changed it */
-export const mapFrom: { at: { x: number; y: number; r: number } | null; cap: CapCopy | null; el: HTMLElement | null } = { at: null, cap: null, el: null };
+/** where the map was opened from (the nav's round button): it opens out of that circle and closes back into it */
+export const mapFrom: { at: { x: number; y: number; r: number } | null; el: HTMLElement | null } = { at: null, el: null };
 /** The iris: a screen opens out of the round button that was pressed (the map's opening, more often).
  *  The opener marks its place on the click; whichever Sheet, Pane or Feed mounts next takes it, once, if still fresh. */
 type Iris = { x: number; y: number; r: number; el?: HTMLElement /* the control itself (the assistant's light hides it while it flies) */ };
@@ -66,7 +56,6 @@ export function irisShut(el: HTMLElement, i: Iris): Animation {
 export function openMapFrom(e: MouseEvent) {
   const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
   mapFrom.at = { x: r.left + r.width / 2, y: r.top + r.height / 2, r: Math.min(r.width, r.height) / 2 };
-  mapFrom.cap = copyCap();
   mapFrom.el = e.currentTarget as HTMLElement; // it closes back into this very control (CampusMap leave)
   sheets.map();
 }
