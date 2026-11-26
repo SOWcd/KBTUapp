@@ -54,8 +54,7 @@ def plain(text: str) -> str:
 
 
 async def send(cfg: Config, token: str, text: str, start: str) -> str:
-    """'ok'; 'gone' (Apple says the token is dead for good); 'failed' (Apple refused it); 'down' (no answer from Apple,
-    or our key: nothing said about the token)."""
+    """'ok'; 'gone' (Apple says the token is dead); 'down' (any other failure: keep the token)."""
     global _http
     if _http is None:
         _http = httpx.AsyncClient(http2=True, timeout=15)
@@ -68,12 +67,15 @@ async def send(cfg: Config, token: str, text: str, start: str) -> str:
         return "down"
     if r.status_code == 200:
         return "ok"
+    if r.status_code == 410:
+        return "gone"
     try:
-        reason = str(r.json().get("reason", ""))
+        body = r.json()
     except ValueError:
-        reason = ""
-    if r.status_code == 410 or reason in GONE:
+        body = None
+    reason = str(body.get("reason", "")) if isinstance(body, dict) else ""
+    if reason in GONE:
         return "gone"
     log.warning("apns: %s %s", r.status_code, reason[:60])  # never the token
-    return "down" if r.status_code == 403 or r.status_code >= 500 else "failed"  # 403: our key; 5xx: Apple's own
+    return "down"  # topic, payload, throttle, credentials or service: none says the device token is dead
 

@@ -297,14 +297,14 @@ def test_one_channel_push_while_the_token_is_live(both):
     assert pushed == [DEVICE] and not telegram and _sent(cfg, "bo:1") == (1, None)  # the app by default, never both
 
 
-def test_a_failed_push_goes_to_the_bot_at_once_and_kills_the_token(both):
+def test_an_invalid_token_goes_to_the_bot_and_can_be_registered_again(both):
     c, cfg, uid, pushed, got = both
-    got[0] = "failed"
+    got[0] = "gone"
     telegram: list = []
     _queue(cfg, uid, "bo:1")
     _postman(cfg, telegram)
     assert pushed == [DEVICE] and len(telegram) == 1 and _sent(cfg, "bo:1") == (1, None)  # the same round, by the bot
-    assert _dead(cfg) == [True]
+    assert _dead(cfg) == []
     assert c.get("/api/me", headers=WEB).json()["notify"]["app"] is False
     _queue(cfg, uid, "bo:2")
     _postman(cfg, telegram)

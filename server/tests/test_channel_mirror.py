@@ -312,7 +312,7 @@ def test_mirrored_album_caption_removal(env, monkeypatch):
 
     work = userbot.Mirror(cfg, Client(), con)
 
-    async def read(_channel, m):
+    async def read(_channel, m, _oid):
         return m.post
 
     monkeypatch.setattr(work, "read", read)
