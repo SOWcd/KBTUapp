@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from kbtu import auth, bot, config, db, logic, media, app as server, texts, video
+from kbtu import auth, bot_dm, chores, config, db, logic, media, outbox, app as server, texts, video
 from test_core import BOT, delete_now, env, login, tma  # noqa: F401  (env: the fixture)
 
 
@@ -202,7 +202,7 @@ def test_album(env, monkeypatch):
         e = c.post("/api/events/1/photos", headers=A, content=jpeg(n)).json()
     assert len(e["photos"]) == 10 and e["canAddPhotos"] is False                            # ten each
     report = con.execute("SELECT b.*, 'ru' AS lang FROM bot_outbox b WHERE kind = 'photo_report'").fetchall()
-    assert [r["user_id"] for r in report] == [dana["id"]] and bot._render(con, report[0])[2] == "ph_1"  # once, to who else came
+    assert [r["user_id"] for r in report] == [dana["id"]] and outbox._render(con, report[0])[2] == "ph_1"  # once, to who else came
     assert c.post("/api/events/1/photos", headers=A, content=jpeg(11)).status_code == 403
     assert c.get("/api/events/1", headers=P).json()["canAddPhotos"] is True                 # the team brings its own
     assert c.delete(f"/api/events/1/photos/{first}", headers=Z).status_code == 403
@@ -216,9 +216,9 @@ def test_album(env, monkeypatch):
     admin.main(["photo-call", "1", "--send"])
     admin.main(["photo-call", "1", "--send"])
     call = con.execute("SELECT b.*, 'ru' AS lang FROM bot_outbox b WHERE kind = 'photo_call'").fetchall()
-    assert sorted(r["user_id"] for r in call) == sorted([ali["id"], dana["id"]]) and bot._render(con, call[0])[2] == "ph_1"
+    assert sorted(r["user_id"] for r in call) == sorted([ali["id"], dana["id"]]) and outbox._render(con, call[0])[2] == "ph_1"
     con.execute("UPDATE events SET ends_at = ? WHERE id = 1", (int(time.time()) - 8 * 86400,))
-    assert bot._render(con, call[0]) is None                                                 # a week on: no adding, quiet
+    assert outbox._render(con, call[0]) is None                                                 # a week on: no adding, quiet
     assert c.get("/api/events/1", headers=A).json()["canAddPhotos"] is False               # a week after the end: closed
     assert delete_now(c, cfg, A) is None
     left = c.get("/api/events/1", headers=P).json()["photos"]
@@ -280,10 +280,10 @@ def test_album_reports(env):
     assert c.post("/api/reports", headers=P, json={"target": "photo", "id": ph["id"], "reason": "insult"}).status_code == 204
     assert c.post(f"/api/admin/reports/photo/{ph['id']}", headers=B, json={"remove": True}).status_code == 204
     con.execute("UPDATE takedowns SET at = at - 29 * 86400")
-    bot.purge(cfg, con)
+    chores.purge(cfg, con)
     assert on_disk()                                                                         # 29 days: still there
     con.execute("UPDATE takedowns SET at = at - 2 * 86400")
-    bot.purge(cfg, con)                                                                      # 31: gone, from disk too
+    chores.purge(cfg, con)                                                                      # 31: gone, from disk too
     assert not on_disk() and not con.execute("SELECT 1 FROM files WHERE id = ?", (ph["id"],)).fetchone()
     assert c.post(f"/api/admin/taken-down/photo/{ph['id']}/restore", headers=B).status_code == 404
     e = c.get("/api/events/1", headers=P).json()
@@ -328,14 +328,14 @@ def test_chat_avatars_on_disk(env, monkeypatch):
     monkeypatch.setattr(media, "chat_peek", peek)
     def suggest(handle):
         con.execute("DELETE FROM meta WHERE key LIKE 'suggest_at:%'")
-        return asyncio.run(bot._suggest(cfg, None, con, {"chat": {"id": 63, "type": "private"}, "date": logic.now(), "text": handle}))["text"]
+        return asyncio.run(bot_dm._suggest(cfg, None, con, {"chat": {"id": 63, "type": "private"}, "date": logic.now(), "text": handle}))["text"]
     on_disk = lambda p: (root / f"{p}.webp").exists()  # noqa: E731
     assert suggest("@jam_news").startswith("✅") and suggest("@broken_pic").startswith("✅")
     first = con.execute("SELECT photo FROM chats WHERE url = 'https://t.me/jam_news'").fetchone()[0]
     assert first and on_disk(first)
     assert con.execute("SELECT photo FROM chats WHERE url = 'https://t.me/broken_pic'").fetchone()[0] is None
     image["https://t.me/jam_news"] = png((40, 200, 40))                                 # a new avatar on t.me
-    asyncio.run(bot.refresh_chats(cfg, None, con))
+    asyncio.run(chores.refresh_chats(cfg, None, con))
     second = con.execute("SELECT photo FROM chats WHERE url = 'https://t.me/jam_news'").fetchone()[0]
     assert second != first and on_disk(second) and not on_disk(first)
     # once our bot sits in the chat, Telegram's own card: title, about, members, avatar
@@ -352,7 +352,7 @@ def test_chat_avatars_on_disk(env, monkeypatch):
                          "getChatMemberCount": {"ok": True, "result": 77}, "getFile": {"ok": True, "result": {"file_path": "p/1.jpg", "file_size": 999}}}[method])
         async def get(self, url):
             return Resp(content=png((40, 40, 200)))
-    assert asyncio.run(bot.chat_card(cfg, Http(), con, cid, -100123)) is True
+    assert asyncio.run(chores.chat_card(cfg, Http(), con, cid, -100123)) is True
     row = con.execute("SELECT title, about, members, photo FROM chats WHERE id = ?", (cid,)).fetchone()
     assert tuple(row)[:3] == ("Jam News", "Every Friday", 77) and row[3] not in (first, second) and on_disk(row[3]) and not on_disk(second)
 
@@ -441,7 +441,7 @@ def test_userpic_copy(env, media_dns):
     import io
     import httpx
     from PIL import Image
-    from kbtu import bot
+    from kbtu import chores
     c, cfg = env
     login(c, 10, "ali")
     con = db.connect(cfg.db_path)
@@ -456,7 +456,7 @@ def test_userpic_copy(env, media_dns):
     async def round_():
         async with httpx.AsyncClient(transport=httpx.MockTransport(
                 lambda r: httpx.Response(200, content=pics[r.url.path[-5]]))) as http:
-            await bot._userpics(cfg, http, con)
+            await chores._userpics(cfg, http, con)
 
     me = lambda: c.get("/api/me", headers=pic(url)).json()["avatar"]
     me()
@@ -483,7 +483,7 @@ def test_userpic_refetch(env, monkeypatch, media_dns):
     con = db.connect(cfg.db_path)
     root = Path(cfg.db_path).parent / "media"
     t = logic.now()
-    monkeypatch.setattr(bot, "now", lambda: t)
+    monkeypatch.setattr(chores, "now", lambda: t)
 
     async def fetch(status, color):
         buf = io.BytesIO()
@@ -491,7 +491,7 @@ def test_userpic_refetch(env, monkeypatch, media_dns):
             Image.new("RGB", (32, 32), color).save(buf, "PNG")
         async with httpx.AsyncClient(transport=httpx.MockTransport(
                 lambda r: httpx.Response(status, content=buf.getvalue()))) as http:
-            await bot._userpics(cfg, http, con)
+            await chores._userpics(cfg, http, con)
         path, at = con.execute("SELECT tg_photo_path, tg_photo_at FROM users WHERE tg_id = 10").fetchone()
         assert at == t
         return root / f"{path}.t.webp"

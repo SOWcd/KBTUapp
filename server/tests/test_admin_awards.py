@@ -127,7 +127,7 @@ def test_award_rows_and_holders(env, dmp_on):
 def test_link_review_fixes(env):
     """Adversarial review (Nov 3): a slot never comes back (undo, a deleted account); an old one-time link stays used;
     the creator's awards only from his links and only he undoes them; the card waits for an Undo; bad days refused."""
-    from kbtu import bot
+    from kbtu import outbox
     c, cfg = env
     con, boss, adm = _staff(c, cfg)
     ann, bob = login(c, 62, "ann"), login(c, 63, "bob")
@@ -165,9 +165,9 @@ def test_link_review_fixes(env):
     c.delete(f"/api/admin/grants/{g['id']}", headers=tma(61))
     con.execute("INSERT INTO bot_outbox (user_id, kind, ref, send_after) VALUES (?, 'achievement', 'ach:init26p:1', 0)", (bob["id"],))
     row = con.execute("SELECT b.*, 'ru' AS lang FROM bot_outbox b WHERE user_id = ? AND ref = 'ach:init26p:1'", (bob["id"],)).fetchone()
-    assert bot._render(con, row) is None
+    assert outbox._render(con, row) is None
     give = lambda: c.post("/api/admin/grants", headers=tma(61), json={"userId": bob["id"], "code": "init26p"})  # noqa: E731
-    assert give().status_code == 200 and bot._render(con, row) is not None                     # held again: it goes
+    assert give().status_code == 200 and outbox._render(con, row) is not None                     # held again: it goes
     # days: an int of the list only
     import pytest
     for d in (7.0, True, "7", 5):
@@ -257,7 +257,7 @@ def test_attendance_counts_once_a_meeting(env, dmp_on):
 
 def test_honor_medal(env, monkeypatch, capsys):
     import pytest
-    from kbtu import admin, bot, texts
+    from kbtu import admin, outbox, texts
     from kbtu.logic import credits
     from test_core import delete_now
 
@@ -287,11 +287,11 @@ def test_honor_medal(env, monkeypatch, capsys):
     assert medals()[0]["reason"] == reason and medals()[0]["level"] == 1
     msg = dict(con.execute("SELECT * FROM bot_outbox WHERE ref = 'ach:honor:1'").fetchone())
     for lang in ("ru", "kk", "en"):
-        text, button, link = bot._render(con, {**msg, "lang": lang})
+        text, button, link = outbox._render(con, {**msg, "lang": lang})
         assert texts.ACH_NAMES[lang]["honor"] in text and reason not in text and button and link == "aw_honor"
 
     mine = c.get("/api/credits", headers=tma(62)).json()["mine"]
-    assert mine["honor"] and mine["items"] == [] and listed() == []
+    assert mine["honor"] and mine["items"] == [] and [(p["person"]["id"], p["honor"]) for p in listed()] == [(uid, True)]  # shown by default
     assert credits.asking(con, uid) == 62
     consent = {"show": True, "rev": mine["rev"], "consent": credits.CONSENT}
     assert c.put("/api/credits/consent", headers=tma(62), json=consent).status_code == 200

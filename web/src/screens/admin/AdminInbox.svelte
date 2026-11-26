@@ -147,10 +147,12 @@
     if (!(await sheets.ask({ title: t('fc.revealAsk'), text: t('fc.revealText'), ok: t('fc.reveal'), cancel: t('common.cancel') }))) return;
     try { const who = await api.revealChannelPost(id); say(t('fc.wrote', { name: who.name }), 'locked_3d'); } catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
-  async function sendAgain(it: InboxItem, id: number) {
-    // a lost send may be in the comments already (the bot can't tell): sent again only after a look there
-    if (!(await sheets.ask({ title: t('fcr.againAsk'), text: t('fcr.againText'), ok: t('fcr.again'), cancel: t('common.cancel') }))) return;
-    void decide(it, t('adm.act.fchan_reply_release'), undefined, () => api.channelReplyMod(id, true, true));
+  async function sendAgain(it: InboxItem, id: number, post = false) {
+    // a lost send may be in the channel or its comments already (the bot can't tell): sent again only after a look there
+    if (!(await sheets.ask({ title: t(post ? 'fc.againAsk' : 'fcr.againAsk'), text: t(post ? 'fc.againText' : 'fcr.againText'),
+      ok: t('fcr.again'), cancel: t('common.cancel') }))) return;
+    void (post ? decide(it, t('adm.act.fchan_release'), undefined, () => api.channelModDecide(id, true, true))
+      : decide(it, t('adm.act.fchan_reply_release'), undefined, () => api.channelReplyMod(id, true, true)));
   }
 
   // what a decided card was about, after its verdict on the slim line
@@ -273,6 +275,8 @@
       <p class="text selectable">{p.body}</p>
       <ForumPics photos={p.photos} />
       {#if p.own}<i class="meta">{t('fc.ownPost')}</i>
+      {:else if p.why === 'lost'}{@render two(t('fcr.again'), () => sendAgain(it, p.id, true),
+        t('fc.takeDown'), () => decide(it, t('adm.act.fchan_hide'), `fchan:${p.id}`, () => api.channelModDecide(p.id, false)))}
       {:else}{@render two(t('fc.release'), () => decide(it, t('adm.act.fchan_release'), undefined, () => api.channelModDecide(p.id, true)),
         t('fc.takeDown'), () => decide(it, t('adm.act.fchan_hide'), `fchan:${p.id}`, () => api.channelModDecide(p.id, false)))}{/if}
     </div>

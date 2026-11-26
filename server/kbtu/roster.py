@@ -179,8 +179,17 @@ def _mine(con, uid: int) -> tuple[sqlite3.Row | None, list[sqlite3.Row]]:
     if not s:
         return None, []
     found = rows(con, """SELECT * FROM roster_pending WHERE ((tg IS NOT NULL AND tg = lower(?)) OR (email IS NOT NULL AND email = lower(?)))
-        AND (rejected_by IS NULL OR rejected_by != ?) ORDER BY id""", s["tg_username"] or "", s["email"] or "", uid)
+        AND (rejected_by IS NULL OR rejected_by != ?)
+        AND NOT EXISTS (SELECT 1 FROM org_bans b WHERE b.org_id = roster_pending.org_id AND b.user_id = ?) ORDER BY id""",
+                 s["tg_username"] or "", s["email"] or "", uid, uid)  # a club's ban outranks the sheet (join): not theirs to match or claim
     return s, found
+
+
+def due(con, uid: int) -> bool:
+    """A row match would join (a read, so /api/me takes the write lock only then, never on every open for a row
+    that waits for a claim)."""
+    s, found = _mine(con, uid)
+    return any(_verified(r, s) for r in found)
 
 
 def _verified(r, s) -> bool:
@@ -236,7 +245,6 @@ def join(con, uid: int, r: sqlite3.Row, trusted: bool = True, promote: bool = Fa
                 # a club's own role may carry rights: a claim without a verified match never takes one, nor anyone one of
                 # another level than the row's (else a member's row titled as the club's Vice-level "HR" gets its rights)
                 if t and (not trusted or t["level"] != role):
-                    t = None
                     tid = None
                 else:
                     tid = t["id"] if t else con.execute("""INSERT INTO org_roles (org_id, name, color, level, created_at) VALUES (?, ?, ?, ?, ?)""",

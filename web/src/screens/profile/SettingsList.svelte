@@ -31,6 +31,11 @@
   import Share from '@lucide/svelte/icons/share';
   import Send from '@lucide/svelte/icons/send';
   import RotateCw from '@lucide/svelte/icons/rotate-cw';
+  import KeyRound from '@lucide/svelte/icons/key-round';
+  import Trash2 from '@lucide/svelte/icons/trash-2';
+  import { APPLE_CONSENT, TG_LINK, appleToken, inApp, native, nonce, telegramProof } from '../../lib/native';
+  import { ApiErr } from '../../lib/api';
+  import { loadMe } from '../../lib/state/session.svelte';
   import { api, type Settings } from '../../lib/api';
   import { session } from '../../lib/state/session.svelte';
   import { data, phrase, dropSchedule } from '../../lib/state/data.svelte';
@@ -136,6 +141,47 @@
     }
   }
 
+  // ---- sign-ins (outside Telegram: me.logins): one account reached by Telegram or Apple (server logic/apple.py) ----
+  let linking = $state(false);
+  async function linkWith(fn: () => Promise<void>, done: string) {
+    if (linking) return;
+    linking = true;
+    try { await fn(); await loadMe(); haptic.ok(); say(done, 'sparkles_3d'); }
+    catch (e) {
+      const why = e instanceof ApiErr ? e.message : '';
+      haptic.error(); say(t(why === 'apple_taken' ? 'logins.appleTaken' : why === 'telegram_taken' ? 'logins.tgTaken' : 'common.error'), 'warning_3d');
+    }
+    finally { linking = false; }
+  }
+  // Telegram's own sign-in page, then back here (WebEntrance reads its #tgAuthResult and links it): only a return this
+  // tab started, marked by a one-time state for this account, gets linked. The iPhone app: the system's sign-in sheet
+  // instead, its return checked against the same state right here (native.ts telegramProof); closed: nothing to say
+  async function linkTelegram() {
+    haptic.tap();
+    try {
+      if (native.has('tglink')) {
+        const state = nonce(), { url } = await api.telegramLinkStart(state, true);
+        const proof = await telegramProof(url, state);
+        if (proof) void linkWith(() => api.linkTelegram(proof), t('logins.tgDone'));
+        return;
+      }
+      const state = nonce(), { url } = await api.telegramLinkStart(state);
+      sessionStorage.setItem(TG_LINK, JSON.stringify({ state, uid: me?.id, at: Date.now() }));
+      location.assign(url);
+    } catch { say(t('common.error'), 'warning_3d'); }
+  }
+  // Apple's sheet closed: nothing to say
+  async function linkApple() {
+    const n = nonce(), token = await appleToken(n);
+    if (token) void linkWith(() => api.linkApple({ token, nonce: n, consent: APPLE_CONSENT }), t('logins.appleDone'));
+  }
+  async function unlinkApple() {
+    if (!(await sheets.ask({ title: t('logins.unlinkAsk'), ok: t('logins.unlink'), cancel: t('common.cancel'), danger: true }))) return;
+    void linkWith(() => api.unlinkApple(), t('logins.unlinked'));
+  }
+  // an account Apple made (App Store 5.1.1(v)) deletes itself here too; a student's goes through Privacy as before
+  const deleteApple = () => sheets.deleteAccount({ awards: 0, tickets: data.events.filter((e) => e.my && e.my.status !== 'cancelled').length, clubs: 0 });
+
   onMount(() => on('homeScreenAdded', () => { home.v = 'added'; clearTimeout(homeWait); say(t('set.homeDone'), 'rocket_3d'); }));
   // Android: a launcher that forbids Telegram's shortcuts (Xiaomi, Huawei...) swallows the dialog without a word;
   // no "added" within a few seconds -> say where to allow it, never a button that seems to do nothing
@@ -196,7 +242,8 @@
   <div data-unit class="sec">
     <Group>
       <Row icon={Info} title={t('set.about')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('about'); }} />
-      {#if me}<Row icon={HandHeart} title={t('set.donate')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('donate'); }} />{/if}
+      <!-- never in the iPhone app: a gift to the app outside Apple's in-app purchase breaks App Store rule 3.1.1 -->
+      {#if me && !inApp}<Row icon={HandHeart} title={t('set.donate')} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('donate'); }} />{/if}
     </Group>
   </div>
   {#if !inTelegram}
@@ -207,6 +254,24 @@
         <Row icon={RotateCw} title={t('web.reload')} tone="action" onclick={() => location.reload()} />
       </Group>
     </div>
+  {/if}
+  {#if me?.logins}
+    {@const lg = me.logins}
+    <div data-unit class="sec">
+      <!-- bot messages come through Telegram alone: said under the group while it isn't linked -->
+      <Group caption={t('logins.title')} footnote={lg.telegram ? undefined : t('logins.tgWhy')}>
+        {#if lg.telegram}<Row icon={Send} title={t('logins.tg')} value={t('logins.linked')} />
+        {:else}<Row icon={Send} title={t('logins.linkTg')} tone="action" disabled={linking} onclick={() => void linkTelegram()} />{/if}
+        {#if lg.apple}<Row icon={KeyRound} title={t('logins.appleName')} value={t('logins.linked')}
+          menu={lg.telegram ? [{ label: t('logins.unlink'), destructive: true, onselect: () => void unlinkApple() }] : undefined} />
+        {:else if native.has('apple')}<Row icon={KeyRound} title={t('logins.linkApple')} tone="action" disabled={linking} onclick={() => void linkApple()} />{/if}
+      </Group>
+    </div>
+    {#if lg.apple && !me.student && !me.deleteAt}
+      <div data-unit class="sec">
+        <Group><Row icon={Trash2} title={t('logins.delete')} tone="destructive" onclick={deleteApple} /></Group>
+      </div>
+    {/if}
   {/if}
   {#if me}
     <div data-unit class="sec">

@@ -10,7 +10,7 @@ from pathlib import Path
 from .. import media
 from ..db import tx
 
-from .core import (ApiError, PERSON_COLS, RANK, Viewer, _by_id, _may, _org, _qs, _rights_from, _roles, can, log_action,
+from .core import (ApiError, PERSON_COLS, RANK, Viewer, _by_id, _may, _org, _qs, _roles, can, log_action,
     _once, need_student, one, org_ref, overseer, person_ref, role_in, rows, short_name)
 
 
@@ -219,6 +219,8 @@ def people(con, v: Viewer, oid: int) -> list[dict]:
 
 def subscribe(con, v: Viewer, oid: int, on: bool) -> dict:
     need_student(v)
+    if on and not one(con, "SELECT 1 FROM orgs WHERE id = ? AND status = 'active'", oid):
+        raise ApiError("not_found")  # before the row: none kept for a hidden club, no 500 for a gone one
     if on:
         con.execute("INSERT OR IGNORE INTO subscriptions (user_id, org_id, created_at) VALUES (?, ?, ?)", (v.id, oid, core.now()))
     else:
@@ -1055,6 +1057,6 @@ def seed_schools(con, root: Path) -> None:
 # when a function runs
 from . import core, oversight  # noqa: E402
 from .chatlist import org_chats  # noqa: E402
-from .oversight import DMP_COLS, _admin, staff  # noqa: E402
+from .oversight import DMP_COLS, _admin  # noqa: E402
 from .seats import joined, notify, notify_staff  # noqa: E402
 from .teams import _ordered, banned  # noqa: E402

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import json
 
-from kbtu import bot, db, logic
+from kbtu import db, logic, outbox
 from test_core import delete_now, env, login, tma  # noqa: F401  (env is a fixture)
 
 EV = {"place": "Atrium", "emoji": "crown_3d", "color": "#3B6BFF", "seats": 50}
@@ -173,7 +173,7 @@ def test_door_helpers(env):
     assert c.get(f"/api/events/{eid}", headers=tma(FRIEND)).json()["myCrew"] == "scan"
     assert con.execute("SELECT COUNT(*) FROM audit_log WHERE action = 'crew_put'").fetchone()[0] == 3
     row = dict(con.execute("SELECT * FROM bot_outbox WHERE kind = 'crew_added' AND user_id = ?", (uid(FRIEND),)).fetchone()) | {"lang": "en"}
-    assert "Anime Quiz" in bot._render(con, row)[0]
+    assert "Anime Quiz" in outbox._render(con, row)[0]
     # the scanner helper: a ticket yes, a badge of someone not going no, the list no, their own ticket no
     code = c.post(f"/api/events/{eid}/registration", headers=tma(FRIEND4), json={}).json()["my"]["ticketCode"]
     S = tma(FRIEND)
@@ -201,7 +201,7 @@ def test_door_helpers(env):
     assert c.delete(f"/api/events/{eid}/crew/{uid(FRIEND)}", headers=tma(OFF)).status_code == 403  # no longer running it
     assert c.delete(f"/api/events/{eid}/crew/{uid(FRIEND)}", headers=tma(INI)).status_code == 200
     assert c.get(f"/api/events/{eid}", headers=S).json()["myCrew"] is None
-    assert bot._render(con, row) is None
+    assert outbox._render(con, row) is None
     # over: no right, no new helper
     assert _crew(c, eid, FRIEND, uid(FRIEND)).status_code == 200
     con.execute("UPDATE events SET starts_at = ?, ends_at = ? WHERE id = ?", (logic.core.now() - 7200, logic.core.now() - 60, eid))

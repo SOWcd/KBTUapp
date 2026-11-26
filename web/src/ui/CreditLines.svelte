@@ -1,5 +1,5 @@
 <script lang="ts">
-  // A person's lines in "People of the app": what shipped, in our words, each under a quiet label of its kind.
+  // A person's lines in "Made together": what shipped, in our words, each under a quiet label of its kind.
   //   under  the kind the block's own label already names (the idea's author under "Idea"): such lines go without theirs
   import type { CreditItem, CreditKind } from '../lib/api';
   import { lineOf } from '../lib/credits';

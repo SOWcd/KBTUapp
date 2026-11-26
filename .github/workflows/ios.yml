@@ -1,0 +1,78 @@
+# The iPhone app (ios/README.md). Run by hand (Actions → iOS → Run workflow): XcodeGen makes the project, Xcode archives
+# it signed by Apple's cloud signing with the App Store Connect API key, and the build goes to TestFlight. Never built on a
+# laptop. A PR that touches ios/ compiles it unsigned and uploads nothing.
+# Secrets (repo → Settings → Secrets → Actions): APPLE_TEAM_ID, ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8 (the .p8's text).
+# Variable (→ Variables): IOS_BUNDLE_ID, default kz.sow.kbtu; the server's IOS_BUNDLE_ID must be the same.
+name: iOS
+on:
+  workflow_dispatch:
+    inputs:
+      build:
+        description: Build number, higher than the last one uploaded (CFBundleVersion)
+        required: true
+      version:
+        description: Version shown in the App Store (CFBundleShortVersionString)
+        default: "1.0"
+  pull_request:
+    paths: ["ios/**", ".github/workflows/ios.yml"]
+permissions:
+  contents: read
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 40
+    env:
+      BUNDLE_ID: ${{ vars.IOS_BUNDLE_ID || 'kz.sow.kbtu' }}
+      TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    steps:
+      - uses: actions/checkout@v5
+      # ponytail: unpinned brew formulae; pin them (or vendor xcodegen) if a release ever breaks the build
+      - run: brew install xcodegen librsvg
+      - name: "App icon from the web's (opaque: the App Store refuses an alpha channel)"
+        run: |
+          rsvg-convert -w 1024 -h 1024 web/public/favicon.svg -o "$RUNNER_TEMP/icon.png"
+          sips -s format jpeg "$RUNNER_TEMP/icon.png" --out "$RUNNER_TEMP/icon.jpg" >/dev/null
+          sips -s format png "$RUNNER_TEMP/icon.jpg" --out ios/KBTUApp/Assets.xcassets/AppIcon.appiconset/icon-1024.png >/dev/null
+      - run: xcodegen generate
+        working-directory: ios
+      - name: Compile (unsigned)
+        if: github.event_name == 'pull_request'
+        working-directory: ios
+        run: xcodebuild -project KBTUApp.xcodeproj -scheme KBTUApp -configuration Release -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build -quiet
+      - name: Archive, sign and upload to TestFlight
+        if: github.event_name == 'workflow_dispatch'
+        working-directory: ios
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          BUILD: ${{ inputs.build }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          [[ "$BUILD" =~ ^[0-9]+(\.[0-9]+){0,2}$ && "$VERSION" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]] || { echo "build and version are numbers like 3 or 1.0.1"; exit 1; }
+          [ -n "$TEAM_ID" ] && [ -n "$ASC_KEY_ID" ] && [ -n "$ASC_ISSUER_ID" ] && [ -n "$ASC_KEY_P8" ] || { echo "missing secrets: ios/README.md"; exit 1; }
+          key="$RUNNER_TEMP/AuthKey_$ASC_KEY_ID.p8"
+          printf '%s\n' "$ASC_KEY_P8" > "$key"
+          trap 'rm -f "$key"' EXIT
+          auth=(-allowProvisioningUpdates -authenticationKeyPath "$key" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID")
+          xcodebuild -project KBTUApp.xcodeproj -scheme KBTUApp -configuration Release -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/KBTUApp.xcarchive" archive \
+            DEVELOPMENT_TEAM="$TEAM_ID" CURRENT_PROJECT_VERSION="$BUILD" MARKETING_VERSION="$VERSION" "${auth[@]}"
+          cat > "$RUNNER_TEMP/export.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>$TEAM_ID</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+          </dict></plist>
+          EOF
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/KBTUApp.xcarchive" -exportOptionsPlist "$RUNNER_TEMP/export.plist" \
+            -exportPath "$RUNNER_TEMP/out" "${auth[@]}"
+          echo "Uploaded $VERSION ($BUILD): App Store Connect → TestFlight shows it after Apple's processing (~10-30 min)."

@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 import time
 
-from kbtu import bot, db, logic
+from kbtu import bot, bot_groups, db, logic
 from test_core import env, login, tma  # noqa: F401  (env: the fixture)
 
 
@@ -61,12 +61,12 @@ def test_event_chat_claim_guards(env, monkeypatch):
 
     async def send(_cfg, _http, body):
         sent.append(body)
-    monkeypatch.setattr(bot, "_send", send)
+    monkeypatch.setattr(bot_groups, "_send", send)
     con.execute("UPDATE events SET chat_token = 'tok2' WHERE id = ?", (e2,))
     msg = {"chat": {"id": -400}, "text": "/start ec_tok2", "date": int(time.time()), "from": {"id": 30}}
-    asyncio.run(bot._group(cfg, _Http("member"), con, msg))                 # an organizer, but not the group's admin
+    asyncio.run(bot_groups._group(cfg,_Http("member"), con, msg))                 # an organizer, but not the group's admin
     assert con.execute("SELECT chat_id FROM events WHERE id = ?", (e2,)).fetchone()[0] == -300 and sent[-1]["text"] == bot.texts.CHAT_BAD
-    asyncio.run(bot._group(cfg, _Http("administrator"), con, msg))
+    asyncio.run(bot_groups._group(cfg,_Http("administrator"), con, msg))
     assert con.execute("SELECT chat_id FROM events WHERE id = ?", (e2,)).fetchone()[0] == -400
 
 
@@ -88,9 +88,9 @@ def test_club_chat_claim_guards(env, monkeypatch):
 
     async def card_(*_a, **_k):
         pass
-    monkeypatch.setattr(bot, "chat_card", card_)
+    monkeypatch.setattr(bot_groups, "chat_card", card_)
     msg = {"chat": {"id": -400, "type": "supergroup"}, "text": f"/start oc_{card}", "date": int(time.time()), "from": {"id": 20}}
-    asyncio.run(bot._group(cfg, _Http("member"), con, msg))                 # the club's president, but not the group's admin
+    asyncio.run(bot_groups._group(cfg,_Http("member"), con, msg))                 # the club's president, but not the group's admin
     assert con.execute("SELECT tg_chat_id FROM chats WHERE id = ?", (card,)).fetchone()[0] is None
-    asyncio.run(bot._group(cfg, _Http("administrator"), con, msg))
+    asyncio.run(bot_groups._group(cfg,_Http("administrator"), con, msg))
     assert con.execute("SELECT tg_chat_id FROM chats WHERE id = ?", (card,)).fetchone()[0] == -400

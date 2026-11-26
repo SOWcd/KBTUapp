@@ -14,7 +14,7 @@ from .core import (NAME, STUDENT_ID, ApiError, DOOR_AUTO, DOOR_EARLY, DOOR_LATE,
     _org, _qs, _rights, _rights_from, _roles, academic_year, add_photo, at_least, avatar_of, can, card, cards,
     clean_nick, course_cap, course_day, course_of, decided, free_taken, friend_ids, full, log, log_action, media_shape,
     need_student, now, one, org_ref, organizes, overseer, person_ref, photo, rights_of, role_in, rows, short_name,
-    shown_name, taken)  # noqa: F401
+    shown_name, share_card, share_hold, taken)  # noqa: F401
 from .seats import (ICS_KEY, _calendar, _chat_ok, _event, _fold, _hidden_orgs, _ics_text, _receipt_flags,
     _receipt_slot, _remind, _ticket_code, _vevent, _visible, _volunteers_view, add_receipt, add_seats, cal_feed, calendar_owner,
     cal_token, reset_cal_token, channel_discussion, channel_due, channel_gone, chat_claim, chat_join, chat_start, end_of, event, guard_join, guard_read, guard_token,
@@ -24,7 +24,7 @@ from .seats import (ICS_KEY, _calendar, _chat_ok, _event, _fold, _hidden_orgs, _
 from .queues import (AI_LIMIT, AI_LIMITS, AI_ORG_LIMITS, AI_POST_LIMITS, AI_POST_WAIT, AI_TRIES, _ai_note, _video,
     ai_failed, ai_next, ai_note, ai_save, ai_state, my_video, new_video, next_video, stale_videos, video_done,
     video_shape, video_uploaded)  # noqa: F401
-from .account import (CONSENT, agreed, ai_on, DELETE_WAIT, DELETION_LOG_DAYS, MS_KEEP, SETTINGS, SKINNED, LANYARDS, SCHOOL_LANYARDS, school_slug, _DEL_GONE,
+from .account import (CONSENT, agreed, ai_on, DELETE_WAIT, DELETION_LOG_DAYS, MS_KEEP, SETTINGS, SKINNED, LANYARDS, SCHOOL_LANYARDS, ARCHIVE, school_slug, _DEL_GONE,
     _DEL_KEEP, _deletion_log, _drop_photo, _drop_unused, _hand_over, _paid_ahead, _placeholder, _prune_deletion_log,
     _qr_code, _roster_mine, _skin, _skin_ok, _user_fks, ask_delete, consent, delete_due, delete_info, delete_me,
     replay_deletions, drain_deleted_files, dm_on, drop_my_photo, drop_my_schedule, id_clash, keep_me, lent_studio, me, ms_apply, ms_check, ms_claim, ms_hold, ms_link, ms_pending, ms_release, ms_remember, ms_sweep,
@@ -77,5 +77,5 @@ from .forum import (ASK_SKILLS, BODY_MAX, CONTACTS_A_DAY, DAYS, DECIDE_IN, HIDE_
     forum_sweep, hide_ask, mod_hide_ask, mod_queue, my_forum, norm_skill, release_ask, reported_enough, search_people,
     set_my_forum, skill_lookup, skill_mod, skills, telegram_of)  # noqa: F401
 from .cohosts import co_runs  # noqa: F401
-from . import appeals, assistant, autoev, chatmod, chatroles, chatsync, chattree, cohosts, crew, credits, evbracket, evgroups, evmatches, evreports, evteams, fchannel, forms, gallery, helpus, inbox, mapflaws, pymk, research, santa, search, stars, subjects, tgcomments, vol  # noqa: F401  (logic.fchannel.*: its names overlap the find-people forum's)
+from . import apple, appeals, assistant, autoev, chatmod, chatroles, chatsync, chattree, cohosts, crew, credits, evbracket, evgroups, evmatches, evreports, evteams, fchannel, forms, gallery, helpus, inbox, mapflaws, pymk, research, santa, search, stars, subjects, tgcomments, vol  # noqa: F401  (logic.fchannel.*: its names overlap the find-people forum's)
 from ..db import tx  # noqa: F401  (callers take these from kbtu.logic)

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import time
 
-from kbtu import bot
+from kbtu import outbox
 from test_core import env, set_clock, tma  # noqa: F401  (env is a fixture)
 from test_event_teams import _event, _list, _mine, _people
 from test_paid_teams import CS2, _pay, _review, _team
@@ -33,13 +33,13 @@ def test_captain_hears_a_player_left(env):
     _join(c, eid, b, token)
     c.delete(f"/api/events/{eid}/registration", headers=tma(a))  # a self-cancel
     (row,) = _told(con, cap)
-    text, _, start = bot._render(con, row)
+    text, _, start = outbox._render(con, row)
     assert "left your team" in text and start == f"ev_{eid}" and str(_uid(con, a)) not in row["ref"]
     _review(c, con, eid, b, True)  # a rejected receipt (a refund)
     assert len(_told(con, cap)) == 2
     # the captain leaving: the next in line (now alone, so nobody) hears nothing; a captain out of the team: quiet
     c.delete(f"/api/events/{eid}/registration", headers=tma(cap))
-    assert bot._render(con, row) is None
+    assert outbox._render(con, row) is None
 
 
 def _short_teams(c, con, eid, sizes, first=100):

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from kbtu import app, bot, db, logic, media
+from kbtu import app, chores, db, logic, media
 from test_core import delete_now, env, login, tma  # noqa: F401
 
 
@@ -36,7 +36,7 @@ def test_deletion_removes_unused_uploads_but_keeps_live_pictures(env, photos):
     assert c.get("/media/aa/unused.webp").status_code == 200
     assert c.post("/api/me/delete", headers=tma(21), json={"photos": photos}).status_code == 200
     con.execute("UPDATE users SET delete_at = 0 WHERE id = ?", (uid,))
-    bot.purge(cfg, con)
+    chores.purge(cfg, con)
     assert not con.execute("SELECT 1 FROM files WHERE id = ?", (unused,)).fetchone()
     for ext in (".webp", ".t.webp", ".jpg"):
         assert c.get(f"/media/aa/unused{ext}").status_code == 404
@@ -105,12 +105,12 @@ def test_committed_deletion_retries_file_cleanup_after_restart(env, monkeypatch,
     with monkeypatch.context() as patch:
         patch.setattr(media, "drop", interrupted)
         with pytest.raises(OSError, match="interrupted unlink"):
-            bot.purge(cfg, con)
+            chores.purge(cfg, con)
     assert con.execute("SELECT 1 FROM meta WHERE key GLOB 'del-file:*'").fetchone()
     if resume == "startup":
         app.create(cfg)  # the replay checkpoint is already committed: only pending files remain
     else:
-        bot.purge(cfg, con)
+        chores.purge(cfg, con)
     for ext in (".webp", ".t.webp", ".jpg"):
         assert not (home / "media" / f"aa/avatar{ext}").exists()
         assert not (home / "receipts" / f"aa/receipt{ext}").exists()

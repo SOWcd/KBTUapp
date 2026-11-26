@@ -21,7 +21,7 @@
   let picker = $state<HTMLInputElement>();
   let choosing = $state(false);
   let switchKey = $state(0);
-  const RECEIPT_CONSENT = 'dn1', PUBLIC_CONSENT = 'sp1', AMOUNT_CONSENT = 'sa1';
+  const RECEIPT_CONSENT = 'dn2', PUBLIC_CONSENT = 'sp1', AMOUNT_CONSENT = 'sa1';
   const policy = () => ({ label: t('set.policy'), url: `${location.origin}/privacy?lang=${i18n.lang}` });
 
   onMount(() => {
@@ -54,17 +54,11 @@
       say(t(error instanceof ApiErr && error.code === 'rate_limited' ? 'sp.limit' : error instanceof ApiErr && error.code === 'bad_input' ? 'ed.photoBad' : 'common.error'), 'warning_3d');
     } finally { busy = false; supportWrite(false); }
   }
-  // Two separate yeses: the name on the Sponsors list (sp1), then, only beside it, the total (sa1). Hiding the name
-  // hides the total too (the server does the same), and a withdrawal never asks.
+  // Shown by default, name and total (server donations.py): two quiet switches, no sheet. Hiding the name hides the
+  // total too (the server does the same); the total shows only beside a name.
   async function publish(show: boolean, amount = false) {
     if (!mine || busy || choosing) return;
     const rev = mine.rev;
-    choosing = true;
-    const agreed = !show || await sheets.ask(amount
-      ? { title: t('sp.amount'), text: t('sp.amountConsent'), ok: t('sp.publishAmount'), cancel: t('common.cancel'), link: policy() }
-      : { title: t('sp.public'), text: t('sp.publicConsent'), ok: t('sp.publish'), cancel: t('common.cancel'), link: policy() });
-    choosing = false;
-    if (!agreed) { switchKey++; return; }
     const was = { show: mine.show, showAmount: mine.showAmount };
     if (amount) mine.showAmount = show;
     else { mine.show = show; if (!show) mine.showAmount = false; }
@@ -99,13 +93,13 @@
       {/each}
     </Group>
   {/if}
-  {#if mine && (mine.tier || mine.show)}
+  {#if mine?.tier}
     {#key switchKey}<Group footnote={t(mine.show ? 'sp.amountHint' : 'sp.publicHint')}>
       <Row title={t('sp.public')} accessory="switch" checked={mine.show} disabled={busy || choosing || (!mine.show && mine.version !== PUBLIC_CONSENT)} onchange={(on) => publish(on)} />
       {#if mine.show}<Row title={t('sp.amount')} accessory="switch" checked={mine.showAmount} disabled={busy || choosing || (!mine.showAmount && mine.amountVersion !== AMOUNT_CONSENT)} onchange={(on) => publish(on, true)} />{/if}
     </Group>{/key}
   {/if}
-  <Group><Row icon={Award} title={t('sp.sponsors')} value={data.sponsors?.length ? String(data.sponsors.length) : undefined} accessory="chevron" onclick={() => { haptic.tap(); sheets.settings('sponsors'); }} /></Group>
+  <Group><Row icon={Award} title={t('cr.title')} value={data.sponsors?.length ? String(data.sponsors.length) : undefined} accessory="chevron" onclick={() => { haptic.tap(); sheets.credits('support'); }} /></Group>
 </div>
 
 <style>
