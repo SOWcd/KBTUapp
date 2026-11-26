@@ -273,10 +273,11 @@ def test_bad_numbers_are_bad_input(env):
 def test_every_api_route_needs_telegram(env):
     """No /api route answers with data to a request without Telegram's initData — a new route that forgot its viewer
     fails here. The calendar file carries its own signature (§4.2); /show's pairing code is the laptop's, no Telegram
-    there (it opens nothing until an organizer binds it: test_screen_pairing)."""
+    there (it opens nothing until an organizer binds it: test_screen_pairing); android.html's step counts answer nothing
+    and hold no person (test_android_page_counts_signed_out)."""
     import re as _re
     c, cfg = env
-    open_ok = {("GET", "/api/events/{eid}/ics"), ("POST", "/api/screen/pair")}
+    open_ok = {("GET", "/api/events/{eid}/ics"), ("POST", "/api/screen/pair"), ("POST", "/api/stats/andr")}
     for r in c.app.routes:
         path, methods = getattr(r, "path", ""), getattr(r, "methods", set()) or set()
         if not path.startswith("/api/"):

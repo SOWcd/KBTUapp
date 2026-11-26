@@ -2801,6 +2801,11 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def usage_stats(con: Con, v: Me, body: dict = Body(...)):
         logic.stats.add(con, v.id, body)
 
+    @app.post("/api/stats/andr", status_code=204)
+    def android_page_stats(con: Con, k: str = ""):
+        """kbtu.sow.kz/android.html's steps (a sendBeacon, signed out): the Android tester funnel's counts, no person"""
+        logic.stats.page_hit(con, k)
+
     @app.get("/api/admin/stats")
     def admin_stats(con: Con, v: Me):
         return logic.admin_stats(con, v)

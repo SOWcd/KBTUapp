@@ -21,12 +21,18 @@ APPEALS = ("apl.open", "apl.typed", "apl.ai", "apl.sent", "apl.drop", "apl.del")
 # the Afisha's personal hero (web/src/lib/hero.ts KINDS, the same names): its cards shown and tapped, by kind only
 HERO_KINDS = ("ticket", "friends", "club", "news", "forum", "class", "next", "today", "week")
 HERO = tuple(f"hero.{a}.{k}" for a in ("show", "tap") for k in HERO_KINDS)
+# the Android tester's funnel: the sheet in the app (shown, tapped), then kbtu.sow.kz/android.html in the phone's
+# browser (opened, each Google step's button, the "Item not found" retry); the page has no sign-in, so `page_hit`
+ANDROID_APP = ("andr.sheet", "andr.go")
+ANDROID_PAGE = ("page", "join", "optin", "play", "retry")
+ANDROID = (*ANDROID_APP, *(f"andr.{k}" for k in ANDROID_PAGE))
+PAGE_CAP = 5000  # a key's day ceiling for the signed-out page: far above real use, so a script can't run it up
 PLATFORMS = ("ios", "android", "desktop", "web")
 BUCKETS = ("≤1", "≤2", "≤3", "≤5", "≤8", "8+")  # seconds from navigation start to the first useful paint
 SESSIONS = ("≤30s", "≤1m", "≤3m", "≤5m", "≤10m", "≤20m", "20m+")  # one visit's visible time, ended by 30 s or more hidden
 DAY_TIMES = ("≤1m", "≤5m", "≤10m", "≤20m", "≤40m", "≤60m", "60m+")  # one device's visible time over a calendar day
 USES = (*SCREENS, *ACTIONS)  # uniq.<key>: at most once a day per device (a flag kept on the device), for "N% of those active used it"
-KEYS = frozenset((*SCREENS, *ACTIONS, *SOURCES, *APPEALS, *HERO, *(f"err.{s}" for s in SCREENS), *(f"uniq.{k}" for k in USES),
+KEYS = frozenset((*SCREENS, *ACTIONS, *SOURCES, *APPEALS, *HERO, *ANDROID_APP,*(f"err.{s}" for s in SCREENS), *(f"uniq.{k}" for k in USES),
                   *(f"open.{p}.{b}" for p in PLATFORMS for b in range(len(BUCKETS))),
                   *(f"sess.{b}" for b in range(len(SESSIONS))), *(f"time.{b}" for b in range(len(DAY_TIMES)))))
 ONE_A_BATCH = ("open.", "uniq.", "sess.", "time.")  # samples, not taps
@@ -63,6 +69,13 @@ def add(con, uid: int, body: dict) -> None:
     _uniq.update((uid, k) for k in counts if k.startswith("uniq."))
     maybe(con, con.executemany, """INSERT INTO usage_days (day, key, n) VALUES (?, ?, ?)
         ON CONFLICT (day, key) DO UPDATE SET n = n + excluded.n""", [(day, k, n) for k, n in counts.items()])
+
+
+def page_hit(con, key: str) -> None:
+    """One tap on android.html, signed out: one of ANDROID_PAGE, +1, never past PAGE_CAP a day; anything else is ignored."""
+    if key in ANDROID_PAGE:
+        maybe(con, con.execute, """INSERT INTO usage_days (day, key, n) VALUES (?, ?, 1)
+            ON CONFLICT (day, key) DO UPDATE SET n = n + 1 WHERE n < ?""", (_today(), f"andr.{key}", PAGE_CAP))
 
 
 def forget(con) -> None:
@@ -132,4 +145,5 @@ def fields(con, days: int, upto: int | None = None) -> dict:
             "sources": lines(sorted(SOURCES, key=lambda k: -got.get(k, 0)), 5),
             "errors": lines(sorted((f"err.{s}" for s in SCREENS if got.get(f"err.{s}")), key=lambda k: -got[k]), 4),
             "hero": "\n".join(f"{k} {got.get(f'hero.tap.{k}', 0)}/{got.get(f'hero.show.{k}', 0)}" for k in HERO_KINDS),
+            "android": " → ".join(f"{k[5:]} {got.get(k, 0)}" for k in ANDROID),
             "opens": "\n".join(opens) or "—"}
