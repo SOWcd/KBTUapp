@@ -45,7 +45,7 @@
   .streak { --tc: var(--warning); --tc2: var(--tc); --ta: 0.18; --tr: -3px; position: relative; isolation: isolate;
     display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 12px 14px; border-radius: var(--r-l); text-align: left; white-space: nowrap;
     background: var(--surface); }
-  /* the card's tier-tinted wash: opacity over a token, not color-mix() (iOS before 16.2 drops it) */
+  /* the card's tier-tinted wash: opacity over a token, no colour mixing (iOS before 16.2 drops it) */
   .streak::before { content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit; opacity: 0.12; pointer-events: none;
     background: radial-gradient(70% 120% at 0% 50%, var(--tc2), transparent 70%); }
   .streak[data-tier='1'] { --tc: var(--tile-orange); --ta: 0.3; --tr: -5px; } /* copper */
