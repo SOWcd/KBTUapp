@@ -1,7 +1,7 @@
 """Admin -> My notifications: a staff member mutes a work item for themselves; muted by all, the owner still gets it."""
 from __future__ import annotations
 
-from kbtu import bot, db, logic, texts
+from kbtu import db, logic, outbox, texts
 from test_core import DB, env, login, tma  # noqa: F401  (env: the fixture)
 
 
@@ -46,7 +46,7 @@ def test_mutes(env):
 def test_appeal_text():
     for n, kind in ((1, "fch_appeal"), (2, "fch_appeal_few"), (5, "fch_appeal_many"), (11, "fch_appeal_many"), (21, "fch_appeal_one"),
                     (22, "fch_appeal_few"), (12, "fch_appeal_many")):
-        assert bot._appeal_kind(n) == kind
+        assert outbox._appeal_kind(n) == kind
     assert texts.bot_message("ru", "fch_appeal", n=1)[0].startswith("\U0001f6e1 1 \u043f\u043e\u0441\u0442 \u0436\u0434\u0451\u0442")
     for lang in ("ru", "kk", "en"):
         for k in ("fch_appeal", "fch_appeal_one", "fch_appeal_few", "fch_appeal_many"):

@@ -1,0 +1,208 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 164" width="1020" height="492">
+<!-- V1 ANCIENT: the Dire's heart. A crown of obsidian blades rising round a molten core that hovers over its dais on the
+     QR's axis (x 297), standing on the strip; the core lights the blades' inner edges, the ruins on the horizon and the
+     cracked ground; embers rise, smoke drifts. The left stays calm and dark behind the text. -->
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="0.35">
+    <stop offset="0" stop-color="#070204"/><stop offset="0.42" stop-color="#120507"/><stop offset="0.72" stop-color="#2a0909"/><stop offset="1" stop-color="#3b0d0a"/>
+  </linearGradient>
+  <radialGradient id="coreGlow" cx="298" cy="92" r="150" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#ffcf7a" stop-opacity="0.75"/><stop offset="0.12" stop-color="#ff7a2a" stop-opacity="0.55"/>
+    <stop offset="0.35" stop-color="#b8241a" stop-opacity="0.32"/><stop offset="0.7" stop-color="#5a0c0c" stop-opacity="0.12"/><stop offset="1" stop-color="#2a0505" stop-opacity="0"/>
+  </radialGradient>
+  <linearGradient id="horizon" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#ff5a24" stop-opacity="0"/><stop offset="0.62" stop-color="#d23a1c" stop-opacity="0.42"/><stop offset="0.8" stop-color="#ff8a3c" stop-opacity="0.55"/><stop offset="1" stop-color="#3a0a08" stop-opacity="0"/>
+  </linearGradient>
+  <linearGradient id="fadeL" x1="0" y1="0" x2="1" y2="0"><stop offset="0.22" stop-color="#fff" stop-opacity="0"/><stop offset="0.62" stop-color="#fff" stop-opacity="1"/></linearGradient>
+  <mask id="mR"><rect width="340" height="164" fill="url(#fadeL)"/></mask>
+  <!-- the blades: lit on the edge that faces the core, black away from it -->
+  <linearGradient id="bladeL" x1="1" y1="1" x2="0" y2="0.3">
+    <stop offset="0" stop-color="#ff9a3c"/><stop offset="0.14" stop-color="#9c2416"/><stop offset="0.42" stop-color="#2a0a0a"/><stop offset="1" stop-color="#0b0304"/>
+  </linearGradient>
+  <linearGradient id="bladeR" x1="0" y1="1" x2="1" y2="0.3">
+    <stop offset="0" stop-color="#ff9a3c"/><stop offset="0.14" stop-color="#9c2416"/><stop offset="0.42" stop-color="#2a0a0a"/><stop offset="1" stop-color="#0b0304"/>
+  </linearGradient>
+  <linearGradient id="litV" x1="0" y1="1" x2="0" y2="0">
+    <stop offset="0" stop-color="#ffc35a"/><stop offset="0.16" stop-color="#e0561f"/><stop offset="0.45" stop-color="#6a160e"/><stop offset="1" stop-color="#1c0506"/>
+  </linearGradient>
+  <linearGradient id="litH" x1="1" y1="0" x2="0" y2="0">
+    <stop offset="0" stop-color="#ffc35a"/><stop offset="0.18" stop-color="#d84c1c"/><stop offset="0.55" stop-color="#5a130d"/><stop offset="1" stop-color="#1c0506"/>
+  </linearGradient>
+  <linearGradient id="shD" x1="0" y1="1" x2="0" y2="0">
+    <stop offset="0" stop-color="#3a0d0a"/><stop offset="0.4" stop-color="#1a0506"/><stop offset="1" stop-color="#090203"/>
+  </linearGradient>
+  <linearGradient id="ridgeV" x1="0" y1="120" x2="0" y2="-10" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#fff4cc"/><stop offset="0.3" stop-color="#ffb347"/><stop offset="0.75" stop-color="#ff6a24" stop-opacity="0.25"/><stop offset="1" stop-color="#ff6a24" stop-opacity="0"/>
+  </linearGradient>
+  <linearGradient id="ridgeH" x1="290" y1="0" x2="180" y2="0" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#fff4cc"/><stop offset="0.3" stop-color="#ffb347"/><stop offset="0.8" stop-color="#ff6a24" stop-opacity="0.25"/><stop offset="1" stop-color="#ff6a24" stop-opacity="0"/>
+  </linearGradient>
+  <linearGradient id="bladeFar" x1="0" y1="1" x2="0" y2="0">
+    <stop offset="0" stop-color="#4a1010"/><stop offset="1" stop-color="#160506"/>
+  </linearGradient>
+  <linearGradient id="edge" x1="0" y1="1" x2="0" y2="0">
+    <stop offset="0" stop-color="#fff0c0"/><stop offset="0.35" stop-color="#ffb347"/><stop offset="1" stop-color="#ff6a24" stop-opacity="0"/>
+  </linearGradient>
+  <linearGradient id="spire" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#160506"/><stop offset="0.45" stop-color="#3a0e0c"/><stop offset="0.5" stop-color="#d0561f"/><stop offset="0.55" stop-color="#2a0909"/><stop offset="1" stop-color="#0c0304"/>
+  </linearGradient>
+  <linearGradient id="spireV" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity="0.85"/><stop offset="0.7" stop-color="#000" stop-opacity="0"/></linearGradient>
+  <!-- the core's facets -->
+  <linearGradient id="f1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fffbe6"/><stop offset="1" stop-color="#ffc35a"/></linearGradient>
+  <linearGradient id="f2" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffb347"/><stop offset="1" stop-color="#f0702a"/></linearGradient>
+  <linearGradient id="f3" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff8a34"/><stop offset="1" stop-color="#b3301a"/></linearGradient>
+  <linearGradient id="f4" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#c33a1c"/><stop offset="1" stop-color="#5a0e0c"/></linearGradient>
+  <linearGradient id="dais" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff9a44"/><stop offset="0.18" stop-color="#7a1d12"/><stop offset="1" stop-color="#1a0606"/></linearGradient>
+  <radialGradient id="contact" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#ffd38a" stop-opacity="0.95"/><stop offset="0.5" stop-color="#ff6a24" stop-opacity="0.5"/><stop offset="1" stop-color="#ff3a14" stop-opacity="0"/></radialGradient>
+  <radialGradient id="vig" cx="0.62" cy="0.55" r="0.75"><stop offset="0.55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.55"/></radialGradient>
+  <filter id="blur6" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="6"/></filter>
+  <filter id="blur2" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.6"/></filter>
+  <filter id="blur1" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="0.7"/></filter>
+  <filter id="glow" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="1.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <!-- smoke: low-frequency noise tinted the Dire's red, thick near the ground and to the right -->
+  <filter id="smoke" x="0" y="0" width="100%" height="100%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.011 0.028" numOctaves="4" seed="7"/>
+    <feColorMatrix values="0 0 0 0 0.55  0 0 0 0 0.09  0 0 0 0 0.06  0 0 0 1.6 -0.62"/>
+  </filter>
+  <!-- stone grain on the blades -->
+  <filter id="rock" x="0" y="0" width="100%" height="100%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="3" result="n"/>
+    <feColorMatrix in="n" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.9 -0.35" result="d"/>
+    <feComposite in="d" in2="SourceGraphic" operator="in" result="g"/>
+    <feMerge><feMergeNode in="SourceGraphic"/><feMergeNode in="g"/></feMerge>
+  </filter>
+  <filter id="grain" x="0" y="0" width="100%" height="100%">
+    <feTurbulence type="fractalNoise" baseFrequency="1.4" numOctaves="2" seed="11"/>
+    <feColorMatrix values="0 0 0 0 1  0 0 0 0 0.85  0 0 0 0 0.7  0 0 0 0.5 -0.18"/>
+  </filter>
+  <!-- the cracks breathe a little unevenly: displaced so no line is ruler-straight -->
+  <filter id="crack" x="-10%" y="-50%" width="120%" height="200%">
+    <feTurbulence type="turbulence" baseFrequency="0.08" numOctaves="2" seed="5" result="t"/>
+    <feDisplacementMap in="SourceGraphic" in2="t" scale="3"/>
+  </filter>
+</defs>
+
+<rect width="340" height="164" fill="url(#bg)"/>
+<rect width="340" height="164" fill="url(#coreGlow)"/>
+
+<!-- one great ring round the core, engraved faint: it carries the composition across behind the text -->
+<g fill="none" stroke="#ffb35a" opacity="0.09">
+  <circle cx="298" cy="92" r="128" stroke-width="0.6"/>
+  <circle cx="298" cy="92" r="134" stroke-width="0.35" stroke-dasharray="1 3.2"/>
+  <circle cx="298" cy="92" r="176" stroke-width="0.4"/>
+</g>
+
+<!-- far: the horizon's haze and the ruins of the Dire's spires against it -->
+<g mask="url(#mR)">
+  <rect x="0" y="78" width="340" height="50" fill="url(#horizon)"/>
+  <path d="M96 124 L104 112 L108 116 L114 98 L118 106 L124 100 L130 112 L140 108 L146 118 L156 104 L160 86 L164 104 L172 110 L180 96 L184 74 L188 96 L196 108 L204 100 L212 112 L222 104 L226 92 L230 104 L240 114 L250 108 L258 118 L270 116 L340 118 L340 124 Z" fill="#1c0607" opacity="0.92"/>
+  <path d="M60 124 L74 118 L90 120 L104 116 L120 120 L140 116 L170 120 L200 117 L230 121 L260 119 L340 121 L340 124 Z" fill="#100304"/>
+  <rect width="340" height="164" filter="url(#smoke)" opacity="0.8"/>
+</g>
+
+<!-- rays thrown up from the core through the smoke -->
+<g filter="url(#blur2)" opacity="0.5" style="mix-blend-mode:screen">
+  <path d="M298 92 L196 -4 L214 -4 Z" fill="#ff9a44" opacity="0.35"/>
+  <path d="M298 92 L246 -4 L258 -4 Z" fill="#ffc06a" opacity="0.45"/>
+  <path d="M298 92 L160 30 L166 22 Z" fill="#ff7a34" opacity="0.25"/>
+  <path d="M298 92 L340 -4 L330 -4 Z" fill="#ffc06a" opacity="0.35"/>
+  <path d="M298 92 L180 70 L182 62 Z" fill="#ff7a34" opacity="0.2"/>
+</g>
+
+<!-- back blades, far and dark -->
+<g filter="url(#rock)">
+  <path d="M286 110 C276 80 266 40 258 -6 L266 -6 C274 40 286 76 294 104 Z" fill="url(#bladeFar)"/>
+  <path d="M310 110 C318 80 326 44 334 -6 L340 -6 L340 10 C332 50 320 80 304 106 Z" fill="url(#bladeFar)"/>
+  <path d="M278 114 C256 100 230 92 214 70 C236 84 260 92 286 104 Z" fill="url(#bladeFar)"/>
+</g>
+
+<!-- the central spire, behind the core, its lit spine running up behind the medallion -->
+<path d="M289 104 L294 -6 L304 -6 L309 104 Z" fill="url(#spire)" filter="url(#rock)"/>
+<path d="M289 104 L294 -6 L304 -6 L309 104 Z" fill="url(#spireV)"/>
+
+<!-- the front blades: a crown of faceted obsidian shards round the core, each a lit face (toward the core), a shadow
+     face and a bright ridge between them -->
+<g filter="url(#rock)">
+  <!-- tall left -->
+  <polygon points="275,117 283,114 240,-10" fill="url(#shD)"/><polygon points="283,114 291,111 240,-10" fill="url(#litV)"/>
+  <!-- mid left, leaning out -->
+  <polygon points="268,119 277,116 198,46" fill="url(#shD)"/><polygon points="277,116 285,113 198,46" fill="url(#litH)"/>
+  <!-- low left, almost flat -->
+  <polygon points="266,124 274,121 184,112" fill="url(#shD)"/><polygon points="274,121 283,117 184,112" fill="url(#litH)"/>
+  <!-- small one between -->
+  <polygon points="279,114 284,112 262,56" fill="url(#shD)"/><polygon points="284,112 288,110 262,56" fill="url(#litV)"/>
+  <!-- tall right, cut by the edge -->
+  <polygon points="305,111 313,114 346,-10" fill="url(#litV)"/><polygon points="313,114 321,117 346,-10" fill="url(#shD)"/>
+  <!-- right, leaning out -->
+  <polygon points="311,116 319,118 366,58" fill="url(#litV)"/><polygon points="319,118 327,121 366,58" fill="url(#shD)"/>
+</g>
+<!-- the ridges catching the core's light, a glow under each -->
+<g fill="none" stroke-linecap="round">
+  <g filter="url(#blur2)" stroke-width="2.4" opacity="0.75">
+    <path d="M283 114 L240 -10" stroke="url(#ridgeV)"/><path d="M277 116 L198 46" stroke="url(#ridgeH)"/><path d="M274 121 L184 112" stroke="url(#ridgeH)"/>
+    <path d="M313 114 L346 -10" stroke="url(#ridgeV)"/><path d="M319 118 L366 58" stroke="url(#ridgeV)"/>
+  </g>
+  <g stroke-width="0.6">
+    <path d="M283 114 L240 -10" stroke="url(#ridgeV)"/><path d="M277 116 L198 46" stroke="url(#ridgeH)"/><path d="M274 121 L184 112" stroke="url(#ridgeH)"/>
+    <path d="M284 112 L262 56" stroke="url(#ridgeV)"/><path d="M313 114 L346 -10" stroke="url(#ridgeV)"/><path d="M319 118 L366 58" stroke="url(#ridgeV)"/>
+  </g>
+  <!-- the lit faces' outer edges, thinner -->
+  <g stroke-width="0.4" opacity="0.7">
+    <path d="M291 111 L240 -10" stroke="url(#ridgeV)"/><path d="M285 113 L198 46" stroke="url(#ridgeH)"/><path d="M305 111 L346 -10" stroke="url(#ridgeV)"/>
+  </g>
+</g>
+
+<!-- the dais the core hovers over, standing on the strip (its top at 118, the strip at 122) -->
+<path d="M256 124 L264 117 L332 117 L340 122 L340 130 L250 130 Z" fill="url(#dais)" filter="url(#rock)"/>
+<path d="M264 117 L332 117" stroke="#ffc46a" stroke-width="0.6" opacity="0.8"/>
+<ellipse cx="298" cy="117.5" rx="22" ry="3.2" fill="url(#contact)"/>
+
+<!-- the core: a molten crystal, its halo first -->
+<circle cx="298" cy="92" r="30" fill="#ff5a1f" opacity="0.45" filter="url(#blur6)"/>
+<circle cx="298" cy="92" r="14" fill="#ffc46a" opacity="0.85" filter="url(#blur6)"/>
+<g>
+  <polygon points="298,69 286,92 295,89" fill="url(#f1)"/>
+  <polygon points="298,69 295,89 310,92" fill="url(#f2)"/>
+  <polygon points="286,92 295,89 298,113" fill="url(#f3)"/>
+  <polygon points="295,89 310,92 298,113" fill="url(#f4)"/>
+  <path d="M298 69 L286 92 L298 113 L310 92 Z" fill="none" stroke="#fff4d0" stroke-width="0.5" opacity="0.9"/>
+  <path d="M286 92 L295 89 L310 92 M295 89 L298 69 M295 89 L298 113" fill="none" stroke="#fff8e0" stroke-width="0.35" opacity="0.8"/>
+  <circle cx="294" cy="84" r="2.2" fill="#fff" opacity="0.9" filter="url(#blur1)"/>
+</g>
+<!-- shards of rock held in its pull, lit on the side toward it -->
+<g filter="url(#rock)">
+  <path d="M266 80 L273 76 L276 83 L268 86 Z" fill="#2a0a0a"/><path d="M273 76 L276 83" stroke="#ffb347" stroke-width="0.6"/>
+  <path d="M322 70 L329 73 L326 80 L320 77 Z" fill="#2a0a0a"/><path d="M320 77 L322 70" stroke="#ffb347" stroke-width="0.6"/>
+  <path d="M272 101 L277 99 L278 104 L273 105 Z" fill="#2a0a0a"/><path d="M277 99 L278 104" stroke="#ff9a44" stroke-width="0.5"/>
+  <path d="M324 98 L330 96 L331 102 Z" fill="#2a0a0a"/><path d="M324 98 L331 102" stroke="#ff9a44" stroke-width="0.5"/>
+</g>
+
+<!-- the ground under the strip: cracked basalt, lava in the seams (seen past the strip's ends and under it) -->
+<rect x="0" y="128" width="340" height="36" fill="#0b0304"/>
+<g mask="url(#mR)" filter="url(#crack)">
+  <g fill="none" stroke="#ff5a1f" filter="url(#glow)" stroke-linecap="round">
+    <path d="M298 130 L282 140 L250 146 L226 156 L196 160 L150 162" stroke-width="1.1"/>
+    <path d="M298 130 L316 142 L332 150 L342 158" stroke-width="1"/>
+    <path d="M282 140 L276 154 L270 164" stroke-width="0.7"/>
+    <path d="M250 146 L244 135 L226 132" stroke-width="0.6"/>
+    <path d="M316 142 L322 158 L318 164" stroke-width="0.7"/>
+    <path d="M226 156 L210 150 L184 152" stroke-width="0.5"/>
+  </g>
+  <g fill="none" stroke="#ffe0a0" stroke-width="0.35" stroke-linecap="round">
+    <path d="M298 130 L282 140 L250 146 L226 156"/><path d="M298 130 L316 142 L332 150"/>
+  </g>
+</g>
+<rect x="0" y="126" width="340" height="38" fill="url(#coreGlow)" opacity="0.35"/>
+
+<!-- embers rising off the core and the cracks -->
+<g filter="url(#glow)">
+  <circle cx="276" cy="58" r="0.9" fill="#ffcf7a"/><circle cx="262" cy="40" r="0.6" fill="#ff9a44"/><circle cx="318" cy="52" r="0.8" fill="#ffcf7a"/>
+  <circle cx="250" cy="70" r="0.5" fill="#ff7a2a"/><circle cx="236" cy="28" r="0.7" fill="#ffb347"/><circle cx="214" cy="48" r="0.45" fill="#ff7a2a"/>
+  <circle cx="286" cy="22" r="0.55" fill="#ffcf7a"/><circle cx="330" cy="30" r="0.6" fill="#ff9a44"/><circle cx="244" cy="96" r="0.7" fill="#ffb347"/>
+  <circle cx="226" cy="84" r="0.4" fill="#ff7a2a"/><circle cx="200" cy="30" r="0.4" fill="#ff9a44" opacity="0.7"/><circle cx="268" cy="10" r="0.5" fill="#ffcf7a" opacity="0.8"/>
+  <circle cx="312" cy="12" r="0.45" fill="#ffb347"/><circle cx="190" cy="80" r="0.35" fill="#ff7a2a" opacity="0.6"/><circle cx="334" cy="100" r="0.6" fill="#ffcf7a"/>
+</g>
+
+<rect width="340" height="164" fill="url(#vig)"/>
+<rect width="340" height="164" filter="url(#grain)" opacity="0.35" style="mix-blend-mode:overlay"/>
+</svg>

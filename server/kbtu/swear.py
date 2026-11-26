@@ -1,4 +1,4 @@
-"""Swear words in a club's group (bot._swear, logic/chatmod.py): a word list, no AI, no network. find(text) gives the
+"""Swear words in a club's group (bot_groups._swear, logic/chatmod.py): a word list, no AI, no network. find(text) gives the
 matched stem from the lists below (what a hit stores), or None. Prefers missing a rare spelling over flagging an
 innocent word: Russian stems count only at a word's start or after a known prefix ("na-", "po-", "za-" ...), so
 "zastrakhuy" (insure!), "oskorblyat" (offend), "korablya", "khleb", "komanda" stay clean.

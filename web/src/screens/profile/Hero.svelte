@@ -482,6 +482,15 @@
       repeating-linear-gradient(45deg, rgba(0, 0, 0, 0.35) 0 0.7px, transparent 0.7px 2px), repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.03) 0 0.7px, transparent 0.7px 2px),
       linear-gradient(90deg, var(--s1), var(--s2) 30%, rgb(44, 44, 48) 50%, var(--s2) 70%, var(--s1));
     box-shadow: inset 1px 0 0 rgba(0, 0, 0, 0.7), inset -1px 0 0 rgba(0, 0, 0, 0.7), 0 2px 6px rgba(0, 0, 0, 0.35); }
+  /* the archive's Dota straps (KBTUapp-mocks/dota looks.css): the Ancient's crimson stitched in old gold; jade going into
+     ember down its length; deep indigo with a cyan thread down each edge */
+  .dota_ancient .strap { box-shadow: inset 2px 0 0 rgba(30, 4, 4, 0.55), inset -2px 0 0 rgba(30, 4, 4, 0.55), inset 3px 0 0 rgba(222, 170, 88, 0.75), inset -3px 0 0 rgba(222, 170, 88, 0.75), 0 2px 6px rgba(0, 0, 0, 0.3); }
+  .dota_clash .strap { background: linear-gradient(90deg, rgba(0, 0, 0, 0.35), transparent 35% 65%, rgba(0, 0, 0, 0.35)), linear-gradient(180deg, rgb(14, 90, 72), rgb(19, 128, 106) 40%, rgb(184, 56, 26) 60%, rgb(106, 18, 12));
+    box-shadow: inset 2.5px 0 0 rgba(255, 246, 225, 0.35), inset -2.5px 0 0 rgba(255, 246, 225, 0.35), 0 2px 6px rgba(0, 0, 0, 0.3); }
+  .dota_clash .strap span { text-shadow: 0 0 4px rgba(255, 255, 255, 0.35); }
+  .dota_rune .strap { background: linear-gradient(90deg, rgba(0, 0, 0, 0.35), transparent 35% 65%, rgba(0, 0, 0, 0.35)), linear-gradient(180deg, rgb(26, 34, 102), rgb(16, 22, 74));
+    box-shadow: inset 2.5px 0 0 rgba(143, 244, 255, 0.55), inset -2.5px 0 0 rgba(143, 244, 255, 0.55), 0 2px 6px rgba(0, 0, 0, 0.3); }
+  .dota_rune .strap span { text-shadow: 0 0 4px rgba(143, 244, 255, 0.6); }
   .club .photo { background: var(--ring); }
   .club .badge { color: var(--ink); } /* dark on a light card (Shade's paper) */
   .ink .id { text-shadow: 0 0 2px rgba(var(--sh), 0.95), 0 0 7px rgba(var(--sh), 0.9), 0 0 14px rgba(var(--sh), 0.7); }

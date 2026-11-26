@@ -64,3 +64,29 @@ def test_lanyard_by_name(env):
     uid = c.get("/api/me", headers=tma(1)).json()["id"]
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (90, ?, 'member', 0), (91, ?, 'member', 0), (92, ?, 'member', 0)", (uid, uid, uid))
     assert logic.account._skin_ok(con, uid, 90) and logic.account._skin_ok(con, uid, 92) and not logic.account._skin_ok(con, uid, 91)
+
+
+def test_archive(env):
+    """The archive (owner, Nov 25): the web's ARCHIVE_LOOKS are the server's; anyone tries one on in the picker (the web
+    alone), the creator alone wears one and others see it on his card; any other pick lets it go."""
+    looks = re.search(r"export const ARCHIVE_LOOKS = \{(.*?)\n\} satisfies", AWARDS.read_text(), re.S).group(1)
+    assert set(re.findall(r"^  (\w+): \{", looks, re.M)) == set(logic.ARCHIVE)
+    c, cfg = env
+    login(c, 82, "ann")
+    bob = login(c, 83, "bob")
+    A, B = tma(82, "Ann"), tma(83, "Bob")
+    assert c.patch("/api/me", headers=A, json={"skin": "dota_rune"}).status_code == 400   # not the creator
+    con = db.connect(cfg.db_path)
+    con.execute("UPDATE users SET is_founder = 1 WHERE id = ?", (bob["id"],))
+    con.commit()
+    assert c.patch("/api/me", headers=B, json={"skin": "dota_nope"}).status_code == 400    # not in the archive
+    assert c.patch("/api/me", headers=B, json={"skin": "dota_rune"}).json()["skin"] == "dota_rune"
+    assert c.get("/api/me", headers=B).json()["skin"] == "dota_rune"
+    assert c.get(f"/api/users/{bob['id']}", headers=A).json()["skin"] == "dota_rune"     # a stranger sees it too
+    assert c.patch("/api/me", headers=B, json={"skin": "sower"}).json()["skin"] == "sower"  # back to his own
+    c.patch("/api/me", headers=B, json={"skin": "dota_clash"})
+    assert c.patch("/api/me", headers=B, json={"skin": None}).json()["skin"] is None
+    assert con.execute("SELECT skin_look FROM users WHERE id = ?", (bob["id"],)).fetchone()[0] is None
+    con.execute("UPDATE users SET skin_pick = 'sower', skin_look = 'dota_clash', is_founder = 0 WHERE id = ?", (bob["id"],))
+    con.commit()
+    assert c.get("/api/me", headers=B).json()["skin"] != "dota_clash"                     # no longer the creator: not his

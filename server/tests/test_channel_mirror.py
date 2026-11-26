@@ -7,7 +7,7 @@ import json
 import logging
 import time
 
-from kbtu import bot, config, db, logic, media, app as server, tgc, video
+from kbtu import bot, chores, config, db, logic, media, outbox, app as server, tgc, video
 from test_core import env, login, set_clock, tma  # noqa: F401  (env: the fixture)
 
 
@@ -73,7 +73,7 @@ def test_events_channel(env, monkeypatch):
 
     async def drop():
         async with httpx.AsyncClient(transport=httpx.MockTransport(telegram)) as http:
-            await bot.post_channel(cfg2, http, con)
+            await chores.post_channel(cfg2, http, con)
     asyncio.run(drop())
     gone = [(x["chat_id"], x["message_id"]) for x in sent if "text" not in x and "caption" not in x]
     assert gone == [("@KBTUevents", 7), ("-100", 70)] and logic.channel_gone(con) == []
@@ -105,7 +105,7 @@ def test_channel_refused_post_skipped(env):
 
     async def go():
         async with httpx.AsyncClient(transport=httpx.MockTransport(telegram)) as http:
-            await bot.post_channel(cfg2, http, con)
+            await chores.post_channel(cfg2, http, con)
     why["Fine"] = "Bad Request: not enough rights to send text messages to the chat"
     asyncio.run(go())
     assert len(logic.channel_due(con, cfg.bot_username)) == 1           # no rights: Fine waits, Long was skipped
@@ -529,31 +529,31 @@ def test_userbot_heartbeat_alert(env, monkeypatch):
     rows_of = lambda kind: [tuple(r) for r in con.execute(  # noqa: E731
         "SELECT u.tg_id, b.ref FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE kind = ?", (kind,))]
     clock = [10**9]
-    for mod in (bot, mirror):
+    for mod in (chores, mirror):
         monkeypatch.setattr(mod, "now", lambda: clock[0])
     set_clock(monkeypatch, lambda: clock[0])
     for _ in range(3):
-        bot.userbot_round(con)                                          # no heartbeat key: silent
+        chores.userbot_round(con)                                          # no heartbeat key: silent
     assert not rows_of("userbot_off")
     mirror.alive(con)
-    clock[0] += bot.USERBOT_QUIET - 60
-    bot.userbot_round(con)                                              # quiet, but not long enough
+    clock[0] += chores.USERBOT_QUIET - 60
+    chores.userbot_round(con)                                              # quiet, but not long enough
     assert not rows_of("userbot_off")
     clock[0] += 120
-    bot.userbot_round(con)
+    chores.userbot_round(con)
     clock[0] += 3600
-    bot.userbot_round(con)                                              # still down: no second alert
+    chores.userbot_round(con)                                              # still down: no second alert
     assert rows_of("userbot_off") == [(9001, f"uo:{10**9}")]
     m = con.execute("SELECT b.*, 'en' AS lang FROM bot_outbox b WHERE kind = 'userbot_off'").fetchone()
-    text, button, start = bot._render(con, m)
+    text, button, start = outbox._render(con, m)
     assert "userbot" in text and button is None and start == ""
     mirror.alive(con)                                                   # back
-    bot.userbot_round(con)
-    bot.userbot_round(con)
+    chores.userbot_round(con)
+    chores.userbot_round(con)
     assert len(rows_of("userbot_ok")) == 1 and not con.execute("SELECT 1 FROM meta WHERE key = 'userbot_alert'").fetchone()
-    clock[0] += bot.USERBOT_QUIET + 1                                   # a new outage: told again, once
-    bot.userbot_round(con)
-    bot.userbot_round(con)
+    clock[0] += chores.USERBOT_QUIET + 1                                   # a new outage: told again, once
+    chores.userbot_round(con)
+    chores.userbot_round(con)
     assert len(rows_of("userbot_off")) == 2
 
 
@@ -620,14 +620,14 @@ def test_channel_ask(env, monkeypatch, capsys):
     assert asks() == ["ca:2", "ca:3"]
     assert "asked before 2" in capsys.readouterr().out
     m = con.execute("SELECT b.*, 'en' AS lang FROM bot_outbox b WHERE ref = 'ca:2'").fetchone()
-    text, button, start = bot._render(con, m)
+    text, button, start = outbox._render(con, m)
     assert "Alpha" in text and button and start == "ce_2"
     tiles = {x["org"]["id"]: x for x in c.get("/api/me", headers=tma(80)).json()["memberships"]}
     assert tiles[1]["channel"] == {"title": "Has", "mirror": True} and tiles[2]["channel"] is None
     assert "channel" not in c.get("/api/me", headers=tma(82)).json()["memberships"][0]   # a Head doesn't link chats
     assert c.get("/api/me", headers=tma(81)).json()["memberships"][0]["channel"] == {"title": "Secret", "mirror": False}
     con.execute("INSERT INTO chats (title, kind, url, created_at, status, org_id, main) VALUES ('Alpha', 'channel', 'https://t.me/alpha_ch', 0, 'org', 2, 1)")
-    assert bot._render(con, m) is None                                  # linked meanwhile: not sent
+    assert outbox._render(con, m) is None                                  # linked meanwhile: not sent
 
 
 def test_deleted_posts_are_wiped(env, monkeypatch, tmp_path):
@@ -681,7 +681,7 @@ def test_deleted_posts_are_wiped(env, monkeypatch, tmp_path):
     con.execute("UPDATE posts SET title = '' WHERE id = ?", (modded,))   # even with its title already gone
     real = logic.now
     set_clock(monkeypatch, lambda: real() + 31 * 86400)
-    bot.purge(cfg, con)
+    chores.purge(cfg, con)
     assert wiped(modded) and not (disk / "pc.webp").exists()
     set_clock(monkeypatch, real)
 

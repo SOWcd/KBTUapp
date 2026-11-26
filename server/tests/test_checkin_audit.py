@@ -8,7 +8,7 @@ from dataclasses import replace
 import pytest
 from fastapi.testclient import TestClient
 
-from kbtu import app, bot, checkin, db, logic, roster
+from kbtu import app, checkin, db, logic, outbox, roster
 from kbtu.logic import guests, organizing
 from test_core import _csv, _paired, delete_now, env, login, set_clock, tma  # noqa: F401
 from test_one_qr import _crew, _setup
@@ -225,7 +225,7 @@ def test_m7_age_recording_uses_the_six_hour_door_window(door, monkeypatch):
     _, _, con, oid, ann, eid, host = door
     now = int(time.time())
     set_clock(monkeypatch, lambda: now)
-    monkeypatch.setattr(bot, "now", lambda: now)
+    monkeypatch.setattr(outbox, "now", lambda: now)
     con.execute("UPDATE org_members SET role = 'vice' WHERE org_id = ? AND user_id = ?", (oid, host.id))
     con.execute("UPDATE events SET starts_at = ?, ends_at = NULL, age_check = 1 WHERE id = ?", (now - 4 * 3600, eid))
     rid = _reg(con, eid, ann["id"], "AGE")
@@ -233,7 +233,7 @@ def test_m7_age_recording_uses_the_six_hour_door_window(door, monkeypatch):
     assert organizing.mark_age(con, host, eid, ann["id"], False) == {"adult": False}
     assert organizing.notify_minors(con, host, eid) == {"count": 1}
     message = con.execute("SELECT * FROM bot_outbox WHERE kind = 'u18_leave'").fetchone()
-    assert bot._render(con, dict(message, lang="en"))[-1] == f"ev_{eid}"
+    assert outbox._render(con, dict(message, lang="en"))[-1] == f"ev_{eid}"
 
 
 def test_m8_repeat_scan_does_not_disclose_receipt_flags_to_members(door, monkeypatch):

@@ -53,15 +53,17 @@
   .venv/bin/python -m kbtu.admin grant session <sid> init26   the badge to everyone counted in a check-in session
   .venv/bin/python -m kbtu.admin santa-news [--dry | <@who>]  (<@who>: to that one President or Vice alone, to read it first) Secret Santa's announcement: queued once to every President and Vice of an active
                                 organization the bot can write to; --dry: the count only. By hand, never on deploy
-  .venv/bin/python -m kbtu.admin broadcast <name> <https://t.me/...> [--dry | <@who>]
+  .venv/bin/python -m kbtu.admin broadcast <name> <https://t.me/...> [--platform android|ios|desktop|web] [--dry | <@who>]
   .venv/bin/python -m kbtu.admin broadcast-votes <name>   the broadcast's Interesting / Not interesting counts
                                 creator only: queue a bot template once per reachable user. --dry counts new recipients;
-                                @username or Telegram ID queues it for one person first
+                                @username or Telegram ID queues it for one person first; --platform: only people who
+                                opened the app on that kind of device in the last 90 days (a preview goes regardless)
   .venv/bin/python -m kbtu.admin team add|del <@username | telegram id>   People of the app's Team (core developers), audited
-  .venv/bin/python -m kbtu.admin credit add <telegram id | gh:login> <idea | find | code> "<ru>" "<kk>" "<en>" [--gh <login>]   "People of the app"
+  .venv/bin/python -m kbtu.admin credit add <telegram id | gh:login> <idea | find | code> "<ru>" "<kk>" "<en>" [--gh <login>] [--name "<name>"]   "People of the app"
                                 (logic/credits.py): a line in OUR words about what they gave (an account isn't needed;
                                 gh:login: a pull request's author, listed under the public login; --gh: the same person's
-                                login beside a Telegram id, shown on their named card only after their yes);
+                                login beside a Telegram id, on their named card; --name: what to call a Telegram id with
+                                no account yet, shown until they open the app; shown by default, a person can hide in Settings);
                                 credit gh <id> <login> puts a login on a line already written;
                                 gender-neutral, no name, handle, link or identifying detail: it is shown under "Student";
                                 credit ship <id> [YYYY-MM-DD] lists it (today), credit list, credit del <id>;
@@ -69,6 +71,13 @@
                                 moving back does not undo it (re-add the lines by hand);
                                 credit ask [--dry]: the bot's "shall we name you?" once per person (and consent text) with a
                                 shipped line and no answer; prints how many were queued; a no is never asked again
+  .venv/bin/python -m kbtu.admin donation add <telegram id> <amount KZT> [YYYY-MM-DD] [--again]   a Kaspi transfer the
+                                creator checked by hand (outside the app): a confirmed donation, the sponsor medal follows;
+                                the same amount on the same day again only with --again. Shown on the Sponsors list (name and
+                                total) unless the donor hid it on the Support page. A donor who also uploaded this transfer's
+                                receipt in the app would be counted twice: check `donation list` first.
+                                donation list: id, user id (internal), amount, source, date, public (no names, no
+                                Telegram ids); donation remove <id>: a manual row typed wrong goes, the medal follows
   .venv/bin/python -m kbtu.admin team-consent-ask [--dry]   the bot's "agree to teams" (a button to the event's consent
                                 sheet) to everyone signed up to a coming team event without the teams consent, once per
                                 person and event; --dry: the count only. By hand, never on deploy
@@ -93,8 +102,10 @@
                                 (guests and event-new also take `--gz <base64 gzip>` at the end instead of stdin)
   .venv/bin/python -m kbtu.admin reg-until <event id> <ISO time with offset>   close an event's sign-up at that time (an organizer's ask)
   .venv/bin/python -m kbtu.admin event-link <event id> <https url>   change an event's "register elsewhere" link (an organizer's ask)
-  .venv/bin/python -m kbtu.admin play-demo [revoke]   Google Play's reviewer link to the made-up demo account (PLAY_DEMO on;
+  .venv/bin/python -m kbtu.admin play-demo [revoke]   the store reviewers' link to the made-up demo account (PLAY_DEMO on;
                                 android/README.md); revoke signs every demo session out (after changing PLAY_DEMO)
+  .venv/bin/python -m kbtu.admin play-demo seed <event id>...   a demo ticket with its QR to each coming free event
+                                (the owner's own; its door list shows "Demo Reviewer"; nobody messaged); unseed: all back
   .venv/bin/python -m kbtu.admin groups-draw <event id> <teams per group> <advance>   draw an event's group stage (an organizer's ask)
                                 JSON: title, description, starts_at and optional ends_at (ISO with offsets), place,
                                 optional poster_b64, guest_list: true, age_check: true. Prints the id and link.
@@ -174,7 +185,7 @@ import time
 from . import config, db, texts
 from pathlib import Path
 
-from .logic.account import _DEL_GONE, staff_row
+from .logic.account import _DEL_GONE, PLATFORMS, staff_row
 from .logic import credits, guests
 from .logic.core import TZ, is_staff, staff_sql
 from .logic import RANK, STUDENT_ID, ApiError, Viewer, fix_identity, log_action, _slug_free, create_org, replay_deletions, find_user, notify, now, one, rows, set_role
@@ -203,7 +214,9 @@ def _staff_undo(con, uid: int) -> int:
     return con.execute("DELETE FROM students WHERE user_id = ? AND student_id = ? AND consent_version != 'staff'", (uid, f"staff{uid}")).rowcount
 
 
-def _broadcast(con, name: str, url: str, target: str | None = None) -> None:
+def _broadcast(con, name: str, url: str, target: str | None = None, platform: str | None = None) -> None:
+    if platform is not None and platform not in PLATFORMS:
+        sys.exit(f"broadcast: --platform is one of {', '.join(PLATFORMS)}")
     if not re.fullmatch(r"https://t\.me/[^\s\x00-\x1f\x7f-\x9f\\]*", url):
         sys.exit("broadcast: expected an https://t.me/ URL")
     if not all(texts.broadcast_message(lang, name) for lang in texts.BOT):
@@ -223,16 +236,20 @@ def _broadcast(con, name: str, url: str, target: str | None = None) -> None:
             if len(matches) != 1:
                 sys.exit("broadcast: no unique preview recipient; use their Telegram ID")
             only = matches[0]["id"]
-        # everyone who hasn't turned broadcasts off (Settings, or the broadcast's own button); a preview goes regardless
+        # everyone who hasn't turned broadcasts off (Settings, or the broadcast's own button); a preview goes regardless.
+        # --platform: only those who opened the app on that kind of device in the last 90 days (user_platforms); a
+        # preview goes regardless of it too
         recipients = """FROM users u WHERE u.can_dm = 1 AND u.banned_at IS NULL AND u.tg_id > 0 AND (u.n_broadcasts = 1 OR ? IS NOT NULL)
             AND (? IS NULL OR u.id = ?) AND (? IS NOT NULL OR NOT EXISTS (SELECT 1 FROM bot_outbox b
-                WHERE b.user_id = u.id AND b.kind = 'app_broadcast' AND b.ref = ? AND b.error IS NULL))"""  # a failed one, or a preview, may go again
+                WHERE b.user_id = u.id AND b.kind = 'app_broadcast' AND b.ref = ? AND b.error IS NULL))
+            AND (? IS NULL OR ? IS NOT NULL OR EXISTS (SELECT 1 FROM user_platforms p WHERE p.user_id = u.id AND p.kind = ?))"""  # a failed one, or a preview, may go again
+        args = (only, only, only, only, name, platform, only, platform)
         if dry:
-            count = one(con, f"SELECT COUNT(*) {recipients}", only, only, only, only, name)[0]
+            count = one(con, f"SELECT COUNT(*) {recipients}", *args)[0]
         else:
             count = con.execute(f"""INSERT OR REPLACE INTO bot_outbox (user_id, kind, ref, payload, send_after)
                 SELECT u.id, 'app_broadcast', ?, ?, ? {recipients} ORDER BY u.id""",
-                                (name, json.dumps({"url": url}), now(), only, only, only, only, name)).rowcount
+                                (name, json.dumps({"url": url}), now(), *args)).rowcount
     print(f"{'would queue' if dry else 'queued'} {count}")
 
 
@@ -283,6 +300,29 @@ def _event_time(value: object, field: str) -> int:
     except (TypeError, ValueError, OverflowError):
         pass
     sys.exit(f"{field}: expected ISO date and time with an offset")
+
+
+def _demo_seed(con, eids: list[int]) -> None:
+    """The stores' reviewers see the app with something in it (android/README.md): the demo account gets a ticket with
+    its QR to each event given (a coming, published, free one the owner's own club runs; its door list shows the made-up
+    name). Only into a free seat, never one a student is waiting for; no bot message: nobody real is told.
+    `play-demo unseed` takes them all back."""
+    from .logic import seats, taken, web_auth
+    t = now()
+    with db.tx(con):
+        uid = web_auth.demo_user(con, t)
+        for eid in eids:
+            e = one(con, "SELECT starts_at, status, price, hidden_at, seats FROM events WHERE id = ?", eid)
+            if not e or e["status"] != "published" or e["hidden_at"] or e["starts_at"] <= t or e["price"]:
+                sys.exit(f"event {eid}: not a coming, published, free event (nothing seeded)")
+            if e["seats"] is not None and taken(con, eid) >= e["seats"] and not one(
+                    con, "SELECT 1 FROM registrations WHERE event_id = ? AND user_id = ? AND status = 'going'", eid, uid):
+                sys.exit(f"event {eid}: full, the seat is a student's (nothing seeded)")
+            con.execute("""INSERT INTO registrations (event_id, user_id, status, ticket_code, created_at, updated_at)
+                VALUES (?, ?, 'going', ?, ?, ?) ON CONFLICT (event_id, user_id) DO UPDATE SET status = 'going', cancel_reason = NULL""",
+                        (eid, uid, seats._ticket_code(con, eid), t, t))
+        log_action(con, None, "demo_seed", "demo", json.dumps({"events": eids}))
+    print(len(eids), "demo tickets")
 
 
 def _event_new(con, cfg: config.Config, org_ref: str, gz: bytes | None = None) -> None:
@@ -463,6 +503,20 @@ def main(args: list[str]) -> None:
             else:
                 web_auth.demo_user(con, now())
         print("demo sessions signed out" if args[1:] else f"https://{cfg.domain}/play-demo?k={cfg.play_demo}")
+    elif cmd == "play-demo" and args[1:2] == ["seed"] and len(args) >= 3 and all(re.fullmatch(r"[0-9]{1,9}", a) for a in args[2:]):
+        _demo_seed(con, [int(a) for a in args[2:]])
+    elif cmd == "play-demo" and args[1:] == ["unseed"]:
+        from .logic import promote, web_auth
+        with db.tx(con):
+            demo = "SELECT id FROM users WHERE tg_id = ?"
+            coming = rows(con, f"""SELECT DISTINCT e.* FROM registrations r JOIN events e ON e.id = r.event_id
+                WHERE r.user_id IN ({demo}) AND e.starts_at > ?""", web_auth.DEMO_TG_ID, now())
+            n = con.execute(f"DELETE FROM registrations WHERE user_id IN ({demo})", (web_auth.DEMO_TG_ID,)).rowcount
+            for e in coming:  # the seat it held goes to whoever waits (as a deleted account's, account.delete_me)
+                if e["status"] == "published" and not e["hidden_at"]:
+                    promote(con, e)
+            log_action(con, None, "demo_unseed", "demo", json.dumps({"tickets": n}))
+        print(n, "demo tickets removed")
     elif cmd == "event-new" and len(args) == 2:
         _event_new(con, cfg, args[1], gz)
     elif cmd == "roster" and args[1:2] == ["load"] and (len(args) == 4 or (len(args) == 2 and gz is not None)):
@@ -519,12 +573,21 @@ def main(args: list[str]) -> None:
     elif cmd == "broadcast-votes" and len(args) == 2:
         yes, no = one(con, "SELECT COALESCE(SUM(vote), 0), COALESCE(SUM(1 - vote), 0) FROM broadcast_votes WHERE name = ?", args[1])
         print(f"{args[1]}: {yes} interested, {no} not")
-    elif cmd == "broadcast" and len(args) in (3, 4) and gz is None:
-        _broadcast(con, *args[1:])
+    elif cmd == "broadcast" and len(args) in (3, 4, 5, 6) and gz is None and len(args) - 2 * ("--platform" in args) in (3, 4):
+        rest = args[1:]
+        platform = None
+        if "--platform" in rest:
+            at = rest.index("--platform")
+            if at < 2 or at + 1 >= len(rest):
+                sys.exit("broadcast: --platform android | ios | desktop | web")
+            platform = rest.pop(at + 1)
+            rest.pop(at)
+        _broadcast(con, *rest, platform=platform)
     elif cmd == "credit" and args[1:2] in (["add"], ["gh"], ["ship"], ["list"], ["del"], ["ask"]):  # the people of the app (logic/credits.py)
         try:
-            if args[1] == "add" and (len(args) == 7 or (len(args) == 9 and args[7] == "--gh")):
-                print(f"credit {credits.add(con, *args[2:7], *args[8:])} (suggested; `credit ship` lists it)")
+            if (args[1] == "add" and len(args) in (7, 9, 11) and len(opts := dict(zip(args[7::2], args[8::2]))) * 2 == len(args) - 7
+                    and opts.keys() <= {"--gh", "--name"}):
+                print(f"credit {credits.add(con, *args[2:7], gh=opts.get('--gh'), name=opts.get('--name'))} (suggested; `credit ship` lists it)")
                 print(f"check before shipping: {credits.REMIND}")
             elif args[1] == "gh" and len(args) == 4:
                 credits.set_gh(con, int(args[2]), args[3])
@@ -540,7 +603,7 @@ def main(args: list[str]) -> None:
                 for r in rows(con, f"""SELECT c.*, u.id AS uid, k.id AS rev, k.show, k.version FROM credits c
                         LEFT JOIN users u ON u.tg_id = c.tg_id AND u.tg_id > 0 {credits._LAST} ORDER BY c.id"""):
                     tg = None if r["tg_id"] is None else f"tg {r['tg_id']}" + ("" if r["uid"] else " (no account)")
-                    who = " + ".join(x for x in (tg, r["gh"] and f"gh {r['gh']}") if x) or "deleted account"
+                    who = " + ".join(x for x in (tg, r["gh"] and f"gh {r['gh']}", r["name"] and f"name {r['name']}") if x) or "deleted account"
                     said = {None: "no answer", True: "yes", False: "no"}[credits._said(r)]
                     print(f"#{r['id']}  {r['shipped_on'] or 'suggested'}  {r['kind']}  {who}, {said}  {r['ru']} | {r['kk']} | {r['en']}")
             else:
@@ -552,6 +615,34 @@ def main(args: list[str]) -> None:
         changed = credits.team(con, u["id"], args[1] == "add")
         print(f"@{u['tg_username'] or u['tg_id']}: " + ("on the Team (shown after their yes; `credit ask` asks)" if args[1] == "add" else "off the Team")
               + ("" if changed else " already"))
+    elif cmd == "donation" and args[1:2] == ["add"] and 4 <= len(args) - ("--again" in args) <= 5 and args[2].isdigit() and args[3].isdigit():
+        from .logic import donations
+        u = one(con, "SELECT id FROM users WHERE tg_id = ? AND tg_id > 0", int(args[2]))
+        if not u:
+            sys.exit(f"{args[2]}: not found — they must open the app once")
+        try:
+            did = donations.add_manual(con, u["id"], int(args[3]), *[a for a in args[4:] if a != "--again"], again="--again" in args)
+        except ValueError:
+            sys.exit("date: YYYY-MM-DD")
+        except ApiError as e:
+            sys.exit(f"{e.code} {e.message}".strip())
+        sum_ = donations.total(con, u["id"])
+        print(f"donation {did}: total {sum_} KZT, tier {donations.tier(sum_)}, "
+              + ("public" if donations.public(con, u["id"]) else "hidden (their own switch on the Support page)"))
+    elif cmd == "donation" and args[1:2] == ["remove"] and len(args) == 3 and args[2].isdigit():  # a manual row typed wrong
+        from .logic import donations
+        try:
+            uid = donations.remove_manual(con, int(args[2]))
+        except ApiError as e:
+            sys.exit(f"{e.code} {e.message}".strip())
+        sum_ = donations.total(con, uid)
+        print(f"donation {args[2]} removed: total {sum_} KZT, tier {donations.tier(sum_)}")
+    elif cmd == "donation" and args[1:] == ["list"]:  # internal ids and amounts only: no name, no Telegram id
+        from .logic import donations
+        for r in rows(con, "SELECT id, user_id, amount, source, flags, status, created_at FROM donations ORDER BY id"):
+            day = time.strftime("%Y-%m-%d", time.gmtime(r["created_at"] + 5 * 3600))
+            print(f"#{r['id']}  user {r['user_id']}  {r['amount'] or '-'}  {'manual' if r['flags'] == 'manual' else r['source']}  {r['status']}  {day}  "
+                  f"public {'yes' if donations.public(con, r['user_id']) else 'no'}")
     elif cmd == "team-consent-ask" and args[1:] in ([], ["--dry"]):  # signed up before the sign-up became the consent
         from .logic import evteams
         n = evteams.consent_ask(con, dry=bool(args[1:]))

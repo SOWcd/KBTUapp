@@ -9,7 +9,7 @@ import time
 import pytest
 from fastapi.testclient import TestClient
 
-from kbtu import bot, logic, receipt, texts
+from kbtu import logic, outbox, receipt, texts
 from kbtu.logic import organizing, seats
 from kbtu import auth
 from test_core import BOT, env, login, set_clock, tma  # noqa: F401 (env is a fixture)
@@ -68,10 +68,10 @@ def test_reject_with_a_reason_names_it(paid):
     assert _review(c, rid, reject=True, why="short").status_code == 204
     m = _rejected(con, 10)
     assert json.loads(m["payload"]) == {"why": "short"}
-    text, button, _ = bot._render(con, m)
+    text, button, _ = outbox._render(con, m)
     assert texts.REJECT_WHY["ru"]["short"] in text and button == texts.BOT["ru"]["receipt_rejected"][1]
     for lang in ("kk", "en"):
-        assert texts.REJECT_WHY[lang]["short"] in bot._render(con, {**dict(m), "lang": lang})[0]
+        assert texts.REJECT_WHY[lang]["short"] in outbox._render(con, {**dict(m), "lang": lang})[0]
     a = con.execute("SELECT data FROM audit_log WHERE action = 'receipt_reject' AND target = ?", (f"receipt:{rid}",)).fetchone()
     assert json.loads(a["data"]) == {"why": "short"}
     assert con.execute("SELECT status, cancel_reason FROM registrations WHERE event_id = ? AND user_id = ?", (eid, _uid(con, 10))).fetchone()[1] == "receipt_rejected"
@@ -83,7 +83,7 @@ def test_reject_without_a_reason_keeps_the_old_text(paid):
     assert _review(c, rid, reject=True).status_code == 204
     m = _rejected(con, 10)
     assert m["payload"] == "{}"
-    assert bot._render(con, m)[0] == texts.bot_message("ru", "receipt_rejected", title="Case Cup", org="IT Club")[0]
+    assert outbox._render(con, m)[0] == texts.bot_message("ru", "receipt_rejected", title="Case Cup", org="IT Club")[0]
 
 
 @pytest.mark.parametrize("body", [{"reject": True, "why": "rude"}, {"reject": True, "why": 1}, {"reject": False, "why": "short"},
@@ -261,14 +261,14 @@ def test_ask_to_write_goes_once(paid):
     assert [(x["user_id"], x["ref"], json.loads(x["payload"])) for x in m] == [(a, f"oa:{eid}:{_uid(con, 20)}", {"nick": "pres_k"})]
     assert m[0]["send_after"] >= logic.now() + organizing.ASK_DELAY - 1  # an old postman during a deploy never takes it
     assert [r["target"] for r in con.execute("SELECT target FROM audit_log WHERE action = 'attendee_ask'")] == [f"user:{a}"]
-    text, button, keys = bot._render(con, m[0])
+    text, button, keys = outbox._render(con, m[0])
     assert text == texts.bot_message("ru", "org_ask", title="Case Cup", org="IT Club")[0]
     assert keys == [[{"text": texts.BOT["ru"]["org_ask"][1], "url": "https://t.me/pres_k"}]]
     assert "pres_k" not in text  # only behind the button
     assert _contact(c, eid, a).json() == {"username": None, "asked": True}
     _named(con, 20, "pres_k")  # (the plain test sign-in above carried no username)
     logic.set_role(con, None, _uid(con, 20), 1, "member", "test")  # no longer the organizer: the message stays unsent
-    assert bot._render(con, m[0]) is None
+    assert outbox._render(con, m[0]) is None
 
 
 def test_ask_needs_my_own_username_and_the_same_checks(paid):
@@ -347,7 +347,7 @@ def test_the_bot_drops_an_ask_that_no_longer_holds(paid, monkeypatch, change):
     assert _ask(c, eid, a).json() == {"asked": True}
     m = _asks(con)[0]
     _named(con, 20, "pres_k")
-    assert bot._render(con, m) is not None
+    assert outbox._render(con, m) is not None
     if change == "nick":
         _named(con, 20, "someone_else")  # the handle he asked with may be another person's now
     elif change == "banned":
@@ -359,4 +359,4 @@ def test_the_bot_drops_an_ask_that_no_longer_holds(paid, monkeypatch, change):
         set_clock(monkeypatch, lambda: end + organizing.REVEAL_AFTER + 60)
     else:
         con.execute("UPDATE registrations SET status = 'cancelled', cancel_reason = 'removed' WHERE user_id = ?", (a,))
-    assert bot._render(con, m) is None
+    assert outbox._render(con, m) is None

@@ -6,7 +6,9 @@ from __future__ import annotations
 import io
 import re
 import zipfile
+import zlib
 import xml.etree.ElementTree as ET
+from xml.parsers import expat
 
 MAX_FILE = 5 << 20       # the file itself
 MAX_PART = 30 << 20      # one part of it unpacked
@@ -32,8 +34,13 @@ def _xml(z: zipfile.ZipFile, name: str):
     if info.file_size > MAX_PART:
         raise Bad(f"{name}: too big unpacked")
     data = z.read(name)
-    if b"<!DOCTYPE" in data[:2048] or b"<!ENTITY" in data:
-        raise Bad(f"{name}: a DTD")  # no entity games
+    # no entity games, in any encoding: a UTF-16 part hides "<!ENTITY" from a byte search, so expat itself looks
+    check = expat.ParserCreate()
+
+    def no_dtd(*_):
+        raise Bad(f"{name}: a DTD")
+    check.StartDoctypeDeclHandler = no_dtd
+    check.Parse(data, True)
     return ET.fromstring(data)
 
 
@@ -45,7 +52,19 @@ def _col(letters: str) -> int:
 
 
 def read(data: bytes) -> tuple[dict[str, list[list[str]]], int]:
-    """{sheet name: rows of cells (text, '' empty)}, and how many formula cells gave their saved value."""
+    """{sheet name: rows of cells (text, '' empty)}, and how many formula cells gave their saved value. Anything
+    malformed is Bad (admin.py catches only that)."""
+    try:
+        return _read(data)
+    except Bad:
+        raise
+    except (KeyError, TypeError, ValueError, AttributeError, IndexError, EOFError, zlib.error, ET.ParseError,
+            expat.ExpatError, zipfile.BadZipFile, NotImplementedError, RuntimeError) as exc:
+        # a missing part, bad XML, no <sheets>, a CRC or a broken stream, an encrypted entry
+        raise Bad(f"not an xlsx ({type(exc).__name__})") from None
+
+
+def _read(data: bytes) -> tuple[dict[str, list[list[str]]], int]:
     if len(data) > MAX_FILE:
         raise Bad("file too big")
     try:

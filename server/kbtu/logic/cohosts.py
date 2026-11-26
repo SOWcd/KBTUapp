@@ -184,7 +184,7 @@ def end(con, v: Viewer, eid: int) -> None:
         con.execute("DELETE FROM club_report_marks WHERE event_id = ? AND org_id = ?", (eid, x["org_id"]))
         con.execute("DELETE FROM club_reports WHERE event_id = ? AND org_id = ?", (eid, x["org_id"]))
         if x["status"] != "accepted":
-            return  # an invite taken back: its message renders to nothing now (bot._render)
+            return  # an invite taken back: its message renders to nothing now (outbox._render)
         _touch(con, eid)
         for uid in _leaders(con, x["org_id"] if host else e["org_id"]):  # the other side's leaders now (the inviter may have left)
             if uid != v.id:

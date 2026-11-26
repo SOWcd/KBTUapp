@@ -42,6 +42,8 @@
   // round 11's scenes (their files' prefix) and the marks on their badge's band
   const SCN: Partial<Record<Look, string>> = { enactuskbtu: 'en', caseclubkbtu: 'cs', knlknolimits: 'knl', literatureclub: 'lit', tumarorchestrakbtu: 'tm', web: 'w3', zhylyzhurekkbtu: 'zh', kbtucinema: 'cin', nisalumnikbtuchapter: 'nis', cybersportkbtu: 'cyb', diceanddestinykbtu: 'dd', thebayharborsociety: 'bh' };
   const MARK: Partial<Record<Look, string>> = { enactuskbtu: enLogo, caseclubkbtu: caseLogo, knlknolimits: knlLogo, literatureclub: litLogo, tumarorchestrakbtu: tumLogo, web: w3St, zhylyzhurekkbtu: zhHeart, kbtucinema: cinCamera, nisalumnikbtuchapter: nisTree, cybersportkbtu: cybPan, diceanddestinykbtu: ddDragon, thebayharborsociety: bhWord };
+  // the archive's (lib/awards.ts ARCHIVE_LOOKS): one still picture each, the card's and the badge's band alike
+  const ARC: Partial<Record<Look, string>> = { dota_ancient: 'dt-ancient', dota_clash: 'dt-clash', dota_rune: 'dt-rune' };
   const L = (n: string) => wide ? CARD[`../assets/lanyards/scenes/${n}-card.webp`] : SC[`../assets/lanyards/scenes/${n}-band.svg`];
 </script>
 
@@ -143,6 +145,11 @@
     <i class="paper"></i>
     {#if wide}<img class="l z far" src={L('mag-far')} alt="" /><img class="l z far" src={L('mag-detail')} alt="" /><img class="l" src={L('mag-ground')} alt="" /><img class="l z near" src={L('mag-issue')} alt="" />
     {:else}<img class="l" src={L('mag-page')} alt="" /><img class="word mgw" src={magWord} alt="" />{/if}
+  {:else if ARC[look]}
+    <!-- Dota for card 126 (owner, Nov 25; KBTUapp-mocks/dota v1-v3): the Ancient's core in its crown of blades; the
+         Radiant and the Dire split by a seam of light; a rune over the river at night. Each hero under the medallion,
+         the left calm behind the text -->
+    <img class="l" src={CARD[`../assets/lanyards/scenes/${ARC[look]}-card.webp`]} alt="" />
   {:else if SCN[look]}
     <!-- round 11 (owner, Nov 6: round 10 too simple; KMA and Geology are the bar), round 12 (owner: "better, but can be
          much better"; an art director's craft points; .claude/reports/club-lanyards/round12/gen/gen-r12.py): three depths,

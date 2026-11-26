@@ -11,7 +11,7 @@ import time
 
 import pytest
 
-from kbtu import bot, db, logic
+from kbtu import db, logic, outbox
 from test_core import env, login, set_clock, tma  # noqa: F401  (env is a fixture)
 from test_team_guests import PAID, _club, _uid
 
@@ -187,7 +187,7 @@ def test_captain_tools_and_handover(club):
     assert c.delete(f"/api/events/{eid}/team/members/{_uid(con, b)}", headers=tma(cap)).status_code == 200
     assert _mine(c, eid, b) is None and _sheet(c, eid, b)["my"]["status"] == "going"
     m = con.execute("SELECT *, 'en' AS lang FROM bot_outbox WHERE kind = 'team_removed' AND user_id = ?", (_uid(con, b),)).fetchone()
-    text, _, start = bot._render(con, m)
+    text, _, start = outbox._render(con, m)
     assert start == f"ev_{eid}" and "Hawks" not in text and "Case Cup" in text
     # the captain leaves the event: the one who came next leads; the last one out: the team is gone
     c.delete(f"/api/events/{eid}/registration", headers=tma(cap))
@@ -278,7 +278,7 @@ def test_form_rules(club, monkeypatch):
     r = c.post(f"/api/events/{eid}/teams/form", headers=tma(20)).json()
     assert [t["name"] for t in r["teams"]] == ["Team 1", "Team 2"] and len(r["teams"][0]["members"]) == 1  # not open: untouched
     m = con.execute("SELECT *, 'ru' AS lang FROM bot_outbox WHERE kind = 'team_placed' AND user_id = ?", (_uid(con, people[1]),)).fetchone()
-    text, _, start = bot._render(con, m)
+    text, _, start = outbox._render(con, m)
     assert start == f"ev_{eid}" and "Team 2" not in text
     con.execute("UPDATE users SET lang = 'ru' WHERE id = ?", (_uid(con, 20),))
     _people(c, 2, first=97), _go(c, eid, 98), _go(c, eid, 97)
@@ -543,7 +543,7 @@ def test_organizer_removal_is_told(club):
     assert c.put(f"/api/events/{eid}/teams/people/{_uid(con, b)}", headers=tma(20), json={"team": None}).status_code == 200
     m = con.execute("SELECT *, 'en' AS lang FROM bot_outbox WHERE kind = 'team_removed' AND user_id = ?", (_uid(con, b),)).fetchone()
     assert m, "no removal message"
-    text, _, start = bot._render(con, m)
+    text, _, start = outbox._render(con, m)
     assert start == f"ev_{eid}" and "Owls" not in text
     assert c.put(f"/api/events/{eid}/teams/people/{_uid(con, b)}", headers=tma(20), json={"team": None}).status_code == 200  # already alone: nothing
     assert con.execute("SELECT COUNT(*) FROM bot_outbox WHERE kind = 'team_removed' AND user_id = ?", (_uid(con, b),)).fetchone()[0] == 1

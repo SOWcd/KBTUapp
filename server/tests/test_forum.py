@@ -9,7 +9,7 @@ import time
 import pytest
 from fastapi.testclient import TestClient
 
-from kbtu import ai, bot, db, logic, app as server, texts
+from kbtu import ai, bot_dm, db, logic, outbox, app as server, texts
 from test_core import delete_now, env, login, tma  # noqa: F401  (env: the fixture)
 
 
@@ -148,21 +148,21 @@ def test_forum_bot_cards(env, monkeypatch):
     logic.set_my_forum(con, b, {"skills": [web], "open": True, "pings": True})
     ask = logic.create_ask(con, a, {"kind": "project", "title": "A site", "skills": [web]}, True)
     row = lambda kind: {**dict(con.execute("SELECT * FROM bot_outbox WHERE kind = ?", (kind,)).fetchone()), "lang": "en"}  # noqa: E731
-    text, button, start = bot._render(con, row("ask_match"))
+    text, button, start = outbox._render(con, row("ask_match"))
     assert text == texts.bot_message("en", "ask_match")[0] and "A site" not in text   # their words stay in the app
     assert button == texts.bot_message("en", "ask_match")[1] and start == f"fa_{ask['id']}"
     logic.contact(con, b, aid=ask["id"])
-    text, _, keys = bot._render(con, row("contact_ask"))
+    text, _, keys = outbox._render(con, row("contact_ask"))
     cid, tok = con.execute("SELECT id, token FROM contacts").fetchone()
     assert "Ben" in text and "A site" in text and [k["callback_data"] for k in keys[0]] == [f"ct:{cid}:{tok}:y", f"ct:{cid}:{tok}:n"]
     sent = []
     async def tg(cfg, http, method, body, files=None):
         sent.append(body)
-    monkeypatch.setattr(bot, "_tg", tg)
+    monkeypatch.setattr(bot_dm, "_tg", tg)
     class Http:
         async def post(self, *a, **k):
             return None
-    tap = lambda who, data: asyncio.run(bot._tapped(cfg, Http(), con, {"id": "q", "from": {"id": who}, "data": data,  # noqa: E731
+    tap = lambda who, data: asyncio.run(bot_dm._tapped(cfg, Http(), con, {"id": "q", "from": {"id": who}, "data": data,  # noqa: E731
                                                                     "message": {"message_id": 5, "chat": {"id": who}}}))
     tap(91, f"ct:{cid}:{tok}:y")                                                                      # Ben can't accept his own offer
     assert con.execute("SELECT status FROM contacts").fetchone()[0] == "pending" and sent[-1]["text"] == texts.bot_message("ru", "contact_gone")[0]
@@ -170,10 +170,10 @@ def test_forum_bot_cards(env, monkeypatch):
     assert con.execute("SELECT status FROM contacts").fetchone()[0] == "pending"
     tap(90, f"ct:{cid}:{tok}:y")
     assert con.execute("SELECT status FROM contacts").fetchone()[0] == "accepted"
-    assert bot._render(con, {**row("contact_ok"), "ref": f"co:{cid}:to:{tok}"})[2][0][0]["url"].startswith("tg://user?id=")  # no username: by ID
+    assert outbox._render(con, {**row("contact_ok"), "ref": f"co:{cid}:to:{tok}"})[2][0][0]["url"].startswith("tg://user?id=")  # no username: by ID
     tap(91, "ps:0")
     assert con.execute("SELECT ask_pings FROM users WHERE id = ?", (b.id,)).fetchone()[0] == 0
-    assert bot._render(con, row("ask_match")) is None                                                 # pings off: quiet
+    assert outbox._render(con, row("ask_match")) is None                                                 # pings off: quiet
 
 
 def test_forum_moderator_queue(env):

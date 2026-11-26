@@ -1,4 +1,4 @@
-"""A club's group's swear filter (swear.py, logic/chatmod.py, bot._swear): the word list's clean and dirty tables, the
+"""A club's group's swear filter (swear.py, logic/chatmod.py, bot_groups._swear): the word list's clean and dirty tables, the
 bot's flow (delete, warn 1-2-3, mute, admins never muted, the 7-day window, edits, off = nothing), the switch's and the
 report's rights, the nightly cleanup, account deletion, and /all in a chat no club holds."""
 from __future__ import annotations
@@ -9,7 +9,7 @@ import time
 import httpx
 import pytest
 
-from kbtu import bot, db, logic, swear, texts, tgc
+from kbtu import bot, bot_groups, db, logic, swear, texts, tgc
 from test_core import delete_now, env, login, tma  # noqa: F401  (env: the fixture)
 
 CLEAN = [  # innocent words that hold a stem, names, Kazakh, English
@@ -103,10 +103,10 @@ class _Http:
 
 def _setup(c, cfg, monkeypatch, on=True):
     monkeypatch.setattr(bot, "SYNC_GAP", 0)
-    monkeypatch.setattr(bot, "WARN_FOR", 0)
+    monkeypatch.setattr(bot_groups, "WARN_FOR", 0)
     monkeypatch.setattr(bot._call, "__defaults__", (0,))
-    bot._swore.clear()
-    monkeypatch.setattr(bot, "_moved", {})
+    bot_groups._swore.clear()
+    monkeypatch.setattr(bot_groups, "_moved", {})
     logic.chatmod.stale()
     for tg in (20, 21, 22, 31, 41):
         login(c, tg, f"u{tg}")
@@ -135,7 +135,7 @@ async def _drain():
 
 def _run(cfg, con, http, *msgs):
     async def go():
-        got = [await bot._swear(cfg, http, con, m) for m in msgs]
+        got = [await bot_groups._swear(cfg, http, con, m) for m in msgs]
         await _drain()
         return got
     return asyncio.run(go())
@@ -150,7 +150,7 @@ def test_warn_warn_mute_and_start_over(env, monkeypatch):
     con, oid, _, cid, uid = _setup(c, cfg, monkeypatch)
     http = _Http()
     assert _run(cfg, con, http, _msg(31, mid=1)) == [True]
-    bot._swore.clear()  # a minute on
+    bot_groups._swore.clear()  # a minute on
     _run(cfg, con, http, _msg(31, "\u0431 \u043b \u044f", mid=2))
     assert [j["message_id"] for j in http.said("deleteMessage")] == [1, 1001, 2, 1002]  # the message, then its warning a minute on
     texts_ = [j["text"] for j in http.said("sendMessage")]
@@ -158,7 +158,7 @@ def test_warn_warn_mute_and_start_over(env, monkeypatch):
     assert texts_ == [texts.swear("ru", "warn")] * 2 and not any(x in texts_[0] for x in ("tg://", "31", "1", "2", "3", "<a"))
     assert all("\u0441\u0443\u043a" not in t and "\u0431\u043b\u044f" not in t for t in texts_)  # never the words
     assert [tuple(h) for h in _hits(con, cid)] == [(31, uid(31), "\u0441\u0443\u043a\u0430", 1, 0), (31, uid(31), "\u0431\u043b\u044f", 2, 0)]
-    bot._swore.clear()
+    bot_groups._swore.clear()
     http = _Http()
     _run(cfg, con, http, _msg(31, mid=3))
     assert http.said("restrictChatMember")[0]["user_id"] == 31
@@ -170,7 +170,7 @@ def test_warn_warn_mute_and_start_over(env, monkeypatch):
     http = _Http()
     _run(cfg, con, http, _msg(31, mid=4), _msg(31, mid=5))
     assert [j["message_id"] for j in http.said("deleteMessage")] == [4, 5] and not http.said("sendMessage") and len(_hits(con, cid)) == 3
-    bot._swore.clear()  # a minute on: the count starts over after the mute
+    bot_groups._swore.clear()  # a minute on: the count starts over after the mute
     http = _Http()
     _run(cfg, con, http, _msg(31, mid=6))
     assert _hits(con, cid)[-1]["warn"] == 1 and not http.said("restrictChatMember")
@@ -184,7 +184,7 @@ def test_forum_topic(env, monkeypatch):
     assert next(x for x in c.get(f"/api/orgs/{oid}/chats", headers=tma(21)).json() if x["id"] == cid)["kind"] == "forum"
     http = _Http()
     _run(cfg, con, http, _msg(31, mid=1, message_thread_id=77, is_topic_message=True))
-    bot._swore.clear()
+    bot_groups._swore.clear()
     _run(cfg, con, http, _msg(22, mid=2), _msg(20, mid=3, message_thread_id=1))  # General; a plain reply's thread in a group
     sent = http.said("sendMessage")
     assert sent[0]["message_thread_id"] == 77 and all("message_thread_id" not in j for j in sent[1:]) and len(sent) == 3
@@ -198,7 +198,7 @@ def test_one_warning_a_minute(env, monkeypatch):
     http = _Http()
     _run(cfg, con, http, *(_msg(31, mid=i) for i in range(10)), *(_msg(tg, mid=100 + tg - 1000) for tg in range(1000, 1015)))
     assert len([j for j in http.said("deleteMessage") if j["message_id"] < 1001]) == 25
-    assert len(http.said("sendMessage")) == bot.SWEAR_CHAT_CAP and len(_hits(con, cid)) == bot.SWEAR_CHAT_CAP
+    assert len(http.said("sendMessage")) == bot_groups.SWEAR_CHAT_CAP and len(_hits(con, cid)) == bot_groups.SWEAR_CHAT_CAP
     assert [h["tg_id"] for h in _hits(con, cid)].count(31) == 1
 
 
@@ -210,10 +210,10 @@ def test_admins_left_alone_and_window(env, monkeypatch):
     assert not http.said("deleteMessage") and not http.said("sendMessage") and _hits(con, cid) == []
     # 7 days: older warnings don't count
     _run(cfg, con, _Http(), _msg(22, mid=9))
-    bot._swore.clear()
+    bot_groups._swore.clear()
     _run(cfg, con, _Http(), _msg(22, mid=10))
     con.execute("UPDATE swear_hits SET at = at - 8 * 86400 WHERE tg_id = 22")
-    bot._swore.clear()
+    bot_groups._swore.clear()
     _run(cfg, con, _Http(), _msg(22, mid=11))
     assert _hits(con, cid)[-1]["warn"] == 1
 
@@ -231,7 +231,7 @@ def test_off_and_ignored(env, monkeypatch):
     assert _run(cfg, con, http, _msg(31, mid=71)) == [False]
     con.execute("DELETE FROM swear_hits")
     con.execute("UPDATE chats SET swear = 1")
-    bot._swore.clear()
+    bot_groups._swore.clear()
     logic.chatmod.stale()
     assert _run(cfg, con, http, _msg(31, "good morning"), _msg(31, "\u0441\u0443\u043a\u0430", chat=-555),           # clean; another chat
                 {**_msg(1087968824), "from": {"id": 1087968824, "is_bot": True}, "sender_chat": {"id": -100}},  # anonymous admin
@@ -261,9 +261,9 @@ def test_bot_without_rights(env, monkeypatch):
     assert _run(cfg, con, http, _msg(31)) == [False] and http.calls == []  # paused: nothing read
     upd = {"chat": {"id": -100, "type": "supergroup"}, "from": {"id": 21},
            "new_chat_member": {"status": "administrator", "user": {"id": 123}, "can_delete_messages": True, "can_restrict_members": False}}
-    asyncio.run(bot._member(cfg, http, con, upd))
+    asyncio.run(bot_groups._member(cfg, http, con, upd))
     assert studio()["swearMiss"] == ["ban"]
-    asyncio.run(bot._member(cfg, http, con, {**upd, "new_chat_member": {**upd["new_chat_member"], "can_restrict_members": True}}))
+    asyncio.run(bot_groups._member(cfg, http, con, {**upd, "new_chat_member": {**upd["new_chat_member"], "can_restrict_members": True}}))
     assert studio()["swearMiss"] == []
     assert _run(cfg, con, _Http(), _msg(31)) == [True]
 
@@ -327,7 +327,7 @@ def test_switch_and_report_rights(env, monkeypatch):
     con.execute("UPDATE chats SET swear = 1")
     logic.chatmod.stale()
     _run(cfg, con, _Http(), _msg(31), _msg(555777, mid=9))
-    bot._swore.clear()
+    bot_groups._swore.clear()
     _run(cfg, con, _Http(), _msg(31, "\u0431\u043b\u044f", mid=8))
     get = lambda tg, o=oid: c.get(f"/api/orgs/{o}/chats/swear", headers=tma(tg))  # noqa: E731
     assert get(31).status_code == 403 and get(41).status_code == 403
@@ -359,22 +359,22 @@ def test_all_in_a_chat_no_club_holds(env, monkeypatch):
     """Only the group admin calls; nobody known and no member list: "nobody to call" once under the command, then both go."""
     c, cfg = env
     con, oid, _, cid, uid = _setup(c, cfg, monkeypatch)
-    monkeypatch.setattr(bot, "_denied", {})
-    monkeypatch.setattr(bot, "_tagged", {})
-    monkeypatch.setattr(bot, "ALL_NO_TTL", 0.5)
+    monkeypatch.setattr(bot_groups, "_denied", {})
+    monkeypatch.setattr(bot_groups, "_tagged", {})
+    monkeypatch.setattr(bot_groups, "ALL_NO_TTL", 0.5)
     monkeypatch.setattr(bot.mtbot, "members", _no_list)
     http = _Http(admins={41})
 
     async def go(*msgs):
         for m in msgs:
-            await bot._group(cfg, http, con, m)
+            await bot_groups._group(cfg,http, con, m)
             await tgc._last["all:-555"]  # the run, not the answer's deletion (ALL_NO_TTL on)
         await _drain()
     asyncio.run(go(_msg(31, "/all", chat=-555), _msg(41, "/all", chat=-555), _msg(41, "@all", chat=-555)))
     sent = http.said("sendMessage")
     assert len(sent) == 1 and sent[0]["chat_id"] == -555 and sent[0]["text"] == texts.bot_message("ru", "all_none")[0]
     assert sent[0]["reply_parameters"]["message_id"] == 7 and {"chat_id": -555, "message_id": 7} in http.said("deleteMessage")
-    assert time.time() - bot._tagged[-555] >= bot.ALL_AGAIN - bot.EMPTY_WAIT - 1       # nobody called: only a short wait
+    assert time.time() - bot_groups._tagged[-555] >= bot_groups.ALL_AGAIN - bot_groups.EMPTY_WAIT - 1       # nobody called: only a short wait
 
 
 async def _no_list(cfg, chat, cap):
@@ -394,11 +394,11 @@ def test_review_holes(env, monkeypatch):
                 _msg(31, "see https://x.kz/pizdec", entities=[{"type": "url", "offset": 4, "length": 19}])) == [False] * 3
     assert _run(cfg, con, _Http(), _msg(31, f"{suka}, \u0441\u0443\u043a\u0430", mid=2,
                                         entities=[{"type": "text_mention", "offset": 0, "length": 4}])) == [True]  # their own word still counts
-    bot._swore.clear()
+    bot_groups._swore.clear()
     assert _run(cfg, con, _Http(), _msg(31, text=None, mid=3, poll={"question": "ok?", "options": [{"text": "fuck"}, {"text": "no"}]})) == [True]
     old = _msg(31, mid=4, date=int(time.time()) - 3600)
     assert _run(cfg, con, _Http(), old, {**old, "edit_date": int(time.time()) - 3599}) == [False, False]
-    bot._swore.clear()
+    bot_groups._swore.clear()
     assert _run(cfg, con, _Http(), {**old, "edit_date": int(time.time())}) == [True]  # an edit now: fresh
     assert [h["warn"] for h in _hits(con, cid)] == [1, 2, 3] and _hits(con, cid)[-1]["muted"] == 1
 
@@ -415,8 +415,8 @@ def test_review_holes(env, monkeypatch):
     assert http.said("deleteMessage")[0]["message_id"] == 5 and not http.said("restrictChatMember")
     assert http.said("sendMessage")[0]["text"] == texts.swear("ru", "warn")
     # the group turned supergroup: its new id is filtered at once
-    asyncio.run(bot._group(cfg, _Http(), con, {"chat": {"id": -100, "type": "group"}, "message_id": 1, "migrate_to_chat_id": -1009}))
-    bot._swore.clear()
+    asyncio.run(bot_groups._group(cfg,_Http(), con, {"chat": {"id": -100, "type": "group"}, "message_id": 1, "migrate_to_chat_id": -1009}))
+    bot_groups._swore.clear()
     assert _run(cfg, con, _Http(), _msg(22, chat=-1009, mid=6)) == [True]
 
 
@@ -424,7 +424,7 @@ def test_deleted_message_still_seen_never_calls(env, monkeypatch):
     """A message the filter deletes still records its sender for /all (they are in the chat); a swearing /all calls nobody."""
     c, cfg = env
     con, oid, _, cid, uid = _setup(c, cfg, monkeypatch)
-    monkeypatch.setattr(bot, "_tagged", {})
+    monkeypatch.setattr(bot_groups, "_tagged", {})
     http = _Http(updates=[{"update_id": 5, "message": _msg(500, mid=3)},
                           {"update_id": 6, "message": _msg(21, "/all \u0441\u0443\u043a\u0430", mid=4)}])
 
@@ -435,14 +435,14 @@ def test_deleted_message_still_seen_never_calls(env, monkeypatch):
     assert asyncio.run(go()) == 7
     assert {j["message_id"] for j in http.said("deleteMessage")} >= {3, 4}
     assert {r[0] for r in con.execute("SELECT tg_id FROM chat_seen WHERE chat_id = -100")} == {500, 21}
-    assert not any("tg://user" in j["text"] for j in http.said("sendMessage")) and not bot._tagging
+    assert not any("tg://user" in j["text"] for j in http.said("sendMessage")) and not bot_groups._tagging
 
 
 def test_unlink_forgets_hits_and_seen(env, monkeypatch):
     c, cfg = env
     con, oid, _, cid, uid = _setup(c, cfg, monkeypatch)
     _run(cfg, con, _Http(), _msg(31))
-    bot._seen(con, _msg(31, "hi"))
+    bot_groups._seen(con, _msg(31, "hi"))
     assert con.execute("SELECT COUNT(*) FROM swear_hits").fetchone()[0] == 1
     assert con.execute("SELECT COUNT(*) FROM chat_seen").fetchone()[0] == 1
     assert c.delete(f"/api/orgs/{oid}/chats/{cid}", headers=tma(21)).status_code == 200

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import time
 
-from kbtu import bot, casting, db, logic, texts
+from kbtu import casting, db, logic, outbox, texts
 from test_core import env, login, tma  # noqa: F401  (env: the fixture)
 
 
@@ -82,9 +82,9 @@ def test_casting(env):
     assert c.get(f"/api/rounds/{rid}/slots", headers=tma(21)).json()[1]["people"][0]["fullName"] == "Testov Ann"
     assert c.post(f"/api/round-apps/{ann['id']}/came", headers=tma(21), json={"came": True}).json() == {"showed": True}
     nudge = con.execute("SELECT b.*, u.lang FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE kind = 'round_iv_nudge'").fetchone()
-    assert bot._render(con, nudge) is None                                                                      # she picked a time
+    assert outbox._render(con, nudge) is None                                                                      # she picked a time
     remind = con.execute("SELECT b.*, u.lang FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE kind = 'round_iv_remind'").fetchone()
-    assert "Room 305" in bot._render(con, remind)[0]
+    assert "Room 305" in outbox._render(con, remind)[0]
 
     assert c.post(f"/api/round-apps/{ann['id']}/decide", headers=tma(20), json={"stage": "yes", "tagId": 1}).json()["takenTag"] == 1
     assert c.get("/api/orgs/1/round", headers=tma(20)).json()["counts"] == {"yes": 1, "no": 1}
@@ -96,7 +96,7 @@ def test_casting(env):
     sent = {x[0]: x[1] for x in con.execute("SELECT kind, user_id FROM bot_outbox WHERE kind IN ('round_yes', 'round_no')")}
     assert sent == {"round_yes": uid[10], "round_no": uid[11]}
     row = con.execute("SELECT b.*, u.lang FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE kind = 'round_yes'").fetchone()
-    assert "SMM" in bot._render(con, row)[0]
+    assert "SMM" in outbox._render(con, row)[0]
     assert c.get("/api/orgs/1/round", headers=tma(11)).json() is None
     assert c.post(f"/api/rounds/{rid}/send", headers=tma(20), json={"final": True}).status_code == 409
     # sixty days after the results the answers and notes go; who applied and how it ended stay
@@ -147,7 +147,7 @@ def test_casting_in_parts(env):
     assert c.get("/api/orgs/1", headers=tma(10)).json()["groupLink"] == link     # and in the club's card, as a member
     assert c.get("/api/orgs/1", headers=tma(11)).json()["groupLink"] is None
     row = con.execute("SELECT b.*, u.lang FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE kind = 'round_yes'").fetchone()
-    text, button, start = bot._render(con, row)
+    text, button, start = outbox._render(con, row)
     assert link not in text and start == "cl_1" and button == texts.bot_message(row["lang"], "round_yes_group", org="")[1]  # a template and a button into the app
     # a told result stands: no change, no re-applying, no withdrawing
     assert decide("Testov Bob", "yes").status_code == 409

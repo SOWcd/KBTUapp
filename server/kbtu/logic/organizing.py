@@ -849,7 +849,7 @@ def _delete_event(con, eid: int) -> tuple[list[str], list[str]]:
         if not con.execute("DELETE FROM events WHERE id = ?", (eid,)).rowcount:
             raise ApiError("not_found")
         # its channel post goes too (it stayed), with the copy in the discussion group: the bot's next
-        # round deletes them (bot.post_channel), the event's row is gone by then
+        # round deletes them (chores.post_channel), the event's row is gone by then
         thread = one(con, "DELETE FROM meta WHERE key = ? RETURNING value", f"thread:{eid}")
         if post and post[0]:
             con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (f"channel_gone:{post[0]}", thread[0] if thread else ""))
@@ -1021,7 +1021,7 @@ def attendees(con, v: Viewer, eid: int) -> list[dict]:
     ids = list({p["invited_by"] for p in found if p["invited_by"]})  # who brought them: "My link" or "Bring a friend" (EventManage's "Who brought")
     # the club's members only: a friend's invite between two outsiders isn't the club's business
     by = {p["id"]: person_ref(p) for p in rows(con, f"{PERSON} JOIN org_members m ON m.user_id = u.id AND m.org_id = ? WHERE u.id IN ({_qs(ids)})",
-                                               one(con, "SELECT org_id FROM events WHERE id = ?", eid)[0], *ids)} if ids else {}
+                                               e["org_id"], *ids)} if ids else {}
     # "came" for whoever brought them only when someone else checked them in: a member can mark their own friends at the door
     out = [{"person": person_ref(p), "by": by.get(p["invited_by"]), "byCame": bool(p["checked_in_at"] and p["checked_in_by"] != p["invited_by"]), "fullName": " ".join(n for n in (p["last_name"], p["first_name"]) if n) or short_name(p), "status": p["status"],
             "checkedInAt": p["checked_in_at"], "walkIn": bool(p["walk_in"]), "manual": bool(p["checkin_manual"]), "at": p["at"], "free": bool(p["free"]),
@@ -1404,10 +1404,11 @@ def invite_friend(con, v: Viewer, eid: int, uid: object) -> list[dict]:
         raise ApiError("forbidden")
     if e["status"] != "published" or e["starts_at"] <= core.now() or e["visibility"] != "public":
         raise ApiError("closed")
-    if one(con, "SELECT COUNT(*) FROM friend_invites WHERE from_id = ? AND created_at > ?", v.id, core.now() - 86400)[0] >= INVITES_A_DAY:
-        raise ApiError("rate_limited")
-    if con.execute("INSERT OR IGNORE INTO friend_invites (from_id, to_id, event_id, created_at) VALUES (?, ?, ?, ?)", (v.id, uid, eid, core.now())).rowcount:
-        notify(con, uid, "friend_invite", f"fi:{eid}:{v.id}")  # the bot skips it if they're already in by then
+    with tx(con):  # counted under the write lock: two taps at once never pass the cap together
+        if one(con, "SELECT COUNT(*) FROM friend_invites WHERE from_id = ? AND created_at > ?", v.id, core.now() - 86400)[0] >= INVITES_A_DAY:
+            raise ApiError("rate_limited")
+        if con.execute("INSERT OR IGNORE INTO friend_invites (from_id, to_id, event_id, created_at) VALUES (?, ?, ?, ?)", (v.id, uid, eid, core.now())).rowcount:
+            notify(con, uid, "friend_invite", f"fi:{eid}:{v.id}")  # the bot skips it if they're already in by then
     return event_invites(con, v, eid)
 
 
@@ -1479,12 +1480,13 @@ def attach_album_photo(con, eid: int, fid: int, uid: int) -> None:
 
 def add_album_photo(con, v: Viewer, eid: int, saved: dict) -> dict:
     e = _event(con, v, eid)
-    if _album_room(con, v, e) <= 0:
-        raise ApiError("forbidden")
-    attach_album_photo(con, eid, event_photo_file(con, v.id, saved), v.id)
-    if one(con, "SELECT COUNT(*) FROM event_photos WHERE event_id = ?", eid)[0] == PHOTO_REPORT_AT:  # the album has a story now
-        for (uid,) in rows(con, "SELECT user_id FROM registrations WHERE event_id = ? AND checked_in_at IS NOT NULL AND user_id != ?", eid, v.id):
-            notify(con, uid, "photo_report", f"ph:{eid}", after=max(core.now(), end_of(e) + 3600))  # once per event (§7)
+    with tx(con):  # the room counted with the insert: two uploads at once never pass the caps together
+        if _album_room(con, v, e) <= 0:
+            raise ApiError("forbidden")
+        attach_album_photo(con, eid, event_photo_file(con, v.id, saved), v.id)
+        if one(con, "SELECT COUNT(*) FROM event_photos WHERE event_id = ?", eid)[0] == PHOTO_REPORT_AT:  # the album has a story now
+            for (uid,) in rows(con, "SELECT user_id FROM registrations WHERE event_id = ? AND checked_in_at IS NOT NULL AND user_id != ?", eid, v.id):
+                notify(con, uid, "photo_report", f"ph:{eid}", after=max(core.now(), end_of(e) + 3600))  # once per event (§7)
     return full(con, v, e)
 
 
@@ -1514,9 +1516,9 @@ def post_update(con, v: Viewer, eid: int, body: str) -> list[dict]:
     text = str(body or "").strip()
     if e["status"] != "published" or not 2 <= len(text) <= 300:
         raise ApiError("bad_input")
-    if one(con, "SELECT COUNT(*) FROM event_updates WHERE event_id = ? AND created_at > ?", eid, core.now() - 86400)[0] >= UPDATES_A_DAY:
-        raise ApiError("rate_limited")
-    with tx(con):
+    with tx(con):  # counted under the write lock: two taps at once never pass the cap together
+        if one(con, "SELECT COUNT(*) FROM event_updates WHERE event_id = ? AND created_at > ?", eid, core.now() - 86400)[0] >= UPDATES_A_DAY:
+            raise ApiError("rate_limited")
         uid = con.execute("INSERT INTO event_updates (event_id, author_id, body, created_at) VALUES (?, ?, ?, ?)", (eid, v.id, text, core.now())).lastrowid
         for (who,) in rows(con, "SELECT user_id FROM registrations WHERE event_id = ? AND status IN ('going','hold','waitlist') AND user_id != ?", eid, v.id):
             notify(con, who, "event_update", f"upd:{uid}")
@@ -1819,7 +1821,7 @@ def open_door(con, v: Viewer, eid: int) -> dict:
 
 
 def door_round(con) -> None:
-    """The postman's round (bot._chores): once the open door has let its first person in (a scan, by name, the big
+    """The postman's round (chores._chores): once the open door has let its first person in (a scan, by name, the big
     screen, a walk-in: the organizers are at the door), each guest going and not yet in hears it once,
     until the start (a moved event: event_changed tells). Only events starting within DOOR_EARLY are read."""
     t = core.now()
@@ -1841,13 +1843,13 @@ def door_round(con) -> None:
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
 from . import autoev, core, evteams, gallery, guests, santa  # noqa: E402
-from .account import _drop_photo, _drop_unused, me  # noqa: E402
-from .clubs import SCHOOLS, _keep_name, org, people  # noqa: E402
+from .account import _drop_photo, _drop_unused  # noqa: E402
+from .clubs import SCHOOLS, _keep_name  # noqa: E402
 from .cohosts import ACCEPTED, changed as cohost_changed, co_runs, runs, tell as cohost_tell  # noqa: E402
 from .crew import kind as crew_kind  # noqa: E402
-from .seats import _visible, for_me, sees_school  # noqa: E402
+from .seats import (_event, _remind, _ticket_code, _visible, end_of, for_me, notify, promote, renew_cancelled_ticket, sees_school,  # noqa: E402
+    unregister)
 from .daily import _memo  # noqa: E402
 from .profiles import _came  # noqa: E402
 from .queues import _video  # noqa: E402
-from .seats import _event, _remind, _ticket_code, end_of, notify, promote, renew_cancelled_ticket, unregister  # noqa: E402
-from .teams import depts_scope, probation_field, team  # noqa: E402
+from .teams import depts_scope, probation_field  # noqa: E402

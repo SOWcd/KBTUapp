@@ -8,7 +8,7 @@ import dataclasses
 
 from fastapi.testclient import TestClient
 
-from kbtu import app as server, bot, db, logic
+from kbtu import app as server, db, logic, outbox
 from test_core import env, login, tma  # noqa: F401  (env: the fixture)
 
 ADMIN, PRES, VICE, HEAD, A, B, C, D, E = 60, 61, 62, 63, 64, 65, 66, 67, 68
@@ -194,7 +194,7 @@ def test_founder_told_once(env):
     _steps(c, oid); _steps(c, oid)
     told = con.execute("SELECT b.*, 'en' AS lang FROM bot_outbox b WHERE kind = 'club_top'").fetchall()
     assert [r["user_id"] for r in told] == [ids[ADMIN]] and told[0]["ref"] == f"top:{oid}"
-    text, _, start = bot._render(con, dict(told[0]))
+    text, _, start = outbox._render(con, dict(told[0]))
     assert "Chess" in text and "lanyard" in text and start == f"cl_{oid}"
 
 
@@ -264,7 +264,7 @@ def test_request_lifecycle(env, monkeypatch):
     told = con.execute("SELECT u.tg_id, b.ref FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE b.kind = 'club_path'").fetchall()
     assert [tuple(t) for t in told] == [(ADMIN, f"opath:{rid}")]
     row = dict(con.execute("SELECT * FROM bot_outbox WHERE kind = 'club_path'").fetchone()) | {"lang": "en"}
-    text, _, start = bot._render(con, row)
+    text, _, start = outbox._render(con, row)
     assert "Chess" in text and start == "capps"
     # only the admin decides; it's in his Inbox
     decide = lambda who=ADMIN, **b: c.post(f"/api/admin/official-requests/{rid}", headers=tma(who), json=b)  # noqa: E731

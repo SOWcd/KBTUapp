@@ -502,17 +502,27 @@ def _link(u) -> str:
 
 
 def block(con, v: Viewer, uid: object, on: object = True) -> None:
-    """Never see each other in the forum again: no offers either way, out of each other's matches and lists."""
+    """Block, from the forum or anyone's profile (the stores' UGC rule: blocking wherever two people meet): never see
+    each other in the forum again (no offers either way, out of each other's matches and lists), friends no more, and
+    no friend request either way (profiles.blocked) until it's undone. Quiet: the other one is told nothing."""
     need_student(v)
     if not isinstance(uid, int) or isinstance(uid, bool) or uid == v.id or not isinstance(on, bool):
         raise ApiError("bad_input")
-    if on:
-        con.execute("INSERT OR IGNORE INTO blocks (user_id, blocked_id, created_at) VALUES (?, ?, ?)", (v.id, uid, core.now()))
-        pymk.forget(con, v.id, uid)  # never suggested to each other, an unblock later included
-        con.execute("UPDATE contacts SET status = 'declined', decided_at = ?, offer_message = NULL WHERE status = 'pending' AND ((from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?))",
-                    (core.now(), v.id, uid, uid, v.id))
-    else:
-        con.execute("DELETE FROM blocks WHERE user_id = ? AND blocked_id = ?", (v.id, uid))
+    if not one(con, "SELECT 1 FROM users WHERE id = ?", uid):
+        raise ApiError("not_found")
+    with tx(con):
+        if on:
+            con.execute("INSERT OR IGNORE INTO blocks (user_id, blocked_id, created_at) VALUES (?, ?, ?)", (v.id, uid, core.now()))
+            pymk.forget(con, v.id, uid)  # never suggested to each other, an unblock later included
+            con.execute("UPDATE contacts SET status = 'declined', decided_at = ?, offer_message = NULL WHERE status = 'pending' AND ((from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?))",
+                        (core.now(), v.id, uid, uid, v.id))
+            con.execute("DELETE FROM friendships WHERE a = ? AND b = ?", (min(uid, v.id), max(uid, v.id)))
+            con.execute("DELETE FROM friend_requests WHERE from_id = ? AND to_id = ?", (v.id, uid))  # mine: gone, not "sent"
+            # theirs: declined quietly (it looks "sent" to them, as any decline: profiles.friendship)
+            con.execute("UPDATE friend_requests SET status = 'declined', decided_at = ? WHERE status = 'pending' AND from_id = ? AND to_id = ?",
+                        (core.now(), uid, v.id))
+        else:
+            con.execute("DELETE FROM blocks WHERE user_id = ? AND blocked_id = ?", (v.id, uid))
 
 
 # ---- reports: hidden only by 3 reports from accounts older than two weeks AND the AI or a moderator
@@ -560,6 +570,5 @@ def forum_sweep(con) -> None:
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
 from . import core, pymk, subjects  # noqa: E402
-from .account import me  # noqa: E402
 from .oversight import _mod  # noqa: E402
 from .seats import notify  # noqa: E402

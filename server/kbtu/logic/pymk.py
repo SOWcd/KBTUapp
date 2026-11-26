@@ -82,7 +82,7 @@ def _store(con, ranked: list[tuple[int, int, int, int]]) -> None:
 
 
 def night(con) -> None:
-    """Once a day (bot._chores): everyone's suggestions worked out afresh."""
+    """Once a day (chores._chores): everyone's suggestions worked out afresh."""
     if not core._once(con, "pymk_day", str(core.day_of(core.now()))):
         return
     ranked = _rank(con)  # reads only: the write lock just for the swap

@@ -4,7 +4,7 @@ paid event, starts the real server on it with the postman off, and prints a link
 them: Telegram's initData rides in the link's hash, signed with a made-up bot token, the way Telegram passes it, so
 the real telegram-web-app.js reads it. Nothing leaves this machine.
 
-    cd server && .venv/bin/python tools/qa.py [--port 8790] [--db /tmp/qa.db] [--fake-ai]
+    cd server && .venv/bin/python tools/qa.py [--port 8790] [--db /tmp/qa.db] [--fake-ai] [--big]
 
 OCR of receipts runs if tesseract with the rus and kaz models is installed (TESSDATA_PREFIX for a local copy)."""
 from __future__ import annotations
@@ -155,6 +155,51 @@ def seed(path: str) -> None:
     con.close()
 
 
+def big(path: str, n: int = 2000) -> None:
+    """--big: n more made-up students, so every long list has a stress case: the guests of an event whose door is open
+    now (going, holds, waitlist, cancelled; a third checked in), Open Mic's members in four departments (the club's
+    people, its DMP roster, the door's team list), Dana's friends, a volunteers' session that ended an hour ago with
+    nobody checked out (its door: VOLUNTEERS=openmic below), and a quarter of them banned (Admin's team list)."""
+    con = db.connect(path)
+    now, day = int(time.time()), 86400
+    first = ("Aruzhan", "Dias", "Madina", "Nursultan", "Aigerim", "Temirlan", "Kamila", "Yerlan", "Zhansaya", "Arman", "Dilnaz", "Sanzhar")
+    last = ("Akhmetov", "Bekova", "Zhanova", "Sadykov", "Omarova", "Tulegenov", "Ismailova", "Kenzhebekov", "Serikova", "Nurpeisov")
+    ids = range(100, 100 + n)
+    name = lambda i: (first[i % len(first)], last[i // len(first) % len(last)])  # noqa: E731
+    con.executemany("""INSERT INTO users (id, tg_id, tg_first_name, tg_last_name, created_at, seen_at, banned_at, ban_reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                    [(i, 10000 + i, *name(i), now - 40 * day, now, now - i * 60 if i % 4 == 0 else None, "QA: spam" if i % 4 == 0 else None) for i in ids])
+    con.executemany("""INSERT INTO students (user_id, student_id, first_name, last_name, course, school, consent_version, consent_at, verified_at, synced_at)
+        VALUES (?, ?, ?, ?, ?, ?, 'qa', ?, ?, ?)""", [(i, f"23B{200000 + i}", *name(i), 1 + i % 4, ("SITE", "BS", "SEOGI", "ISE")[i % 4], now, now, now) for i in ids])
+    start = now - 3600  # on now: the door is open (Attendees' Mark, the door's People)
+    con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, ends_at, emoji, color, tint, seats, created_by, created_at, updated_at, published_at)
+        VALUES (6, 1, 'published', 'Winter concert', 'Main hall', ?, ?, 'party_popper_3d', '#2B4C9A', '#1E3770', ?, 1, ?, ?, ?)""",
+                (start, start + 4 * 3600, n, now - 7 * day, now - 7 * day, now - 7 * day))
+    status = ("going",) * 14 + ("hold", "waitlist", "waitlist", "cancelled")  # one in 18 of each but going
+    con.executemany("""INSERT INTO registrations (event_id, user_id, status, ticket_code, hold_until, created_at, updated_at, checked_in_at, checkin_manual)
+        VALUES (6, ?, ?, ?, ?, ?, ?, ?, ?)""", [(i, s, f"QA-B{i}", now + day if s == "hold" else None, now - 7 * day + i * 60, now - day,
+                                               start + i % 3000 if s == "going" and i % 3 == 0 else None, int(i % 9 == 0))
+                                              for i in ids for s in [status[i % len(status)]]])
+    for k, dept in enumerate(("Stand-up", "Music", "Media", "Hosts")):
+        con.execute("INSERT INTO org_tags (id, org_id, name, color, created_at, department) VALUES (?, 1, ?, '#2B4C9A', ?, 1)", (k + 1, dept, now))
+    con.executemany("INSERT INTO org_members (org_id, user_id, role, joined_at, role_id) VALUES (1, ?, 'member', ?, (SELECT id FROM org_roles WHERE org_id = 1 AND level = 'member'))",
+                    [(i, now - i * 3600) for i in ids])
+    con.executemany("INSERT INTO member_tags (tag_id, user_id) VALUES (?, ?)", [(1 + i % 4, i) for i in ids])
+    con.executemany("INSERT INTO friendships (a, b, created_at) VALUES (1, ?, ?)", [(i, now - i * 600) for i in ids])
+    # the volunteers' session: finished an hour ago, everyone checked in, a tenth already answered for (the migration's cutoff is "now")
+    con.execute("REPLACE INTO meta (key, value) VALUES (?, ?)", (logic.vol.FROM, str(now - 30 * day)))
+    con.execute("INSERT INTO qr_sessions (id, title, pin_hash, started_at, ended_at, created_at, org_id) VALUES (1, 'Volunteers: Saturday', 'qa-big', ?, ?, ?, 1)",
+                (now - 6 * 3600, now - 3600, now - 6 * 3600))
+    con.execute("INSERT INTO vol_meets (session_id, org_id, created_at) VALUES (1, 1, ?)", (now - 6 * 3600,))
+    con.executemany("INSERT INTO vol_people (id, org_id, user_id, name, created_at) VALUES (?, 1, ?, ?, ?)", [(i, i, " ".join(name(i)), now - 30 * day) for i in ids])
+    con.executemany("INSERT INTO vol_shifts (id, vol_id, session_id, in_at, out_at) VALUES (?, ?, 1, ?, ?)",
+                    [(i, i, now - 6 * 3600 + i * 5, now - 2 * 3600 if i % 10 == 0 else None) for i in ids])
+    con.executemany("INSERT INTO vol_edits (vol_id, what, ref, by, at) VALUES (?, 'resolve', ?, 1, ?)", [(i, i, now - 1800) for i in ids if i % 10 == 0])
+    # the ledger's part of the policy agreed to, so its gate doesn't cover the lists
+    con.execute("UPDATE students SET consent_version = ?", (logic.account.CONSENT + logic.account.CONSENT_VOL,))
+    con.commit()
+    con.close()
+
+
 def link(port: int, tg: int, first: str) -> str:
     data = auth.sign_init_data({"id": tg, "first_name": first, "language_code": "ru"}, BOT)
     theme = json.dumps({"bg_color": "#000000", "text_color": "#ffffff"})
@@ -201,14 +246,18 @@ def main() -> None:
     ap.add_argument("--port", type=int, default=8790)
     ap.add_argument("--db", default=str(Path(os.environ.get("TMPDIR", "/tmp")) / "kbtu-qa.db"))
     ap.add_argument("--fake-ai", action="store_true", help="a made-up assistant model (fake_ai_app)")
+    ap.add_argument("--big", action="store_true", help="2000 more people on the long lists (big); Dana is the app's admin")
     a = ap.parse_args()
     seed(a.db)
+    if a.big:
+        big(a.db)
     for _, tg, first, _ in PEOPLE:
         print(f"{first}: {link(a.port, tg, first)}", flush=True)
     env = {**os.environ, "DB_PATH": a.db, "BOT_TOKEN": BOT, "TOKEN_KEY": base64.b64encode(os.urandom(32)).decode(), "BACKGROUND": "0",
-           "ADMIN_TG_IDS": os.environ.get("QA_ADMIN_TG_IDS", ""), "WEB_DIST": str(SERVER.parent / "web" / "dist"),
+           "ADMIN_TG_IDS": os.environ.get("QA_ADMIN_TG_IDS", "1001" if a.big else ""), "WEB_DIST": str(SERVER.parent / "web" / "dist"),
            "BOARD": os.environ.get("BOARD", "1"), "FORUM_CHANNEL": os.environ.get("FORUM_CHANNEL", "-1001"), "FORUM_GROUP": os.environ.get("FORUM_GROUP", "-1002"),
-           "APPEALS": os.environ.get("APPEALS", "1"), "ASK": os.environ.get("ASK", "1"), "GALLERY": os.environ.get("GALLERY", "1")}  # the student forum on, as it will be after its policy part
+           "APPEALS": os.environ.get("APPEALS", "1"), "ASK": os.environ.get("ASK", "1"), "GALLERY": os.environ.get("GALLERY", "1"),  # the student forum on, as it will be after its policy part
+           "VOLUNTEERS": os.environ.get("VOLUNTEERS", "openmic" if a.big else "")}  # --big: the volunteers' door (big)
     subprocess.run([sys.executable, "-m", "uvicorn", "tools.qa:fake_ai_app" if a.fake_ai else "kbtu.app:create", "--factory", "--host", "127.0.0.1", "--port", str(a.port),
                     "--log-level", "warning"], cwd=SERVER, env=env)
 

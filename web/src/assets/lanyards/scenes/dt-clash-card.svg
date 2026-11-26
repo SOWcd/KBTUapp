@@ -1,0 +1,131 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 164" width="1020" height="492">
+<!-- V2 RADIANT · DIRE: the card split by the moment two sides meet. The Radiant's deep jade behind the text (calm,
+     its sun-wheel faint behind the photo), the Dire's ember-black under the medallion (its horned crescent rising behind
+     it); between them a crackling seam of light, green on one lip and red on the other, white where they touch, sparks
+     thrown both ways. -->
+<defs>
+  <linearGradient id="rad" x1="0" y1="0" x2="1" y2="0.2">
+    <stop offset="0" stop-color="#03130f"/><stop offset="0.5" stop-color="#062520"/><stop offset="0.78" stop-color="#0c4238"/><stop offset="1" stop-color="#1b7a64"/>
+  </linearGradient>
+  <linearGradient id="dire" x1="1" y1="0" x2="0" y2="0.2">
+    <stop offset="0" stop-color="#160304"/><stop offset="0.45" stop-color="#3a0807"/><stop offset="0.85" stop-color="#8a1a0e"/><stop offset="1" stop-color="#c8401a"/>
+  </linearGradient>
+  <radialGradient id="sunR" cx="58" cy="-10" r="160" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#d8ffe8" stop-opacity="0.22"/><stop offset="0.5" stop-color="#7affc4" stop-opacity="0.06"/><stop offset="1" stop-color="#7affc4" stop-opacity="0"/>
+  </radialGradient>
+  <radialGradient id="heatD" cx="300" cy="150" r="120" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#ff6a2a" stop-opacity="0.35"/><stop offset="1" stop-color="#ff3a14" stop-opacity="0"/>
+  </radialGradient>
+  <clipPath id="cR"><path d="M-2 -2 H272 C262 30 236 56 246 84 C254 106 250 130 226 166 H-2 Z"/></clipPath>
+  <clipPath id="cD"><path d="M272 -2 H342 V166 H226 C250 130 254 106 246 84 C236 56 262 30 272 -2 Z"/></clipPath>
+  <linearGradient id="horn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffb066"/><stop offset="0.4" stop-color="#c2361a"/><stop offset="1" stop-color="#3a0807"/></linearGradient>
+  <linearGradient id="hornF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5a0f0b"/><stop offset="1" stop-color="#1a0405"/></linearGradient>
+  <linearGradient id="sunG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f6ffd8"/><stop offset="1" stop-color="#6fe0b0"/></linearGradient>
+  <linearGradient id="skyD" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0c0102" stop-opacity="0.85"/><stop offset="0.55" stop-color="#1a0304" stop-opacity="0.4"/><stop offset="0.75" stop-color="#1a0304" stop-opacity="0"/></linearGradient>
+  <linearGradient id="rock" x1="0" y1="0" x2="0.3" y2="1"><stop offset="0" stop-color="#2a0806"/><stop offset="0.5" stop-color="#110203"/><stop offset="1" stop-color="#060001"/></linearGradient>
+  <filter id="b10" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="7"/></filter>
+  <filter id="b3" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="2.2"/></filter>
+  <filter id="b1" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="0.8"/></filter>
+  <filter id="glow" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="1" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <!-- the seam crackles: displaced by fine turbulence so it is never a smooth vector curve -->
+  <filter id="crackle" x="-30%" y="-10%" width="160%" height="120%">
+    <feTurbulence type="turbulence" baseFrequency="0.06 0.12" numOctaves="3" seed="9" result="t"/>
+    <feDisplacementMap in="SourceGraphic" in2="t" scale="5" xChannelSelector="R" yChannelSelector="G"/>
+  </filter>
+  <filter id="smokeG" x="0" y="0" width="100%" height="100%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.014 0.03" numOctaves="4" seed="4"/>
+    <feColorMatrix values="0 0 0 0 0.25  0 0 0 0 0.85  0 0 0 0 0.65  0 0 0 1.4 -0.66"/>
+  </filter>
+  <filter id="smokeR" x="0" y="0" width="100%" height="100%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.012 0.03" numOctaves="4" seed="12"/>
+    <feColorMatrix values="0 0 0 0 0.9  0 0 0 0 0.2  0 0 0 0 0.08  0 0 0 1.5 -0.6"/>
+  </filter>
+  <filter id="grain" x="0" y="0" width="100%" height="100%">
+    <feTurbulence type="fractalNoise" baseFrequency="1.4" numOctaves="2" seed="2"/>
+    <feColorMatrix values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.5 -0.18"/>
+  </filter>
+  <linearGradient id="fadeR" x1="0" y1="0" x2="1" y2="0"><stop offset="0.35" stop-color="#fff" stop-opacity="0"/><stop offset="0.75" stop-color="#fff" stop-opacity="1"/></linearGradient>
+  <mask id="mR"><rect width="340" height="164" fill="url(#fadeR)"/></mask>
+  <radialGradient id="vig" cx="0.6" cy="0.5" r="0.78"><stop offset="0.55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.5"/></radialGradient>
+</defs>
+
+<!-- the Radiant -->
+<g clip-path="url(#cR)">
+  <rect width="340" height="164" fill="url(#rad)"/>
+  <rect width="340" height="164" fill="url(#sunR)"/>
+  <!-- its sun-wheel, engraved faint behind the photo and the name -->
+  <g transform="translate(60 66)" opacity="0.13" fill="none" stroke="url(#sunG)">
+    <circle r="56" stroke-width="0.6"/><circle r="61" stroke-width="0.3" stroke-dasharray="0.8 2.6"/><circle r="34" stroke-width="0.5"/>
+    <g stroke-width="0.5">
+      <path d="M0 -34 L4 -56 L0 -84 L-4 -56 Z"/><path d="M0 34 L4 56 L0 84 L-4 56 Z"/><path d="M-34 0 L-56 4 L-84 0 L-56 -4 Z"/><path d="M34 0 L56 4 L84 0 L56 -4 Z"/>
+      <path d="M24 -24 L42 -38 L60 -60 L38 -42 Z"/><path d="M-24 24 L-42 38 L-60 60 L-38 42 Z"/><path d="M24 24 L38 42 L60 60 L42 38 Z"/><path d="M-24 -24 L-38 -42 L-60 -60 L-42 -38 Z"/>
+    </g>
+  </g>
+  <g mask="url(#mR)"><rect width="340" height="164" filter="url(#smokeG)" opacity="0.9"/></g>
+  <!-- the Radiant's light leaking toward the seam -->
+  <path d="M272 -2 C262 30 236 56 246 84 C254 106 250 130 226 166" fill="none" stroke="#5effc8" stroke-width="26" opacity="0.28" filter="url(#b10)"/>
+</g>
+
+<!-- the Dire: a black-crimson sky over a molten horizon; its thorn-rocks stand black against it, crests rim-lit -->
+<g clip-path="url(#cD)">
+  <rect width="340" height="164" fill="url(#dire)"/>
+  <rect width="340" height="164" fill="url(#skyD)"/>
+  <rect width="340" height="164" filter="url(#smokeR)" opacity="0.45"/>
+  <!-- the molten horizon behind the rocks -->
+  <ellipse cx="296" cy="116" rx="76" ry="34" fill="#ff5a1f" opacity="0.75" filter="url(#b10)"/>
+  <ellipse cx="292" cy="114" rx="46" ry="12" fill="#ffb060" opacity="0.85" filter="url(#b3)"/>
+  <ellipse cx="292" cy="116" rx="18" ry="3" fill="#fff0c8" opacity="0.8" filter="url(#b1)"/>
+  <!-- far ridge, hazed in the heat -->
+  <path d="M226 166 V124 L238 118 L246 108 L252 116 L262 104 L270 112 L280 106 L288 114 L298 102 L306 112 L318 104 L326 112 L342 100 V166 Z" fill="#4a0c08" opacity="0.9" filter="url(#b1)"/>
+  <!-- the thorn-rocks: angular, leaning, black -->
+  <g fill="url(#rock)">
+    <path d="M232 166 L236 136 L244 120 L240 104 L252 72 L256 96 L262 108 L266 130 L272 166 Z"/>
+    <path d="M262 166 L268 140 L276 124 L282 92 L288 60 L292 88 L296 112 L292 130 L300 166 Z"/>
+    <path d="M300 166 L304 142 L312 126 L320 116 L338 84 L332 112 L334 128 L342 136 V166 Z"/>
+    <path d="M282 166 L288 146 L294 140 L304 148 L310 166 Z"/>
+  </g>
+  <!-- rim light on the crests, facing the glow -->
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <g stroke="#ff7a2a" stroke-width="1.8" opacity="0.55" filter="url(#b1)">
+      <path d="M240 104 L252 72 L256 96 L262 108"/><path d="M282 92 L288 60 L292 88 L296 112"/><path d="M320 116 L338 84 L332 112"/>
+    </g>
+    <g stroke="url(#horn)" stroke-width="0.6">
+      <path d="M240 104 L252 72 L256 96 L262 108 L266 130"/><path d="M276 124 L282 92 L288 60 L292 88 L296 112"/><path d="M312 126 L320 116 L338 84 L332 112"/>
+    </g>
+  </g>
+  <!-- molten cracks in the rock -->
+  <g fill="none" stroke="#ff8a3a" stroke-width="0.35" opacity="0.45" filter="url(#b1)">
+    <path d="M287 74 L285 96 L288 108"/><path d="M251 86 L250 102"/>
+  </g>
+  <!-- embers lifting off -->
+  <g filter="url(#glow)" fill="#ffd8a0">
+    <circle cx="296" cy="50" r="0.6"/><circle cx="312" cy="70" r="0.45" opacity="0.8"/><circle cx="270" cy="46" r="0.4" opacity="0.7"/>
+    <circle cx="322" cy="40" r="0.5"/><circle cx="262" cy="60" r="0.35" opacity="0.6"/><circle cx="304" cy="88" r="0.4" opacity="0.7"/><circle cx="276" cy="80" r="0.5"/>
+  </g>
+  <path d="M272 -2 C262 30 236 56 246 84 C254 106 250 130 226 166" fill="none" stroke="#ff4a1c" stroke-width="22" opacity="0.28" filter="url(#b10)"/>
+</g>
+
+<!-- the seam: green lip, red lip, white where they touch -->
+<g filter="url(#crackle)" fill="none" stroke-linecap="round">
+  <path d="M270 -2 C260 30 234 56 244 84 C252 106 248 130 224 166" stroke="#7affd0" stroke-width="2.4" filter="url(#b3)"/>
+  <path d="M274 -2 C264 30 238 56 248 84 C256 106 252 130 228 166" stroke="#ff6a2a" stroke-width="2.4" filter="url(#b3)"/>
+  <path d="M272 -2 C262 30 236 56 246 84 C254 106 250 130 226 166" stroke="#fffbe8" stroke-width="1.1" filter="url(#glow)"/>
+  <!-- forks of it -->
+  <g stroke-width="0.5" filter="url(#glow)">
+    <path d="M241 62 L230 58 L222 64 L212 60" stroke="#9affdc" opacity="0.8"/><path d="M246 98 L236 104 L228 102" stroke="#9affdc" opacity="0.7"/>
+    <path d="M262 28 L272 34 L282 30" stroke="#ff9a5a" opacity="0.8"/><path d="M251 116 L262 122 L274 118 L282 124" stroke="#ff9a5a" opacity="0.7"/>
+    <path d="M247 80 L258 76 L264 82" stroke="#ffb07a" opacity="0.6"/>
+  </g>
+</g>
+
+<!-- sparks thrown both ways -->
+<g filter="url(#glow)">
+  <circle cx="226" cy="40" r="0.6" fill="#b8ffe4"/><circle cx="214" cy="84" r="0.5" fill="#9affdc"/><circle cx="232" cy="120" r="0.55" fill="#b8ffe4"/>
+  <circle cx="204" cy="30" r="0.4" fill="#9affdc" opacity="0.7"/><circle cx="220" cy="140" r="0.45" fill="#9affdc"/><circle cx="196" cy="110" r="0.35" fill="#9affdc" opacity="0.6"/>
+  <circle cx="270" cy="52" r="0.6" fill="#ffcf8a"/><circle cx="262" cy="96" r="0.55" fill="#ffb066"/><circle cx="276" cy="140" r="0.6" fill="#ffcf8a"/>
+  <circle cx="290" cy="20" r="0.4" fill="#ffb066" opacity="0.8"/><circle cx="330" cy="120" r="0.5" fill="#ffcf8a"/><circle cx="268" cy="8" r="0.45" fill="#ffcf8a"/>
+</g>
+
+<rect width="340" height="164" fill="url(#vig)"/>
+<rect width="340" height="164" filter="url(#grain)" opacity="0.3" style="mix-blend-mode:overlay"/>
+</svg>

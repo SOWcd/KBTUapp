@@ -52,5 +52,7 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=120s CMD curl -fs http://127.0.0.1:8080/healthz || exit 1
 # secrets come from the environment (Coolify): BOT_TOKEN, TOKEN_KEY, ADMIN_TG_IDS, DOMAIN
 # workers: WEB_CONCURRENCY if the host sets it, else one per core, the whole server (owner: use it to the max; the app is
-# multi-worker safe; one was the bottleneck at 300 people opening at once). exec keeps uvicorn PID 1 for the stop signal
-CMD ["sh", "-c", "export WEB_CONCURRENCY=${WEB_CONCURRENCY:-$(nproc)}; exec uvicorn kbtu.app:create --factory --host 0.0.0.0 --port 8080 --proxy-headers --forwarded-allow-ips '*' --no-access-log"]
+# multi-worker safe; one was the bottleneck at 300 people opening at once). exec keeps uvicorn PID 1 for the stop signal.
+# X-Forwarded-* only from a private peer (the tunnel and the proxy on the server's own networks), never '*': a request
+# straight to the port must not pick its own address (Aldiyar's report; app.py _visitor_ip)
+CMD ["sh", "-c", "export WEB_CONCURRENCY=${WEB_CONCURRENCY:-$(nproc)}; exec uvicorn kbtu.app:create --factory --host 0.0.0.0 --port 8080 --proxy-headers --forwarded-allow-ips '127.0.0.1,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,fc00::/7' --no-access-log"]

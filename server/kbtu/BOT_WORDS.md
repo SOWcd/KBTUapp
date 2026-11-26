@@ -2,6 +2,9 @@
 
 The rule (AGENTS.md): the bot sends templates with a button into the app, never a user's words. The exceptions, all of them:
 
+(Where they are sent from: the postman in `outbox.py`, private chats in `bot_dm.py`, groups, `/all` and the video replies in
+`bot_groups.py`, the channel's comments in `tgc.py`; all through `bot._tg`.)
+
 Two exceptions: a student's own post
 to the forum channel (`FORUM_CHANNEL`), published only after the AI's yes or a moderator's, as plain text without
 links or mentions, signed with the app's name or "Anonymous student"; the author can delete it, a moderator can
@@ -14,8 +17,14 @@ row keeps their user id (an anonymous author's reply never does), the author del
 (`tgc_back`, to post it again), the title of my own find-people request (`contact_ask`, `ask_hidden`).
 A share card of a forum post live in the channel (`/api/share` kind `fp`, inline mode) quotes its first 160 characters,
 escaped, never a signature; inline offers only my own signed posts. A card already sent stays in its chat after a
-take-down, as a forward of the channel's post would.
+take-down, as a forward of the channel's post would. Outside the Mini App (a browser, the phone apps) the same card,
+built by `/api/share` (`handoff`), waits an hour in `meta` under a one-time secret (`core.share_hold`): the bot sends it
+only to the Telegram account that made it, in its private chat (`/start sh_<secret>`), and its "Send to a chat" button
+offers it in inline mode to that account alone; no new words.
 
 Also: in a group, a TikTok, YouTube Shorts or Instagram link is answered with the video file itself, or the post's photos and videos as one album (`TIKTOK=1`, `kbtu/tiktok.py`; an Instagram story's video only with `INSTAGRAM_COOKIES`), no caption, no words of the bot's own.
+
+The iPhone app's notifications (`kbtu/apns.py`) are the same rendered bot message to the same person, sent there
+instead of Telegram (never both): they add no words and no exception.
 
 The CSV exports use template captions and go to the requester's private chat with the bot. Attendee exports may contain sign-up answers. Team log exports include attendance comments for people with current report consent and require the club's `reports` right.

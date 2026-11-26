@@ -7,7 +7,7 @@ import time
 
 import pytest
 
-from kbtu import auth, bot, config, db, logic
+from kbtu import auth, config, db, logic, outbox
 from test_core import BOT, delete_now, env, login, set_clock, tma  # noqa: F401  (env: the fixture)
 
 
@@ -195,7 +195,7 @@ def test_freshmen_prefill(env, monkeypatch, capsys):
     assert not con.execute("SELECT 1 FROM prefill WHERE email = 'a_one@kbtu.kz'").fetchone()
     assert ach(uid[2])["init26f"] == 1 and ach(uid[2])["init26"] == 0 and alerts() == []
     out = con.execute("SELECT * FROM bot_outbox WHERE user_id = ? AND ref = 'ach:init26f:1'", (uid[2],)).fetchone()
-    assert bot._render(con, {**dict(out), "lang": "kk"})                                    # the bot's card has its name
+    assert outbox._render(con, {**dict(out), "lang": "kk"})                                    # the bot's card has its name
     # a typo'd mail, another person's name: nothing from the row, no badge, the row stays, no alert
     r = c.post("/api/kbtu/manual", headers=tma(3), json={"studentId": "25B010099", "consentVersion": logic.CONSENT})
     assert r.status_code == 200, r.text
@@ -214,7 +214,7 @@ def test_freshmen_prefill(env, monkeypatch, capsys):
     assert not con.execute("SELECT 1 FROM prefill WHERE email = 'j_ten@kbtu.kz'").fetchone()
     for kind, ref in alerts():
         out = con.execute("SELECT * FROM bot_outbox WHERE kind = ? AND ref = ?", (kind, ref)).fetchone()
-        text = bot._render(con, {**dict(out), "lang": "en"})[0]
+        text = outbox._render(con, {**dict(out), "lang": "en"})[0]
         assert f"#{ref.split(':')[1]}" in text and "kbtu.kz" not in text and "B0" not in text and "Serikov" not in text
     # deleting an account before it linked: its row goes too
     logic.account.ms_remember(con, uid[4], who(4, "b_two@kbtu.kz", "Bek", "Twoev"))

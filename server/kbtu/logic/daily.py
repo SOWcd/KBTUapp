@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 
 from .. import receipt, texts
@@ -10,6 +11,7 @@ from ..db import tx
 from . import notifications
 from .core import TZ, ApiError, PERSON, Viewer, _may, _once, _org, _rights_from, can, day_of, day_start, evdel, one, rows, shown_name
 
+log = logging.getLogger(__name__)
 
 MEMO_ASKS = ("room", "guests", "provide", "promo", "gear", "print", "film")
 
@@ -222,12 +224,11 @@ def stats_day(con) -> None:
                  one(con, "SELECT COUNT(*) FROM users WHERE created_at >= ? AND created_at < ?", lo, hi)[0],
                  one(con, f"SELECT COUNT(*) FROM students s WHERE verified_at < ? AND NOT {core.staff_sql()}", hi)[0]))
     con.execute("DELETE FROM visits WHERE day < ?", (day - 30,))  # 30 days, as the privacy policy says
+    con.execute("DELETE FROM user_platforms WHERE seen_at < ?", (core.now() - 90 * 86400,))  # 90 days, as the policy says
     con.execute("DELETE FROM profile_views WHERE day < ?", (day,))  # strangers' profile counts: today's and yesterday's stay
     con.execute("DELETE FROM fchan_feed_pages WHERE expires_at <= ?", (core.now(),))
     from .organizing import GUEST_DAYS
     con.execute("DELETE FROM door_guests WHERE user_id IS NULL AND created_at <= ?", (core.now() - GUEST_DAYS,))
-    notifications.forget(con)
-    web_auth.forget(con, core.now())
     # the bot's copy of a message older than 30 days loses its words; the row stays, its key keeps it from going twice
     con.execute("UPDATE bot_outbox SET payload = '{}' WHERE send_after < ? AND payload != '{}' AND (sent_at IS NOT NULL OR error IS NOT NULL)",
                 (core.now() - 30 * 86400,))  # one still waiting keeps its words
@@ -235,30 +236,38 @@ def stats_day(con) -> None:
     con.execute("DELETE FROM bot_outbox WHERE kind = 'id_clash' AND send_after < ?", (core.now() - 30 * 86400,))  # the ref names a student ID
     con.execute("DELETE FROM chat_seen WHERE seen_at < ?", (core.now() - chatlist.SEEN_KEEP,))  # /all's memory: 180 days
     con.execute("DELETE FROM chat_seen_free WHERE seen_at < ?", (core.now() - chatlist.SEEN_KEEP,))
-    forum_sweep(con)
-    stats.forget(con)  # the anonymous usage counters: 180 days
-    appeals.forget(con)  # appeals to SG: 90 days after closing, 180 at most
-    mapflaws.sweep(con)
-    research.sweep(con)  # proposals: 180 days; survey answers: a year after closure
-    donations.sweep(con)
-    helpus.sweep(con)  # anonymous lines to the creator: 90 days; offers to help: 180
-    forms.forget(con)  # public-form answers: one year after closure
-    chatmod.sweep(con)  # swear warnings in clubs' groups: 90 days
-    assistant.sweep(con)
     # the answers to an event's questions at sign-up go 30 days after it (the privacy policy's promise for them)
     con.execute("""UPDATE registrations SET answers = NULL WHERE answers IS NOT NULL AND event_id IN
         (SELECT id FROM events WHERE COALESCE(ends_at, starts_at) < ?)""", (core.now() - 30 * 86400,))
     con.execute("DELETE FROM santa_people WHERE event_id IN (SELECT id FROM events WHERE COALESCE(ends_at, starts_at) < ?)", (core.now() - 30 * 86400,))  # Secret Santa's wishlists and pairs with them
-    santa.forget(con)  # its chat: 3 days after the gifts day
     # a check-in screen's expected list (names, mails, phones) goes 30 days after its session ended, or 90 after one
     # never ended (never run, or left running); the session and its scans stay (they are the check-ins)
     con.execute("""DELETE FROM qr_expected WHERE session_id IN (SELECT id FROM qr_sessions WHERE ended_at < ?
         OR (ended_at IS NULL AND created_at < ?))""", (core.now() - 30 * 86400, core.now() - 90 * 86400))
-    _prune_deletion_log(con)
     from .. import checkin  # imports logic: here, not at the top
-    checkin.sweep(con)  # check-ins left running (the organizers' list sweeps too, as it's read)
-    chatsync.night(con)  # linked clubs: their members against their chats again (updates missed while down)
-    roles_backfill(con)  # Batch titles without a source language so they don't flood the translation queue.
+    # each on its own: _once has marked the day, so one sweep raising would skip every later one (the policy's
+    # retention among them) until tomorrow, and every night while it keeps failing (Inkar's review, #349)
+    for sweep in (notifications.forget, lambda c: web_auth.forget(c, core.now()), forum_sweep,
+                  stats.forget,      # the anonymous usage counters: 180 days
+                  appeals.forget,    # appeals to SG: 90 days after closing, 180 at most
+                  mapflaws.sweep,
+                  research.sweep,    # proposals: 180 days; survey answers: a year after closure
+                  donations.sweep,
+                  helpus.sweep,      # anonymous lines to the creator: 90 days; offers to help: 180
+                  forms.forget,      # public-form answers: one year after closure
+                  chatmod.sweep,     # swear warnings in clubs' groups: 90 days
+                  assistant.sweep,
+                  santa.forget,      # its chat: 3 days after the gifts day
+                  _prune_deletion_log,
+                  checkin.sweep,     # check-ins left running (the organizers' list sweeps too, as it's read)
+                  chatsync.night,    # linked clubs: their members against their chats again (updates missed while down)
+                  roles_backfill):   # Batch titles without a source language so they don't flood the translation queue.
+        try:
+            sweep(con)
+        except Exception:
+            if con.in_transaction:
+                con.execute("ROLLBACK")
+            log.exception("stats_day: %s failed", getattr(sweep, "__qualname__", sweep))
 
 
 def admin_stats(con, v: Viewer) -> dict:

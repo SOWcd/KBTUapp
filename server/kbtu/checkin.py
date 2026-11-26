@@ -265,7 +265,7 @@ def _door(con, v: Viewer, e, sid: int | None, start: bool = False) -> None:
         raise ApiError("forbidden", "screen")
     if not _guests(con, e, sid):
         raise ApiError("forbidden", "door_staff")
-    at = max(logic.door_at(e), e["starts_at"] - logic.DOOR_AUTO) if start else logic.door_at(e)
+    at = e["starts_at"] - logic.DOOR_AUTO if start else logic.door_at(e)  # door_at is never later than T-30
     if now() < at and e["status"] == "published" and not e["hidden_at"] and not named:
         raise ApiError("closed", "not_open", {"at": at})
     if e["status"] != "published" or e["hidden_at"] or logic.door_shut(e, now()) == "closed" or not named and logic.door_shut(e, now()):
@@ -714,7 +714,7 @@ def export(con, key: bytes, sid: int, e: int, k: str) -> str:
         name = " ".join(n for n in (r["last_name"], r["first_name"]) if n) or " ".join(n for n in (r["tg_last_name"], r["tg_first_name"]) if n)
         out_rows.append(list(map(_cell, ["scanned, not signed in" if not done else "came" if x else "came (not on the list)",
                     x["full_name"] if x else name, r["middle_name"], r["last_lat"], r["first_lat"], r["middle_lat"], email, r["student_id"], r["school"], r["course"], x and x["phone"],
-                    (x and x["tg"]) or r["tg_username"], time.strftime("%H:%M:%S", time.gmtime(arrival + 5 * 3600)),
+                    (x and x["tg"]) or r["tg_username"], hm(arrival),
                     ("A" if r["verified_at"] <= s["started_at"] else "B") if done and r["verified_at"] is not None and s["started_at"] is not None else "", hm(r["left_at"]),  # unlinked since: no tier
                     f"{(r['left_at'] - arrival) / 3600:.1f}" if done and r["left_at"] and r["left_at"] > arrival else "",
                     markers.get(r["marked_by"], "")])))

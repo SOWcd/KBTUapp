@@ -9,7 +9,7 @@ import types
 
 from fastapi.testclient import TestClient
 
-from kbtu import bot, db, logic, media, app as server, texts
+from kbtu import bot, bot_dm, bot_groups, db, logic, media, outbox, app as server, texts
 from test_core import delete_now, env, login, tma  # noqa: F401  (env: the fixture)
 
 
@@ -43,7 +43,7 @@ class _ChatHttp:
 
 def _bot_in(cfg, con, tg, chat_id, status="administrator", kind="supergroup", title=None):
     """Our bot added to a chat by `tg` (Telegram's action performer); whose card it is now, if any."""
-    asyncio.run(bot._member(cfg, _ChatHttp(), con, {"chat": {"id": chat_id, "type": kind, "title": title or f"chat {chat_id}"},
+    asyncio.run(bot_groups._member(cfg, _ChatHttp(), con, {"chat": {"id": chat_id, "type": kind, "title": title or f"chat {chat_id}"},
                                                      "from": {"id": tg}, "new_chat_member": {"status": status, "user": {"id": 123}}}))
     r = con.execute("SELECT org_id FROM chats WHERE tg_chat_id = ?", (chat_id,)).fetchone()
     return r and r[0]
@@ -231,7 +231,7 @@ def test_suggest_chat(env, monkeypatch):
     monkeypatch.setattr(media, "chat_peek", peek)
     def say(tg, **m):  # each a while after the last (one t.me look per 10 s per student)
         con.execute("DELETE FROM meta WHERE key LIKE 'suggest_at:%'")
-        return asyncio.run(bot._suggest(cfg, None, con, {"chat": {"id": tg, "type": "private"}, "date": logic.now(), **m}))["text"]
+        return asyncio.run(bot_dm._suggest(cfg, None, con, {"chat": {"id": tg, "type": "private"}, "date": logic.now(), **m}))["text"]
     picked = {"chat_shared": {"request_id": 1, "chat_id": -100777, "username": "KBTU_news", "title": "KBTU News"}}
     assert say(99, **picked) == texts.bot_message("ru", "chat_signin")[0]          # not a student
     assert say(30, **picked) == texts.chat_reply("ru", [("sent", "KBTU News", "channel")])
@@ -248,14 +248,14 @@ def test_suggest_chat(env, monkeypatch):
     assert c.post("/api/chats/suggest", headers=tma(99), json={"link": "@x_chat"}).status_code == 403
     # one clock for the two: the gate counts 10-second slots (now() // 10), and two calls a few ms apart that straddle a
     # slot's end were two slots, so "sent" came back where "slow" was asserted (was: failed now and then, more under load)
-    real_now, frozen = bot.now, bot.now()
-    monkeypatch.setattr(bot, "now", lambda: frozen)
+    real_now, frozen = bot_dm.now, bot_dm.now()
+    monkeypatch.setattr(bot_dm, "now", lambda: frozen)
     assert c.post("/api/chats/suggest", headers=tma(30), json={"link": "@typed_once"}).json()["status"] == "sent"
     assert c.post("/api/chats/suggest", headers=tma(30), json={"link": "@typed_fast"}).json()["status"] == "slow"  # within 10 s of the last
-    monkeypatch.setattr(bot, "now", real_now)
+    monkeypatch.setattr(bot_dm, "now", real_now)
     con.execute("DELETE FROM chats WHERE url = 'https://t.me/typed_once'")
     assert say(30, text="@second_chat").startswith("✅") and say(30, text="@third_chat").startswith("✅")
-    assert asyncio.run(bot._suggest(cfg, None, con, {"chat": {"id": 30, "type": "private"}, "date": logic.now(), "text": "@quick_one"}))["text"] \
+    assert asyncio.run(bot_dm._suggest(cfg, None, con, {"chat": {"id": 30, "type": "private"}, "date": logic.now(), "text": "@quick_one"}))["text"] \
         == texts.bot_message("ru", "chat_later")[0]                                    # within 10 s of the last
     for i in range(6):
         assert say(30, text=f"@more_chat_{i}").startswith("✅")
@@ -265,14 +265,14 @@ def test_suggest_chat(env, monkeypatch):
     waiting = c.get("/api/chats", headers=tma(31)).json()["pending"]
     assert [x["kind"] for x in waiting][-3:] == ["group", "group", "channel"] and len(waiting) == 10  # newest first
     ping = con.execute("SELECT * FROM bot_outbox WHERE kind = 'chat_suggested'").fetchall()
-    assert len(ping) == 1 and bot._render(con, {**dict(ping[0]), "lang": "ru"})[2] == "achats"   # one a day
+    assert len(ping) == 1 and outbox._render(con, {**dict(ping[0]), "lang": "ru"})[2] == "achats"   # one a day
     news = waiting[-1]["id"]
     assert c.post(f"/api/chats/{news}/opened", headers=tma(30)).status_code == 404
     assert c.post(f"/api/admin/chats/{news}/approve", headers=tma(30)).status_code == 403
     assert c.post(f"/api/admin/chats/{news}/approve", headers=tma(31)).json()["title"] == "KBTU News"
     assert [x["title"] for x in c.get("/api/chats", headers=tma(30)).json()["all"]] == ["KBTU News"]
     told = con.execute("SELECT * FROM bot_outbox WHERE kind = 'chat_approved' AND user_id = ?", (ali["id"],)).fetchone()
-    assert bot._render(con, {**dict(told), "lang": "ru"})[2] == "chats"
+    assert outbox._render(con, {**dict(told), "lang": "ru"})[2] == "chats"
     assert c.delete(f"/api/admin/chats/{waiting[0]['id']}", headers=tma(31)).status_code == 204   # declined
     assert len(c.get("/api/chats", headers=tma(31)).json()["pending"]) == 8
     assert say(30, text="@kbtu_news") == texts.chat_reply("ru", [("exists", "KBTU News", "channel")])   # live now
@@ -280,7 +280,7 @@ def test_suggest_chat(env, monkeypatch):
     c.post(f"/api/admin/chats/{inv['id']}/approve", headers=tma(31))
     assert inv["url"] in [x["url"] for x in c.get("/api/chats", headers=tma(30)).json()["all"]]       # a student sees the invite
     assert inv["url"] not in [x["url"] for x in c.get("/api/chats", headers=tma(99)).json()["all"]]   # a guest doesn't
-    keys = bot._welcome(con, cfg, {"chat": {"id": 30, "type": "private"}, "date": logic.now(), "text": "/start chat"})["reply_markup"]["keyboard"]
+    keys = bot_dm._welcome(con, cfg, {"chat": {"id": 30, "type": "private"}, "date": logic.now(), "text": "/start chat"})["reply_markup"]["keyboard"]
     assert [k[0]["request_chat"]["chat_is_channel"] for k in keys] == [True, False] and "chat_has_username" not in keys[0][0]["request_chat"]  # any chat
 
 

@@ -15,7 +15,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from kbtu import ai, app as server, bot, db, logic, texts
+from kbtu import ai, app as server, bot_dm, db, logic, outbox, texts
 from test_core import delete_now, env, login, set_clock, tma  # noqa: F401  (env: the fixture)
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "tools"))
@@ -125,7 +125,7 @@ def test_held_note_waits_for_admin_with_forum_off(subj, monkeypatch):
     assert [x["person"]["id"] for x in c.get(f"/api/subjects/{sid}", headers=tma(2)).json()["people"]] == [p["ann"]]
     assert c.post(f"/api/forum/asks/{aid}/hide", headers=tma(3)).status_code == 204
     m = con.execute("SELECT * FROM bot_outbox WHERE kind = 'ask_hidden'").fetchone()
-    assert bot._render(con, dict(m) | {"lang": "en"})[2] == f"sj_{sid}"                                    # the author's link: the card
+    assert outbox._render(con, dict(m) | {"lang": "en"})[2] == f"sj_{sid}"                                    # the author's link: the card
 
 
 def test_term_end_and_expiry(subj, monkeypatch):
@@ -151,7 +151,7 @@ def test_contact_is_the_find_people_offer(subj):
     person = c.get(f"/api/subjects/{sid}", headers=tma(2)).json()["people"][0]
     assert sent == {"id": person["offerId"], "status": "pending"} and person["offered"] == "pending"
     m = dict(con.execute("SELECT * FROM bot_outbox WHERE kind = 'contact_ask'").fetchone()) | {"lang": "ru"}
-    assert m["user_id"] == p["ann"] and CALC in bot._render(con, m)[0] and "bob_tg" not in bot._render(con, m)[0]
+    assert m["user_id"] == p["ann"] and CALC in outbox._render(con, m)[0] and "bob_tg" not in outbox._render(con, m)[0]
     cid, tok = con.execute("SELECT id, token FROM contacts").fetchone()
     assert logic.decide_contact(con, p["ann"], cid, True, tok) == "accepted"
     assert c.get(f"/api/subjects/{sid}", headers=tma(2)).json()["people"][0]["telegram"] == logic.telegram_of(con, p["ann"])
@@ -187,7 +187,7 @@ def test_only_the_sender_can_withdraw_a_pending_subject_offer(subj):
         assert c.delete(url, headers=tma(who)).status_code == 404
     m = dict(con.execute("SELECT * FROM bot_outbox WHERE kind = 'contact_ask'").fetchone()) | {"lang": "en"}
     assert c.delete(url, headers=tma(2)).status_code == 204
-    assert bot._render(con, m) is None and logic.contacts(con, ann) == []
+    assert outbox._render(con, m) is None and logic.contacts(con, ann) == []
     assert c.get(f"/api/subjects/{sid}", headers=tma(2)).json()["people"][0]["offered"] is None
     assert logic.decide_contact(con, p["ann"], cid, True, tok) is None
     assert not con.execute("SELECT 1 FROM bot_outbox WHERE kind = 'contact_ok'").fetchone()
@@ -212,13 +212,13 @@ def test_withdrawal_edits_the_bot_card_even_if_delivery_is_in_flight(subj, sent_
     c, con, p, sid, _ = subj
     cid, tok = _ann_offer(c, con, sid, 2)
     con.execute("UPDATE users SET can_dm = 1 WHERE id = ?", (p["ann"],))
-    m, = [m for m in bot._due(con) if m["kind"] == "contact_ask"]
-    assert bot._take(con, m, False)
+    m, = [m for m in outbox._due(con) if m["kind"] == "contact_ask"]
+    assert outbox._take(con, m, False)
     if sent_first:
-        bot._answered(con, m, 200, {"ok": True, "result": {"message_id": 42}})
+        outbox._answered(con, m, 200, {"ok": True, "result": {"message_id": 42}})
     assert c.delete(f"/api/subjects/offer/{cid}", headers=tma(2)).status_code == 204
     if not sent_first:
-        bot._answered(con, m, 200, {"ok": True, "result": {"message_id": 42}})
+        outbox._answered(con, m, 200, {"ok": True, "result": {"message_id": 42}})
     calls = []
 
     class Http:
@@ -227,13 +227,13 @@ def test_withdrawal_edits_the_bot_card_even_if_delivery_is_in_flight(subj, sent_
             return httpx.Response(400, json={"ok": False, "description": "message can't be edited"})
 
     cfg = c.app.state.cfg
-    asyncio.run(bot._withdrawn_offers(cfg, Http(), con))
+    asyncio.run(outbox._withdrawn_offers(cfg, Http(), con))
     how, body = calls.pop()
     assert how == "editMessageText" and (body["chat_id"], body["message_id"]) == (1, 42)
     assert body["reply_markup"] == {"inline_keyboard": []}
     assert con.execute("SELECT offer_message FROM contacts WHERE id = ?", (cid,)).fetchone()[0] is None
     # If Telegram left the card in place, its original buttons only explain what happened.
-    asyncio.run(bot._tapped(cfg, Http(), con, {"id": "tap", "from": {"id": 1}, "data": f"ct:{cid}:{tok}:y",
+    asyncio.run(bot_dm._tapped(cfg, Http(), con, {"id": "tap", "from": {"id": 1}, "data": f"ct:{cid}:{tok}:y",
                                               "message": {"message_id": 42, "chat": {"id": 1}}}))
     assert calls == [("answerCallbackQuery", {"callback_query_id": "tap", "text": texts.bot_message(m["lang"], "contact_withdrawn")[0]})]
 
@@ -258,11 +258,11 @@ def test_old_accept_never_answers_a_reused_offer(subj):
     assert c.delete(f"/api/subjects/{sid}/me", headers=tma(1)).status_code == 204
     doug_id, doug_tok = _ann_offer(c, con, sid, 4)
     assert doug_id != bob_id and doug_tok != bob_tok                                     # never Bob's old id (core.next_id)
-    assert bot._render(con, old) is None                                                  # Bob's card: gone, not Doug's
+    assert outbox._render(con, old) is None                                                  # Bob's card: gone, not Doug's
     assert logic.decide_contact(con, p["ann"], bob_id, True, bob_tok) is None            # Bob's Accept: nothing
     assert logic.decide_contact(con, p["ann"], bob_id, True) is None                     # nor a button without a token
     bot_tap = dict(con.execute("SELECT * FROM bot_outbox WHERE kind = 'contact_ask' ORDER BY id DESC").fetchone()) | {"lang": "en"}
-    assert bot._render(con, bot_tap | {"user_id": p["bob"]}) is None                    # Doug's card renders for Ann alone
+    assert outbox._render(con, bot_tap | {"user_id": p["bob"]}) is None                    # Doug's card renders for Ann alone
     assert con.execute("SELECT status FROM contacts").fetchone()[0] == "pending"
     assert not con.execute("SELECT 1 FROM bot_outbox WHERE kind = 'contact_ok'").fetchone()
     assert logic.decide_contact(con, p["ann"], doug_id, True, doug_tok) == "accepted"    # Doug's own card works
@@ -476,11 +476,11 @@ def test_tokenless_offers_never_answer(subj):
     con.execute("UPDATE users SET role = 'admin' WHERE id = ?", (p["ann"],))
     forum = TestClient(server.create(dataclasses.replace(c.app.state.cfg, forum=True)))
     assert forum.post(f"/api/forum/contacts/{cid}", headers=tma(1), json={"yes": True}).status_code == 404  # the app, no token
-    assert bot._render(con, {"kind": "contact_ask", "ref": f"ct:{cid}", "lang": "en", "user_id": p["ann"]}) is None
+    assert outbox._render(con, {"kind": "contact_ask", "ref": f"ct:{cid}", "lang": "en", "user_id": p["ann"]}) is None
     assert logic.decide_contact(con, p["ann"], cid, True, tok) == "accepted"
     ok = {"kind": "contact_ok", "ref": f"co:{cid}:to:{tok}", "lang": "en"}
-    assert bot._render(con, ok | {"user_id": p["bob"]}) and bot._render(con, ok | {"user_id": p["cat"]}) is None
-    assert bot._render(con, {"kind": "contact_ok", "ref": f"co:{cid}:to", "lang": "en", "user_id": p["bob"]}) is None
+    assert outbox._render(con, ok | {"user_id": p["bob"]}) and outbox._render(con, ok | {"user_id": p["cat"]}) is None
+    assert outbox._render(con, {"kind": "contact_ok", "ref": f"co:{cid}:to", "lang": "en", "user_id": p["bob"]}) is None
 
 
 def test_migration_gives_old_offers_tokens(env, before_door_migration):  # noqa: F811
@@ -664,7 +664,7 @@ def test_an_old_workers_tokenless_offer_heals(subj):
     c, con, p, sid, _ = subj
     cid, _tok = _ann_offer(c, con, sid, 2)
     con.execute("UPDATE contacts SET token = NULL")
-    card = bot._render(con, {"kind": "contact_ask", "ref": f"ct:{cid}", "lang": "en", "user_id": p["ann"]})
+    card = outbox._render(con, {"kind": "contact_ask", "ref": f"ct:{cid}", "lang": "en", "user_id": p["ann"]})
     tok = con.execute("SELECT token FROM contacts").fetchone()[0]
     assert tok and card[2][0][0]["callback_data"] == f"ct:{cid}:{tok}:y"
     assert logic.decide_contact(con, p["ann"], cid, True) is None

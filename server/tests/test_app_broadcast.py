@@ -5,7 +5,7 @@ import json
 import httpx
 import pytest
 
-from kbtu import admin, bot, db, texts
+from kbtu import admin, bot_dm, db, outbox, texts
 from test_core import env  # noqa: F401  (env: the fixture)
 
 NAME = "app_home"
@@ -33,8 +33,8 @@ def test_broadcast_dry_preview_and_delivery(audience, capsys, monkeypatch):
     con, cfg = audience
     cmd = ["broadcast", NAME, URL]
     messages = []
-    monkeypatch.setattr(bot, "_chores", lambda *_: None)
-    monkeypatch.setattr(bot, "GAP", 0)
+    monkeypatch.setattr(outbox, "_chores", lambda *_: None)
+    monkeypatch.setattr(outbox, "GAP", 0)
 
     def telegram(request):
         assert request.url.path.endswith("/sendMessage")
@@ -43,7 +43,7 @@ def test_broadcast_dry_preview_and_delivery(audience, capsys, monkeypatch):
 
     async def send():
         async with httpx.AsyncClient(transport=httpx.MockTransport(telegram)) as http:
-            await bot.send_due(cfg, http)
+            await outbox.send_due(cfg, http)
 
     admin.main([*cmd, "--dry"])
     assert capsys.readouterr().out.strip() == "would queue 3"
@@ -100,6 +100,30 @@ def test_broadcast_refuses_unsafe_requests(audience):
     assert con.execute("SELECT COUNT(*) FROM bot_outbox").fetchone()[0] == 0
 
 
+def test_broadcast_to_one_platform(audience, capsys):
+    """--platform android: only people seen on Android (user_platforms), the usual rules too; a preview goes regardless,
+    and a later broadcast of the same name to another platform skips whoever already got it."""
+    con, _ = audience
+    con.execute("INSERT INTO user_platforms (user_id, kind, seen_at) SELECT id, 'android', 0 FROM users WHERE tg_id IN (11, 13, 14)")
+    con.execute("INSERT INTO user_platforms (user_id, kind, seen_at) SELECT id, 'ios', 0 FROM users WHERE tg_id IN (11, 12)")
+    android = ["broadcast", NAME, URL, "--platform", "android"]
+    admin.main([*android, "--dry"])
+    assert capsys.readouterr().out.strip() == "would queue 1"        # 11; 13 can't be written to, 14 is banned
+    admin.main([*android, "@reader"])                                 # the creator has no row: a preview still goes
+    assert capsys.readouterr().out.strip() == "queued 1"
+    admin.main(android)
+    assert capsys.readouterr().out.strip() == "queued 1"
+    admin.main(["broadcast", NAME, URL, "--platform", "ios"])
+    assert capsys.readouterr().out.strip() == "queued 1"             # 12; 11 already has it
+    assert [r[0] for r in con.execute("SELECT u.tg_id FROM bot_outbox b JOIN users u ON u.id = b.user_id ORDER BY u.tg_id")] == [10, 11, 12]
+    for bad in (["--platform", "linux"], ["--platform"], ["--platform", "--dry"], ["--platform", "ios", "--platform", "web"]):
+        with pytest.raises(SystemExit):
+            admin.main(["broadcast", NAME, URL, *bad])
+    with pytest.raises(SystemExit):
+        admin.main(["broadcast", "--platform", "ios", NAME, URL])
+    assert con.execute("SELECT COUNT(*) FROM bot_outbox").fetchone()[0] == 3
+
+
 def test_a_failed_preview_can_go_again(audience, capsys):
     con, _ = audience
     admin.main(["broadcast", NAME, URL, "@reader"])
@@ -117,7 +141,7 @@ def test_broadcast_votes(audience, capsys):
         async def post(self, url, json):
             calls.append((url.rsplit("/", 1)[1], json))
     kb = [[{"text": "x", "url": URL}], [{"text": "y", "callback_data": "bv:1:" + NAME}]]
-    tap = lambda tg, v: asyncio.run(bot._tapped(cfg, Http(), con, {"id": "q", "from": {"id": tg}, "data": f"bv:{v}:{NAME}",  # noqa: E731
+    tap = lambda tg, v: asyncio.run(bot_dm._tapped(cfg, Http(), con, {"id": "q", "from": {"id": tg}, "data": f"bv:{v}:{NAME}",  # noqa: E731
                                                                     "message": {"message_id": 5, "chat": {"id": tg}, "reply_markup": {"inline_keyboard": kb}}}))
     tap(11, 1)
     tap(12, 0)

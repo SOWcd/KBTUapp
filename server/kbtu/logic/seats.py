@@ -160,7 +160,7 @@ def guard_token(key: bytes, chat_id: int, tg_id: int, qid: str) -> str:
 def guard_read(key: bytes, token: str) -> tuple[int, int, str]:
     """(chat, Telegram id, query) from guard_token's link; forbidden when it's forged, gone when it's old."""
     body, _, sig = (token or "").partition(".")
-    if not body or not hmac.compare_digest(sig, hmac.new(key, body.encode(), hashlib.sha256).hexdigest()[:24]):
+    if not body or not hmac.compare_digest(sig.encode(), hmac.new(key, body.encode(), hashlib.sha256).hexdigest()[:24].encode()):  # bytes: a forged é is a 403, not a 500
         raise ApiError("forbidden")
     chat_id, tg_id, qid, at = json.loads(base64.urlsafe_b64decode(body + "=" * (-len(body) % 4)))
     if at < time.time() - GUARD_TTL:
@@ -245,7 +245,7 @@ def channel_gone(con) -> list[tuple[int, str]]:
 
 def channel_discussion(con, post: int) -> sqlite3.Row | None:
     """The channel's post reached its discussion group (Telegram forwards it there by itself): the event whose post it is
-    and that has no first comment yet, else None. The bot then writes the rules under it (bot._discussion)."""
+    and that has no first comment yet, else None. The bot then writes the rules under it (bot_groups._discussion)."""
     return one(con, "SELECT * FROM events WHERE channel_msg = ? AND channel_link IS NULL", post)
 
 
@@ -328,9 +328,9 @@ def cal_token(con, v: Viewer) -> str:
     """My calendar feed's secret: made once and kept, so a subscribed calendar stays subscribed."""
     need_student(v)
     t = one(con, "SELECT cal_token FROM users WHERE id = ?", v.id)[0]
-    if not t:
-        t = secrets.token_urlsafe(18)
-        con.execute("UPDATE users SET cal_token = ? WHERE id = ?", (t, v.id))
+    if not t:  # two first taps at once: only an empty one is set, both answer with the one kept
+        con.execute("UPDATE users SET cal_token = ? WHERE id = ? AND cal_token IS NULL", (secrets.token_urlsafe(18), v.id))
+        t = one(con, "SELECT cal_token FROM users WHERE id = ?", v.id)[0]
     return t
 
 
@@ -1089,6 +1089,4 @@ def set_saved(con, v: Viewer, eid: int, on: bool) -> None:
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
 from . import core, evteams, santa  # noqa: E402
-from .clubs import org  # noqa: E402
 from .organizing import _staff_event, kz_phone  # noqa: E402
-from .teams import team  # noqa: E402

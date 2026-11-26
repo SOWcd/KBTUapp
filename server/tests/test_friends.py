@@ -195,3 +195,28 @@ def test_referral_by_profile_qr(env):
         VALUES (?, '25B000102', 'X', 'Testov', 1, '1', 0, 1, 0, 0)""", (uid,))
     logic.ms_link(con, uid, {"oid": "o102", "email": "x102@kbtu.kz", "first": "X", "last": "Testov"})
     assert c.get("/api/me", headers=tma(100)).json()["referrals"]["count"] == 1
+
+
+def test_block_from_a_profile(env):
+    """Block on anyone's card (the stores' UGC rule): friends no more, pending requests gone both ways, no new request
+    either way (it looks like requests are off), the card says so to me alone; Unblock lets a request through again."""
+    c, cfg = env
+    ali, zhan, dana = login(c, 41, "ali"), login(c, 42, "zhan"), login(c, 43, "dana")
+    A, Z, D = tma(41, "Ali"), tma(42, "Zhan"), tma(43, "Dana")
+    c.post("/api/friends/requests", headers=A, json={"userId": zhan["id"]})
+    c.post(f"/api/friends/requests/{ali['id']}/accept", headers=Z)
+    c.post("/api/friends/requests", headers=D, json={"userId": ali["id"]})
+    assert c.post("/api/forum/blocks", headers=A, json={"user": zhan["id"], "on": True}).status_code == 204
+    assert c.post("/api/forum/blocks", headers=A, json={"user": dana["id"], "on": True}).status_code == 204
+    assert c.post("/api/forum/blocks", headers=A, json={"user": 999999, "on": True}).status_code == 404
+    mine = c.get("/api/friends", headers=A).json()
+    assert mine["friends"] == [] and mine["incoming"] == []
+    card = c.get(f"/api/users/{zhan['id']}", headers=A).json()
+    assert card["friendship"] == "none" and card["blocked"] and card["closed"]
+    theirs = c.get(f"/api/users/{ali['id']}", headers=Z).json()
+    assert theirs["closed"] and "blocked" not in theirs  # they see requests closed, never that they were blocked
+    assert c.post("/api/friends/requests", headers=Z, json={"userId": ali["id"]}).json()["error"] == "closed"
+    assert c.post("/api/friends/requests", headers=A, json={"userId": zhan["id"]}).json()["error"] == "closed"
+    assert c.post("/api/forum/blocks", headers=A, json={"user": zhan["id"], "on": False}).status_code == 204
+    assert "blocked" not in c.get(f"/api/users/{zhan['id']}", headers=A).json()
+    assert c.post("/api/friends/requests", headers=Z, json={"userId": ali["id"]}).json()["friendship"] == "requested"

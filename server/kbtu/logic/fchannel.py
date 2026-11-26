@@ -1017,8 +1017,9 @@ def mod_queue(con, v: Viewer) -> dict:
             "removed": [shape(p) | {"undo": _pending(con, p["tg_msg"])} for p in removed], "replies": reply_mod_queue(con)}
 
 
-def mod_decide(con, v: Viewer, pid: int, ok: object) -> None:
-    """A held post goes out (ok) or is removed; a live one can only be taken down (it leaves the channel)."""
+def mod_decide(con, v: Viewer, pid: int, ok: object, again: object = False) -> None:
+    """A held post goes out (ok) or is removed; a live one can only be taken down (it leaves the channel). A lost send
+    (may be in the channel already, untracked) goes out again only on again=True, as reply_mod_decide's."""
     _mod(v)
     if not isinstance(ok, bool):
         raise ApiError("bad_input")
@@ -1028,6 +1029,8 @@ def mod_decide(con, v: Viewer, pid: int, ok: object) -> None:
             raise core.decided(con, f"fchan:{pid}") if one(con, "SELECT 1 FROM fchan_posts WHERE id = ?", pid) else ApiError("not_found")
         if p["user_id"] == v.id and not _owner(con, v):  # their own: another moderator decides (the founder alone may)
             raise ApiError("forbidden")
+        if ok and p["why"] == "lost" and again is not True:
+            raise ApiError("conflict", "lost")
         if ok:
             con.execute("UPDATE fchan_posts SET status = 'live', why = NULL WHERE id = ?", (pid,))
         else:
@@ -1035,7 +1038,7 @@ def mod_decide(con, v: Viewer, pid: int, ok: object) -> None:
             _unpost(con, p, "moderator", UNDO_WINDOW)
             _post_off(con, pid, UNDO_WINDOW)
             con.execute("UPDATE fchan_posts SET status = 'hidden', why = 'moderator', tg_msg = NULLIF(tg_msg, 0) WHERE id = ?", (pid,))
-            if p["status"] == "held":  # declined before it went out: its author hears, after the undo minute (bot.py checks it still is)
+            if p["status"] == "held":  # declined before it went out: its author hears, after the undo minute (outbox.py checks it still is)
                 notify(con, p["user_id"], "fch_declined", f"fd:{pid}", after=core.now() + UNDO_WINDOW)
         log_action(con, v.id, "fchan_release" if ok else "fchan_hide", f"fchan:{pid}")
 

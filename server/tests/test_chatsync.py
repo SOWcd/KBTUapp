@@ -10,7 +10,7 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-from kbtu import app as server, bot, db, logic
+from kbtu import app as server, bot, bot_groups, db, logic
 from kbtu.logic import chatsync
 from test_core import delete_now, login, tma  # noqa: F401
 from test_core import env  # noqa: F401  (the fixture)
@@ -150,7 +150,7 @@ def test_paused_when_the_bot_loses_admin(club):
     assert not con.execute("SELECT 1 FROM chat_sync_todo").fetchone()
     # the bot in the my_chat_member path pauses it as well
     chatsync.start(con, DEPT, False)
-    asyncio.run(bot._member(dataclasses.replace(cfg), None, con, {"chat": {"id": DEPT, "type": "group"}, "new_chat_member": {"status": "kicked"}}))
+    asyncio.run(bot_groups._member(dataclasses.replace(cfg), None, con, {"chat": {"id": DEPT, "type": "group"}, "new_chat_member": {"status": "kicked"}}))
     assert con.execute("SELECT paused FROM chat_sync WHERE chat_id = ?", (DEPT,)).fetchone()[0]
 
 

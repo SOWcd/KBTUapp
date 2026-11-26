@@ -13,7 +13,7 @@ import httpx
 import pytest
 
 from kbtu import app as server
-from kbtu import bot, db, receipt, texts, tgc
+from kbtu import bot, bot_groups, db, outbox, receipt, texts, tgc
 from fastapi.testclient import TestClient
 from test_core import env, tma  # noqa: F401  (env: the fixture)
 from test_review_seats import _paid, _shot, _status
@@ -22,8 +22,11 @@ from test_review_seats import _paid, _shot, _status
 @pytest.fixture(autouse=True)
 def _memory(monkeypatch):
     """Whatever a process keeps in memory, restored after each test (each 'process' below starts it empty)."""
-    for name, value in (("_stop", None), ("_stop_by", float("inf")), ("_replay", None), ("_video_seen", set())):
+    for name, value in (("_stop", None), ("_stop_by", float("inf")), ("_replay", None)):
         monkeypatch.setattr(bot, name, value)
+    seen = set()  # one set: the update loop (bot) and the group videos (bot_groups) share it
+    monkeypatch.setattr(bot, "_video_seen", seen)
+    monkeypatch.setattr(bot_groups, "_video_seen", seen)
 
 
 def _hi(uid: int, chat: int) -> dict:
@@ -69,7 +72,8 @@ class Telegram:
 
 async def _ears(cfg, tg: Telegram) -> None:
     """One process's ears: from what it finds stored to its stop or its death. Its memory starts empty."""
-    bot._stop, bot._stop_by, bot._replay, bot._video_seen = asyncio.Event(), float("inf"), None, set()
+    bot._stop, bot._stop_by, bot._replay = asyncio.Event(), float("inf"), None
+    bot._video_seen = bot_groups._video_seen = set()  # one set, shared by both modules
     async with httpx.AsyncClient(transport=httpx.MockTransport(tg)) as http:
         tg.task = asyncio.create_task(bot._ears(cfg, http))
         try:
@@ -220,18 +224,18 @@ def test_group_video_not_sent_twice(env, monkeypatch):
 
     async def video(cfg_, http, msg, url, started):
         videos.append(msg["message_id"])
-    monkeypatch.setattr(bot, "_group_video", video)
+    monkeypatch.setattr(bot_groups, "_group_video", video)
 
     def link(msg):
         bot.stop()  # SIGTERM right as the batch came in
         return "https://www.tiktok.com/@a/video/1" if "vid" in str(msg.get("text")) else None
-    monkeypatch.setattr(bot.tiktok, "link", link)
+    monkeypatch.setattr(bot_groups.tiktok, "link", link)
     grp = {"update_id": 100, "message": {"message_id": 7, "chat": {"id": -100, "type": "supergroup"}, "from": {"id": 10},
                                          "date": int(time.time()), "text": "vid"}}
     tg = Telegram([grp, _hi(101, 11)])
     asyncio.run(_ears(cfg, tg))
     assert videos == [7] and tg.said() == [] and _state(cfg)["next"] == 100
-    monkeypatch.setattr(bot.tiktok, "link", lambda msg: "https://www.tiktok.com/@a/video/1" if "vid" in str(msg.get("text")) else None)
+    monkeypatch.setattr(bot_groups.tiktok, "link", lambda msg: "https://www.tiktok.com/@a/video/1" if "vid" in str(msg.get("text")) else None)
     asyncio.run(_ears(cfg, tg))
     assert videos == [7] and tg.said() == [11]
 
@@ -265,8 +269,8 @@ def test_no_new_group_video_while_stopping(env, monkeypatch):
 
     async def video(cfg_, http, msg, url, started):
         sent.append(msg["message_id"])
-    monkeypatch.setattr(bot, "_group_video", video)
-    monkeypatch.setattr(bot.tiktok, "link", lambda m: "https://www.tiktok.com/@a/video/1" if "vid" in str(m.get("text")) else None)
+    monkeypatch.setattr(bot_groups, "_group_video", video)
+    monkeypatch.setattr(bot_groups.tiktok, "link", lambda m: "https://www.tiktok.com/@a/video/1" if "vid" in str(m.get("text")) else None)
     grp = {"update_id": 101, "message": {"message_id": 7, "chat": {"id": -100, "type": "supergroup"}, "from": {"id": 10},
                                          "date": int(time.time()), "text": "vid"}}
 
@@ -356,7 +360,7 @@ def test_run_drains_then_lets_go(env, monkeypatch):
     async def ears(cfg_, http):
         tgc.spawn(quick(), None)
         tgc.spawn(slow(), None)
-        tgc.spawn(bot._unsay(cfg_, http, -100, 5), None)
+        tgc.spawn(bot_groups._unsay(cfg_, http, -100, 5), None)
         seen["ears"] = "up"
         while not bot._stopping():
             await bot._nap(30)
@@ -373,7 +377,7 @@ def test_run_drains_then_lets_go(env, monkeypatch):
     monkeypatch.setattr(bot, "load_pack", nothing)
     monkeypatch.setattr(bot, "_commands", nothing)
     monkeypatch.setattr(bot.receipt, "ready", lambda: True)
-    monkeypatch.setattr(bot, "send_due", nothing)
+    monkeypatch.setattr(outbox, "send_due", nothing)
     monkeypatch.setattr(bot, "_ears", ears)
     for name in ("_videos", "_translator", "_userbot"):
         monkeypatch.setattr(bot, name, forever(name))
