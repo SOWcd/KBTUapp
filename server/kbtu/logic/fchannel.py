@@ -595,7 +595,9 @@ def reported(con, pid: int) -> None:
     """moderation.report on a post with photos: PHOTO_HIDE_AT distinct people's open reports, and no moderator kept it
     before, take it out of the channel at once (a picture can't wait for the queue); the reports stay open, the
     moderator's call removes it for good or brings it back (moderation.resolve_report). Words alone wait in the queue."""
-    if not _has_photos(con, pid) or one(con, "SELECT 1 FROM reports WHERE target = 'fpost' AND target_id = ? AND status = 'dismissed'", pid):
+    # a moderator's keep holds for what they saw: an edit after it (new photos) is judged again
+    if not _has_photos(con, pid) or one(con, """SELECT 1 FROM reports r JOIN fchan_posts p ON p.id = r.target_id WHERE r.target = 'fpost' AND r.target_id = ?
+            AND r.status = 'dismissed' AND COALESCE(r.resolved_at, 0) >= COALESCE(p.edited_at, 0)""", pid):
         return
     if one(con, "SELECT COUNT(DISTINCT reporter_id) FROM reports WHERE target = 'fpost' AND target_id = ? AND status = 'open'", pid)[0] < PHOTO_HIDE_AT:
         return
@@ -871,15 +873,20 @@ def edit_settle(con, v: Viewer, eid: int, verdict: str | None) -> dict:
     moderator: the AI can't judge pictures); 'noise' or 'ad' refuse it, the post as it was, my new photos back to me
     (to try again); 'person', a 'flag' or no answer wait for a moderator."""
     with tx(con):
-        e = one(con, """SELECT e.*, p.anon FROM fchan_edits e JOIN fchan_posts p ON p.id = e.post_id
+        e = one(con, """SELECT e.*, p.anon, p.status AS post_status FROM fchan_edits e JOIN fchan_posts p ON p.id = e.post_id
                         WHERE e.id = ? AND p.user_id = ?""", eid, v.id)
         if not e:
             raise ApiError("not_found")
-        if e["status"] == "check":
+        if e["status"] == "check" and e["post_status"] != "live":  # taken down meanwhile: the edit goes with it
+            _edits_off(con, e["post_id"])
+        elif e["status"] == "check":
             if verdict in ("noise", "ad"):
                 con.execute("UPDATE fchan_edits SET status = 'refused', why = ?, body = '', photos = NULL WHERE id = ?", (verdict, eid))
                 con.execute("UPDATE fchan_photos SET user_id = ?, edit_id = NULL, created_at = ? WHERE edit_id = ?", (v.id, core.now(), eid))
-            elif verdict == "ok" and e["anon"] and _has_photos(con, e["post_id"]):
+            elif verdict == "ok" and (e["anon"] and _has_photos(con, e["post_id"]) or e["photos"] is not None
+                                      and one(con, "SELECT 1 FROM reports WHERE target = 'fpost' AND target_id = ?", e["post_id"])):
+                # the AI can't judge pictures: an anonymous post's, or new ones on a post someone reported (a swap
+                # under a report, then back after a moderator's keep, would pass nobody)
                 con.execute("UPDATE fchan_edits SET status = 'held', why = 'photo' WHERE id = ?", (eid,))
             elif verdict == "ok":
                 _apply_edit(con, e)
@@ -966,7 +973,7 @@ def edit_mod_decide(con, v: Viewer, eid: int, ok: object) -> None:
         else:
             con.execute("DELETE FROM fchan_photos WHERE edit_id = ?", (eid,))
             con.execute("UPDATE fchan_edits SET status = 'declined', body = '', photos = NULL WHERE id = ?", (eid,))
-        log_action(con, v.id, "fchan_edit_release" if ok else "fchan_edit_decline", f"fchane:{eid}")
+        log_action(con, v.id, "fchan_edit_release" if ok else "fchan_edit_decline", f"fchane:{eid}")  # Done's lines (core.MOD_DONE), no undo
 
 
 def edits_due(con) -> list:
@@ -975,6 +982,8 @@ def edits_due(con) -> list:
     out = []
     for p in rows(con, "SELECT * FROM fchan_posts WHERE edit_sync IS NOT NULL AND tg_msg > 0 AND status IN ('live', 'hidden') ORDER BY id LIMIT 5"):
         pics = [tuple(r) for r in rows(con, "SELECT id, n, msg, path, sync FROM fchan_photos WHERE post_id = ? ORDER BY n", p["id"])]
+        # ponytail: five a round, oldest first; a message Telegram keeps answering with a server error holds the rest
+        # (a 400 gives up), back off per post if it ever does
         out.append((p["id"], p["edit_sync"], p["tg_msg"], p["body"], _sign(con, p), pics))
     return out
 
@@ -1046,7 +1055,9 @@ def sent(con, pid: int, msg_id: int, pics: list[int] | None = None) -> None:
     the messages go right back out (with the right words if it's past 48 h: a moderator's take-down isn't the
     author's delete)."""
     now = core.now()
-    if con.execute("UPDATE fchan_posts SET tg_msg = ?, posted_at = CASE WHEN tg_msg = 0 THEN ? ELSE COALESCE(posted_at, ?) END WHERE id = ? AND status = 'live' AND tg_msg IN (0, ?)", (msg_id, now, now, pid, msg_id)).rowcount:
+    if con.execute("""UPDATE fchan_posts SET tg_msg = ?, posted_at = CASE WHEN tg_msg = 0 THEN ? ELSE COALESCE(posted_at, ?) END,
+            edit_sync = NULL WHERE id = ? AND status = 'live' AND tg_msg IN (0, ?)""", (msg_id, now, now, pid, msg_id)).rowcount:
+        con.execute("UPDATE fchan_photos SET sync = 0 WHERE post_id = ?", (pid,))  # sent as it is now: nothing left to edit in
         for n, m in enumerate(pics or []):
             con.execute("UPDATE fchan_photos SET msg = ? WHERE post_id = ? AND n = ?", (m, pid, n))
         # its author hears it went out (a template, to their own chat alone: an anonymous post stays so); once a post, and

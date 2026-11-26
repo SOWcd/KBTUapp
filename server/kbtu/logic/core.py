@@ -201,7 +201,7 @@ FULL_TOOLS = "(official = 1 OR kind != 'club' OR top_at IS NOT NULL)"
 
 # the staff's decisions on what waits (Admin → Inbox), and their undos: the audit lines Done shows and decided() reads
 MOD_DONE = ("subject_lift", "report_remove", "report_keep", "tg_confirm", "tg_keep", "tg_restore", "post_hide", "fchan_hide", "fchan_release",
-            "fchan_reply_hide", "fchan_reply_release", "fchan_reply_keep", "chat_approve", "chat_decline", "chat_remove")
+            "fchan_reply_hide", "fchan_reply_release", "fchan_reply_keep", "fchan_edit_release", "fchan_edit_decline", "chat_approve", "chat_decline", "chat_remove")
 ADMIN_DONE = ("capp_yes", "capp_no", "opath_yes", "opath_no", "roster_ok", "roster_no", "event_delete", "tg_report_close")
 UNDOES = ("subject_unlift", "restore", "fchan_undo", "fchan_restore", "fchan_reply_undo", "fchan_reply_restore", "capp_undo", "opath_undo", "chat_undo", "event_undo",
           "tg_report_open")

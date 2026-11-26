@@ -1851,6 +1851,8 @@ const kk: Dict = {
   'adm.act.fchan_reply_hide': "Алынды",
   'adm.act.fchan_reply_release': "Жарияланды",
   'adm.act.fchan_reply_keep': "Қалдырылды",
+  'adm.act.fchan_edit_release': "Түзету жарияланды",
+  'adm.act.fchan_edit_decline': "Түзету қабылданбады",
   'adm.act.chat_approve': "Қосылды",
   'adm.act.chat_decline': "Қабылданбады",
   'adm.act.chat_remove': "Каталогтан алынды",

@@ -277,8 +277,8 @@
       <p class="text selectable">{p.body}</p>
       <ForumPics photos={p.photos} />
       {#if p.own}<i class="meta">{t('fc.ownPost')}</i>
-      {:else if p.edit}{@const e = p.edit}{@render two(t('fc.release'), () => decide(it, t('adm.act.fchan_release'), undefined, () => api.channelEditDecide(e.id, true)),
-        t('fc.editDecline'), () => decide(it, t('fc.editDeclined'), undefined, () => api.channelEditDecide(e.id, false)))}
+      {:else if p.edit}{@const e = p.edit}{@render two(t('fc.release'), () => decide(it, t('adm.act.fchan_edit_release'), undefined, () => api.channelEditDecide(e.id, true)),
+        t('fc.editDecline'), () => decide(it, t('adm.act.fchan_edit_decline'), undefined, () => api.channelEditDecide(e.id, false)))}
       {:else if p.why === 'lost'}{@render two(t('fcr.again'), () => sendAgain(it, p.id, true),
         t('fc.takeDown'), () => decide(it, t('adm.act.fchan_hide'), `fchan:${p.id}`, () => api.channelModDecide(p.id, false)))}
       {:else}{@render two(t('fc.release'), () => decide(it, t('adm.act.fchan_release'), undefined, () => api.channelModDecide(p.id, true)),

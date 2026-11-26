@@ -1851,6 +1851,8 @@ const en: Dict = {
   'adm.act.fchan_reply_hide': "Taken down",
   'adm.act.fchan_reply_release': "Published",
   'adm.act.fchan_reply_keep': "Kept",
+  'adm.act.fchan_edit_release': "Edit published",
+  'adm.act.fchan_edit_decline': "Edit declined",
   'adm.act.chat_approve': "Added",
   'adm.act.chat_decline': "Declined",
   'adm.act.chat_remove': "Removed",

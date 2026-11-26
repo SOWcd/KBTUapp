@@ -136,6 +136,7 @@ _TEXT = {  # target kind -> (the text, read for all rows at once)
     "fpost": "SELECT id, body FROM fchan_posts WHERE id IN ({})",
     "fchan": "SELECT id, body FROM fchan_posts WHERE id IN ({})",
     "fchanr": "SELECT id, body FROM fchan_replies WHERE id IN ({})",
+    "fchane": "SELECT e.id, p.body FROM fchan_edits e JOIN fchan_posts p ON p.id = e.post_id WHERE e.id IN ({})",  # the post an edit was of
     "ask": "SELECT id, title FROM asks WHERE id IN ({})",
     "opath": "SELECT r.id, o.name FROM official_requests r JOIN orgs o ON o.id = r.org_id WHERE r.id IN ({})",
     "roster": "SELECT id, full_name FROM roster_pending WHERE id IN ({})",  # while the row is there (never kept in the log)

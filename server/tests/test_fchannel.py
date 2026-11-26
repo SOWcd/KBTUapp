@@ -652,7 +652,7 @@ def test_post_feed(env, monkeypatch):
         assert row["person"] is None and row["anon"] and not row["mine"]
         assert {k: v for k, v in row.items() if k not in ("id", "msg", "at", "comments", "thread", "hot", "human")} == {
             "body": "A quiet confession", "status": "live", "anon": True, "nick": nick, "sign": texts.nick(*nick), "person": None, "mine": False,
-            "faces": [], "reactions": [], "hearts": 0, "hearted": False, "photos": []}
+            "faces": [], "reactions": [], "hearts": 0, "hearted": False, "photos": [], "edited": False}
         assert "Bob" not in json.dumps(f) and "bob" not in json.dumps(f)
     assert [p["id"] for p in c.get("/api/forum-posts/feed", headers=A).json()] == [masked["id"], named["id"]]  # another's held: never
     assert [p["mine"] for p in c.get("/api/forum-posts/feed", headers=B).json()] == [True, False]

@@ -1873,6 +1873,8 @@ const ru = {
   'adm.act.fchan_reply_hide': "Снято",
   'adm.act.fchan_reply_release': "Опубликовано",
   'adm.act.fchan_reply_keep': "Оставлено",
+  'adm.act.fchan_edit_release': "Правка опубликована",
+  'adm.act.fchan_edit_decline': "Правка отклонена",
   'adm.act.chat_approve': "Добавлен",
   'adm.act.chat_decline': "Отклонён",
   'adm.act.chat_remove': "Убран из каталога",

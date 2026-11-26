@@ -158,3 +158,29 @@ def test_take_down_drops_a_waiting_edit(env, monkeypatch):
     assert c.post(f"/api/forum-edits/{eid}/mod", headers=tma(4), json={"ok": True}).status_code in (404, 409)
     assert tuple(con.execute("SELECT status, body FROM fchan_edits WHERE id = ?", (eid,)).fetchone()) == ("gone", "")
     con.close()
+
+
+def test_photo_swap_on_a_reported_post_waits(env, monkeypatch):
+    """A named post's new photo goes on the AI's yes to the words, unless someone reported the post: then a moderator
+    looks (a swap under a report, then back after a keep, would pass nobody); a keep from before an edit no longer
+    shields the post from the reports' auto-hide."""
+    c, cfg, said, _ = setup(env, monkeypatch)
+    login(c, 1, "ann"), login(c, 2, "bob"), login(c, 3, "cat")
+    con = db.connect(cfg.db_path)
+    mods(c, con)
+    tg = TG()
+    ph = upload(c, 1)
+    pid = _live(c, cfg, con, tg, 1, "Found this umbrella in the library", photos=[ph["id"]])
+    assert c.post("/api/reports", headers=tma(2), json={"target": "fpost", "id": pid, "reason": "spam"}).status_code in (200, 204)
+    con.execute("UPDATE reports SET status = 'dismissed', resolved_at = ? WHERE target = 'fpost' AND target_id = ?", (int(time.time()) - 5, pid))
+    set_clock(monkeypatch, lambda: int(time.time()) + 700)
+    new = upload(c, 1)
+    r = c.post(f"/api/forum-posts/{pid}/edit", headers=tma(1), json={"body": "Found this umbrella in the library", "photos": [new["id"]]})
+    assert r.status_code == 200 and r.json()["state"] == "held"
+    eid = c.get("/api/forum-posts/mod", headers=tma(4)).json()["edits"][0]["edit"]["id"]
+    assert c.post(f"/api/forum-edits/{eid}/mod", headers=tma(4), json={"ok": True}).status_code == 204
+    # the keep was before this edit: two reports now take it out again
+    for uid in (2, 3):
+        c.post("/api/reports", headers=tma(uid), json={"target": "fpost", "id": pid, "reason": "spam"})
+    assert con.execute("SELECT status FROM fchan_posts WHERE id = ?", (pid,)).fetchone()[0] == "hidden"
+    con.close()
