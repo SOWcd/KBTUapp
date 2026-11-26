@@ -765,7 +765,7 @@ def _full(con, v: Viewer, e: sqlite3.Row, c: dict, head: bool, pay: bool) -> dic
                         for u in rows(con, "SELECT * FROM event_updates WHERE event_id = ? ORDER BY created_at DESC, id DESC LIMIT 10", e["id"])],
             **_rating_view(con, v, e, head), "volunteers": _volunteers_view(con, v, e, head), "teams": evteams.view(con, v, e, head),
             **santa.view(con, v, e, head),
-            "chat": e["chat_link"] if e["chat_link"] and _chat_ok(con, e, v.id) else None, "chatLinked": bool(e["chat_id"]) if head else None,
+            "chat": e["chat_link"] if e["chat_link"] and (head or _chat_ok(con, e, v.id)) else None, "chatLinked": bool(e["chat_id"]) if head else None,
             # no video, no query (most events): `id = NULL` matches nothing, yet it would still be asked on every sheet opened
             "wideVideo": video_shape(x) if e["wide_video_id"] and (x := one(con, "SELECT * FROM videos WHERE id = ?", e["wide_video_id"])) and (head or x["status"] == "ready") else None,
             # the editor sees its video while it is still being compressed (or why it failed)

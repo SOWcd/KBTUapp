@@ -107,6 +107,22 @@ def chat_start(con, v: Viewer, eid: int) -> str:
     return token
 
 
+def chat_set(con, v: Viewer, eid: int, link: str | None) -> str | None:
+    """"Paste the group's link": the organizers' own group by any t.me or invite link (chat_link), shown at once to
+    those _chat_ok lets in; None removes it. Our bot isn't in that group, so whoever has the link gets in: a group the
+    bot linked stops being the event's (its join requests no longer ours to decide). Rights as chat_start's."""
+    if v.staff_org and not v.lent_full:
+        raise ApiError("forbidden", "staff")
+    e = _staff_event(con, v, eid, "events")
+    if e["status"] == "cancelled":
+        raise ApiError("closed")
+    url = chat_link(link[:200]) if link else None
+    if link and not url:
+        raise ApiError("bad_input", "link")
+    con.execute("UPDATE events SET chat_link = ?, chat_id = NULL, chat_token = NULL WHERE id = ?", (url, eid))
+    return url
+
+
 def chat_claim(con, token: str, tg_id: int, chat_id: int) -> sqlite3.Row | None:
     """The bot's /start ec_<token> in a group from someone who may run the event: the event, its token spent; else None."""
     with tx(con):
@@ -1089,4 +1105,5 @@ def set_saved(con, v: Viewer, eid: int, on: bool) -> None:
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
 from . import core, evteams, santa  # noqa: E402
+from .chatlist import chat_link  # noqa: E402
 from .organizing import _staff_event, kz_phone  # noqa: E402

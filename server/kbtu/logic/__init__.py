@@ -15,7 +15,7 @@ from .core import (NAME, STUDENT_ID, ApiError, DOOR_AUTO, DOOR_LATE, door_at, do
     decided, log_action, need_student, now, one, organizes, overseer, person_ref, rights_of, role_in, rows, short_name,
     shown_name, share_card, share_hold, taken)  # noqa: F401
 from .seats import (_receipt_flags, _visible, add_receipt, add_seats, cal_feed, calendar_owner, cal_token,
-    reset_cal_token, channel_discussion, channel_due, channel_gone, chat_claim, chat_join, chat_start, end_of, event,
+    reset_cal_token, channel_discussion, channel_due, channel_gone, chat_claim, chat_join, chat_set, chat_start, end_of, event,
     guard_join, guard_read, guard_token, event_ics, events, ics_sig, notify, notify_staff, past_events, promote, receipt_open,
     receipt_path, register, remove_seats, review_receipt, joined, refill, signup_open, team_ask, team_asks,
     team_decide, team_unask, set_saved, sweep_holds, title_in, unregister, volunteer_apply, volunteer_decide,
