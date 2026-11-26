@@ -187,6 +187,13 @@ Ideas and fixes are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Security is
   and every demo session ends. Only while a review is due.
 - `ANDROID_CERT_SHA256=<AA:BB:...>[,...]`: the Android app's signing certificates for `/.well-known/assetlinks.json`
   (the upload key's and Play's app signing key's); unset: no file, the app shows a browser bar.
+- `WALLET_PASS_CERT` + `WALLET_PASS_KEY` + `WALLET_PASS_TYPE_ID` + `APPLE_TEAM_ID`: "Add to Apple Wallet" under My QR
+  on an iPhone or a Mac (`kbtu/wallet.py`): one pass per student, their badge QR, which every event's door already
+  takes; added once, never updated. The certificate is the Pass Type ID certificate followed by Apple's WWDR G4
+  intermediate, both PEM; the key is its unencrypted PEM. Each value is the PEM itself (`\n` escapes are fine), a
+  path to it, or its base64. Any one unset, or a key that isn't the certificate's: off (no button, `/wallet/…` is a
+  404). The download link is in `/api/me` only (Safari has no session), signed with `TOKEN_KEY` over the badge's
+  code: it gives what `/api/me` already gives, and dies with the code (a deleted account) or a ban. Never in the repo.
 - No switch changes the policy or the consent version.
 - `WEB_CONCURRENCY`: uvicorn workers (the app is multi-worker safe).
 

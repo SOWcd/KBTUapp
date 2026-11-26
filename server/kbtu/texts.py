@@ -1565,6 +1565,16 @@ MS_PAGE = {
            "stuck": "Doesn't open?", "here": ("Done!", "Close this page and go back to the app.")},
 }
 
+# The Apple Wallet pass (wallet.py): the badge QR every event's door takes
+WALLET = {
+    "ru": {"description": "Бейдж KBTU App", "name": "Имя", "no": "Номер", "howLabel": "Как пользоваться",
+           "how": "Покажи QR на входе любого события KBTU App: по нему тебя отметят. Он только твой: не пересылай его."},
+    "kk": {"description": "KBTU App бейджі", "name": "Аты", "no": "Нөмірі", "howLabel": "Қалай қолдану",
+           "how": "QR-ды KBTU App-тың кез келген іс-шарасының кіреберісінде көрсет: сол арқылы сені белгілейді. Ол тек сенікі: ешкімге жіберме."},
+    "en": {"description": "KBTU App badge", "name": "Name", "no": "Number", "howLabel": "How to use",
+           "how": "Show the QR at the door of any KBTU App event: it checks you in. It is yours alone: don't send it to anyone."},
+}
+
 # The bot's command menu (Telegram's "/" list), per scope and language (bot._commands): groups get /all, private chats /start
 COMMANDS = {
     "all_group_chats": {"ru": [("all", "Позвать всех участников клуба")], "kk": [("all", "Клубтың барлық мүшелерін шақыру")],

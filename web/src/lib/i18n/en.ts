@@ -2238,6 +2238,7 @@ const en: Dict = {
   'me.qr': "My QR",
   'me.cardFront': "Turn the badge over",
   'me.qrHint': "Show it: it opens your profile in KBTU App",
+  'me.wallet': "Add to Apple Wallet",
   'pd.note': "Saved when an event asked for it, or from the KBTU portal before 19 October",
   'pd.phone': "Phone number",
   'pd.ask': "Your phone number",

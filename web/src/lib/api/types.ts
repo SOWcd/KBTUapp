@@ -359,6 +359,7 @@ export interface Me {
   referrals: { count: number; code: string } | null; // students my invite link brought (signed in with KBTU), my badge's code for the link
   evRef?: string | null;        // "My link"'s code for an event (ev_<id>_<code>): its own, never the badge's; null for guests
   qr: string | null;            // my badge QR, "<id>_<code>" (§4.4): a random code, so nobody can make up another's; null for guests
+  wallet?: string;              // my badge as an Apple Wallet pass (server/kbtu/wallet.py): its link; absent: off
   oversee: boolean;             // DMP staff: the registry in Studio with DMP picked
   checkin?: MyCheckin | null;   // my running check-in: the capsule
   appeals?: { consent: boolean; sg: boolean }; // appeals to SG are on for me (APPEALS); agreed to its section; SG's queue mine
