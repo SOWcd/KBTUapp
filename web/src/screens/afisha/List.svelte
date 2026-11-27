@@ -77,17 +77,17 @@
   // the minute (a tick inside the same minute redraws nothing) and still while another tab is shown (back: at once)
   const minute = () => Math.floor(nowTs() / 60) * 60;
   let now = $state(minute());
-  function tick() {
+  function advance() {
     const next = minute();
     if (next === now) return;
     if (data.events.some((e) => e.my?.status === 'going' && endOf(e) > now && endOf(e) <= next)) void loadMyPast();
     now = next;
   }
   onMount(() => {
-    const id = setInterval(() => { if (ui.tab === 'afisha') tick(); }, 30_000);
+    const id = setInterval(() => { if (ui.tab === 'afisha') advance(); }, 30_000);
     return () => clearInterval(id);
   });
-  $effect(() => { if (ui.tab === 'afisha') untrack(tick); });
+  $effect(() => { if (ui.tab === 'afisha') untrack(advance); });
   // which events are over and which are on, as one string: the rows' tags follow it, changing only as an event starts
   // or ends, not with every minute (the clock re-rendered every row)
   const phases = $derived(data.events.map((e) => (endOf(e) <= now ? 'o' : e.startsAt <= now ? 'l' : '') + e.id).join());
