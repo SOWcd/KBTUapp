@@ -19,6 +19,7 @@
   import Music from '@lucide/svelte/icons/music';
   import MonitorUp from '@lucide/svelte/icons/monitor-up';
   import Megaphone from '@lucide/svelte/icons/megaphone';
+  import Armchair from '@lucide/svelte/icons/armchair';
   import Landmark from '@lucide/svelte/icons/landmark';
   import MessageCircleQuestion from '@lucide/svelte/icons/message-circle-question-mark';
   import { session, loadMe } from '../../lib/state/session.svelte';
@@ -34,7 +35,7 @@
   import { api, type PersonCard } from '../../lib/api';
   import { nextUp, nameOf, whenOf, semester, termsOf, MASTER, PSYCHOLOGIST } from '../../lib/academic';
   import { t, tn, i18n } from '../../lib/i18n/index.svelte';
-  import { dateInput, dayMonth, dayNo, nowTs } from '../../lib/time';
+  import { dateInput, dayMonth, dayNo, nowTs, time as clock } from '../../lib/time';
   import { helpDone, helpDue, helpSeen } from '../../lib/helpus';
   import ActionCard from '../../ui/ActionCard.svelte';
   import { onMount } from 'svelte';
@@ -380,6 +381,11 @@
     <!-- appeals to the Student Government (APPEALS): their entry is the Forum tab's card under the composer;
          here only for a person without that tab, so nobody loses it (SG's queue is its panel, top right) -->
     {#if session.me?.appeals && !session.channel}<Row icon={Megaphone} title={t('apl.row')} accessory="chevron" onclick={() => { haptic.tap(); sheets.appeals(); }} />{/if}
+    <!-- library seats (LIBRARY): my seat at a glance, else the free ones -->
+    {#if session.me?.library}{@const lib = data.library}
+      <Row icon={Armchair} title={t('lib.title')} accessory="chevron" onclick={() => { haptic.tap(); sheets.library(); }}
+        subtitle={lib?.mine ? t('lib.mineLine', { table: lib.mine.table, seat: lib.mine.seat, until: clock(lib.mine.until) }) : lib?.rooms.length ? t('lib.freeLine', { n: lib.rooms.reduce((s, r) => s + r.free, 0) }) : undefined} />
+    {/if}
   </Group></div>
 
   <AppCard />

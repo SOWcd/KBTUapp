@@ -375,6 +375,7 @@ export interface Me {
   checkin?: MyCheckin | null;   // my running check-in: the capsule
   appeals?: { consent: boolean; sg: boolean }; // appeals to SG are on for me (APPEALS); agreed to its section; SG's queue mine
   ask?: { consent: boolean; staff: boolean };  // the help desk (KRI's "Ask a person", ASK) is on for me; its own consent; its queue mine
+  library?: { consent: boolean };              // library seats are on for me (LIBRARY); agreed to its own consent (server library.CONSENT)
   vol?: VolMe;                  // GET /api/me only: the volunteers ledger's club (server logic/vol.py, VOLUNTEERS); absent: nothing of it for me
   inChannel?: boolean;          // in the app's Telegram channel / topics group (server logic/appchats.py): Profile hides their rows
   inGroup?: boolean;
@@ -1007,3 +1008,24 @@ export interface DonationReview {
   readAmount: number | null; recipient: string | null; sender: string | null; no: string | null; paidAt: Ts | null;
   flags: string[]; auto: boolean; image: boolean; at: Ts; revision: number; undo: boolean;
 }
+
+// ---- library seats (server logic/library.py, LIBRARY): seat states only, never who sits where
+/** free, taken by someone, reported ("nobody here" waits for its answer), mine, or the one I reported */
+export type LibSeat = 'free' | 'taken' | 'reported' | 'mine' | 'asked';
+export interface LibTable { id: Id; label: string; room: string; seats: LibSeat[] }
+export interface LibMine { table: string; room: string; seat: number; since: Ts; until: Ts; asked: Ts | null }
+/** my latest report: waiting for the holder (until), the holder answered (still not here? until), or the seat freed */
+export interface LibReport { id: Id; table: string; tableId: Id; seat: number; state: 'wait' | 'here' | 'freed'; until?: Ts }
+export interface LibState {
+  consent: boolean; hold: number; confirm: number;
+  rooms: { id: Id; name: string; free: number; total: number }[];
+  mine: LibMine | null; report: LibReport | null; blockedUntil: Ts | null;
+}
+export interface LibAct { table: LibTable; state: LibState }
+/** the admin's rooms: their tables with the stickers' codes and the seats' live states, the big screen's key */
+export interface LibRoom {
+  id: Id; name: string; screen: string; free: number; total: number;
+  tables: { id: Id; label: string; seats: LibSeat[]; code: string }[];
+}
+/** the room's big screen (/show?lib=<key>): free or taken, nothing else */
+export interface LibWall { name: string; free: number; total: number; tables: { label: string; seats: ('free' | 'taken')[] }[] }

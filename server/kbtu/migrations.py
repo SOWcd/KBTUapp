@@ -2639,4 +2639,58 @@ MIGRATIONS: list[tuple[int, str]] = [
       PRIMARY KEY (chat_id, topic)
     ) STRICT;
     ALTER TABLE tg_channels ADD COLUMN stay INTEGER NOT NULL DEFAULT 0;"""),
+    # Library seats (logic/library.py, LIBRARY; the policy's section 16): rooms and their tables, a QR sticker per table
+    # (code: a bare random string only the app's scanner takes); screen: the room's big-screen key (/show?lib=, seat
+    # states only); gone_at: removed by the admin, undoable. A sit is one person on one seat until `until` (a rescan
+    # moves it on); ended_at and why once it ends. A report: "nobody here" on a live sit, by its reporter; answered_at
+    # the holder's "I'm here" or rescan, still_at the reporter's "still not here" (the seat freed), false_at the holder
+    # back on the seat soon after that. All of it goes after 7 days (library.sweep) or with the account
+    (256, """CREATE TABLE lib_rooms (
+      id         INTEGER PRIMARY KEY,
+      name       TEXT NOT NULL,
+      screen     TEXT NOT NULL UNIQUE,
+      created_at INTEGER NOT NULL,
+      gone_at    INTEGER
+    ) STRICT;
+    CREATE TABLE lib_tables (
+      id         INTEGER PRIMARY KEY,
+      room_id    INTEGER NOT NULL REFERENCES lib_rooms(id) ON DELETE CASCADE,
+      label      TEXT NOT NULL,
+      seats      INTEGER NOT NULL CHECK (seats BETWEEN 1 AND 12),
+      code       TEXT NOT NULL UNIQUE,
+      created_at INTEGER NOT NULL,
+      gone_at    INTEGER
+    ) STRICT;
+    CREATE INDEX lib_tables_by_room ON lib_tables(room_id);
+    CREATE TABLE lib_sits (
+      id         INTEGER PRIMARY KEY,
+      table_id   INTEGER NOT NULL REFERENCES lib_tables(id) ON DELETE CASCADE,
+      seat       INTEGER NOT NULL,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      started_at INTEGER NOT NULL,
+      until      INTEGER NOT NULL,
+      ended_at   INTEGER,
+      why        TEXT
+    ) STRICT;
+    CREATE UNIQUE INDEX lib_sits_seat ON lib_sits(table_id, seat) WHERE ended_at IS NULL;
+    CREATE UNIQUE INDEX lib_sits_mine ON lib_sits(user_id) WHERE ended_at IS NULL;
+    CREATE INDEX lib_sits_until ON lib_sits(until) WHERE ended_at IS NULL;
+    CREATE INDEX lib_sits_by_user ON lib_sits(user_id, started_at);
+    CREATE TABLE lib_reports (
+      id          INTEGER PRIMARY KEY,
+      sit_id      INTEGER NOT NULL REFERENCES lib_sits(id) ON DELETE CASCADE,
+      reporter_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at  INTEGER NOT NULL,
+      answered_at INTEGER,
+      still_at    INTEGER,
+      false_at    INTEGER
+    ) STRICT;
+    CREATE INDEX lib_reports_by_sit ON lib_reports(sit_id);
+    CREATE INDEX lib_reports_by_reporter ON lib_reports(reporter_id, created_at);
+    CREATE INDEX lib_reports_open ON lib_reports(created_at) WHERE answered_at IS NULL AND still_at IS NULL;
+    CREATE TABLE lib_consents (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      version TEXT NOT NULL,
+      at      INTEGER NOT NULL
+    ) STRICT;"""),
 ]

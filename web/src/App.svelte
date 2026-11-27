@@ -14,7 +14,7 @@
   import { keepTickets } from './lib/offlineTickets';
   import { channel, channelUnread, warmChannelFeeds, watchChannelVisit } from './lib/state/channel.svelte';
   import { loadSubjects, subjReady } from './lib/state/subjects.svelte';
-  import { data, resetResearch, loadResearch, loadResearchRequests, loadAfisha, loadSchedule, loadCredits, loadSupport, loadGallery, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadVol, loadAppeals, loadSg, loadAsks, loadHelpq, loadStudio, loadTeam, loadMeetups, loadMeetupSetup, phrase, studioChanged, eventById, eventTeamChunk, toggleGoing, skipped, classKey } from './lib/state/data.svelte';
+  import { data, resetResearch, loadResearch, loadResearchRequests, loadAfisha, loadSchedule, loadCredits, loadSupport, loadGallery, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadVol, loadAppeals, loadLibrary, loadSg, loadAsks, loadHelpq, loadStudio, loadTeam, loadMeetups, loadMeetupSetup, phrase, studioChanged, eventById, eventTeamChunk, toggleGoing, skipped, classKey } from './lib/state/data.svelte';
   import { burst } from './ui/burst';
   import { hiNow, nextUp, once, opened, returning, seen } from './lib/greet';
   import { visit } from './lib/helpus';
@@ -365,6 +365,7 @@
     if (p === 'apl') { ui.tab = session.channel ? 'forum' : 'profile'; if (session.me?.appeals) sheets.appeals(); return; } // the bot: SG answered my appeal   // the bot: "keep my account"
     if (p === 'ask') { ui.tab = 'profile'; if (session.me?.ask) sheets.askHuman(); return; } // the bot: my question to a person has an answer (old messages)
     if (p === 'cm') return; // the bot's "register" under a deleted Telegram comment: the comment's card is a launch moment (tgComment)
+    if (p === 'lib') { ui.tab = 'profile'; if (session.me?.library) sheets.library(); return; } // the bot: my seat (a report, time running out) or the one I reported
     if (p === 'anthem') { sheets.anthem(); return; } // the volunteers' chat link: the anthem over the tab as it is, guests too
     if (p === 'android') { void lazy(() => import('./screens/sheets/AndroidTestSheet.svelte'), {}); return; } // the bot's android_test broadcast: become a tester of the app on Google Play
     if (p === 'capps') { sheets.admin(); return; }                              // the bot: a club to check
@@ -553,6 +554,7 @@
     if (session.me?.oversee) void loadRegistry();
     if (session.me?.vol?.ledger) void loadVol();
     if (session.me?.appeals) void loadAppeals();
+    if (session.me?.library) void loadLibrary();
     if (session.me?.appeals?.sg) void loadSg();
     if (session.me?.ask) void loadAsks();
     if (session.me?.ask?.staff) void loadHelpq();

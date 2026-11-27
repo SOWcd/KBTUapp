@@ -55,6 +55,8 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         return text, button, f"ev_{evs[0]['id']}"
     if kind.startswith("tgc_"):  # the forum channel's comments (tgc.py)
         return tgc.render(con, m, lang)
+    if kind.startswith("lib_"):  # library seats (logic/library.py): a seat's number and its table's label, never a name
+        return logic.library.render(con, m, lang)
     if kind == "fch_comments":
         post = one(con, """SELECT p.id FROM fchan_posts p JOIN users u ON u.id = p.user_id
             WHERE p.id = ? AND p.user_id = ? AND p.status = 'live' AND p.tg_msg > 0
