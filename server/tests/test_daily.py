@@ -34,6 +34,34 @@ def test_admin_stats(env, monkeypatch):
     assert [tuple(r) for r in con.execute("SELECT day, active, students FROM stats_days")] == [((t + 5 * 3600) // 86400 - 1, 1, 0)]  # both signed in today
 
 
+def test_nightly_pending_lists_and_unresolved_map_notes_expire(env, monkeypatch):
+    c, cfg = env
+    uid = login(c, 21, "ali")["id"]
+    con = db.connect(cfg.db_path)
+    t = (logic.now() + 5 * 3600) // 86400 * 86400 - 5 * 3600 + 600
+    set_clock(monkeypatch, lambda: t)
+    monkeypatch.setattr(logic.mapflaws, "now", lambda: t)
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'club', 'club', 'Club', 'C', 'laptop_3d', 0)")
+    for offset in (-1, 0, 1):
+        con.execute("""INSERT INTO roster_pending (key, org_id, sheet, role, full_name, claimed_by, created_at)
+            VALUES (?, 1, 'sheet', 'member', 'Example person', ?, ?)""", (str(offset), uid, t - 90 * 86400 + offset))
+        for table in ("prefill", "prefill_rest"):
+            con.execute(f"INSERT INTO {table} (email, student_id, loaded_at) VALUES (?, ?, ?)",
+                        (f"test{offset}@example.test", str(offset), t - logic.account.PREFILL_KEEP + offset))
+        for done in (False, True):
+            con.execute("""INSERT INTO map_flaws (user_id, ver, floor, u, v, body, created_at, done_at)
+                VALUES (?, 'kbtu', 1, 0.5, 0.5, ?, ?, ?)""", (uid, f"{done}:{offset}",
+                    t - logic.mapflaws.OPEN_KEEP + offset, t - logic.mapflaws.KEEP + offset if done else None))
+    for table in ("prefill", "prefill_rest"):
+        con.execute(f"INSERT INTO {table} (email, student_id) VALUES ('undated@example.test', 'undated')")
+    logic.stats_day(con)
+    logic.stats_day(con)  # a retry on the same night is harmless
+    assert [r[0] for r in con.execute("SELECT key FROM roster_pending")] == ["1"]
+    for table in ("prefill", "prefill_rest"):
+        assert [r[0] for r in con.execute(f"SELECT student_id FROM {table}")] == ["1"]
+    assert {r[0] for r in con.execute("SELECT body FROM map_flaws")} == {"False:1", "True:1"}
+
+
 def test_memo(env, monkeypatch):
     """The memo in one tap: next week's events that ask DMP for something become DMP's complex memos in one
     email, signed by whoever opens it; Wednesday morning the President and Vices hear it's ready. A place may be left

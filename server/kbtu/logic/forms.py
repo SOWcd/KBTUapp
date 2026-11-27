@@ -26,7 +26,8 @@ from . import core
 from .core import ApiError, one, rows
 
 A_DAY = 500          # answers a form takes in a day, from everyone: a flood can't fill the disk
-KEEP = 365 * 86400   # at most one year after closing
+KEEP = 365 * 86400   # one year after closing, or the last answer while still open
+_PUBLIC_END = "COALESCE(f.closed_at, (SELECT MAX(a.created_at) FROM form_answers a WHERE a.form_id = f.id))"
 LONG, SHORT = 4000, 200
 MOST = 1 << 20       # an answer sheet's bytes: far above a real one; no account guards the route, so it's capped unread
 OTHER = "__other__"  # the "Other" chip's value; its words come in the field "<id>~"
@@ -108,8 +109,12 @@ def create(con, slug: str, spec: object) -> int:
 
 
 def close(con, slug: str) -> None:
-    if not con.execute("UPDATE forms SET closed_at = ? WHERE slug = ? AND closed_at IS NULL", (core.now(), slug)).rowcount:
-        raise ApiError("not_found")
+    with tx(con):
+        f = one(con, "SELECT id FROM forms WHERE slug = ? AND closed_at IS NULL", slug)
+        if not f:
+            raise ApiError("not_found")
+        forget(con, f["id"])  # closing an abandoned form must not revive expired answers
+        con.execute("UPDATE forms SET closed_at = ? WHERE id = ?", (core.now(), f["id"]))
 
 
 def _questions(spec: dict) -> list[dict]:
@@ -166,6 +171,7 @@ def submit(con, slug: str, body: object) -> None:
         out = answers(json.loads(f["spec"]), body)
         if one(con, "SELECT COUNT(*) FROM form_answers WHERE form_id = ? AND created_at > ?", f["id"], core.now() - 86400)[0] >= A_DAY:
             raise ApiError("rate_limited", "form_day")
+        forget(con, f["id"])  # a new answer starts a fresh window after a full year of inactivity
         con.execute("INSERT INTO form_answers (form_id, answers, created_at) VALUES (?, ?, ?)", (f["id"], json.dumps(out, ensure_ascii=False), core.now()))
 
 
@@ -175,14 +181,16 @@ def listing(con) -> list[tuple[str, bool, int]]:
         + (SELECT COUNT(*) FROM research_answers a WHERE a.form_id = f.id) n FROM forms f ORDER BY f.id""")]
 
 
-def forget(con) -> None:
-    con.execute("DELETE FROM form_answers WHERE form_id IN (SELECT id FROM forms WHERE closed_at <= ?)", (core.now() - KEEP,))
+def forget(con, fid: int | None = None) -> None:
+    scope = "f.id = ? AND " if fid is not None else ""
+    con.execute(f"""DELETE FROM form_answers WHERE form_id IN
+        (SELECT f.id FROM forms f WHERE {scope}{_PUBLIC_END} <= ?)""", (*(() if fid is None else (fid,)), core.now() - KEEP))
 
 
 def export(con, slug: str) -> str:
     """Owner's CSV: the time (UTC), then a column per question under its label; a multi's picks joined by "; ".
     Research adds account/name columns; anonymous rows have neither."""
-    f = one(con, "SELECT id, spec, closed_at FROM forms WHERE slug = ?", slug)
+    f = one(con, f"SELECT f.id, f.spec, f.closed_at, {_PUBLIC_END} AS public_end FROM forms f WHERE f.slug = ?", slug)
     if not f:
         raise ApiError("not_found")
     qs = _questions(json.loads(f["spec"]))
@@ -195,7 +203,8 @@ def export(con, slug: str) -> str:
         return buf.getvalue()
     # Keep legacy public answers anonymous, including the live library's earlier answers.
     records = [dict(r) | {"user_id": None, "name": "", "day_only": False} for r in rows(con,
-        "SELECT answers, created_at FROM form_answers WHERE form_id = ? ORDER BY id", f["id"])]
+        "SELECT answers, created_at FROM form_answers WHERE form_id = ? ORDER BY id", f["id"])] \
+        if f["public_end"] is not None and f["public_end"] > core.now() - KEEP else []
     if research:
         records += [dict(r) | {"day_only": True} for r in rows(con, """SELECT a.answers, a.day created_at, a.user_id,
             trim(COALESCE(s.first_name, u.tg_first_name, '') || ' ' || COALESCE(s.last_name, u.tg_last_name, '')) name

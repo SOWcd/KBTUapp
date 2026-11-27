@@ -2722,4 +2722,12 @@ MIGRATIONS: list[tuple[int, str]] = [
     # A comment verdict may edit its earlier DM only in the same chat. Legacy message ids have no known chat:
     # leave it NULL rather than guessing after an account relink.
     (260, "ALTER TABLE tgc_comments ADD COLUMN dm_chat_id INTEGER;"),
+    # Intake lists expire from their original load, including rows that cannot be matched to an account.
+    # Old rows have no per-list link: use the earliest known main load, or 0 to expire an undated import.
+    (261, """ALTER TABLE prefill ADD COLUMN loaded_at INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE prefill_rest ADD COLUMN loaded_at INTEGER NOT NULL DEFAULT 0;
+    UPDATE prefill SET loaded_at = COALESCE((SELECT MIN(CAST(value AS INTEGER)) FROM meta
+        WHERE key >= 'prefill_list:' AND key < 'prefill_list;'), 0);
+    UPDATE prefill_rest SET loaded_at = COALESCE((SELECT MIN(CAST(value AS INTEGER)) FROM meta
+        WHERE key >= 'prefill_list:' AND key < 'prefill_list;'), 0);"""),
 ]

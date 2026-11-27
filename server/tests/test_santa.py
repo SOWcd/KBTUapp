@@ -852,8 +852,8 @@ def test_report_ids_survive_transcript_sweep(env):
 
 
 def test_chat_cap_end_and_retiring(env, monkeypatch):
-    """Fifty messages a day per person, whatever becomes of them; the chat ends three days after the gifts day as it
-    stood at the draw (an edit revives nothing) and the night's round deletes it; the first one to leave the ring
+    """Fifty messages a day per person, whatever becomes of them; the chat ends three days after the current gifts day
+    and the night's round deletes it; the first one to leave the ring
     retires the chat for everyone alike (whose thread vanished would name a Santa); an unhandled report: 90 days."""
     c, cfg = env
     con, eid = _game(c, cfg, 5)
@@ -873,13 +873,18 @@ def test_chat_cap_end_and_retiring(env, monkeypatch):
     assert _chat(c, eid, x).status_code == 404 and _say(c, eid, x, "to").status_code == 404
     con.execute("UPDATE events SET visibility = 'public' WHERE id = ?", (eid,))
     assert _chat(c, eid, x).status_code == 200
-    # the end: fixed at the draw; moving the gifts day later brings nothing back; the night's round deletes
+    # Moving gifts later extends an active chat; moving them earlier shortens it, whatever the stored draw date.
     until = con.execute("SELECT g.until - e.starts_at FROM santa_chats g JOIN events e ON e.id = g.event_id WHERE e.id = ?", (eid,)).fetchone()[0]
     assert until == 3 * DAY
     logic.santa.forget(con)
     assert con.execute("SELECT COUNT(*) FROM santa_msgs").fetchone()[0] == logic.santa.MSG_DAY + 1
     con.execute("UPDATE santa_chats SET until = ? WHERE event_id = ?", (int(time.time()) - 1, eid))
     con.execute("UPDATE events SET starts_at = starts_at + ?, ends_at = NULL WHERE id = ?", (30 * DAY, eid))
+    assert _chat(c, eid, a).status_code == 200
+    logic.santa.forget(con)
+    assert con.execute("SELECT COUNT(*) FROM santa_msgs").fetchone()[0] == logic.santa.MSG_DAY + 1
+    con.execute("UPDATE santa_chats SET until = ? WHERE event_id = ?", (int(time.time()) + 30 * DAY, eid))
+    con.execute("UPDATE events SET starts_at = ?, ends_at = ? WHERE id = ?", (int(time.time()) - 3 * DAY, int(time.time()) + DAY, eid))
     assert _chat(c, eid, a).status_code == 404 and _say(c, eid, b, "from").status_code == 404 and _page(c, eid, a)["mySanta"]["chat"] is False
     sent = [m for m in _out(con, "santa_msg") if m["user_id"] == _uid(con, b)]
     assert sent and outbox._render(con, sent[0]) is None  # nor a push about a chat that is over
@@ -888,10 +893,11 @@ def test_chat_cap_end_and_retiring(env, monkeypatch):
     set_clock(monkeypatch, lambda: int(time.time()))
     assert not con.execute("SELECT 1 FROM santa_msgs").fetchone()
     # someone leaves the ring: every thread goes and the chat is off for all, the same for each; a reported thread stays
-    con.execute("UPDATE santa_chats SET until = ? WHERE event_id = ?", (int(time.time()) + DAY, eid))
+    con.execute("UPDATE events SET starts_at = ?, ends_at = NULL WHERE id = ?", (int(time.time()) + DAY, eid))
     assert _say(c, eid, x, "to", "kept for the staff").status_code == 200 and _say(c, eid, b, "to", "gone").status_code == 200
     assert c.post(f"/api/events/{eid}/santa/chat/report", headers=tma(x), json={"side": "to"}).status_code == 204
     c.delete(f"/api/events/{eid}/registration", headers=tma(a))
+    con.execute("UPDATE events SET starts_at = starts_at + ? WHERE id = ?", (30 * DAY, eid))  # a retired chat stays retired
     assert [r["text"] for r in con.execute("SELECT text FROM santa_msgs ORDER BY abs(id)")] == ["kept for the staff", None]
     for tg in PLAYERS:
         assert _chat(c, eid, tg).status_code == 404 and _say(c, eid, tg, "to").status_code == 404
@@ -906,7 +912,7 @@ def test_chat_cap_end_and_retiring(env, monkeypatch):
     con.execute("UPDATE events SET starts_at = ? WHERE id = ?", (int(time.time()) - 89 * DAY, eid))
     logic.santa.forget(con)
     assert con.execute("SELECT COUNT(*) FROM santa_msgs").fetchone()[0] == 2
-    con.execute("UPDATE events SET starts_at = ? WHERE id = ?", (int(time.time()) - 91 * DAY, eid))
+    con.execute("UPDATE events SET starts_at = ?, ends_at = ? WHERE id = ?", (int(time.time()) - 91 * DAY, int(time.time()) + DAY, eid))
     logic.santa.forget(con)
     assert not con.execute("SELECT 1 FROM santa_msgs").fetchone()
     con.execute("UPDATE santa_sends SET at = at - 86401")

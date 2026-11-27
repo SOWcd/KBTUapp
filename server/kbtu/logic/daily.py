@@ -229,6 +229,10 @@ def stats_day(con) -> None:
     con.execute("DELETE FROM visits WHERE day < ?", (day - 30,))  # 30 days, as the privacy policy says
     con.execute("DELETE FROM user_platforms WHERE seen_at < ?", (core.now() - 90 * 86400,))  # 90 days, as the policy says
     con.execute("DELETE FROM android_app WHERE seen_at < ?", (core.now() - 90 * 86400,))  # the same device kind, the same 90
+    con.execute("DELETE FROM roster_pending WHERE created_at <= ?", (core.now() - 90 * 86400,))
+    from .account import PREFILL_KEEP
+    for table in ("prefill", "prefill_rest"):
+        con.execute(f"DELETE FROM {table} WHERE loaded_at <= ?", (core.now() - PREFILL_KEEP,))
     con.execute("DELETE FROM profile_views WHERE day < ?", (day,))  # strangers' profile counts: today's and yesterday's stay
     con.execute("DELETE FROM fchan_feed_pages WHERE expires_at <= ?", (core.now(),))
     from .organizing import GUEST_DAYS
@@ -263,7 +267,7 @@ def stats_day(con) -> None:
                   research.sweep,    # proposals: 180 days; survey answers: a year after closure
                   donations.sweep,
                   helpus.sweep,      # anonymous lines to the creator: 90 days; offers to help: 180
-                  forms.forget,      # public-form answers: one year after closure
+                  forms.forget,      # public-form answers: one year after closure, or the last answer while open
                   chatmod.sweep,     # swear warnings in clubs' groups: 90 days
                   assistant.sweep,
                   santa.forget,      # its chat: 3 days after the gifts day

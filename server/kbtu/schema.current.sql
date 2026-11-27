@@ -926,7 +926,7 @@ CREATE TABLE prefill (
       school      TEXT,
       phone       TEXT,
       came        INTEGER NOT NULL DEFAULT 0 CHECK (came IN (0, 1))
-    ) STRICT;
+    , loaded_at INTEGER NOT NULL DEFAULT 0) STRICT;
 CREATE TABLE prefill_rest (
       id          INTEGER PRIMARY KEY,
       email       TEXT,
@@ -938,7 +938,7 @@ CREATE TABLE prefill_rest (
       school      TEXT,
       phone       TEXT,
       came        INTEGER NOT NULL DEFAULT 0 CHECK (came IN (0, 1))
-    ) STRICT;
+    , loaded_at INTEGER NOT NULL DEFAULT 0) STRICT;
 CREATE TABLE profile_views (
       day       INTEGER NOT NULL,   -- Almaty day number
       viewer_id INTEGER NOT NULL,
