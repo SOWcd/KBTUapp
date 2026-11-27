@@ -11,6 +11,7 @@
   import Plus from '@lucide/svelte/icons/plus';
   import Trophy from '@lucide/svelte/icons/trophy';
   import type { Membership, Org, OrgCategory, OrgRef, Post } from '../../lib/api';
+  import { clubLook, lookVars, skinOf } from '../../lib/awards';
   import { byWeight, clubSub, daysLeft, friendsIn, hit, nextByOrg, roundDue, service, waitsDmp } from '../../lib/clubs';
   import { artOf, coverOf } from '../../lib/covers';
   import { t, tn } from '../../lib/i18n/index.svelte';
@@ -159,7 +160,10 @@
         {#key castings.length}<div class={['calls', 'hscroll', { one: calls.length === 1 }]}>
           {#each calls.slice(0, SHOWN) as c (c.key)}
             {@const art = artOf(c.org)}
-            <div class="call" style:background={coverOf(c.org)}>
+            {@const look = skinOf(c.org)}
+            {@const tpl = look ? clubLook(look) : undefined}
+            <!-- a template lanyard's picture is see-through: its ground and ink are the look's colours, as on its ticket -->
+            <div class={['call', { look: tpl, paper: tpl?.ink }]} style={look && tpl ? lookVars(look) : undefined} style:background={tpl ? undefined : coverOf(c.org)}>
               {#if art}<img class="art" src={art} alt="" loading="lazy" decoding="async" draggable="false" />{/if}
               <i class="shade"></i>
               <button class="open" onclick={c.open} aria-label={c.org.name}></button>
@@ -263,6 +267,17 @@
   .go::after { content: ''; position: absolute; inset: -4px 0; } /* 44 to the finger */
   .go.done { background: rgba(255, 255, 255, 0.24); color: var(--on-accent); }
   .go:disabled { opacity: 0.6; }
+  /* a club's lanyard as the ground (lookVars, the ticket's .club): its colours and ink; on a light paper the foot washed
+     in the paper instead of shaded dark, so the dark ink reads */
+  .call.look { background: linear-gradient(155deg, var(--c1), var(--c2) 55%, var(--c3)); color: var(--ink); }
+  .look .bot b { text-shadow: var(--tsh); }
+  /* lookVars' --ink shadows the app's: a dark look's white button takes the look's colour, and the time pill stays white */
+  .look:not(.paper) .go:not(.done) { color: var(--c2); }
+  .look .when:not(.soon) { color: var(--on-accent); }
+  .paper .shade { background: linear-gradient(180deg, transparent 38%, var(--c2)); opacity: 0.82; }
+  .paper .act small { color: var(--ink2); opacity: 1; }
+  .paper .go { background: var(--ink); color: var(--c1); }
+  .paper .go.done { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ink2); color: var(--ink); }
 
   /* the list: chips that filter it in place, then plain rows on the ground */
   .dir { scroll-margin-top: var(--page-top); }
