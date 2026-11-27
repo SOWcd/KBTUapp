@@ -177,6 +177,10 @@ Ideas and fixes are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Security is
 - `IG_USER_ID` + `IG_TOKEN`: the clubs' Instagram posts in their news through the app's own Instagram account
   (`kbtu/instagram.py`, "Clubs' Instagram posts" above). Either unset: off, nothing is requested.
 - `REPORTS=1`: clubs' event reports in Studio and the member's own log in their profile (`logic/evreports.py`). Off by default. Separate consent covers attendance marks and comments under section 3 of the privacy policy.
+- `LIBRARY=1`: library seats (`logic/library.py`): a QR sticker per table, scan and sit for 3 hours, "nobody here"
+  with 10 minutes to answer; Profile → Library, Admin → Library (rooms, tables, the sticker PDF, the big screen
+  `/show?lib=<key>`). `LIBRARY=staff`: the app's admins and moderators only (a demo). Off by default. Its own consent
+  (`lib1`) under the privacy policy's section 16; sits and reports are kept 7 days.
 - `ROOMS_FILE`: the map's "Free now", the timetable's busy rooms (`server/tools/rooms.py`, default `rooms.json` next to the database); no file: off.
 - `SUBJECTS_FILE`: the subjects' cards, "find people to study it with" (`server/tools/subjects.py` from the portal's course list scrape, default `subjects.json` next to the database; `logic/subjects.py`: a listing is a find-people request on a subject); no file: off.
 - `IOS_BUNDLE_ID`: the iPhone app's bundle ID, `kz.sow.kbtu` ([ios/README.md](ios/README.md)); set, Sign in with Apple and its push

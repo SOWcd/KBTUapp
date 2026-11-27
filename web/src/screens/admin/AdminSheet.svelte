@@ -17,6 +17,7 @@
   import HandHeart from '@lucide/svelte/icons/hand-heart';
   import Gift from '@lucide/svelte/icons/gift';
   import MapPinned from '@lucide/svelte/icons/map-pinned';
+  import Armchair from '@lucide/svelte/icons/armchair';
   import ChartNoAxesColumn from '@lucide/svelte/icons/chart-no-axes-column';
   import MessageSquareHeart from '@lucide/svelte/icons/message-square-heart';
   import { untrack, type Component } from 'svelte';
@@ -178,6 +179,8 @@
       {#if data.inbox?.santa}{@render place(Gift, t('santa.repTitle'), () => sheets.santaReports(), data.inbox.santa)}{/if}
       <!-- what people told the creator from the app: anonymous lines and offers to help, the unread on the row -->
       {#if admin}{@render place(MessageSquareHeart, t('vo.title'), () => sheets.adminVoices(), data.inbox?.voices ?? 0)}{/if}
+      <!-- library seats (LIBRARY): rooms, tables, stickers, the live view -->
+      {#if admin && session.me?.library}{@render place(Armchair, t('lib.title'), () => sheets.libraryAdmin())}{/if}
       <!-- the map's flaws: quiet and last (a card on top pulled from moderation) -->
       {#if data.inbox?.flaws}{@render place(MapPinned, t('mf.title'), () => sheets.mapFlaws(), 0, String(data.inbox.flaws))}{/if}
     </Group>

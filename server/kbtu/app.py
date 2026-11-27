@@ -557,6 +557,26 @@ def reports_viewer(request: Request, v: Me) -> Viewer:
 Reports = Annotated[Viewer, Depends(reports_viewer)]
 
 
+def library_viewer(request: Request, v: Me) -> Viewer:
+    """Library seats (logic/library.py): LIBRARY=1 everyone, staff the app's admins and moderators; off: not here."""
+    if not logic.library.on(request.app.state.cfg.library, v):
+        raise ApiError("not_found")
+    return v
+
+
+Library = Annotated[Viewer, Depends(library_viewer)]
+
+
+def library_admin(v: Library) -> Viewer:
+    """The admin's library routes whose body is big (the sticker pages): refused before a byte of it is read."""
+    if v.role != "admin":
+        raise ApiError("forbidden")
+    return v
+
+
+LibraryAdmin = Annotated[Viewer, Depends(library_admin)]
+
+
 def create(cfg: config.Config | None = None) -> FastAPI:
     cfg = cfg or config.load()
     logic.core._SHARED.clear(); logic.profiles._RARITY[0] = 0  # per-worker caches belong to one database (tests make many)
@@ -611,6 +631,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     logic.seats.ICS_KEY = hmac.new(cfg.token_key, b"kbtu-ics", hashlib.sha256).digest()
     logic.seats.REF_KEY = hmac.new(cfg.token_key, b"kbtu-event-ref", hashlib.sha256).digest()  # "My link"'s code
     logic.appeals.ASK = cfg.ask  # the bot's help-desk answer message goes only where the desk opens (ASK)
+    logic.library.MODE = cfg.library  # LIBRARY: the bot's seat messages go only while it is on
     logic.gallery.MODE = cfg.gallery  # GALLERY: who posts to the Gallery ("all", "staff"); empty: the albums alone
     logic.chatsync.POLICY = logic.CONSENT if cfg.chat_sync else ""  # clubs mirrored from their chats (CHAT_SYNC); empty: off
     logic.guests.KEY = hmac.digest(cfg.token_key, b"kbtu-guest-name", "sha256")
@@ -820,7 +841,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                                    **({"tgComment": True} if cfg.tgc_chat and logic.tgcomments.saved(con, v) else {}),
                                    **({"vol": x} if (x := logic.vol.summary(con, v)) else {}),
                                    **({"appeals": logic.appeals.summary(con, v)} if logic.appeals.on(con, cfg.appeals, v) else {}),
-                                   **({"ask": logic.appeals.ask_summary(con, v)} if logic.appeals.ask_on(con, cfg.ask, v) else {})}
+                                   **({"ask": logic.appeals.ask_summary(con, v)} if logic.appeals.ask_on(con, cfg.ask, v) else {}),
+                                   **({"library": logic.library.summary(con, v)} if logic.library.on(app.state.cfg.library, v) else {})}
 
     async def app_chats(uid: int, tg: int) -> None:
         """After /api/me's answer: am I in the app's channel and group (logic/appchats.py, once a day at most)."""
@@ -2589,6 +2611,77 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             board_writer(request, board_viewer(request, v), con)
         logic.mapflaws.report(con, v, body, student)
 
+    # library seats (logic/library.py, LIBRARY): the sheet, a scanned table, a seat, "nobody here" and its answers;
+    # the room's big screen by its key (seat states only); the admin's rooms, tables and sticker sheet
+    @app.get("/api/library")
+    def library_state(con: Con, v: Library, response: Response):
+        response.headers["Cache-Control"] = "private, no-store"
+        return logic.library.state(con, v)
+
+    @app.post("/api/library/table")
+    def library_table(con: Con, v: Library, body: dict = Body(...)):
+        return logic.library.table(con, v, body)
+
+    @app.post("/api/library/sit")
+    def library_sit(con: Con, v: Library, body: dict = Body(...)):
+        return logic.library.sit(con, v, body)
+
+    @app.post("/api/library/report")
+    def library_report(con: Con, v: Library, body: dict = Body(...)):
+        return logic.library.report(con, v, body)
+
+    @app.post("/api/library/still")
+    def library_still(con: Con, v: Library, body: dict = Body(...)):
+        return logic.library.still(con, v, body)
+
+    @app.post("/api/library/here")
+    def library_here(con: Con, v: Library):
+        return logic.library.here(con, v)
+
+    @app.post("/api/library/leave")
+    def library_leave(con: Con, v: Library):
+        return logic.library.leave(con, v)
+
+    @app.delete("/api/library/consent", status_code=204)
+    def library_withdraw(con: Con, v: Library):
+        logic.library.withdraw(con, v)
+
+    @app.get("/api/library/screen/{key}")
+    def library_screen(key: str, con: Con, request: Request, response: Response):
+        if not request.app.state.cfg.library:
+            raise ApiError("not_found")
+        response.headers["Cache-Control"] = "no-store"
+        return logic.library.screen(con, key)
+
+    @app.get("/api/admin/library")
+    def library_rooms(con: Con, v: Library, response: Response):
+        response.headers["Cache-Control"] = "private, no-store"
+        return logic.library.admin_list(con, v)
+
+    @app.post("/api/admin/library/rooms")
+    def library_add_room(con: Con, v: Library, body: dict = Body(...)):
+        return logic.library.add_room(con, v, body)
+
+    @app.patch("/api/admin/library/rooms/{rid}")
+    def library_edit_room(rid: int, con: Con, v: Library, body: dict = Body(...)):
+        return logic.library.edit_room(con, v, rid, body)
+
+    @app.post("/api/admin/library/rooms/{rid}/tables")
+    def library_add_tables(rid: int, con: Con, v: Library, body: dict = Body(...)):
+        return logic.library.add_tables(con, v, rid, body)
+
+    @app.patch("/api/admin/library/tables/{tid}")
+    def library_edit_table(tid: int, con: Con, v: Library, body: dict = Body(...)):
+        return logic.library.edit_table(con, v, tid, body)
+
+    @app.post("/api/admin/library/rooms/{rid}/stickers", status_code=204)
+    async def library_stickers(rid: int, con: Con, v: LibraryAdmin, request: Request,
+                               body: object = Depends(json_body(logic.library.PAGES * logic.library.PAGE_BYTES * 4 // 3 + 4096))):
+        """The sticker sheet the app drew, as a PDF into the admin's chat with the bot (it prints from any phone)."""
+        room, pdf = await run_in_threadpool(logic.library.stickers, con, v, rid, body)
+        lang = logic.one(con, "SELECT lang FROM users WHERE id = ?", v.id)["lang"]
+        await send_file(request.state.tg["id"], "stickers.pdf", pdf, texts.pick(texts.BOT, lang)["lib_stickers"][0].format(room=room), "application/pdf")  # a plain caption: no HTML escaping
+
     # Native research: verified students answer once; proposals are reviewed only in Admin.
     research_body = Depends(json_body(logic.research.BODY_MOST))
 
@@ -2716,11 +2809,12 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         u = logic.one(con, "SELECT tg_id, lang FROM users WHERE id = ?", v.id)
         await send_file(u["tg_id"], *texts.attendees_csv(u["lang"], e["title"], people))
 
-    async def send_file(tg_id: int, name: str, data: bytes, caption: str) -> None:
-        """A CSV into the person's own chat with the bot (asked for by them): it opens on any phone and can be forwarded."""
+    async def send_file(tg_id: int, name: str, data: bytes, caption: str, mime: str = "text/csv") -> None:
+        """A file (a CSV, the library's stickers) into the person's own chat with the bot (asked for by them): it opens
+        on any phone and can be forwarded."""
         try:
-            async with httpx.AsyncClient(timeout=20) as http:
-                r = await bot._tg(cfg, http, "sendDocument", {"chat_id": str(tg_id), "caption": caption}, files={"document": (name, data, "text/csv")})
+            async with httpx.AsyncClient(timeout=60) as http:
+                r = await bot._tg(cfg, http, "sendDocument", {"chat_id": str(tg_id), "caption": caption}, files={"document": (name, data, mime)})
             answer = r.json()
         except (httpx.HTTPError, ValueError) as exc:
             log.warning("file: %s", type(exc).__name__)

@@ -1,7 +1,7 @@
 // Shared data the screens read, kept in one place per entity so a change shows everywhere at once
 // (one home per thing). Actions update optimistically and roll back if the server says no.
 import { api, ApiErr, type ResearchAnswers, type ResearchSurvey, type ResearchRequest, type Support, type Sponsor, type AlbumPhoto, type GalleryAlbum, type GalleryPage, type AdminStats, type Inbox, type ClassItem, type Membership, type EventCard, type Chats, type Credits, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type ChatTree, type StaffMute, type TeamMember, type VolLedger, type Appeal, type SgQueue, type Solved, type TeamPick } from '../api';
-import type { DonationReview, MyRegistration, SantaChats, ScreenSession, TeamSetup, MeetupScans } from '../api';
+import type { DonationReview, MyRegistration, SantaChats, ScreenSession, TeamSetup, MeetupScans, LibState } from '../api';
 import { joinClasses } from '../classes';
 import { teamError } from '../teams';
 import { teamConsentOk, TEAM_CONSENT } from '../teamConsent';
@@ -64,6 +64,7 @@ export const data = $state({
   sg: null as SgQueue | null,                 // SG's queue (its granted people): with the app, never kept on the phone
   asks: null as Appeal[] | null,              // my questions to the help desk (ASK on): with the app, never kept on the phone
   helpq: null as SgQueue | null,              // the help desk's queue (its granted people): with the app, never kept on the phone
+  library: null as LibState | null,           // library seats (LIBRARY on for me): with the app, never kept on the phone
   vol: null as VolLedger | null,              // a club's volunteers ledger (its President and whom she grants): with the app, never kept on the phone (contacts)
   registry: null as RegistryOrg[] | null,
   chatTrees: null as ChatTree[] | null,       // DMP's tree of every club's groups (counts only): with the registry     // DMP's registry, this month: loaded with the app, never kept on the phone (contacts)
@@ -334,6 +335,9 @@ export function volGone(e: unknown): boolean {
   return true;
 }
 
+export async function loadLibrary(): Promise<void> {
+  try { data.library = await api.library(); } catch { /* offline: the last copy stays */ }
+}
 export async function loadAppeals(): Promise<void> {
   try { const r = await api.appeals(); data.appeals = r.items; data.solved = r.solved; } catch { /* offline: the last copy stays */ }
 }

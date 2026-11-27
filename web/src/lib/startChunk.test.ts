@@ -8,8 +8,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
  *  purpose for the usage counters' funnels, error classes and screen times (PR 431: they must count from the start);
  *  +100 for the layout numbers' lazy import (the measuring itself is its own chunk, layoutStats.ts); +250 for the
  *  Android tester offer (lib/androidTest.ts, the TWA check, Profile's row): a lazy import of it came out 500 B bigger; +200 for
- *  Studio's news-from-a-group-topic strings (PR 441: the ru dictionary ships with the start). */
-const MAX_START_GZIP = 224_150;
+ *  Studio's news-from-a-group-topic strings (PR 441: the ru dictionary ships with the start); +2,150 for library seats'
+ *  strings (PR 449, the ru dictionary again; the screens themselves are lazy chunks). */
+const MAX_START_GZIP = 226_300;
 
 const gzipped = async (code: string) => (await new Response(new Blob([code]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer()).byteLength;
 

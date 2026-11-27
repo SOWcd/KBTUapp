@@ -84,6 +84,9 @@ class Config:
     ig_token: str = field(default="", repr=False)
     # REPORTS=1: clubs' event reports and personal attendance logs (logic/evreports.py, privacy policy section 3)
     reports: bool = False
+    # LIBRARY=1: library seats for everyone (logic/library.py, privacy policy section 16); staff: the app's admins and
+    # moderators only (to try it, a demo); empty: off
+    library: str = ""
     # ROOMS_FILE: the map's "free now", the timetable's busy rooms (tools/rooms.py), next to the database by default; no file: off
     rooms_file: str = ""
     # SUBJECTS_FILE: the subjects' cards (tools/subjects.py: names, codes, credits, school only), next to the database by default; no file: off
@@ -207,6 +210,7 @@ def load() -> Config:
         docs={"1": "fts", "hybrid": "hybrid"}.get(env.get("DOCS", "").strip(), ""),
         docs_db=env.get("DOCS_DB") or str(Path(db_path).parent / "docs.db"),
         reports=env.get("REPORTS", "").strip() == "1",
+        library={"1": "all", "staff": "staff"}.get(env.get("LIBRARY", "").strip(), ""),
         tiktok=env.get("TIKTOK", "").strip() == "1",
         ig_user_id=uid if (uid := env.get("IG_USER_ID", "").strip()).isdigit() else "",  # a typo: off, never a call with it
         ig_token=env.get("IG_TOKEN", "").strip(),

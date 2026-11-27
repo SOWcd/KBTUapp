@@ -4,6 +4,7 @@ import type { ChatFill } from '../eventFill';
 import type { ResearchAnswers, ResearchSurvey, ResearchInput, ResearchRequest, Support, Sponsor, DonationReview, ApiError, Credits, ClubApplication, Id, OfficialPath, PersonCard, Video, AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, MemberPatch, Friends, Friendship, FoundStudent, LinkCard, PersonRef, Media, GalleryPage, AlbumPhoto, Attendee, DoorPerson, EventUpdate, PostInput, CheckinResult, ClassItem, JoinRequest, CohostInvite, CrewKind, CrewMember, EventReport, ReportPatch, EventCard, EventFull, EventInput, Me, Org, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, ChatSection, Chats, ClubApplicationInput, OfficialRequest, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, LentStudio, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp, TeamAsk, TeamPick, TeamInvite, TeamsBoard, ShortLink, StudioChat, ChatTree, WaitingChat, SwearRow, ChatRoles, RosterRequest, Skill, ForumMe, ForumCard, Ask, AskInput, Contact, ForumMod, AssistReply, Fixable, TgComment, TgcRule, VolLedger, VolPerson, VolDoor, Appeal, AppealHelp, AppealTopic, AppealStatus, SgQueue, Solved, Subjects, SubjectCard, RejectWhy } from './types';
 import type { BracketMatch, BracketSeed, EventBracket, EventGroups, EventMatch, MatchScore } from './types';
 import type { Archived, ReportLogEntry, ReportMarkPatch, ReviewReason, SantaChats, SantaMsg, SantaReport } from './types';
+import type { LibAct, LibRoom, LibState, LibTable, LibWall } from './types';
 import type { Graph } from '../route';
 import { splitVariants } from '../awards';
 import { ApiErr } from './errors';
@@ -575,6 +576,25 @@ export const server = {
   channelReplyRestore: (id: Id): Promise<void> => call('POST', `/forum-replies/${id}/restore`), // a take-down undone
   mapFlaw: (f: { ver: string; floor: number; u: number; v: number; px: number; py: number; body: string }): Promise<void> => call('POST', '/map/flaws', f), // a long press on the map
   mapFlaws: (): Promise<{ id: Id; ver: string; floor: number; u: number; v: number; px: number | null; py: number | null; body: string; at: Ts; done: Ts | null }[]> => call('GET', '/map/flaws'), // the admin
+  // library seats (server logic/library.py): a scanned sticker's code goes with every seat action (I'm at the table)
+  library: (): Promise<LibState> => call('GET', '/library'),
+  libTable: (code: string): Promise<LibTable> => call('POST', '/library/table', { code }),
+  libSit: (code: string, seat: number, consent?: string): Promise<LibAct> => call('POST', '/library/sit', { code, seat, consent }),
+  libReport: (code: string, seat: number, consent?: string): Promise<LibAct> => call('POST', '/library/report', { code, seat, consent }),
+  libStill: (code: string, report: Id): Promise<LibAct> => call('POST', '/library/still', { code, report }),
+  libHere: (): Promise<LibState> => call('POST', '/library/here'),
+  libLeave: (): Promise<LibState> => call('POST', '/library/leave'),
+  libWithdraw: (): Promise<void> => call('DELETE', '/library/consent'),
+  libRooms: (): Promise<LibRoom[]> => call('GET', '/admin/library'),
+  libAddRoom: (name: string): Promise<LibRoom[]> => call('POST', '/admin/library/rooms', { name }),
+  libEditRoom: (id: Id, patch: { name?: string; gone?: boolean }): Promise<LibRoom[]> => call('PATCH', `/admin/library/rooms/${id}`, patch),
+  libAddTables: (room: Id, seats: number, n: number): Promise<LibRoom[]> => call('POST', `/admin/library/rooms/${room}/tables`, { seats, n }),
+  libEditTable: (id: Id, patch: { label?: string; seats?: number; gone?: boolean }): Promise<LibRoom[]> => call('PATCH', `/admin/library/tables/${id}`, patch),
+  libStickers: (room: Id, pages: string[]): Promise<void> => call('POST', `/admin/library/rooms/${room}/stickers`, { pages }), // the PDF comes in the bot's chat
+  libWall: async (key: string): Promise<LibWall | null> => { // the big screen: no sign-in, the room's key is all it needs
+    const r = await fetch(`/api/library/screen/${encodeURIComponent(key)}`).catch(() => null);
+    return r?.ok ? r.json() : null;
+  },
   mapFlawsMine: (): Promise<{ id: Id; ver: string; floor: number; u: number; v: number; px: number | null; py: number | null; body: string }[]> => call('GET', '/map/flaws/mine'), // my own open ones, pins on the map
   mapFlawDone: (id: Id, done: boolean): Promise<void> => call('POST', `/map/flaws/${id}/done`, { done }),
   research: (): Promise<ResearchSurvey[]> => call('GET', '/research'),

@@ -271,6 +271,10 @@ export const openers = {
   createClub: () => lazy(() => import('../../screens/sheets/CreateClubSheet.svelte'), {}),
   /** KBTU's academic calendar: the year's dates */
   academic: () => lazy(() => import('../../screens/sheets/AcademicSheet.svelte'), {}),
+  /** library seats (LIBRARY): my seat, scan a table, "nobody here"; Profile's row, startapp=lib */
+  library: () => lazy(() => import('../../screens/library/Library.svelte'), {}),
+  /** Admin → Library: rooms, tables, the sticker PDF, the live view and the big screen's link */
+  libraryAdmin: () => lazy(() => import('../../screens/library/LibraryAdmin.svelte'), {}),
   /** KBTU's anthem to listen to and learn: Profile's row, startapp=anthem */
   anthem: () => lazy(() => import('../../screens/sheets/AnthemSheet.svelte'), {}),
   /** my whole award collection and the showcase picker (Profile: the badge's numbers) */
