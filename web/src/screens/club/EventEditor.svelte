@@ -168,9 +168,6 @@
   let touched = $state(false);
   const touch = () => { if (!touched) { base = JSON.stringify(f); touched = true; } };
   let said = $state(''); // what is being written to KRI: kept with the text draft, so a failed try or a closed app loses nothing
-  // an upload still running is something to lose too: Back asks instead of dropping it unseen
-  const uploads = $derived(vUp.tall >= 0 || vUp.wide >= 0 || slidesUp > 0 || !!uploading);
-  const dirty = $derived(uploads || !!said.trim() || touched && JSON.stringify(f) !== base);
   let loading = $state(!!untrack(() => id)); // an edit until the server's copy is in: the blank form is inert (Publish made a second event)
   const live = $derived(!!saved && saved.status !== 'draft');
   const tint = $derived(shade(f.color));
@@ -379,6 +376,9 @@
   // more photos after the cover, swiped sideways in the Feed and the sheet: nine at most, in the order picked
   const SLIDES = 9;
   let slidesUp = $state(0); // how many are being sent
+  // an upload still running is something to lose too: Back asks instead of dropping it unseen
+  const uploads = $derived(vUp.tall >= 0 || vUp.wide >= 0 || slidesUp > 0 || !!uploading);
+  const dirty = $derived(uploads || !!said.trim() || touched && JSON.stringify(f) !== base);
   async function pickSlides(ev: Event) {
     const el = ev.currentTarget as HTMLInputElement, files = [...(el.files ?? [])].slice(0, SLIDES - f.slides.length);
     el.value = '';
