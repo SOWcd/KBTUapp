@@ -67,7 +67,7 @@ test('admissions: the managers\' desk in Studio', async ({ open }) => {
   const hi = p.page.getByRole('button', { name: main['say.hi.teamGo'] as string });
   if (await hi.waitFor({ timeout: 6000 }).then(() => true, () => false)) await hi.click();
   await p.page.getByRole('navigation', { name: main['nav.label'] as string }).getByRole('button', { name: main['page.clubs'] as string }).click();
-  await p.page.getByRole('button', { name: /\u0410\u043a\u0430\u0434\u0435\u043c\u0438\u044f \u043a\u043e\u0440\u043f\u043e\u0440\u0430\u0442\u0438\u0432\u043d\u043e\u0433\u043e/ }).first().click();
+  await p.page.getByRole('button', { name: /^(\u0410\u041a\u041e|\u0410\u043a\u0430\u0434\u0435\u043c\u0438\u044f)/ }).first().click();
   await p.page.getByRole('button', { name: tr('studio.ako') }).click();
   const desk = p.page.getByRole('region', { name: tr('akd.title') });
   await expect(desk.getByText('\u0415\u0440\u043b\u0430\u043d \u0421\u0430\u043f\u0430\u0440\u043e\u0432')).toBeVisible();
