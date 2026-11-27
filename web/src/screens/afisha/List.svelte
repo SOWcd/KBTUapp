@@ -429,8 +429,8 @@
     <div class="rate-prompt">
       <Card>
         <div class="rate-head">
-          <div><h2 class="t-body">{t('rate.ask')}</h2><p class="t-foot clamp-2">{e.title}</p></div>
-          <IconButton icon={X} label={t('rate.dismiss')} kind="plain" onclick={() => void dismissEventRating(e.id)} />
+          <div><h2 class="t-body">{t('rate.ask')}</h2><p class="t-foot ellipsis">{e.title}</p></div>
+          <IconButton icon={X} size="s" label={t('rate.dismiss')} kind="plain" onclick={() => void dismissEventRating(e.id)} />
         </div>
         <div class="rate-stars" role="group" aria-label={t('rate.ask')}>
           {#each [1, 2, 3, 4, 5] as score (score)}
@@ -588,13 +588,15 @@
   .kick { margin: 0 0 var(--s-5); font: 450 var(--fs-sub)/1.3 var(--font-text); color: var(--text-3); }
   .offline { margin-bottom: var(--s-6); }
   .tools { flex: none; display: flex; gap: var(--s-3); margin-left: auto; }
-  .rate-prompt { margin-bottom: var(--s-3); }
-  .rate-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); }
-  .rate-head > div { min-width: 0; }
-  .rate-head h2 { font-weight: 600; }
-  .rate-head p { margin-top: 2px; color: var(--text-2); overflow-wrap: anywhere; }
+  /* the ask is one quiet line (the question, then which event) over the stars: it is a passing prompt, and the hero
+     under it is the screen's picture, so it takes as little of the first screen as its taps allow */
+  .rate-prompt { --card-pad: var(--s-3) var(--s-4); margin-bottom: var(--s-3); }
+  .rate-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); margin: -2px -6px -2px 0; }
+  .rate-head > div { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: var(--s-2); }
+  .rate-head h2 { flex: none; font-weight: 600; }
+  .rate-head p { min-width: 0; color: var(--text-2); }
   .rate-stars { display: grid; grid-template-columns: repeat(5, 1fr); gap: var(--s-1); margin-top: var(--s-2); }
-  .rate-stars button { display: grid; place-items: center; min-height: var(--tap); border-radius: var(--r-m); background: var(--fill); color: var(--warning-text); }
+  .rate-stars button { display: grid; place-items: center; min-height: var(--tap); border-radius: var(--r-s); background: var(--fill); color: var(--warning-text); }
   .rate-stars button:active { transform: scale(0.94); }
   .off { margin: var(--s-3) var(--s-1) 0; color: var(--text-2); }
   .pastrow { margin-top: var(--s-4); }

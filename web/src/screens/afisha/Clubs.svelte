@@ -185,7 +185,7 @@
     {/if}
 
     <section class="dir" bind:this={dir}>
-      <div class="hd"><h2>{t('clubs.allClubs')}<i>{clubs.length}</i></h2></div>
+      <div class="hd"><h2>{t('clubs.allClubs')}{#if clubs.length}<i>{clubs.length}</i>{/if}</h2></div>
       <div class="chips hscroll">
         {#each chips as c (c.key)}
           <button class={['chip', { on: filter === c.key }]} aria-pressed={filter === c.key} onclick={() => pick(c.key)}>
@@ -195,6 +195,7 @@
         {/each}
       </div>
       {#each rows as o (o.id)}{@render row(o)}{/each}
+      {#if !rows.length && !quiet.length}<p class="none">{t('clubs.nothing')}</p>{/if}
       {#if quiet.length}
         <p class="cap">{t('clubs.quiet')}</p>
         <div class="still">{#each quiet as o (o.id)}{@render row(o)}{/each}</div>

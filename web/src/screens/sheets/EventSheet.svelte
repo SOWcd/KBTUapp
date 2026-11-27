@@ -393,7 +393,7 @@
       {#if !cancelled && !over && (cost || e.seats)}
         <p class="meta">{#if cost}<b>{cost}</b>{/if}{#if e.seats}{#if cost}<i>·</i>{/if}<span class:red={full}>{e.taken >= e.seats ? t('event.full') : tn('event.seatsLeft', e.seats - e.taken)}</span>{/if}</p>
         {#if e.price && e.freeFirst && !started}<p class="meta">{e.freeLeft ? t('event.freeFirst', { n: e.freeLeft, of: e.freeFirst }) : t('event.freeFirstGone')}</p>{/if}
-        {#if e.seats}<div class="bar"><span style="transform:scaleX({pct / 100})" class:full={pct >= 100}></span></div>{/if}
+        {#if e.seats && pct}<div class="bar"><span style="transform:scaleX({pct / 100})" class:full={pct >= 100}></span></div>{/if}
       {/if}
     </div>
 
