@@ -1,5 +1,5 @@
 // Who is looking: the account from /api/me. Guests browse; any action goes through asStudent(),
-// which opens the KBTU sign-in sheet and runs the action by itself after sign-in (SPEC §2).
+// which opens the KBTU sign-in sheet and runs the action by itself after sign-in.
 import { api, ApiErr, type Me, type ReportLogEntry, type Settings } from '../api';
 import { CONSENT_VERSION } from '../legal';
 import { inTelegram, tg } from '../tg';

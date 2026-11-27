@@ -1,7 +1,7 @@
 <script lang="ts">
-  // Who registered for an event (Head+; §3: organizers see full names). Going first, then holds and the
+  // Who registered for an event (Head+; organizers see full names). Going first, then holds and the
   // waitlist; a check-in shows its time. A tap opens the person's card. "Export" has the bot send the list as a CSV
-  // to the organizer's chat (opens on any phone, can be forwarded to DMP). A paid event (§4.3): how much should have
+  // to the organizer's chat (opens on any phone, can be forwarded to DMP). A paid event: how much should have
   // come to the club's Kaspi, and each receipt a tap away; flagged ones (⚠) on top.
   // Cancelled paid seats wait folded at the end, their receipts there for refunds even after signing up again.
   // ⋯ "Write in Telegram": one person's @username, asked for on the tap (never in the list; server attendee_contact).
@@ -57,7 +57,7 @@
   const going = $derived((list ?? []).filter((a) => a.status === 'going').length);
   const came = $derived((list ?? []).filter((a) => a.checkedInAt).length);
   const title = $derived(eventById(id)?.title ?? '');
-  // check in by name (no QR, §4.4) while the door is open: 3 h before the start until the end (or 6 h after the start)
+  // check in by name (no QR) while the door is open: 3 h before the start until the end (or 6 h after the start)
   const ev = $derived(eventById(id));
   const price = $derived(ev?.price ?? 0);
   // a co-host's event team reads short names only: no receipts, no file, no profiles (server cohosts.py)

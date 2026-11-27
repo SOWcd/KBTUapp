@@ -13,7 +13,7 @@ from .core import (STAFF_KINDS, ApiError, PERSON, PERSON_COLS, RANK, Viewer, _by
     rows, short_name, shown_name)
 
 
-# ---------------------------------------------------------------- the clubs registry for DMP (§4.13)
+# ---------------------------------------------------------------- the clubs registry for DMP
 
 QUIET_FOR = 60 * 86400  # "hasn't come in a while": no check-in at the club's events for this long
 DMP_COLS = PERSON_COLS + ", u.tg_username, s.student_id, s.course, s.school, s.email, s.phone, s.middle_name, s.middle_lat"
@@ -33,7 +33,7 @@ def _month(back: int = 0) -> tuple[int, int]:
 
 
 def _dmp_person(p: sqlite3.Row, role: str | None = None) -> dict:
-    """What DMP sees of a club member (§3): full name, student ID, course, school; contacts only of Presidents and Vices."""
+    """What DMP sees of a club member: full name, student ID, course, school; contacts only of Presidents and Vices."""
     lead = role in ("president", "vice")
     return {"person": person_ref(p), "fullName": f"{p['last_name']} {p['first_name']}".strip(), "studentId": p["student_id"],
             "course": p["course"], "school": p["school"], "username": p["tg_username"] if lead else None,
@@ -91,8 +91,8 @@ def registry(con, v: Viewer, back: int = 0) -> list[dict]:
 
 
 def registry_roster(con, v: Viewer, oid: int) -> list[dict]:
-    """A club's roster for DMP, leaders first; who hasn't come to the club's events in 60 days is marked (§4.13). A look at
-    personal data: audit-logged (§9)."""
+    """A club's roster for DMP, leaders first; who hasn't come to the club's events in 60 days is marked. A look at
+    personal data: audit-logged."""
     _overseer_only(con, v)
     if not _org(con, oid):
         raise ApiError("not_found")
@@ -116,7 +116,7 @@ def registry_search(con, v: Viewer, q: str) -> list[dict]:
     matcher = search._Search(q)
     found = [p for p in rows(con, f"""SELECT DISTINCT {DMP_COLS} FROM org_members m JOIN users u ON u.id = m.user_id JOIN students s ON s.user_id = u.id""")
              if search.fold(p["student_id"]).startswith(k) or matcher.person_score(p)][:30]
-    log_action(con, v.id, "registry_search", "registry", json.dumps({"found": len(found)}))  # a look at personal data (§9)
+    log_action(con, v.id, "registry_search", "registry", json.dumps({"found": len(found)}))  # a look at personal data
     ids = [p["id"] for p in found]
     of: dict[int, list] = {}
     for c in rows(con, f"""SELECT o.*, m.role, m.user_id AS member FROM org_members m JOIN orgs o ON o.id = m.org_id
@@ -132,7 +132,7 @@ def registry_search(con, v: Viewer, q: str) -> list[dict]:
 
 
 def set_official(con, v: Viewer, oid: int, on: object) -> dict:
-    """DMP marks a club official ✓ or takes it back (DMP Head+ and the admin, §2) — the growth path's last step (§4.6):
+    """DMP marks a club official ✓ or takes it back (DMP Head+ and the admin) — the growth path's last step:
     a student initiative becomes an official club. Its President hears it from the bot (once); the audit log keeps who."""
     _overseer_only(con, v)
     o = one(con, "SELECT * FROM orgs WHERE id = ? AND kind = 'club' AND status != 'archived'", oid)
@@ -151,7 +151,7 @@ def set_official(con, v: Viewer, oid: int, on: object) -> dict:
 
 def registry_export(con, v: Viewer) -> list[sqlite3.Row]:
     """Every roster at once for the CSV the bot sends (contacts of Presidents and Vices only, as on screen). Personal
-    data leaving the app: every export goes to the audit log (§2)."""
+    data leaving the app: every export goes to the audit log."""
     _overseer_only(con, v)
     out = rows(con, f"""SELECT o.name AS club, m.role, m.joined_at, {DMP_COLS} FROM org_members m JOIN orgs o ON o.id = m.org_id
         JOIN users u ON u.id = m.user_id JOIN students s ON s.user_id = u.id
@@ -338,7 +338,7 @@ def audit(con, v: Viewer) -> list[dict]:
 
 def set_role(con, actor: int | None, uid: int, oid: int, role: str, by: str) -> None:
     """One person's role in a club, by the admin (the app or the CLI). One president per club: the old one steps down
-    to vice. A role counts once the person has signed in with KBTU (only students act, SPEC §2)."""
+    to vice. A role counts once the person has signed in with KBTU (only students act)."""
     if role not in (*RANK, "none"):
         raise ApiError("bad_input")
     with tx(con):

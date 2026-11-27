@@ -2443,7 +2443,7 @@ const en: Dict = {
   'don.thanks': "Thank you for your support",
   'psy.kbtu': "A psychologist",
   'me.psychBook': "Book",
-  // the academic calendar (SPEC §4.11)
+  // the academic calendar
   'acad.title': "Academic calendar",
   'acad.sub': "2026–2027 academic year · bachelor's",
   'acad.subM': "2026–2027 academic year · master's",
@@ -3010,7 +3010,7 @@ const en: Dict = {
   'dur.min': "{n} min",
   'dur.h': "{h} h",
   'dur.hm': "{h} h {m} min",
-  // friends (§4.7)
+  // friends
   'fr.count': { one: "{n} friend", other: "{n} friends" },
   'fr.add': "Add",
   'fr.requests': "Friend requests",
@@ -3055,7 +3055,7 @@ const en: Dict = {
   'pymk.on': "Turn on",
   'pymk.later': "Not now",
   'pymk.turnedOn': "Done. New faces will show up here",
-  // the Awards page (§4.11)
+  // the Awards page
   'awp.showcase': "Showcase",
   'awp.next': "Almost there",
   'awp.left': "{n} more to level {tier}",
@@ -3071,7 +3071,7 @@ const en: Dict = {
   'awp.guestTitle': "Sign in to earn awards",
   'awp.guestText': "Come to events, bring friends, keep a streak — and collect medals almost nobody has.",
   'awp.empty': "empty",
-  // News and the post composer (§4.10)
+  // News and the post composer
   'news.sub': "Everything happening on campus",
   'news.broadcasts': "From {dmp} and KBTU App",
   'news.clubs': "Clubs",
@@ -3154,7 +3154,7 @@ const en: Dict = {
   'time.min': "{n} min ago",
   'time.h': "{n} h ago",
   'time.yesterday': "yesterday",
-  // check in by name at the door (§4.4)
+  // check in by name at the door
   'door.byName': "No QR? Find by name",
   'door.search': "First or last name",
   'door.mark': "Check in",

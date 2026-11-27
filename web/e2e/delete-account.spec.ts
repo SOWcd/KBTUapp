@@ -1,4 +1,4 @@
-// Deleting an account (SPEC §4.8, server/kbtu/logic/account.py): Ali asks in the settings, the app says when and
+// Deleting an account (server/kbtu/logic/account.py): Ali asks in the settings, the app says when and
 // offers the way back; a week later the bot's round (delete_due) deletes it, and then his friend and his club no
 // longer see him, and his own app is a guest's.
 import { test, expect, type Phone, type Qa, reload } from './fixtures';

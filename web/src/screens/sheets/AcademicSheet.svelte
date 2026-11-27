@@ -1,5 +1,5 @@
 <script lang="ts">
-  // KBTU's academic calendar (SPEC §4.11): the year's dates by semester, each in order; what is on says so. What is over
+  // KBTU's academic calendar: the year's dates by semester, each in order; what is on says so. What is over
   // stays out of the way: one quiet line on top brings it back, faded,
   // in its place. The PDF's footnote (classes held online) and its source at the end.
   import { fold } from '../../ui/fold';

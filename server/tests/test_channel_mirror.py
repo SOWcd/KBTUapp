@@ -115,7 +115,7 @@ def test_channel_refused_post_skipped(env):
 
 
 def test_channel_mirror(env, tmp_path):
-    """PLAN 86 part 2: an org's main public channel in its news (mirror.py, fed by userbot.py with fake messages here):
+    """An org's main public channel in its news (mirror.py, fed by userbot.py with fake messages here):
     a post's first line is its title, its photo copied; an album is one post; an edit follows and reads "edited"; a
     video is a link; Telegram's views and reactions show and ours are refused, and so are edits in the app; a deletion
     takes the post down once all its messages went; nobody is notified. Off in Studio, or another main channel: the

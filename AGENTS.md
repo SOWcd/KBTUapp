@@ -31,7 +31,7 @@ screen per PR, never slower than before, checked on a phone in both themes.
 
 | What | Where |
 | --- | --- |
-| API routes | `server/kbtu/app.py` |
+| API routes | `server/kbtu/app.py`; find one without reading it: `python3 server/tools/routes.py <text>` prints `METHOD path  app.py:line  handler → the rule calls` (no venv needed) |
 | Rules by area | `server/kbtu/logic/*.py` (`core` shared helpers; `seats` sign-up and tickets; `organizing` Studio, the door; `fchannel` the forum channel's posts; `tgcomments` its comments; `forum` find-people; `account` me, settings, deleting an account; `moderation` reports; `daily` the weekly DMP memo and `stats_day` (the nightly retention sweep: a new cleanup goes there; the scheduler is `chores.py::_chores`); `clubs` clubs and join requests (`join_requests`; not `club_applications` = a new club, nor `casting` = recruitment rounds); `stats` anonymous usage counters; `credits` the people of the app, its own consent; `helpus` to the creator from the app: an anonymous line (no author kept, by design) and a signed offer to help) |
 | Schema | read `server/kbtu/schema.current.sql` (generated: today's tables); change it only by appending to `MIGRATIONS` in `server/kbtu/migrations.py` (read that file with `tail`), then run `server/tools/schema_dump.py` |
 | Telegram bot | `server/kbtu/bot.py` (polling, the ears, the Telegram call `_tg`), `outbox.py` (the postman: `bot_outbox` rows into messages), `bot_dm.py` (private chats), `bot_groups.py` (group chats, `/all`, video links), `chores.py` (the postman's chores: backup, retention sweep, chat cards, userpics) |
@@ -147,7 +147,8 @@ tab freezes animations and `requestAnimationFrame`: look with it visible.
 - **Svelte**: runes only. `@keyframes` are scoped per component: define the ones you use. The official Svelte MCP (`.mcp.json`) has the docs and
   `svelte-autofixer`: run a new or changed component through it until it reports nothing.
 - **Style**: match the code around you; short comments that say why. Deliberate shortcuts are marked
-  `# ponytail:` / `// ponytail:` with their ceiling and the upgrade path.
+  `# ponytail:` / `// ponytail:` with their ceiling and the upgrade path. A comment states its rule itself: never
+  cite a document that isn't in this repo (no `SPEC §n`, `PLAN n`; the privacy policy's `policy §n` is fine).
 - **Security reviews**: features that touch money, check-in, anonymity or personal data get an adversarial review
   (a second agent trying to break them) before they ship.
 

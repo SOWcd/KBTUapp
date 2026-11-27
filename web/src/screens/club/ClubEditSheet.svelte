@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The club's profile (Vice+, SPEC §2), Settings' way (a long form of text is unclear):
+  // The club's profile (Vice+), Settings' way (a long form of text is unclear):
   // the logo, rows that say what is set, each long thing a tap deeper. A text's page writes straight into this form, so
   // Back there keeps it; Save sends only what changed, and leaving with changes asks first. Chats and short links save
   // on their own pages, at once.
@@ -35,7 +35,7 @@
   // the logo: one of my uploads, or null — then the emoji on its cover shows again
   let logo = $state<{ id?: Id; url: string } | null>(null);
   let f = $state({ name: '', abbr: '', emoji: '', cover: 0, description: '', links: [] as LinkDraft[], hidden: false, category: null as OrgCategory | null });
-  // as typed, never a translation (PLAN 9)
+  // as typed, never a translation
   function fill(x: Org) {
     o = x;
     f = { name: x.name, abbr: x.abbr ?? '', emoji: x.emoji, cover: x.cover, description: x.description ?? '', links: x.links.map(linkDraft), hidden: x.membersHidden, category: x.category };

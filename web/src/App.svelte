@@ -210,7 +210,7 @@
   // the app's open time ends at the first frame drawn with the first tab built and something to show (the copy or the server)
   let measured = false;
   $effect(() => { if (measured || !built[ui.tab] || !pageReady(ui.tab) || !session.ready || !data.eventsReady) return; measured = true; requestAnimationFrame(() => setTimeout(painted)); });
-  // the capsule says what the top overlay is (SPEC §8.2); a closing one lets go at once, so it morphs back with the exit.
+  // the capsule says what the top overlay is; a closing one lets go at once, so it morphs back with the exit.
   // It takes that overlay's own theme too (the map's switch), so it never sits light on a dark map.
   // The top overlay that speaks decides (a Pane at rest is quiet but still the top: the capsule never names the page
   // under it); a menu or an Ask says nothing and lets the one below speak.
@@ -299,7 +299,7 @@
     });
   });
 
-  // ---- the clubs' rosters (PLAN 95): joined from DMP's list (a toast each, once), the welcome before the KBTU sign-in,
+  // ---- the clubs' rosters: joined from DMP's list (a toast each, once), the welcome before the KBTU sign-in,
   // a row under another name; each sheet once per launch, after the start's own moments ----
   const rosterShown = new Set<string>();
   $effect(() => {
@@ -359,7 +359,7 @@
     if (p === 'map') { sheets.map(); return; }
     if (p === 'awards') { ui.tab = 'profile'; asStudent(() => sheets.awards()); return; }
     if (p === 'feed') { ui.tab = 'afisha'; sheets.feed(); return; }
-    if (p === 'exit') { sheets.map(undefined, true); return; } // the owner's "help me get out" link (PLAN item 21)
+    if (p === 'exit') { sheets.map(undefined, true); return; } // the owner's "help me get out" link
     if (p === 'friends') { ui.tab = 'profile'; sheets.friends(); return; }
     if (p === 'me') { ui.tab = 'profile'; return; }
     if (p === 'apl') { ui.tab = session.channel ? 'forum' : 'profile'; if (session.me?.appeals) sheets.appeals(); return; } // the bot: SG answered my appeal   // the bot: "keep my account"
@@ -531,7 +531,7 @@
     untrack(() => { localize(data); localize(session.me); });
   });
 
-  // ---- a new achievement level the app hasn't celebrated yet (§4.11): one moment at a time, once the app has settled ----
+  // ---- a new achievement level the app hasn't celebrated yet: one moment at a time, once the app has settled ----
   // (and after signing in later: a returning student may bring one)
   let booted = $state(false), wasStudent = false;
   $effect(() => {

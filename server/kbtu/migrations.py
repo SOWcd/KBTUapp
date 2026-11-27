@@ -2,7 +2,7 @@
 user_version is behind, and the helpers only they use. Moved out of db.py as is (issue #21): the SQL is unchanged."""
 from __future__ import annotations
 
-# Changes after the base schema: (user_version they bring the file to, SQL). Append only; mirror in SPEC §5.
+# Changes after the base schema: (user_version they bring the file to, SQL). Append only.
 def held_by(x: str) -> str:
     """SQL: the club that holds Telegram chat `x` (its chat sync link, else its chats card, else its newest event's
     chat), as logic.chatlist._holder reads it."""
@@ -38,7 +38,7 @@ MIGRATIONS: list[tuple[int, str]] = [
     # Keep recruitment open or closed at the club's discretion in Studio.
     (4, "ALTER TABLE orgs ADD COLUMN recruiting INTEGER NOT NULL DEFAULT 1; UPDATE orgs SET recruiting = 0 WHERE kind IN ('school','office','app');"
         " ALTER TABLE orgs DROP COLUMN recruiting_until;"),
-    # the badge QR (§4.4): a random code per student, so nobody can make a QR from a user id;
+    # the badge QR: a random code per student, so nobody can make a QR from a user id;
     # walk_in marks a registration made at the door with that QR
     (5, "ALTER TABLE users ADD COLUMN qr_code TEXT; CREATE UNIQUE INDEX users_qr ON users(qr_code);"
         " ALTER TABLE registrations ADD COLUMN walk_in INTEGER NOT NULL DEFAULT 0;"),
@@ -147,7 +147,7 @@ MIGRATIONS: list[tuple[int, str]] = [
         last_id INTEGER NOT NULL,
         PRIMARY KEY (event_id, user_id)
     ) STRICT;"""),
-    # a nickname and my own photo (SPEC §3): everyone sees the nick, organizers the real name beside it;
+    # a nickname and my own photo: everyone sees the nick, organizers the real name beside it;
     # avatar_tg is the "Photo from Telegram" switch, off once I upload my own (it goes in users.avatar_file_id)
     (16, """ALTER TABLE users ADD COLUMN nick TEXT CHECK (nick IS NULL OR length(nick) BETWEEN 2 AND 24);
     ALTER TABLE users ADD COLUMN avatar_tg INTEGER NOT NULL DEFAULT 1;"""),
@@ -171,11 +171,11 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE UNIQUE INDEX one_strike_per_meeting ON strikes(event_id, user_id) WHERE event_id IS NOT NULL;"""),
     # the server's own notes between starts: the achievements list the levels were last recorded for
     (20, "CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);"),
-    (21, "ALTER TABLE users ADD COLUMN mark TEXT;"),  # a person's mark by the name besides the Creator's: 'idea' (SPEC §1)
-    (22, "ALTER TABLE org_roles ADD COLUMN rights TEXT;"),  # a club role's toggles, comma-separated; NULL: its level's (SPEC §2)
+    (21, "ALTER TABLE users ADD COLUMN mark TEXT;"),  # a person's mark by the name besides the Creator's: 'idea'
+    (22, "ALTER TABLE org_roles ADD COLUMN rights TEXT;"),  # a club role's toggles, comma-separated; NULL: its level's
     # what the club asks DMP for in its weekly memo: JSON, the editor's "For the memo" block
     (23, "ALTER TABLE events ADD COLUMN memo TEXT;"),
-    # DMP books rooms by memo (SPEC §4.12c).
+    # DMP books rooms by memo.
     (24, "DROP TABLE IF EXISTS room_requests;"),
     # casting: a club's recruitment round, its departments (the club's tags) and own questions, the
     # applications (what the student picked and answered; the rest is their KBTU profile) and the team's votes

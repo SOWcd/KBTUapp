@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Opening a recruitment round, or changing the live one (PLAN "Casting"; the "casting" right). About three minutes:
+  // Opening a recruitment round, or changing the live one (the "casting" right). About three minutes:
   // departments (optional: none is a round for the whole club) are the club's tags (a new one right here), each with a line about it and maybe places; how many a
   // student may pick; up to six questions of the club's own, from templates or written (in any one language: the screen
   // around them is in the student's language already); the deadline and "results by"; "what's next" (in-person

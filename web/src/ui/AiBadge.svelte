@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The mark on everything an AI made: a translation now, more later (PLAN AI1-AI7).
+  // The mark on everything an AI made: a translation now, more later.
   import Sparkles from '@lucide/svelte/icons/sparkles';
 </script>
 

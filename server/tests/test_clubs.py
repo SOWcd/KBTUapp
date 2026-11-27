@@ -67,7 +67,7 @@ def test_join_requests(env):
 
 
 def test_admin_clubs(env):
-    """The pilot's admin panel (SPEC §2): the admin creates a club and gives it a president by @username or Telegram ID;
+    """The pilot's admin panel: the admin creates a club and gives it a president by @username or Telegram ID;
     a new president moves the old one to vice; nobody else can do any of it."""
     import dataclasses
     _, cfg = env
@@ -223,7 +223,7 @@ def test_guard_join(env):
 
 
 def test_team_rank_rule(env):
-    """The club's own team (SPEC §2): everyone in it sees the roster; Vice+ manage only people below them and give only
+    """The club's own team: everyone in it sees the roster; Vice+ manage only people below them and give only
     roles below their own; the President hands the club over and becomes Vice; anyone but the President can leave."""
     c, cfg = env
     ids = {n: login(c, i, n)["id"] for i, n in ((20, "pres"), (21, "vice"), (22, "head"), (23, "memb"), (24, "out"))}
@@ -251,7 +251,7 @@ def test_team_rank_rule(env):
 
 
 def test_invite_link(env):
-    """A club's invite link (SPEC §4.5): Vice+ get a fresh one each time; a student who opens it is a Member at once (a
+    """A club's invite link: Vice+ get a fresh one each time; a student who opens it is a Member at once (a
     pending application is settled); one person, once, within 48 hours; a member opening it doesn't use it up."""
     c, cfg = env
     pres, ali, zhan = login(c, 20, "pres"), login(c, 21, "ali"), login(c, 22, "zhan")
@@ -275,7 +275,7 @@ def test_invite_link(env):
 
 
 def test_showcase(env):
-    """The showcase (SPEC §4.11): up to 6 keys — achievement codes and badges as b<event id> — kept in the order picked;
+    """The showcase: up to 6 keys — achievement codes and badges as b<event id> — kept in the order picked;
     junk is dropped; the card's shelf shows only what the person actually has."""
     c, cfg = env
     ali = login(c, 41, "ali")
@@ -294,7 +294,7 @@ def test_showcase(env):
 
 
 def test_posts(env):
-    """News (SPEC §4.10): Head+ write their club's posts; only a broadcast org writes to every club member, and the bot
+    """News: Head+ write their club's posts; only a broadcast org writes to every club member, and the bot
     tells them; the unread dot counts broadcasts until they're read; a club takes its post down; a photo must be one's own."""
     c, cfg = env
     head, mem, dmp = login(c, 51, "head"), login(c, 52, "mem"), login(c, 53, "dmp")
@@ -422,7 +422,7 @@ def test_member_link(env):
 
 
 def test_registry(env, monkeypatch):
-    """DMP's registry (§4.13): DMP Head+ only; every club with its numbers and President; rosters with full names and
+    """DMP's registry: DMP Head+ only; every club with its numbers and President; rosters with full names and
     IDs, contacts only of Presidents and Vices; search finds club members only; the CSV goes to their chat."""
     import httpx
     c, cfg = env
@@ -446,7 +446,7 @@ def test_registry(env, monkeypatch):
     assert [x["person"]["id"] for x in c.get("/api/registry/search", headers=D, params={"q": "24Bal"}).json()] == [ali["id"]]
     assert c.get("/api/registry/search", headers=D, params={"q": "Zhan"}).json() == []                 # in no club
     looks = [(r[0], r[1]) for r in con.execute("SELECT actor_id, action FROM audit_log WHERE action LIKE 'registry_%' ORDER BY id")]
-    assert looks == [(dmp["id"], "registry_roster"), (dmp["id"], "registry_search"), (dmp["id"], "registry_search")]  # §9
+    assert looks == [(dmp["id"], "registry_roster"), (dmp["id"], "registry_search"), (dmp["id"], "registry_search")]  # every look at personal data
     assert [json.loads(r[0]) for r in con.execute("SELECT data FROM audit_log WHERE action = 'registry_search' ORDER BY id")] == [{"found": 1}, {"found": 0}]
     log_id = con.execute("""INSERT INTO audit_log (actor_id, action, target, data, at)
         VALUES (?, 'registry_search', 'registry', '{"q":"24Bali","found":1}', 0)""", (dmp["id"],)).lastrowid
@@ -458,7 +458,7 @@ def test_registry(env, monkeypatch):
         lambda r: (sent.append(r.content), httpx.Response(200, json={"ok": True}))[1])))
     assert c.post("/api/registry/export", headers=D).status_code == 204
     assert b"Testov" in sent[0] and b"pres_tg" in sent[0] and b"ali_tg" not in sent[0]
-    assert [r[0] for r in con.execute("SELECT actor_id FROM audit_log WHERE action = 'registry_export'")] == [dmp["id"]]  # §2
+    assert [r[0] for r in con.execute("SELECT actor_id FROM audit_log WHERE action = 'registry_export'")] == [dmp["id"]]  # every export
     # DMP gives the ✓ (and can take it back): the President hears it once; not for offices; never for a plain member
     assert c.post("/api/registry/orgs/1/official", headers=A, json={"on": True}).status_code == 403
     assert c.post("/api/registry/orgs/9/official", headers=D, json={"on": True}).status_code == 404
@@ -474,7 +474,7 @@ def test_registry(env, monkeypatch):
 
 
 def test_feature_post(env):
-    """A post for everyone on top of List (§2): moderators and the admin, public posts only, one at a time, 0 days ends it."""
+    """A post for everyone on top of List: moderators and the admin, public posts only, one at a time, 0 days ends it."""
     import dataclasses
     c, cfg = env
     c = TestClient(server.create(dataclasses.replace(cfg, admins=frozenset({60}))))
@@ -501,7 +501,7 @@ def test_feature_post(env):
 
 
 def test_club_applications(env, monkeypatch):
-    """Starting a club (§4.6): one pending application per person, the admins hear about it; yes = the club exists with
+    """Starting a club: one pending application per person, the admins hear about it; yes = the club exists with
     the applicant as President; no = a reason, and a new application only in 30 days."""
     import dataclasses
     c, cfg = env
@@ -548,7 +548,7 @@ def test_club_applications(env, monkeypatch):
 
 
 def test_president_link(env, monkeypatch):
-    """A new club's President by link (§2): only the admin makes one, as our bot's card; the first student to open it
+    """A new club's President by link: only the admin makes one, as our bot's card; the first student to open it
     leads the club (the old President steps down to Vice); once, within 7 days; a new link ends the unused old one."""
     import dataclasses
     import json
@@ -582,7 +582,7 @@ def test_president_link(env, monkeypatch):
 
 
 def test_club_profile(env):
-    """The club's own profile (Vice+, §2): name, two letters, emoji, cover, about, links, logo — only what is sent changes;
+    """The club's own profile (Vice+): name, two letters, emoji, cover, about, links, logo — only what is sent changes;
     a member can't; a taken name, a bad link or a stray value are refused and nothing changes."""
     c, cfg = env
     vice, mem = login(c, 20, "vice"), login(c, 21, "mem")
@@ -621,7 +621,7 @@ def test_club_profile(env):
 
 
 def test_meetings(env):
-    """Studio part 2 (§2b): a meeting the whole club (or a tag) is expected at. Everyone expected hears; "can't" needs a
+    """Studio part 2: a meeting the whole club (or a tag) is expected at. Everyone expected hears; "can't" needs a
     reason; Head+ see the answers and who came; the door lists everyone expected and
     lets in someone who came anyway; others don't see it."""
     c, cfg = env
@@ -672,7 +672,7 @@ def test_meetings(env):
 
 
 def test_leaders_meeting(env):
-    """A leaders meeting (§4.10): only an oversight org makes one; it invites every club's leaders from the chosen role up
+    """A leaders meeting: only an oversight org makes one; it invites every club's leaders from the chosen role up
     (the bot at once); they answer yes or no; DMP sees the answers per club; nobody else sees the event."""
     c, cfg = env
     dmp, pres, vice, mem = login(c, 80, "dmp"), login(c, 81, "pres"), login(c, 82, "vice"), login(c, 83, "mem")
@@ -697,7 +697,7 @@ def test_leaders_meeting(env):
 
 
 def test_departments(env):
-    """Departments (PLAN item 47): tags marked department, a person in several or none, each given or taken alone. A
+    """Departments: tags marked department, a person in several or none, each given or taken alone. A
     Vice+ gives and takes any on anyone; a Head only their own (given by hand) on those below them, never themselves;
     plain tags leave the departments alone."""
     c, cfg = env
@@ -727,7 +727,7 @@ def test_departments(env):
     assert put(21, 10, {"tags": [star]}).status_code == 200 and depts(10) == sorted([smm, dev])  # tags leave departments alone
     assert put(23, 10, {"dropDept": dev}).status_code == 200 and depts(10) == [smm]  # the other one stays
     meet = {"title": "SMM sync", "place": "305", "startsAt": int(time.time()) + 86400, "emoji": "laptop_3d", "color": "#3B6BFF", "seats": None, "visibility": "members", "meeting": True}
-    assert c.post("/api/orgs/1/events", headers=tma(22), json={**meet, "meetingTag": dev}).json().get("message") == "dept"  # PLAN 35
+    assert c.post("/api/orgs/1/events", headers=tma(22), json={**meet, "meetingTag": dev}).json().get("message") == "dept"  # a Head calls only their department
     assert c.post("/api/orgs/1/events", headers=tma(22), json=meet).json().get("message") == "dept"                # not the whole club
     assert c.post("/api/orgs/1/events", headers=tma(22), json={**meet, "meetingTag": smm}).status_code == 200
     assert c.post("/api/orgs/1/events", headers=tma(21), json=meet).status_code == 200                              # a Vice calls anyone
@@ -761,7 +761,7 @@ def test_departments(env):
 
 
 def test_team_two(env):
-    """Team 2.0 (§2b): the club's own roles are a name on a level (Vice+, strictly below their own); tags are groups
+    """Team 2.0: the club's own roles are a name on a level (Vice+, strictly below their own); tags are groups
     (Head+); probation is a label (Head+ put it on, the person and Head+ see it, a Vice+ takes it off); a Head's removal is a request, a Vice+ removes at once; a ban keeps
     them out of applications and the link until lifted."""
     from kbtu import outbox as kbtu_outbox  # "outbox" below is this test's own query helper

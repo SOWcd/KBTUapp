@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Awards (SPEC §4.11), a sheet from the badge's numbers: the whole collection in two
+  // Awards, a sheet from the badge's numbers: the whole collection in two
   // tabs. Medals: on top, the one closest to its next level (the reason to go to one more event); then every medal as a
   // card — the medal in its level's rim, the level, the way to the next one, how rare it is — earned first. Pins: the
   // app's one-time ones, then the events'. "Showcase" turns the page into a picker: up to 6 medals or pins for the badge on Me, in the order tapped, with the shelf previewed on top. A tap otherwise opens the award card.

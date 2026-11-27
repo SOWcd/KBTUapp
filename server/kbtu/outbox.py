@@ -1,4 +1,4 @@
-"""The postman (SPEC §7): sends what logic.notify() queued in bot_outbox, as server templates (texts.py) in the user's
+"""The postman: sends what logic.notify() queued in bot_outbox, as server templates (texts.py) in the user's
 language with a button into the app; only to users who let the bot write (can_dm). A user who blocked the bot loses
 can_dm until Telegram says otherwise. bot.py's _postman runs send_due every POLL seconds, in the worker that leads."""
 from __future__ import annotations

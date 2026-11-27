@@ -1,5 +1,5 @@
 <script lang="ts">
-  // A new post (SPEC §4.10), Head+: the club (if I lead several), a photo (re-encoded by the server like a cover), the
+  // A new post, Head+: the club (if I lead several), a photo (re-encoded by the server like a cover), the
   // title, the text, a label, who sees it (broadcast orgs only: every club member, with a bot message, or every
   // student), and the pin. Publish shows it in News at once; leaving with something written asks first.
   // `post`: editing it (its club's Head+) — the same form, filled; who sees it stays; Save sends only what changed.

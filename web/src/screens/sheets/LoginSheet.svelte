@@ -1,5 +1,5 @@
 <script lang="ts">
-  // KBTU sign-in (SPEC §4.1): Microsoft only. One big button; pressing it accepts the terms, said under
+  // KBTU sign-in: Microsoft only. One big button; pressing it accepts the terms, said under
   // it with both links (no checkbox); it opens outside
   // Telegram, comes back by /ms.html, and the app reloads me when it's in sight again; someone new then types only the
   // student ID and year (Microsoft doesn't know them: KBTU leaves employeeId empty). Typed in before Oct 20 (relink)

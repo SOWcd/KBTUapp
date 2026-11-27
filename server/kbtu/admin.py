@@ -53,7 +53,7 @@
                                 platform and Telegram version, safe-area insets, env(), the nav's bottom gap, by px bucket
   .venv/bin/python -m kbtu.admin achstats                               each achievement's counter over the students (counts
                                 only): the share reaching every level and the typical values, to set the levels by
-  .venv/bin/python -m kbtu.admin roster load <rows.json> <map.json> | --gz <b64 of gzip {"rows", "map"}>   the clubs' rosters from DMP's sheet (PLAN 95): rows from
+  .venv/bin/python -m kbtu.admin roster load <rows.json> <map.json> | --gz <b64 of gzip {"rows", "map"}>   the clubs' rosters from DMP's sheet: rows from
                                 tools/roster_convert.py, the map sheet -> slug or {"new": {"name", "short", "emoji"}};
                                 a second run adds nothing; those already in the app whose rows they are join at once
   .venv/bin/python -m kbtu.admin grant session <sid> init26   the badge to everyone counted in a check-in session
@@ -178,7 +178,7 @@
                                 are deleted again. Restore the newest deletions.log and its matching deletions.salt beside
                                 the database, even for a snapshot predating the first deletion. Startup also runs this check.
 
-A role counts once the person has signed in with KBTU or is staff (only students act, SPEC §2). Role changes go to
+A role counts once the person has signed in with KBTU or is staff (only students act). Role changes go to
 the audit log. Prints Telegram names only, never the KBTU profile."""
 from __future__ import annotations
 
@@ -998,7 +998,7 @@ def main(args: list[str]) -> None:
             if n:
                 guests.claim(con, u["id"])
         print(f"@{u['tg_username'] or u['tg_id']}: " + ("confirmed" if n else "nothing typed in to confirm"))
-    elif cmd == "staff" and len(args) in (4, 5):  # SPEC §1: the student ID can't be a real one, so a KBTU sign-in is refused
+    elif cmd == "staff" and len(args) in (4, 5):  # the student ID can't be a real one, so a KBTU sign-in is refused
         u = _user(con, args[1])
         if one(con, "SELECT 1 FROM students WHERE user_id = ?", u["id"]):
             sys.exit(f"@{u['tg_username'] or u['tg_id']}: already signed in with KBTU or staff")

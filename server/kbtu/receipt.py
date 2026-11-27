@@ -1,4 +1,4 @@
-"""Kaspi receipts (SPEC §4.3): whatever a student sends (Kaspi's PDF, a screenshot) becomes one picture, and what the
+"""Kaspi receipts: whatever a student sends (Kaspi's PDF, a screenshot) becomes one picture, and what the
 receipt says is read off that picture. Kaspi's iPhone PDF has no text in it (iOS draws the glyphs; checked on the
 owner's receipts), so everything goes through OCR: Tesseract with the rus and kaz "fast" models (Debian's
 tesseract-ocr-rus/-kaz), about half a second a receipt. Fields are found by their shape, not by the labels next to

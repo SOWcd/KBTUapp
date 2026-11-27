@@ -130,7 +130,7 @@ export const openers = {
   /** a saved draft as students will see it once it's published: the editor's preview of the draft as the server has it */
   draftPreview: (id: Id): void => void api.event(id).then((e) => sheets.preview({ ...e, status: 'published' }), () => say(t('common.error'), 'warning_3d')),
   ticket: (id: Id) => lazy(chunks.ticket, { id }, 'sheet.ticket'),
-  pay: (id: Id) => lazy(() => import('../../screens/sheets/PaySheet.svelte'), { id }, 'sheet.pay'), // a held seat of a paid event: the Kaspi details and the receipt (§4.3)
+  pay: (id: Id) => lazy(() => import('../../screens/sheets/PaySheet.svelte'), { id }, 'sheet.pay'), // a held seat of a paid event: the Kaspi details and the receipt
   receipt: (receipt: AttendeeReceipt, name: string, ondone?: () => void) => lazy(() => import('../../screens/club/ReceiptSheet.svelte'), { receipt, name, ondone }), // the organizer's look at one receipt
   /** an album full screen, from photo `start`; `onremove` takes one out and answers with what is left */
   //   from: the thumbnail it grows out of and shrinks back into (one element, or one per photo: the grid's, the mosaic's)
@@ -197,7 +197,7 @@ export const openers = {
   manage: (id: Id, staff?: boolean, org?: Id) => lazy(() => import('../../screens/club/EventManage.svelte'), { id, staff, org }, 'sheet.manage', `${id}:${!!staff}:${org ?? ''}`),
   /** next week's memo to DMP for a club (Head+): from Studio and the bot's Wednesday message */
   memo: (org: Id) => lazy(() => import('../../screens/club/MemoSheet.svelte'), { org }),
-  /** the clubs' rosters (PLAN 95): the claims I confirm */
+  /** the clubs' rosters: the claims I confirm */
   rosterRequests: (ondone?: () => void, org?: number) => lazy(() => import('../../screens/club/RosterRequests.svelte'), { ondone, org }),
   /** an event's volunteer applications (the organizers) */
   volunteers: (id: Id, need: number) => lazy(() => import('../../screens/club/VolunteersSheet.svelte'), { id, need }),
@@ -227,7 +227,7 @@ export const openers = {
   /** always-open applications: the club's own questions (Vice+), and a student's answers to them */
   joinQuestions: (org: Id) => lazy(() => import('../../screens/club/JoinQuestions.svelte'), { org }),
   joinApply: (org: Id) => lazy(() => import('../../screens/sheets/JoinApply.svelte'), { org }),
-  /** Team 2.0 (§2b): the club's roles and tags (Vice+ / Head+ make them), its bans (Vice+); `onchange` after an edit */
+  /** Team 2.0: the club's roles and tags (Vice+ / Head+ make them), its bans (Vice+); `onchange` after an edit */
   teamSetup: (org: Id, onchange?: () => void) => lazy(() => import('../../screens/club/TeamSetupSheet.svelte'), { org, onchange }),
   /** one person of a club's Team, their own sheet over it: roles, departments, probation, hand-over, removal */
   member: (org: Id, user: Id, setup: () => TeamSetup | null, depts: (x: TeamMember) => ClubTag[], onchange: () => void) =>
@@ -267,9 +267,9 @@ export const openers = {
   clubEdit: (org: Id, at?: 'chats') => lazy(() => import('../../screens/club/ClubEditSheet.svelte'), { id: org, at }, undefined, at ? `${at}:${org}` : org),
   /** everyone in a club or school (the club sheet's "All members") */
   people: (org: Id, title: string) => lazy(() => import('../../screens/sheets/PeopleSheet.svelte'), { org, title }),
-  /** starting a club (§4.6): my application or the form */
+  /** starting a club: my application or the form */
   createClub: () => lazy(() => import('../../screens/sheets/CreateClubSheet.svelte'), {}),
-  /** KBTU's academic calendar: the year's dates (SPEC §4.11) */
+  /** KBTU's academic calendar: the year's dates */
   academic: () => lazy(() => import('../../screens/sheets/AcademicSheet.svelte'), {}),
   /** library seats (LIBRARY): my seat, scan a table, "nobody here"; Profile's row, startapp=lib */
   library: () => lazy(() => import('../../screens/library/Library.svelte'), {}),
@@ -363,7 +363,7 @@ const REF = /^(\d+)(?:_([A-Z2-7]{10}))?$/; // an id, and a member's "My link" (e
 
 /** `p` opened by its prefix's opener; false: no prefix here takes it. afterSignIn: deepLink run again after the sign-in */
 export function openDeepLink(p: string, app: AppLinks, afterSignIn = false): boolean {
-  // tm_<club>: the bot's removal messages open that club's Team (§2b) over its Studio; no longer in it: the club's page
+  // tm_<club>: the bot's removal messages open that club's Team over its Studio; no longer in it: the club's page
   // (the Team once the Studio pane is open: two chunk loads at once, lazy() opens only the later one, and Team reads
   // ui.club, which the pane sets: a cold start opened another club's Team, no Studio under it)
   const team = (org: number) => {
@@ -383,8 +383,8 @@ export function openDeepLink(p: string, app: AppLinks, afterSignIn = false): boo
     ui.tab = 'club'; ui.club = org; void lazy(chunks.studio, { org }, 'sheet.studio').then(() => sheets.santaHi(org));
   };
   const table: Record<string, Link> = {
-    join: [(org, token) => app.join(Number(org), token), false, /^(\d+)_([0-9a-f]{24})$/], // a club's invite link (§4.5)
-    pres: [(org, token) => app.president(Number(org), token), false, /^(\d+)_([0-9a-f]{24})$/], // a new club's one-time President link (the admin's, §2)
+    join: [(org, token) => app.join(Number(org), token), false, /^(\d+)_([0-9a-f]{24})$/], // a club's invite link
+    pres: [(org, token) => app.president(Number(org), token), false, /^(\d+)_([0-9a-f]{24})$/], // a new club's one-time President link (the admin's)
     gl: [(code) => { // the creator's award link (one-time, or many's: admin claim new)
       ui.tab = 'profile';
       asStudent(async () => {

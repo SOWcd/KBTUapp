@@ -57,7 +57,7 @@ def org_events(con, v: Viewer, oid: int) -> list[dict]:
         AND org_id NOT IN (SELECT id FROM orgs WHERE status = 'hidden') AND id IN (SELECT x.event_id FROM event_cohosts x
         JOIN orgs c ON c.id = x.org_id AND c.status = 'active' WHERE x.org_id = ? AND x.status = 'accepted')) AND memo_only = 0 AND NOT {evdel('events')} ORDER BY starts_at""", oid, oid)
     found = [e for e in found if e["visibility"] != "members" or e["org_id"] != oid or for_me(con, v, e, role)]  # a department's: its own
-    # receipts that look wrong and nobody looked at yet (§4.3; a registration's last receipt counts), on top of Studio too
+    # receipts that look wrong and nobody looked at yet (a registration's last receipt counts), on top of Studio too
     check = dict(rows(con, """SELECT r.event_id, COUNT(*) FROM registrations r JOIN events e ON e.id = r.event_id
         JOIN receipts c ON c.id = (SELECT MAX(id) FROM receipts WHERE registration_id = r.id)
         WHERE e.org_id = ? AND r.status = 'going' AND c.status = 'accepted' AND c.flags != '' AND c.reviewed_at IS NULL AND c.created_at >= r.created_at
@@ -103,7 +103,7 @@ def _asking(con, eid: int, reader: int = 0) -> list:
 
 
 def shade(color: str) -> str:
-    """Sheet tint from the event's colour (with a cover the editor sends the photo's own, §4.8b): the same hue, a quarter darker."""
+    """Sheet tint from the event's colour (with a cover the editor sends the photo's own): the same hue, a quarter darker."""
     n = int(color[1:], 16)
     return "#" + "".join(f"{round(((n >> s) & 255) * 0.75):02x}" for s in (16, 8, 0))
 
@@ -120,7 +120,7 @@ def _invited_leaders(con, e: sqlite3.Row, exclude: int | None = None) -> list[sq
 
 
 def decline(con, v: Viewer, eid: int, note: object = None) -> dict:
-    """"Can't make it" (a leaders meeting, §4.10; a club meeting, §2b, says why, which its Head+ read): the answer is
+    """"Can't make it" (at a leaders meeting or a club meeting, says why, which its Head+ read): the answer is
     kept, a seat or a ticket given back."""
     need_student(v)
     e = _event(con, v, eid)
@@ -146,7 +146,7 @@ def _team_door(e: sqlite3.Row) -> bool:
 
 
 def _expected(con, e: sqlite3.Row) -> list[int]:
-    """Who a team-only event is for (§2b; a meeting expects them): the club's students, only those with its tag, or
+    """Who a team-only event is for (a meeting expects them): the club's students, only those with its tag, or
     its board (Head+, by their roles now)."""
     tag = e["meeting_tag"]
     return [r[0] for r in rows(con, "SELECT m.user_id FROM org_members m JOIN students s ON s.user_id = m.user_id WHERE m.org_id = ?"
@@ -155,7 +155,7 @@ def _expected(con, e: sqlite3.Row) -> list[int]:
 
 
 def meeting_answers(con, v: Viewer, eid: int) -> list[dict]:
-    """A club meeting's people for its Head+ (§2b): each one's answer (yes, no with the reason, none) and whether they
+    """A club meeting's people for its Head+: each one's answer (yes, no with the reason, none) and whether they
     came, and whether they are on probation."""
     e = _staff_event(con, v, eid, "events")
     if not e["meeting"]:
@@ -176,7 +176,7 @@ def meeting_answers(con, v: Viewer, eid: int) -> list[dict]:
 
 
 def leaders_answers(con, v: Viewer, eid: int) -> list[dict]:
-    """DMP's view of a leaders meeting (§4.10): per club, who said yes, who no, who hasn't answered."""
+    """DMP's view of a leaders meeting: per club, who said yes, who no, who hasn't answered."""
     e = _staff_event(con, v, eid, "events")
     if e["visibility"] != "leaders":
         raise ApiError("bad_input")
@@ -251,7 +251,7 @@ def campus_place(place: str) -> str | None:
 
 
 def clean_event(i: dict, oversee: bool = False) -> dict:
-    """The editor's input, checked. A leaders meeting (§4.10) only from an oversight org
+    """The editor's input, checked. A leaders meeting only from an oversight org
     (DMP), with the lowest role invited."""
     try:
         title, place = str(i["title"]).strip(), str(i["place"]).strip()
@@ -269,7 +269,7 @@ def clean_event(i: dict, oversee: bool = False) -> dict:
         emoji, color = str(i["emoji"]), str(i["color"])
         visibility = None if i.get("visibility") is None else str(i["visibility"])  # left out: kept as it is
         leaders = str(i.get("leadersFrom") or "president") if visibility == "leaders" else None
-        meeting = i.get("meeting") is True  # a club meeting (§2b): team-only, someone's tag or the whole club expected
+        meeting = i.get("meeting") is True  # a club meeting: team-only, someone's tag or the whole club expected
         # "For whom": one of the club's tags on any team-only event, required or not (_meeting_ok checks it)
         tag = int(i["meetingTag"]) if i.get("meetingTag") is not None else None
         board = i.get("forBoard") is True  # "For whom": the board (Head+), a built-in choice beside the tags
@@ -325,7 +325,7 @@ def online_fields(i: dict, was: str | None) -> dict:
 def _meeting_ok(con, v: Viewer, oid: int, f: dict, priced: bool, was: tuple | None = None, vis: str = "public") -> None:
     """A meeting has no price. "For whom" (the tag) is one of the club's own, on a team-only event only (a meeting or
     not: a department's get-together today, its required meeting tomorrow). A Head with a department calls only that
-    department (PLAN item 35); `was` (meeting, tag, board) before an edit: what someone else set stays as it is. `vis`: the
+    department; `was` (meeting, tag, board) before an edit: what someone else set stays as it is. `vis`: the
     event's visibility after the edit."""
     if f["meeting"] and priced or (f["meeting_tag"] or f["for_board"]) and f.get("visibility", vis) != "members" \
             or f["meeting_tag"] and not one(con, "SELECT 1 FROM org_tags WHERE id = ? AND org_id = ?", f["meeting_tag"], oid):
@@ -409,7 +409,7 @@ def kz_phone(raw: object) -> str | None:
 
 
 def _pay(con, v: Viewer, body: dict, org: sqlite3.Row, e: sqlite3.Row | None = None) -> dict:
-    """The price and where students send it (§4.3): only an official club's Vice+ set them (the creator from Admin too, logged) (any club's Vice+ makes it free), and they are fixed once the
+    """The price and where students send it: only an official club's Vice+ set them (the creator from Admin too, logged) (any club's Vice+ makes it free), and they are fixed once the
     first receipt is in. Absent keeps them; a null price makes the event free. The phone is kept as +7XXXXXXXXXX.
     freeFirst: how many 1st-year students come free (the first ones to register); it can change any time.
     ponytail: a raised freeFirst doesn't turn 1st-years already holding a seat free; they pay or let it go."""
@@ -647,7 +647,7 @@ def update_event(con, v: Viewer, eid: int, body: dict) -> dict:
 
 
 def _changed(con, v: Viewer, e: sqlite3.Row, after: sqlite3.Row) -> None:
-    """Who hears that a published event moved (PLAN "Place and time", §4.9): the room DMP gave for a place to be confirmed,
+    """Who hears that a published event moved: the room DMP gave for a place to be confirmed,
     or one KBTU room for another, tells nobody (the 2-hour reminder shows it; at once for those with reminders off);
     another venue or a new time tells them, edits within 10 minutes in one message (the bot reads the event when it
     sends); within 2 hours of the start or during it, at once and only to those not checked in. A new place also gets a
@@ -667,7 +667,7 @@ def _changed(con, v: Viewer, e: sqlite3.Row, after: sqlite3.Row) -> None:
         if soon and r["checked_in_at"] or quiet and not soon and r["n_remind"]:
             continue
         if not one(con, "SELECT 1 FROM bot_outbox WHERE user_id = ? AND kind = 'event_changed' AND ref LIKE ? AND sent_at IS NULL", r[0], f"event:{eid}:%"):
-            notify(con, r[0], "event_changed", f"event:{eid}:{after['updated_at']}", after=core.now() if soon or moved else core.now() + 600)  # always on (§4.9)
+            notify(con, r[0], "event_changed", f"event:{eid}:{after['updated_at']}", after=core.now() if soon or moved else core.now() + 600)  # always on
     if placed and after["place"]:
         con.execute("INSERT INTO event_updates (event_id, author_id, body, created_at) VALUES (?, ?, ?, ?)", (eid, v.id, f"📍 → {after['place']}", core.now()))
 
@@ -749,14 +749,14 @@ def _publish(con, v: Viewer, e: sqlite3.Row, announce: bool) -> dict:
     con.execute("DELETE FROM event_reviews WHERE event_id = ?", (eid,))  # a member's draft: answered, whoever published it
     told = None
     if announce:
-        if e["visibility"] == "leaders":  # §4.10: every invited leader hears at once (always on)
+        if e["visibility"] == "leaders":  # every invited leader hears at once (always on)
             for (uid,) in _invited_leaders(con, e, exclude=v.id):
                 notify(con, uid, "leaders_invite", f"li:{eid}")
-        if e["meeting"]:  # §2b: everyone expected hears at once (always on)
+        if e["meeting"]:  # everyone expected hears at once (always on)
             for uid in _expected(con, e):
                 if uid != v.id:
                     notify(con, uid, "meeting_invite", f"mi:{eid}")
-        if e["visibility"] == "public" and not e["guest_host"]:  # subscribers hear about it (§7, can be turned off); a partner's: the feed only
+        if e["visibility"] == "public" and not e["guest_host"]:  # subscribers hear about it (can be turned off); a partner's: the feed only
             after = _tell_after(con, e)
             told = after is None
             if told:
@@ -1040,11 +1040,11 @@ def attendees(con, v: Viewer, eid: int) -> list[dict]:
     if not paid:  # the co-host: short names as at the door; no full names, answers or who brought them (the policy's organizer is the host)
         out = [{**a, "person": _door_ref(p), "fullName": short_name(p), "by": None, "byCame": False, "answers": None} for a, p in zip(out, found)]
     flagged = lambda a: bool(a["receipt"] and a["receipt"]["flags"] and not a["receipt"]["reviewed"])  # noqa: E731
-    return sorted(out, key=lambda a: (not flagged(a), order[a["status"]], a["fullName"]))  # §4.3: flagged receipts first
+    return sorted(out, key=lambda a: (not flagged(a), order[a["status"]], a["fullName"]))  # flagged receipts first
 
 
 def attendees_export(con, v: Viewer, eid: int) -> tuple[sqlite3.Row, list[sqlite3.Row]]:
-    """The event and its people for the CSV (Head+, §3: an organizer sees contacts for their own event). Every export
+    """The event and its people for the CSV (Head+; an organizer sees contacts for their own event). Every export
     of personal data goes to the audit log."""
     need_student(v)
     e = _staff_event(con, v, eid, "events")
@@ -1230,7 +1230,7 @@ def screen_came(con, eid: int, uid: int, t: int, physical: bool = True) -> dict:
 
 
 def checkin(con, v: Viewer, eid: int, raw: str, admit: bool = False) -> dict:
-    """The door scanner: a ticket (KBTU<code>) or a badge QR (§4.4). Says how late they are, for the organizer. A
+    """The door scanner: a ticket (KBTU<code>) or a badge QR. Says how late they are, for the organizer. A
     flagged receipt stops before anything is recorded (_held); `admit`: the organizer looked and lets them in."""
     with tx(con):
         e = _door_ok(con, v, _staff_event(con, v, eid, "door", cohost=True, helper=("scan", "door")))
@@ -1378,8 +1378,8 @@ INVITES_A_DAY = 30
 
 
 def event_invites(con, v: Viewer, eid: int) -> list[dict]:
-    """"Bring a friend" (§4.7): my friends and where each one stands with this event — to invite, invited by me, or
-    going (only for those who show where they go, §3; the rest look invitable and the bot simply stays quiet)."""
+    """"Bring a friend": my friends and where each one stands with this event — to invite, invited by me, or
+    going (only for those who show where they go; the rest look invitable and the bot simply stays quiet)."""
     need_student(v)
     e = _event(con, v, eid)
     out = []
@@ -1486,7 +1486,7 @@ def add_album_photo(con, v: Viewer, eid: int, saved: dict) -> dict:
         attach_album_photo(con, eid, event_photo_file(con, v.id, saved), v.id)
         if one(con, "SELECT COUNT(*) FROM event_photos WHERE event_id = ?", eid)[0] == PHOTO_REPORT_AT:  # the album has a story now
             for (uid,) in rows(con, "SELECT user_id FROM registrations WHERE event_id = ? AND checked_in_at IS NOT NULL AND user_id != ?", eid, v.id):
-                notify(con, uid, "photo_report", f"ph:{eid}", after=max(core.now(), end_of(e) + 3600))  # once per event (§7)
+                notify(con, uid, "photo_report", f"ph:{eid}", after=max(core.now(), end_of(e) + 3600))  # once per event
     return full(con, v, e)
 
 
@@ -1510,7 +1510,7 @@ UPDATES_A_DAY = 3
 
 def post_update(con, v: Viewer, eid: int, body: str) -> list[dict]:
     """An organizer's update (Head+): pinned under the event's title for everyone,
-    and the bot tells the people going, holding a seat or waiting — with our template, never the organizer's words (§9).
+    and the bot tells the people going, holding a seat or waiting — with our template, never the organizer's words.
     Three a day per event at most, so it stays news and never spam."""
     e = _staff_event(con, v, eid, "events")
     text = str(body or "").strip()
@@ -1609,7 +1609,7 @@ def add_walk_in(con, v: Viewer, eid: int, name: object, team: object = None, adu
 
 def guest_list_export(con, v: Viewer, eid: int) -> tuple[sqlite3.Row, list[dict]]:
     """The list after the event, for the same people (the door's right): the organizers' rows and the app's tickets,
-    named as the door list names them (§3: a Member sees short names only). Into the audit log, as every export."""
+    named as the door list names them (a Member sees short names only). Into the audit log, as every export."""
     e = _door_ok(con, v, _staff_event(con, v, eid, "door", cohost=True, helper=("door",)))
     if not e["guest_list"]:
         raise ApiError("not_found")
@@ -1656,7 +1656,7 @@ def notify_minors(con, v: Viewer, eid: int) -> dict:
 
 
 def door(con, v: Viewer, eid: int) -> list[dict]:
-    """The door list for check-in by name (Member+, like the scanner; §3: a Member sees short names only): who is going,
+    """The door list for check-in by name (Member+, like the scanner; a Member sees short names only): who is going,
     the ones still to come first."""
     e = _door_ok(con, v, _staff_event(con, v, eid, "door", cohost=True, helper=("door",)))
     found = rows(con, f"""SELECT {PERSON_COLS}, r.checked_in_at, r.walk_in, r.checkin_manual, r.door_team, a.adult FROM registrations r
@@ -1664,7 +1664,7 @@ def door(con, v: Viewer, eid: int) -> list[dict]:
         WHERE r.event_id = ? AND r.status = 'going' AND (s.user_id IS NOT NULL OR ? AND u.tg_id > 0)""", eid, e["guest_list"])
     out = [{"person": _door_ref(p), "checkedInAt": p["checked_in_at"], "walkIn": bool(p["walk_in"]), "manual": bool(p["checkin_manual"]), "team": p["door_team"],
             **({"adult": None if p["adult"] is None else bool(p["adult"])} if e["age_check"] else {})} for p in found]
-    if _team_door(e):  # §2b: everyone expected is on the list, answered or not
+    if _team_door(e):  # everyone expected is on the list, answered or not
         registered = {p["id"] for p in found}
         rest = [u for u in _expected(con, e) if u not in registered]
         out += [{"person": _door_ref(p), "checkedInAt": None, "walkIn": False, "manual": False,
@@ -1674,7 +1674,7 @@ def door(con, v: Viewer, eid: int) -> list[dict]:
 
 
 def checkin_by_name(con, v: Viewer, eid: int, uid: int, admit: bool = False) -> dict:
-    """No QR (a dead phone): a person going to the event is checked in by hand from the door list (§4.4). The same answer
+    """No QR (a dead phone): a person going to the event is checked in by hand from the door list. The same answer
     as the scanner; marked "by hand" for the organizer and the CSV."""
     with tx(con):
         e = _door_ok(con, v, _staff_event(con, v, eid, "door", cohost=True, helper=("door",)))
@@ -1710,7 +1710,7 @@ def checkin_by_name(con, v: Viewer, eid: int, uid: int, admit: bool = False) -> 
 def undo_checkin(con, v: Viewer, eid: int, uid: int) -> None:
     """Take back a check-in by name made in the last 10 minutes (a scanned ticket stays: it proves the person came). One
     that came from a walk-in's typed name (link_door_guests) takes that name with it: it wasn't them, and a name left
-    linked would keep saying they came (PLAN A19 "left")."""
+    linked would keep saying they came."""
     _door_ok(con, v, _staff_event(con, v, eid, "door", cohost=True, helper=("door",)))
     with tx(con):
         cur = con.execute("""UPDATE registrations SET checked_in_at = NULL, checked_in_by = NULL, checkin_manual = 0, updated_at = ?

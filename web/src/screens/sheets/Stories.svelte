@@ -1,5 +1,5 @@
 <script lang="ts">
-  // News as stories (PLAN 46): a club's posts full screen, one at a time. A tap on the right goes on, on the
+  // News as stories: a club's posts full screen, one at a time. A tap on the right goes on, on the
   // left back; past a club's last post the next club follows, past the last club it closes; a pull down, Back or the
   // cross closes. No timer: posts are read, not glanced at. Seen posts are marked read (the circle's ring and the dot go).
   // No reactions or comments on a club's own post (two reactions were thin; talk lives in the forum). In ⋯: edit, pin, show on
@@ -184,7 +184,7 @@
     {/key}
 
     {#if p.tg}
-      <!-- a Telegram channel's post: its counts there, a tap opens it (PLAN 86) -->
+      <!-- a Telegram channel's post: its counts there, a tap opens it -->
       {@const tg = p.tg}
       <div class="acts">
         {#each tg.reactions.slice(0, 2) as [e, n] (e)}<button onclick={() => openLink(tg.url)}><span class="tge">{e}</span><b class="num">{compact(n)}</b></button>{/each}

@@ -1,5 +1,5 @@
 // "Write to the creator": opens the owner's Telegram DM with a one-line draft, so he sees at once that the message
-// comes from the app (SPEC §4.11b; one button, a short draft, no version line).
+// comes from the app (one button, a short draft, no version line).
 import { openLink } from './tg';
 
 export const OWNER = 'Sowers';
@@ -8,7 +8,7 @@ export const CODE = 'https://github.com/SOWcd/KBTUapp';
 /** the app's topics group in Telegram (BUGS / IDEAS / QUESTIONS) */
 export const TALK = 'https://t.me/KBTUappTop';
 
-/** The same chat with a draft of the screen's own (e.g. DMP's list has me wrong, PLAN 95). */
+/** The same chat with a draft of the screen's own (e.g. DMP's list has me wrong). */
 export function writeSupport(draft: string): void {
   openLink(`https://t.me/${OWNER}?text=${encodeURIComponent(draft)}`);
 }

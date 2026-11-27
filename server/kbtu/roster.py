@@ -1,4 +1,4 @@
-"""The clubs' rosters from DMP's Student Union sheet (PLAN 95): DMP gave it and allowed its use; every
+"""The clubs' rosters from DMP's Student Union sheet: DMP gave it and allowed its use; every
 row waits in roster_pending for its student and stays theirs (the city hidden or deleted any time). A one-off until
 everyone has signed up: the table is dropped by hand then.
 

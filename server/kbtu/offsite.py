@@ -1,4 +1,4 @@
-"""The off-site copy (PLAN item 22): the nightly database copy and the receipts, and on Sundays the media too, packed
+"""The off-site copy: the nightly database copy and the receipts, and on Sundays the media too, packed
 with tar, encrypted with age to the owner's public key (the private one stays offline with him: this server can write
 backups but never read them) and put into R2 bucket kbtu-app-backups with one SigV4 PUT. The bucket keeps each object
 29 days locked and deletes it at 30. Off until Coolify has the four BACKUP_* settings and the image has `age`."""

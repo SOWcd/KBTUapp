@@ -1,4 +1,4 @@
-"""Casting (PLAN "Casting", after a real club's process): a club's recruitment round. The club opens
+"""Casting (after a real club's process): a club's recruitment round. The club opens
 it with departments (its own tags, each with a line about it and maybe places) and at most six questions of its own;
 a student applies in a minute (name, year, school, KBTU email and Telegram are their profile already), picking up to
 `picks` departments in order (no departments: a round for the whole club; one: nothing to pick); the casting team (the "casting" right: HR, heads) screens the applications one by one

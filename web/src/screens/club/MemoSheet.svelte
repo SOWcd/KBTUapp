@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The week's memo to DMP (PLAN stage 2, their rules: Wednesdays 9:00-18:00, one email for the week, from the KBTU
+  // The week's memo to DMP (their rules: Wednesdays 9:00-18:00, one email for the week, from the KBTU
   // address to youth_policy@kbtu.kz). The server writes one memo from the events' requests in DMP's form, signed by me in kk, ru,
   // en; here it can be fixed by hand, then the Outlook app opens with it through public/outlook.html (a Mini App can't open
   // mailto: or ms-outlook: itself, Telegram's openLink takes http/https only), or it's copied. Back in the app it asks "Sent it?": the events sent

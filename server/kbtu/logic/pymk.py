@@ -1,7 +1,7 @@
 """People you may know: clubmates suggested to each other on the Friends page (idea: a student, in People of the app).
 
 Opt-in on both sides: a row of `pymk_consents` is the "Suggest me" switch on, with the text it answered (CONSENT,
-its own, as appeals.CONSENT; the policy's People you may know clause, §3 and §8). Reciprocal: only someone who can be suggested sees
+its own, as appeals.CONSENT; the policy's People you may know clause). Reciprocal: only someone who can be suggested sees
 suggestions, so nobody watches without being seen. Off, the row goes and so do my suggestions both ways, at once.
 
 Phase 1 is clubs only. On prod (Nov 2026) 178 students had a timetable, too few to match on, and a timetable can be

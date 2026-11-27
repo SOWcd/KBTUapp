@@ -1,4 +1,4 @@
-"""Texts the server writes itself: share cards now, bot messages next (SPEC §7). Like the app's i18n, ru is
+"""Texts the server writes itself: share cards now, bot messages next. Like the app's i18n, ru is
 the source and kk/en follow it; a user's language comes from users.lang. Only server templates reach
 Telegram: from the client we take ids, never text."""
 from __future__ import annotations
@@ -31,7 +31,7 @@ SHARE_REFER = {  # Use one invite link so it can connect existing students and c
     "kk": ("Дос бол", "👋 <b>{name}</b> сені досқа шақырады!\n\n👀 Кім қайда баратынын көр\n🎟 Барлық іс-шаралар мен клубтар", "🤝 Досқа қосу"),
     "en": ("Be my friend", "👋 <b>{name}</b> wants to be friends!\n\n👀 See who's going where\n🎟 All events and clubs", "🤝 Add friend"),
 }
-SHARE_PRES = {  # the admin's one-time President link (§2): a new club's President opens it
+SHARE_PRES = {  # the admin's one-time President link: a new club's President opens it
     "ru": ("Клуб ждёт президента", "👑 <b>Президент клуба {club}</b>\nТебя назначают в KBTU App\n\n🔐 Войди через KBTU\n🔒 Одноразовая · ⏳ 7 дней", "Стать президентом"),
     "kk": ("Клуб президентін күтеді", "👑 <b>{club} клубының президенті</b>\nСені KBTU App-та тағайындайды\n\n🔐 KBTU арқылы кір\n🔒 Бір реттік · ⏳ 7 күн", "Президент болу"),
     "en": ("A club awaits its President", "👑 <b>President of {club}</b>\nYou're being appointed on KBTU App\n\n🔐 Sign in with KBTU\n🔒 One use · ⏳ 7 days", "Become President"),
@@ -78,7 +78,7 @@ SHARE_JOIN = {
 }
 
 
-# An achievement shared from its card (§4.11): first person (the user sends it), its name and tier as the app names them
+# An achievement shared from its card: first person (the user sends it), its name and tier as the app names them
 # (web i18n ach.<code>.name / ach.tier.N), how rare it is; the button opens the reader's own progress toward it.
 SHARE_AWARD = {
     "ru": ("Моя награда в KBTU App", "🏅 <b>{name}</b>{tier}\nМоя новая награда в KBTU App\n\n💎 Есть у {p}% студентов. Получится так же?", "🏅 Посмотреть награду"),
@@ -213,7 +213,7 @@ def share_event(lang: str, title: str, starts_at: int, place: str, org: str = ""
     return caption, button
 
 
-# Bot messages (SPEC §7): kind → (HTML text, button or None). Fields: title, when, place, org, room.
+# Bot messages: kind → (HTML text, button or None). Fields: title, when, place, org, room.
 BOT = {
     "ru": {
         "paysupport": ("💬 <b>Поддержка по платежам</b>\nЗвёзды — добровольная поддержка приложения, взамен ничего не выдаётся.\nЕсли заплатил по ошибке и хочешь вернуть их, напиши в поддержку: @Sowers. Приложи чек Telegram и свой Telegram ID: <code>{tg_id}</code>", None),
@@ -1054,7 +1054,7 @@ def chat_reply(lang: str, got: list[tuple[str, str, str]]) -> str:
     return "\n\n".join(parts)
 
 
-# The attendee list as a CSV (SPEC §6): headers and statuses in the organizer's language.
+# The attendee list as a CSV: headers and statuses in the organizer's language.
 # "Year of study", not "course", in what DMP reads (their rule for forms: KBTU has years of study, not courses).
 CSV_HEAD = {
     "ru": ("Фамилия", "Имя", "Отчество", "Фамилия (латиницей)", "Имя (латиницей)", "Отчество (латиницей)", "Telegram", "ID студента", "Год обучения", "Школа", "Почта", "Телефон", "Статус", "Записался", "Пришёл", "Записан у входа", "Отмечен вручную"),
@@ -1085,7 +1085,7 @@ REGISTRY_CAPTION = {"ru": "Реестр клубов KBTU App", "kk": "KBTU App 
 
 
 def registry_csv(lang: str, people) -> tuple[str, bytes, str]:
-    """Every roster (DMP, §4.13): the same rules as on screen — contacts only of Presidents and Vices."""
+    """Every roster (DMP): the same rules as on screen — contacts only of Presidents and Vices."""
     lang = lang if lang in REGISTRY_HEAD else "ru"
     out = io.StringIO()
     w = csv.writer(out, delimiter=";")
@@ -1461,7 +1461,7 @@ def print_letter(org: str, events: list[tuple[dict, dict]], pos: str, name: str,
 
 
 def memo_text(org: str, events: list[tuple[dict, dict]], sign: str) -> str:
-    """The week's one memo (PLAN stage 2): events are (e as memo_asks takes it plus `meeting`, its requests). With one
+    """The week's one memo: events are (e as memo_asks takes it plus `meeting`, its requests). With one
     event its requests follow the intro; with more each event's line heads its own, numbered through. With none, the
     blank: the header, "asks you:" and the signature, for the sheet's templates."""
     if not events:

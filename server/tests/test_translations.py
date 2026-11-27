@@ -36,7 +36,7 @@ def test_bot_texts_open_with_an_emoji():
 
 
 def test_translations(env):
-    """PLAN 9 (ai.py): the source language from the letters; the model's answer parsed or refused; only public published
+    """Translations (ai.py): the source language from the letters; the model's answer parsed or refused; only public published
     events and active clubs are sent; an edit of the text (not of the time) translates again; a translation never
     overwrites an edit made meanwhile; 3 failures leave it; cards carry titles, the club's description only its page."""
     import httpx
@@ -239,7 +239,7 @@ def one_val(con, sql: str, *args):
 
 
 def test_bot_and_calendar_titles_translated(env):
-    """PLAN 9's deferred part: the bot's messages and my calendar feed show an event's title in my language when it has
+    """Translations, the deferred part: the bot's messages and my calendar feed show an event's title in my language when it has
     a translation (made up here), else as typed."""
     c, cfg = env
     pres, ali = login(c, 92, "pres"), login(c, 93, "ali")

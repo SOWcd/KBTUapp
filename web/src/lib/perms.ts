@@ -1,4 +1,4 @@
-// The rank rule from SPEC §2, the UI's copy: it hides what you can't do; the server enforces it (logic.py).
+// The rank rule (one acts only on people strictly below), the UI's copy: it hides what you can't do; the server enforces it (logic.py).
 import type { ClubLevel, ClubRole, Membership, OrgRole, Right } from './api/types';
 import { i18n, t } from './i18n/index.svelte';
 
@@ -12,7 +12,7 @@ export const ROLE_NAME: Record<OrgRole, string> = { president: 'President', vice
 /** Highest role first. */
 export const byRank = (a: { role: OrgRole }, b: { role: OrgRole }): number => RANK[b.role] - RANK[a.role];
 
-/** A club role's rights (SPEC §2), the toggles of its editor in order, each with the level it needs: the highest one a role
+/** A club role's rights, the toggles of its editor in order, each with the level it needs: the highest one a role
  *  has ranks it (whom it acts on). A level without a club role has its level's. */
 export const RIGHTS: { key: Right; level: ClubLevel }[] = [
   { key: 'door', level: 'member' }, { key: 'events', level: 'head' }, { key: 'posts', level: 'head' }, { key: 'people', level: 'head' },
@@ -23,7 +23,7 @@ export const RIGHTS: { key: Right; level: ClubLevel }[] = [
 /** I may do this in this club (my membership, or a club with my rights) */
 export const may = (m: { rights?: Right[] | null } | null | undefined, right: Right): boolean => !!m?.rights?.includes(right);
 
-/** The rank rule (§2): whoever runs the team manages only people strictly below them. */
+/** The rank rule: whoever runs the team manages only people strictly below them. */
 export const canManage = (m: { role: OrgRole; rights?: Right[] } | null | undefined, theirs: OrgRole): boolean => may(m, 'team') && RANK[m!.role] > RANK[theirs];
 
 /** The roles you can give: strictly below your own. */
@@ -32,7 +32,7 @@ export const canGive = (mine: OrgRole): OrgRole[] => (['vice', 'head', 'member']
 /** Anyone but the President can leave a club, whatever its kind (the server's remove_member; Team's Leave). */
 export const canLeave = (m: { role: OrgRole }): boolean => m.role !== 'president';
 
-/** The club's own name for someone's role (§2b), else the level's. */
+/** The club's own name for someone's role, else the level's. */
 export const roleName = (role: OrgRole, title?: string | null): string => title || ROLE_NAME[role];
 /** A club role's name in the app's language: the club may give it in Kazakh and English too, else its own name. */
 export const inLang = <T extends string | null | undefined>(name: T, kk?: string | null, en?: string | null): string | T =>
@@ -55,10 +55,10 @@ export const rightsLine = (rights: Right[], reports: boolean): string => {
 /** an organizer's line: the real name, the nick beside it */
 export const withNick = (real: string, p: { nick?: string | null }): string => (p.nick ? `${real} · ${p.nick}` : real);
 
-/** Colours for the clubs' own roles and tags (§2b): each reads as a dot in both themes. */
+/** Colours for the clubs' own roles and tags: each reads as a dot in both themes. */
 export const TEAM_COLORS = ['#3B6BFF', '#7C4DFF', '#FF4FA3', '#F2542D', '#FFB23D', '#2FBF71', '#18A9DB', '#8E8E93'];
 
-/** "people" acts on people strictly below them (tags, probation, asking to remove; §2b). */
+/** "people" acts on people strictly below them (tags, probation, asking to remove). */
 export const isAbove = (m: { role: OrgRole; rights?: Right[] } | null | undefined, theirs: OrgRole): boolean => may(m, 'people') && RANK[m!.role] > RANK[theirs];
 
 /** A club's own event (team-only, a club meeting) or DMP's leaders meeting: people come, nobody checks tickets, so it has
