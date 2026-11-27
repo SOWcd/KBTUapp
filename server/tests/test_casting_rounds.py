@@ -8,7 +8,7 @@ from test_core import env, login, tma  # noqa: F401  (env: the fixture)
 
 
 def test_casting(env):
-    """Casting (PLAN "Casting"): a club opens a round with its tags as departments and a few questions; its
+    """Casting: a club opens a round with its tags as departments and a few questions; its
     followers hear it; students apply (a department's own question only if they picked it); the casting team (Head+ by
     default) sees the applications with what only the app knows, votes, takes one into a department; the results in one
     tap make the accepted members with the department's tag and tell everyone."""

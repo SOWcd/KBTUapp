@@ -18,7 +18,7 @@ def _ach_codes(person: dict) -> dict:
 
 
 def test_roster_name_match():
-    """PLAN 95's name check (made-up names): two words shared in any order and spelling, Cyrillic or Latin, Kazakh
+    """The roster load's name check (made-up names): two words shared in any order and spelling, Cyrillic or Latin, Kazakh
     letters, a patronymic more; one shared word isn't enough."""
     from kbtu import roster
     erlan, nurlan = "\u0415\u0440\u043b\u0430\u043d", "\u041d\u0443\u0440\u043b\u0430\u043d\u043e\u0432"   # Yerlan Nurlanov in Russian
@@ -33,7 +33,7 @@ def test_roster_name_match():
 
 
 def test_roster_load_and_join(env):
-    """PLAN 95 with made-up rows: the load is idempotent and makes missing clubs official; a student already in the app
+    """The roster load with made-up rows: the load is idempotent and makes missing clubs official; a student already in the app
     whose university email and name match joins at once (role, position as the club role's name, department, city, year,
     phone) with a toast once; listed but not signed in with Microsoft: a welcome with the club and position only; the
     username but another name: asked without the phone or city; "Yes, it's me" requests approval, the claim
@@ -86,7 +86,7 @@ def test_roster_load_and_join(env):
 
 
 def test_roster_app_wins(env):
-    """PLAN 95, students already in the app: what the app has wins. A membership held keeps its role (no
+    """The roster load, students already in the app: what the app has wins. A membership held keeps its role (no
     promotion, no demotion); a missing one is added, a President on the sheet where the club has another in the app
     comes in as Vice (counted in the load's summary); department, title, city, phone and year fill only what's empty."""
     from kbtu import roster

@@ -40,7 +40,7 @@ def test_unlock_moment(env):
 
 
 def test_first_fifty(env, monkeypatch):
-    """Card numbers and "First 500" (§4.4, §4.11): the number is the order of first KBTU sign-in and stays the person's;
+    """Card numbers and "First 500": the number is the order of first KBTU sign-in and stays the person's;
     the Creator's card shows 0 and takes no place, so the grant goes to cards 1..FIRST_N; a deleted account's number
     stays empty, never given again: a return gets a new one."""
     c, cfg = env
@@ -99,7 +99,7 @@ def test_anthem_award(env):
 
 
 def test_grants(env):
-    """Manual achievements (§4.11): the admin only; "Bug hunter" adds up, a secret one is given once; each new level is
+    """Manual achievements: the admin only; "Bug hunter" adds up, a secret one is given once; each new level is
     celebrated (the bot's card, the unlock moment) and audited."""
     import dataclasses
     c, cfg = env
@@ -133,7 +133,7 @@ def test_grants(env):
 
 
 def test_grant_scanner(env):
-    """The owner's batch scanner (PLAN "Creator awards"): a badge QR is one grant, a wrong code finds nobody, a
+    """The owner's batch scanner: a badge QR is one grant, a wrong code finds nobody, a
     secret one only once; undo within a minute takes the level and its unsent card back; "You gave" lists them."""
     import dataclasses
     c, cfg = env

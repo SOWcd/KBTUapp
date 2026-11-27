@@ -62,7 +62,7 @@ def test_photos(env):
     assert kept["cover"] is not None and kept["cover"]["focus"] == [0.25, 0.8]                         # absent keeps both
     gone = c.patch(f"/api/events/{ev['id']}", headers=tma(20), json={**body, "coverId": None}).json()
     assert gone["cover"] is None
-    # PLAN 33: photos after the cover, swiped sideways; a co-organizer keeps the others' when saving
+    # Photos after the cover, swiped sideways; a co-organizer keeps the others' when saving
     login(c, 21, "vic")
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) SELECT 1, id, 'vice', 0 FROM users WHERE tg_id = 21")
     def pic(tg, rgb):
@@ -143,7 +143,7 @@ def test_videos(env, tmp_path):
     x = logic.next_video(con)
     with pytest.raises(video.BadVideo):
         asyncio.run(video.compress(Path(cfg.db_path).parent / "uploads" / str(x["id"]), Path(cfg.db_path).parent / "media"))
-    # PLAN 32: a horizontal clip behind the sheet: 720 on the short side, muted, 20 s at most; only in its own slot
+    # A horizontal clip behind the sheet: 720 on the short side, muted, 20 s at most; only in its own slot
     wsrc = tmp_path / "wide.mov"
     subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc2=s=1920x1080:r=30:d=2", "-f", "lavfi", "-i", "sine=d=2",
                     "-c:v", "libx264", "-preset", "ultrafast", "-c:a", "aac", str(wsrc)], check=True)
