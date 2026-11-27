@@ -111,7 +111,8 @@ async function openPhone(page: Page, qa: Qa, who: Who, info: TestInfo, faults: F
       method: body ? 'POST' : 'GET', headers: { Authorization: `tma ${init}`, 'Content-Type': 'application/json' }, data: body ? JSON.stringify(body) : undefined });
     const me = await (await call('/me')).json() as { unlocked?: { code: string; level: number }[] };
     for (const u of me.unlocked ?? []) expect((await call('/me/unlocked', u)).ok(), `award ${u.code} marked seen`).toBe(true);
-    await page.addInitScript(() => { try { localStorage.setItem('kb-install', '1'); } catch { /* storage blocked */ } });
+    // (and on Android, the Google Play tester sheet: lib/androidTest.ts, already opened its page)
+    await page.addInitScript(() => { try { localStorage.setItem('kb-install', '1'); localStorage.setItem('andr.asked', '1'); localStorage.setItem('andr.went', '1'); } catch { /* storage blocked */ } });
   }
   await page.addInitScript(() => {
     const w = window as unknown as { __tg: { events: [string, unknown][]; back: boolean }; TelegramWebviewProxy: unknown };
