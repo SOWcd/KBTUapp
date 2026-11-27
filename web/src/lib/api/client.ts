@@ -51,7 +51,7 @@ export const staffOrg = { id: 0 as Id, full: false, role: 'president', events: n
 const orgHead = (): Record<string, string> => ({ 'X-Staff-Org': String(staffOrg.id), ...(staffOrg.full && staffOrg.role !== 'president' ? { 'X-Staff-Role': staffOrg.role } : {}) });
 const staffOf = (method: string, path: string, event?: Id): Record<string, string> => {
   const o = staffOrg.id;
-  if (o && method === 'POST' && (path === '/photos' || path === '/videos' || path === `/orgs/${o}/events` || path === `/orgs/${o}/events/fill`)) return orgHead();
+  if (o && method === 'POST' && (path === '/photos' || path === '/photos?logo=1' || path === '/videos' || path === `/orgs/${o}/events` || path === `/orgs/${o}/events/fill`)) return orgHead();
   const id = event === undefined ? /^\/events\/(\d+)(?:[/?]|$)/.exec(path)?.[1] : String(event);
   // A personal action always uses the student's own authority, even while Admin has the event open.
   if (/^\/events\/\d+\/(?:registration|receipt|comments|saved|team|team-ask|volunteer|decline|rating|invites|santa\/wish|santa\/chat)(?:[/?]|$)/.test(path)) return {};
@@ -500,7 +500,8 @@ export const server = {
   markAge: (id: Id, user: Id, adult: boolean): Promise<{ adult: boolean }> => call('POST', `/events/${id}/age`, { user_id: user, adult }),
   /** the bot asks the checked-in guests marked under 18 to leave (once in 10 min: rate_limited); count = messaged */
   notifyMinors: (id: Id): Promise<{ count: number }> => call('POST', `/events/${id}/age/notify`),
-  uploadPhoto: (file: Blob): Promise<Media> => call('POST', '/photos', file), // Head+; re-encoded by the server, use its id as coverId
+  // Head+; re-encoded by the server, use its id as coverId; logo: a club's logo, its dark frame cut off (media.trim_frame)
+  uploadPhoto: (file: Blob, logo = false): Promise<Media> => call('POST', logo ? '/photos?logo=1' : '/photos', file),
   uploadVideo, // Head+; in pieces, then compressed: its id as videoId (wide: wideVideoId)
   video: (id: Id): Promise<Video> => call('GET', `/videos/${id}`), // my upload, while it is compressed
   /** Paid events (§4.3): my receipt for the seat I hold → the ticket at once (Kaspi's PDF or an image; the server reads it). */

@@ -71,7 +71,7 @@
     const cut = await sheets.cropPhoto(file); // framed first, as my own photo
     if (!cut) return;
     uploading = true;
-    try { const m = await api.uploadPhoto(await shrink(cut, 1200)); logo = { id: m.id, url: m.thumb }; haptic.ok(); }
+    try { const m = await api.uploadPhoto(await shrink(cut, 1200), true); logo = { id: m.id, url: m.thumb }; haptic.ok(); }
     catch { haptic.error(); say(t('ed.photoBad'), 'pleading_face_3d'); }
     finally { uploading = false; }
   }
