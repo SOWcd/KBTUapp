@@ -19,7 +19,7 @@
   import { cancelCasting, data, loadNews, phrase } from '../../lib/state/data.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { ago, relDay, time } from '../../lib/time';
-  import { haptic, onAndroid, openLink } from '../../lib/tg';
+  import { haptic, inTelegram, onAndroid, openLink } from '../../lib/tg';
   import { compact } from '../../lib/chats';
   import { coverFor, focusPos } from '../../lib/photo';
   import { castingOn, tagName, storyStart, seenEv, markSeen, type StoryGroup } from '../../lib/posts';
@@ -127,6 +127,9 @@
       ...(q.canDelete ? [{ label: t('news.hide'), destructive: true, onselect: () => void takeDown() }] : []),
     ], 'end');
   }
+  // the web app: ⋯ is the top pill (Overlay.action); inside Telegram it stays in the story's header
+  const mored = $derived(!!p && (p.canEdit || p.canDelete || !!session.me?.student));
+  $effect(() => { if (!inTelegram) overlay.action = mored ? { icon: Ellipsis, label: t('common.more'), run: more } : null; });
   function report() { if (!p) return; const q = p; sheets.report('post', q.id, q.title, () => drop(q)); }
 </script>
 
@@ -163,7 +166,7 @@
         <button class="org" onclick={() => sheets.club(g.org.id)}><OrgLogo org={g.org} size={36} />
           <span><small>{ago(p.createdAt)}{#if p.tag}{' · ' + tagName(p.tag)}{/if}{#if p.editedAt}{' · ' + t('news.edited')}{/if}</small></span></button>
         {#if p.pinned}<span class="pinned" aria-label={t('news.pinned')}><Pin size={15} /></span>{/if}
-        {#if p.canEdit || p.canDelete || session.me?.student}<button class="ib" onclick={more} aria-label={t('common.more')} aria-haspopup="menu"><Ellipsis size={20} /></button>{/if}
+        {#if mored && inTelegram}<button class="ib" onclick={more} aria-label={t('common.more')} aria-haspopup="menu"><Ellipsis size={20} /></button>{/if}
         <button class="ib" onclick={() => close(overlay.id)} aria-label={t('common.close')}><X size={20} /></button>
       </div>
     </div>

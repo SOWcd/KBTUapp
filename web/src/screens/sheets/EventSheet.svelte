@@ -63,7 +63,7 @@
   import { t, tn, money, friendsLine, fmtNum, type Key, placeOf, subjectOf } from '../../lib/i18n/index.svelte';
   import { relDay, time, nowTs, dayMonthShort, parts, at, duration, ago, multiDay, daySpan, endTime } from '../../lib/time';
   import Megaphone from '@lucide/svelte/icons/megaphone';
-  import { openLink, haptic, shareCard } from '../../lib/tg';
+  import { openLink, haptic, inTelegram, shareCard } from '../../lib/tg';
   import { count } from '../../lib/stats';
   import { sheets, registration } from '../../lib/state/sheets';
   import { coverFor, focusPos } from '../../lib/photo';
@@ -334,6 +334,8 @@
     shareCard({ kind: 'ev', id: String(id) }).then((sent) => { if (sent) say(phrase('say.shared'), 'party_popper_3d'); })
       .catch(() => { haptic.error(); say(t('common.error'), 'warning_3d'); });
   }
+  // the web app: Share is the top pill (Overlay.action), the save stays on the picture; inside Telegram both stay there
+  $effect(() => { if (!inTelegram) overlay.action = e && !preview ? { icon: Share, label: t('event.share'), run: share } : null; });
   // "My link": the same card with my badge code in its button, so who signs up by it counts for me (EventManage's "Who brought")
   const myLink = $derived(!!mem && !!e && e.status === 'published' && !started && !e.guestHost && !e.externalUrl && !inner(e) && !preview);
   // the team's tools group has a row to show (a guest host's event leaves a Member nothing)
@@ -375,7 +377,7 @@
       {:else}<button class="org" onclick={() => sheets.club(e.org.id)}><OrgTag org={e.org} /></button>{/if}
       <span class="acts" class:on={e.saved} inert={!!preview}>
         <IconButton icon={Bookmark} kind="glass" size="s" on={e.saved} label={e.saved ? t('event.saved') : t('event.save')} onclick={() => toggleSaved(id)} />
-        <IconButton icon={Share} kind="glass" size="s" label={t('event.share')} onclick={share} /></span></div>
+        {#if inTelegram}<IconButton icon={Share} kind="glass" size="s" label={t('event.share')} onclick={share} />{/if}</span></div>
       <div class="tags">
       {#if e.meeting}<Tag tone="onphoto">{t('event.meeting')}</Tag>{:else if e.visibility === 'members'}<Tag tone="onphoto">{t('event.teamOnly')}</Tag>{:else if e.visibility === 'leaders'}<Tag tone="onphoto">{t('event.leaders')}</Tag>{:else if e.firstYear}<Tag tone="warning">{t('event.firstYear')}</Tag>{/if}
       {#if e.school}<Tag tone="onphoto">{t('event.schoolOnly', { school: shortOf(e.org) })}</Tag>{/if}
