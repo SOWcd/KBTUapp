@@ -132,7 +132,11 @@
     catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   // by time only: a club's pin holds on its own page, not over everyone's news
-  const feed = $derived<Post[] | null>(posts && [...posts].sort((a, b) => b.createdAt - a.createdAt));
+  // up to 100 posts: the first screen's few in the tap's frame, the rest once the sheet has slid in (all at once kept
+  // every open of this sheet over half a second, stats tti.sheet.news, and stuttered the slide)
+  let rest = $state(false);
+  onMount(() => { const k = setTimeout(() => (rest = true), 360); return () => clearTimeout(k); });
+  const feed = $derived<Post[] | null>(posts && [...posts].sort((a, b) => b.createdAt - a.createdAt).slice(0, rest ? undefined : 5));
   // "your club" / "you follow"; anyone else's post says only when
   const why = (p: Post) => (me?.memberships.some((m) => m.org.id === p.org.id) ? t('news.yourClub') + ' · ' : data.orgs.some((o) => o.id === p.org.id && o.subscribed) ? t('news.following') + ' · ' : '');
 </script>
