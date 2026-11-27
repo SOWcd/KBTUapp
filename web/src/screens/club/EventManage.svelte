@@ -448,7 +448,7 @@
               {#each kaspi as a (a.receipt!.id)}
                 {@const r = a.receipt!}
                 <Row dense title={money(r.amount ?? 0)} subtitle={[r.paidAt && until(r.paidAt), r.sender, r.no && `№ ${r.no}`].filter(Boolean).join(' · ')}>
-                  {#snippet trailing()}<IconButton icon={Check} size="s" kind="tinted" label={t('mg.kaspiFound')} onclick={() => inKaspi(r.id)} />{/snippet}
+                  {#snippet trailing()}<IconButton icon={Check} size="s" kind="tinted" label={t('rc.ok')} onclick={() => inKaspi(r.id)} />{/snippet}
                 </Row>
               {/each}
             {/if}
