@@ -89,6 +89,7 @@ test('News with 100 posts: tap to first frame, main thread after', async ({ page
     `**Android News, 100 posts, CPU 4x** · tap → first frame ${Math.round(tti)} ms · in the 3 s after: ${after.n} long tasks, the longest ${Math.round(after.max)} ms, blocking ${Math.round(after.tbt)} ms · ${after.posts} posts drawn · the last post's opacity 0.3 s after scrolling to it: ${last}`,
   ]);
   expect(after.posts, 'every post drawn within 3 s').toBe(100);
+  expect(last, 'the last post is there when scrolled to, not fading in on a delay').toBe(1);
 });
 
 test.describe('a phone Telegram marks LOW', () => {
