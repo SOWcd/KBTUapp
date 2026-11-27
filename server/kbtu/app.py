@@ -2212,14 +2212,15 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     # ------------------------------------------------------------ photos
 
     @app.post("/api/photos")
-    async def upload_photo(request: Request, con: Con, v: Me):
-        """The file itself is the body (no multipart). Decoding and re-encoding run off the event loop."""
+    async def upload_photo(request: Request, con: Con, v: Me, logo: bool = False):
+        """The file itself is the body (no multipart). Decoding and re-encoding run off the event loop. logo: a club's
+        logo, its baked-in dark frame cut off (media.trim_frame)."""
         data = await read_upload(request)
         if not logic.organizes(con, v):  # before the work, not only after it
             raise ApiError("forbidden")
         await run_in_threadpool(logic.core.upload_attempt, con, v, "cover")
         with TemporaryDirectory(dir=photos.parent) as staged:
-            saved = await _picture(media.save, data, Path(staged))
+            saved = await _picture(lambda d: media.save(d, Path(staged), logo=logo), data)
 
             def keep() -> dict:
                 with db.tx(con):
