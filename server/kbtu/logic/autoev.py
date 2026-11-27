@@ -4,10 +4,16 @@ announcement (`worth`: long enough, a date or a time in it, no model) gets ONE m
 prompt (assistant.FILL, "today" being the post's day), which may also say it's no event. A future date and time: a DRAFT
 of that club, never published by itself (a wrong date in Afisha is worse than none), with the post as its source.
 Its leaders see it on top of Studio, the app's admins in Admin's queue (open it, or dismiss: Admin's event delete, with
-its Undo); the club's President hears it once from the bot. Each post is looked at once (auto_events), whatever came of it."""
+its Undo); the club's President hears it once from the bot. Each post is looked at once (auto_events), whatever came of it.
+
+An org the creator trusts (orgs.auto_publish: admin auto-publish, a KBTU office such as its psychological service) gets
+the event PUBLISHED at once instead, its followers told as by its own Publish, when the post itself says the day and the
+time the model read (`clear`), within AHEAD_MAX, and at most PUBLISH_MAX a day; anything less certain stays a draft as
+for everyone. A later edit of the post changes nothing (no post is looked at twice); Admin's event delete takes it down."""
 from __future__ import annotations
 
 import difflib
+import json
 import logging
 import re
 import time
@@ -16,12 +22,14 @@ import httpx
 
 from .. import ai, llm
 from ..db import tx
-from .core import TZ, _event_cover, at, day_start, now, one, org_ref, rows
+from .core import TZ, _event_cover, at, day_start, log_action, now, one, org_ref, rows
 
 log = logging.getLogger("kbtu.autoev")
 
 MIN_TEXT = 60     # shorter is a caption, not an announcement
 DAY_MAX = 10      # model calls per club a day at most: a channel posting dates all day costs no more
+PUBLISH_MAX = 3   # a trusted org's events published by themselves a day at most: past it, drafts (a channel gone wrong floods no Afisha)
+AHEAD_MAX = 60 * 86400  # further off than that published by itself is more likely a misread date: a draft
 
 _MONTHS = (r"(?:\u044f\u043d\u0432\u0430\u0440|\u0444\u0435\u0432\u0440\u0430\u043b|\u043c\u0430\u0440\u0442|\u0430\u043f\u0440\u0435\u043b|\u043c\u0430[\u0439\u044f]|\u0438\u044e\u043d|\u0438\u044e\u043b|\u0430\u0432\u0433\u0443\u0441\u0442|\u0441\u0435\u043d\u0442\u044f\u0431\u0440|\u043e\u043a\u0442\u044f\u0431\u0440|\u043d\u043e\u044f\u0431\u0440|\u0434\u0435\u043a\u0430\u0431\u0440"
            r"|\u049b\u0430\u04a3\u0442\u0430\u0440|\u0430\u049b\u043f\u0430\u043d|\u043d\u0430\u0443\u0440\u044b\u0437|\u0441\u04d9\u0443\u0456\u0440|\u043c\u0430\u043c\u044b\u0440|\u043c\u0430\u0443\u0441\u044b\u043c|\u0448\u0456\u043b\u0434\u0435|\u0442\u0430\u043c\u044b\u0437|\u049b\u044b\u0440\u043a\u04af\u0439\u0435\u043a|\u049b\u0430\u0437\u0430\u043d|\u049b\u0430\u0440\u0430\u0448\u0430|\u0436\u0435\u043b\u0442\u043e\u049b\u0441\u0430\u043d"
@@ -40,6 +48,17 @@ _DATEISH = re.compile(
 def worth(text: str) -> bool:
     """A channel post worth the model's look: long enough, with a date or a time expression in it (ru, kk, en)."""
     return len(text.strip()) >= MIN_TEXT and bool(_DATEISH.search(text))
+
+
+def clear(text: str, starts: int) -> bool:
+    """The post itself says the start the model read: its time as typed (19:00, 19.00) and its day, as a number with
+    its month (21.11, 21 \u043d\u043e\u044f\u0431\u0440\u044f, November 21) or a word (tomorrow, Friday: from the post's own day). Published by itself only then."""
+    t = time.gmtime(starts + TZ)
+    d, m = rf"0?{t.tm_mday}", rf"0?{t.tm_mon}"
+    hm = re.search(rf"(?<!\d)0?{t.tm_hour}[:.]{t.tm_min:02d}(?!\d)", text)
+    day = re.search(rf"(?<![\d.:]){d}[./]{m}(?![\d:])|(?<!\d){d}(?:-?(?:\u0433\u043e|\u0448\u0456|\u0448\u044b|th|st|nd|rd))?\s+{_MONTHS}"
+                    rf"|{_MONTHS}[a-z\u0430-\u044f\u04d9\u0456\u04a3\u0493\u04af\u04b1\u049b\u04e9\u04bb]*\s+{d}(?!\d)|\b(?:{_WORDS})", text, re.I)
+    return bool(hm and day)
 
 
 NOT_ONE = """
@@ -105,14 +124,29 @@ def made(con, pid: int, answer: str, text: str = "") -> int | None:
         if "tr" in f:
             e.update(organizing._own_tr({"tr": f["tr"]}, e))
         e["tint"] = organizing.shade(e["color"])
-        t = now()  # one time for both: an untouched draft is one whose updated_at is its created_at (cover)
+        t = now()  # one time for both: an untouched event is one whose updated_at is its created_at (cover)
+        out = _trusted(con, a["org_id"]) and clear(text, starts) and starts <= t + AHEAD_MAX
+        if out:
+            e["published_at"] = t
         eid = con.execute(f"""INSERT INTO events (org_id, status, {', '.join(e)}, created_at, updated_at)
-            VALUES (?, 'draft', {', '.join('?' * len(e))}, ?, ?)""", (a["org_id"], *e.values(), t, t)).lastrowid  # keys from above
+            VALUES (?, ?, {', '.join('?' * len(e))}, ?, ?)""", (a["org_id"], "published" if out else "draft", *e.values(), t, t)).lastrowid  # keys from above
         con.execute("UPDATE auto_events SET event_id = ? WHERE post_id = ?", (eid, pid))
         cover(con, pid)
+        if out:  # its followers hear as from its own Publish; nobody is asked to check it
+            row = one(con, "SELECT * FROM events WHERE id = ?", eid)
+            if organizing._tell_after(con, row) is None:
+                organizing.tell_followers(con, row, a["org_id"], 0)
+            log_action(con, None, "event_autopublish", f"event:{eid}", json.dumps({"post": pid}))
+            return eid
         for (uid,) in rows(con, "SELECT user_id FROM org_members WHERE org_id = ? AND role = 'president'", a["org_id"]):
             notify(con, uid, "auto_event", f"ae:{eid}")
     return eid
+
+
+def _trusted(con, oid: int) -> bool:
+    """The org publishes its found events itself (auto_publish), under the day's cap (inside the caller's tx)."""
+    return bool(one(con, "SELECT 1 FROM orgs WHERE id = ? AND auto_publish = 1 AND status = 'active'", oid)) and one(con, """SELECT COUNT(*)
+        FROM auto_events a JOIN events e ON e.id = a.event_id AND e.status != 'draft' WHERE a.org_id = ? AND a.at > ?""", oid, now() - 86400)[0] < PUBLISH_MAX
 
 
 async def propose(con, cfg, http: httpx.AsyncClient, pid: int, text: str, posted: int) -> int | None:
@@ -133,17 +167,19 @@ async def propose(con, cfg, http: httpx.AsyncClient, pid: int, text: str, posted
 TALL_FOCUS = "0.500,0.200"  # a poster taller than wide (4:5, 3:4): its title sits high, the wide frames keep it in view
 # an untouched draft: nobody saved it yet (the editor's save sets updated_at); +1: rows made before `at` above
 UNTOUCHED = "e.status = 'draft' AND e.updated_at <= e.created_at + 1"
+FRESH = "e.status != 'cancelled' AND e.updated_at <= e.created_at + 1"  # or published by itself (a trusted org's), untouched since
 
 
 def cover(con, pid: int) -> None:
     """The post's picture as its draft's cover (the draft is the finished post), whenever it reaches the
-    post (an album's photo after its caption: mirror.take calls this too), only while the draft is untouched and has none:
+    post (an album's photo after its caption: mirror.take calls this too), only while the draft (or the event a trusted
+    org's post published) is untouched and has none:
     a cover a person set, or took off, stays. The event gets its own file row (event_cover, no owner) over the same
     stored picture (files are named by their content, media.store): the draft's delete drops that row, the post's
     take-down the post's (uncover), and the picture leaves the disk with the last row (account._drop_photo)."""
     with tx(con):
         r = one(con, f"""SELECT e.id AS eid, f.* FROM auto_events a
-            JOIN events e ON e.id = a.event_id AND {UNTOUCHED} AND e.hidden_at IS NULL AND e.cover_file_id IS NULL
+            JOIN events e ON e.id = a.event_id AND {FRESH} AND e.hidden_at IS NULL AND e.cover_file_id IS NULL
             JOIN posts p ON p.id = a.post_id AND p.hidden_at IS NULL JOIN files f ON f.id = p.photo_file_id WHERE a.post_id = ?""", pid)
         if not r:
             return

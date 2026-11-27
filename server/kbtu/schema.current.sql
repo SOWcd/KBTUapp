@@ -883,7 +883,7 @@ CREATE TABLE orgs (
   status           TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','hidden','archived')),
   created_by       INTEGER REFERENCES users(id) ON DELETE SET NULL,
   created_at       INTEGER NOT NULL
-, links TEXT NOT NULL DEFAULT '[]', recruiting INTEGER NOT NULL DEFAULT 1, memo_opened_at INTEGER, memo_opened_by INTEGER REFERENCES users(id) ON DELETE SET NULL, i18n TEXT, lang TEXT, ai_tries INTEGER NOT NULL DEFAULT 0, members_hidden INTEGER NOT NULL DEFAULT 0, abbr TEXT, join_questions TEXT, top_at INTEGER, category TEXT) STRICT;
+, links TEXT NOT NULL DEFAULT '[]', recruiting INTEGER NOT NULL DEFAULT 1, memo_opened_at INTEGER, memo_opened_by INTEGER REFERENCES users(id) ON DELETE SET NULL, i18n TEXT, lang TEXT, ai_tries INTEGER NOT NULL DEFAULT 0, members_hidden INTEGER NOT NULL DEFAULT 0, abbr TEXT, join_questions TEXT, top_at INTEGER, category TEXT, auto_publish INTEGER NOT NULL DEFAULT 0 CHECK (auto_publish IN (0, 1)), guests_private INTEGER NOT NULL DEFAULT 0 CHECK (guests_private IN (0, 1))) STRICT;
 CREATE TABLE post_reactions (
   post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

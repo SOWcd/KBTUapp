@@ -197,6 +197,10 @@ def deleting(con, eid: int) -> bool:
 
 # an orgs row with an official club's tools: official, KBTU's own office or school, or a club at the Ascent's top (clubs.py)
 FULL_TOOLS = "(official = 1 OR kind != 'club' OR top_at IS NOT NULL)"
+# an event (its id: {e}) whose guests friends may see: never one hosted or co-hosted by an org with guests_private (a
+# psychological service: who goes there is nobody's business); the organizers' own list is not this
+GUESTS_SEEN = """NOT EXISTS (SELECT 1 FROM events gx JOIN orgs go ON go.id IN (gx.org_id, gx.co_org_id) AND go.guests_private = 1 WHERE gx.id = {e})
+    AND NOT EXISTS (SELECT 1 FROM event_cohosts gc JOIN orgs go ON go.id = gc.org_id AND go.guests_private = 1 WHERE gc.event_id = {e})"""
 
 
 # the staff's decisions on what waits (Admin → Inbox), and their undos: the audit lines Done shows and decided() reads
@@ -666,9 +670,9 @@ def cards(con, v: Viewer, evs: list[sqlite3.Row], share: bool = False) -> list[d
     saved = {r[0] for r in rows(con, f"SELECT event_id FROM saved_events WHERE user_id = ? AND event_id IN ({q})", v.id, *ids)}
     asks = dict(rows(con, f"SELECT event_id, status FROM team_asks WHERE user_id = ? AND event_id IN ({q})", v.id, *ids))  # seats.team_ask
     friends: dict[int, list] = {}
-    if v.student:  # friends see where you go only if you allow it; guests see nobody
+    if v.student:  # friends see where you go only if you allow it; guests see nobody; nobody at a private-guests org's (GUESTS_SEEN)
         for p in rows(con, f"""SELECT {PERSON_COLS}, r.event_id AS ev FROM registrations r JOIN users u ON u.id = r.user_id
-                LEFT JOIN students s ON s.user_id = u.id WHERE r.event_id IN ({q}) AND r.status = 'going' AND u.show_going = 1
+                LEFT JOIN students s ON s.user_id = u.id WHERE r.event_id IN ({q}) AND r.status = 'going' AND u.show_going = 1 AND {GUESTS_SEEN.format(e='r.event_id')}
                 AND r.user_id IN (SELECT b FROM friendships WHERE a = ? UNION SELECT a FROM friendships WHERE b = ?) ORDER BY r.id""", *ids, v.id, v.id):
             friends.setdefault(p["ev"], []).append(person_ref(p))
     out = []

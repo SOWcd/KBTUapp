@@ -2244,6 +2244,7 @@ const en: Dict = {
   'clubs.awaitsDmp': "Awaiting DMP's review",
   'clubs.daysLeft': { one: "{n} day left", other: "{n} days left" },
   'clubs.gov': "Student Government",
+  'clubs.office': "Official KBTU service",
   'clubs.open': "Open",
   'clubs.leave': "Leave",
   'clubs.popular': "Popular",

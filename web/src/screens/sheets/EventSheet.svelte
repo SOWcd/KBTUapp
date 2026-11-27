@@ -68,6 +68,7 @@
   import { sheets, registration } from '../../lib/state/sheets';
   import { coverFor, focusPos } from '../../lib/photo';
   import { nameOf, schoolName, shortOf } from '../../lib/short';
+  import { service } from '../../lib/clubs';
   import Group from '../../ui/Group.svelte';
   import Row from '../../ui/Row.svelte';
   import Section from '../../ui/Section.svelte';
@@ -377,7 +378,8 @@
         <IconButton icon={Share} kind="glass" size="s" label={t('event.share')} onclick={share} /></span></div>
       <div class="tags">
       {#if e.meeting}<Tag tone="onphoto">{t('event.meeting')}</Tag>{:else if e.visibility === 'members'}<Tag tone="onphoto">{t('event.teamOnly')}</Tag>{:else if e.visibility === 'leaders'}<Tag tone="onphoto">{t('event.leaders')}</Tag>{:else if e.firstYear}<Tag tone="warning">{t('event.firstYear')}</Tag>{/if}
-      {#if e.school}<Tag tone="onphoto">{t('event.schoolOnly', { school: shortOf(e.org) })}</Tag>{/if}</div>
+      {#if e.school}<Tag tone="onphoto">{t('event.schoolOnly', { school: shortOf(e.org) })}</Tag>{/if}
+      {#if service(e.org)}<Tag tone="onphoto">{t('clubs.office')}</Tag>{/if}</div>
     </div>
 
     <!-- what, when, how much: type alone, read in one look -->

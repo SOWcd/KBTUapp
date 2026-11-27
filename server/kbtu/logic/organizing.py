@@ -1384,7 +1384,8 @@ def event_invites(con, v: Viewer, eid: int) -> list[dict]:
     e = _event(con, v, eid)
     out = []
     # who's coming and whom I asked: read once for the list, not per friend
-    signed = {r[0] for r in rows(con, "SELECT user_id FROM registrations WHERE event_id = ? AND status IN ('going', 'hold', 'waitlist')", eid)}
+    signed = {r[0] for r in rows(con, f"""SELECT user_id FROM registrations WHERE event_id = ? AND status IN ('going', 'hold', 'waitlist')
+        AND {core.GUESTS_SEEN.format(e='event_id')}""", eid)}  # a private-guests org's: every friend looks invitable
     invited = {r[0] for r in rows(con, "SELECT to_id FROM friend_invites WHERE from_id = ? AND event_id = ?", v.id, eid)}
     for p in rows(con, PERSON + " WHERE u.id IN (SELECT b FROM friendships WHERE a = ? UNION SELECT a FROM friendships WHERE b = ?)", v.id, v.id):
         if not sees_school(con, p["id"], e):  # a school's own event: friends of another school aren't offered (no query for any other event)

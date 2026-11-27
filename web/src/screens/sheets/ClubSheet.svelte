@@ -4,6 +4,8 @@
   // club can be written to: a DM to its President (lib/clubdm; in the footer once applications are closed). Its Vice+ change
   // the logo and the rest by tapping the logo (it is looked for here, not in Studio).
   import OfficialMark from '../../ui/OfficialMark.svelte';
+  import OfficeMark from '../../ui/OfficeMark.svelte';
+  import { service } from '../../lib/clubs';
   import Bell from '@lucide/svelte/icons/bell';
   import BellCheck from '@lucide/svelte/icons/bell-check';
   import TelegramMark from '../../ui/TelegramMark.svelte';
@@ -99,8 +101,8 @@
         <span class="lg"><button class="logo" onclick={() => sheets.clubEdit(o.id)} aria-label={t('ce.title')}><OrgLogo org={o} size={84} /></button>
           <span class="cam"><IconButton icon={Camera} kind="primary" size="s" label={t('ce.title')} onclick={() => sheets.clubEdit(o.id)} /></span></span>
       {:else}<OrgLogo org={o} size={84} />{/if}
-      <h2 class="t-h2 name">{o.name}{#if o.official && o.kind === 'club'}<span class="ok"><OfficialMark size={21} explain /></span>{/if}</h2>
-      <p class="t-foot">{o.official ? t('clubs.official') : t('club.initiative')}</p>
+      <h2 class="t-h2 name">{o.name}{#if o.official && o.kind === 'club'}<span class="ok"><OfficialMark size={21} explain /></span>{/if}{#if service(o)}<span class="ok"><OfficeMark size={20} /></span>{/if}</h2>
+      <p class="t-foot">{service(o) ? t('clubs.office') : o.official ? t('clubs.official') : t('club.initiative')}</p>
       <p class="t-foot stats">{[tn('clubs.subscribers', o.subscribers), tn('club.members', o.members)].join(' · ')}</p>
       {#if o.myRole}<span class="tag"><Tag tone="accent">{t('club.myRole', { role: roleLabel({ role: o.myRole, title: o.myTitle, titleKk: o.myTitleKk, titleEn: o.myTitleEn }) })}</Tag></span>
       {:else if o.round}<span class="tag"><Tag tone="success">{t('cast.recruiting', { when: dayMonth(o.round.closesAt) })}</Tag></span>

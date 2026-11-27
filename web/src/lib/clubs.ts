@@ -24,6 +24,8 @@ export function nextByOrg(events: EventCard[]): Map<number, string> {
       m.set(e.org.id, `${e.startsAt - now < 6 * 86400 ? weekdayShort(e.startsAt) : dayMonthShort(e.startsAt)} ${time(e.startsAt)} · ${e.title}`);
   return m;
 }
+/** KBTU's own official service (an office: the psychological service, DMP), not a student club: its own mark. */
+export const service = (o?: Pick<OrgRef, 'kind' | 'official'> | null) => !!o && o.kind === 'office' && o.official;
 /** An initiative at the Ascent's top: its line says it's waiting for DMP. */
 export const waitsDmp = (o: Org) => !!o.top && !o.official;
 /** A club row's line: waiting for DMP; "recruiting" for one taking applications any time; what's next; its latest event

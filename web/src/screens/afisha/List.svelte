@@ -38,6 +38,7 @@
   import { castingOn, tagName } from '../../lib/posts';
   import CastingCard from '../../ui/CastingCard.svelte';
   import { nameOf, shortOf } from '../../lib/short';
+  import { service } from '../../lib/clubs';
   import { inner, onTeam } from '../../lib/perms';
   import Poster from '../../ui/Poster.svelte';
   import OrgLogo from '../../ui/OrgLogo.svelte';
@@ -337,7 +338,8 @@
   {:else if e.guestHost}<Tag tone="neutral">{t('event.partner')}</Tag>
   {:else if e.visibility === 'members'}<Tag tone="accent">{t('event.teamOnly')}</Tag>
   {:else if e.school}<Tag tone="neutral">{t('event.schoolOnly', { school: shortOf(e.org) })}</Tag>
-  {:else if e.firstYear}<Tag tone="warning">{t('event.firstYear')}</Tag>{/if}
+  {:else if e.firstYear}<Tag tone="warning">{t('event.firstYear')}</Tag>
+  {:else if service(e.org)}<Tag tone="neutral">{t('clubs.office')}</Tag>{/if}
   {#if e.friends.length && !cancelled}
     <span class="fr"><span class="av">{#each e.friends.slice(0, 3) as f (f.id)}<Avatar person={f} size={18} tappable={false} />{/each}</span>
       <span class="ellipsis">{friendsLine(e.friends.map((f) => f.name), over)}</span></span>

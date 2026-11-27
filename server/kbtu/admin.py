@@ -6,6 +6,12 @@
   .venv/bin/python -m kbtu.admin logos-trim [--apply]                   every club logo's baked-in dark frame cut off, as an upload
                                 now does (media.trim_frame); without --apply only which ones would change
   .venv/bin/python -m kbtu.admin org <slug> "<name>" <short> <emoji> [--official] [--school]   a school is official, never closes
+  .venv/bin/python -m kbtu.admin office <slug> <short> <emoji> "<ru>" "<kk>" "<en>" <https://t.me/channel>   a KBTU service
+                                (kind office): official, its name in the three languages as typed, its public channel the
+                                main chat with the mirror on; who goes to its events never shows to other students
+                                (guests_private). Its found events stay drafts until auto-publish
+  .venv/bin/python -m kbtu.admin auto-publish <slug> on | off   an org's events found in its channel published at once
+                                (logic/autoev.py: a clear future date and time, a few a day; the rest drafts), audited
   .venv/bin/python -m kbtu.admin org-award <id | slug | "exact name"> <year> "<title>"   a KBTU Awards nomination it won,
                                 on its card (the ceremony's English name); org-award-del with the same words removes it
   .venv/bin/python -m kbtu.admin org-role <role id> "<ru>" ["<kk>"]     a club role's title corrected: those languages count as typed
@@ -282,6 +288,46 @@ def _event_input(given: bytes | None = None) -> dict:
     if not isinstance(body, dict):
         sys.exit(f"stdin: one JSON object, {EVENT_STDIN >> 20} MB at most")
     return body
+
+
+def _office(con, slug: str, short: str, emoji: str, ru: str, kk: str, en: str, channel: str) -> None:
+    """A KBTU service (admin office): kind office, official, named as typed in each language (no "KBTU" cut: it is
+    KBTU's own), guests private; its public channel looked up on t.me and linked as the main chat, mirror on."""
+    import asyncio
+    import httpx
+    from . import media, mirror
+    from .logic import add_org_chat, chat_link
+    names = [" ".join(x.split()) for x in (ru, kk, en)]
+    if not re.fullmatch(r"[a-z0-9]{2,24}", slug) or not 1 <= len(short) <= 2 or not re.fullmatch(r"[a-z0-9_]{1,40}", emoji) \
+            or not all(2 <= len(x) <= 80 for x in names):
+        sys.exit("slug: [a-z0-9]{2,24}; short: 1-2 letters; emoji: a key of the 3D set; names: 2-80 characters each")
+    url = chat_link(channel)
+    if not url or not mirror.username(url):
+        sys.exit("the channel: a public one, @name or https://t.me/name")
+    if not _slug_free(con, slug, None):
+        sys.exit(f"{slug}: taken")
+    boss = one(con, "SELECT id FROM users WHERE is_founder = 1 AND role = 'admin'") or sys.exit("no owner (the founder admin) yet")
+
+    async def peek() -> dict:
+        async with httpx.AsyncClient(timeout=10) as http:
+            return await media.chat_peek(http, url)
+    p = asyncio.run(peek())
+    if not p["ok"] or not p.get("channel"):
+        sys.exit(f"{url}: Telegram shows no public channel there (try again later if t.me is down)")
+    p.pop("image", None)  # its avatar comes with the chats' daily look
+    with db.tx(con):
+        oid = create_org(con, None, names[0], short, emoji, True, slug, "office")
+        con.execute("UPDATE orgs SET name = ?, i18n = ?, lang = 'ru', guests_private = 1 WHERE id = ?",
+                    (names[0], json.dumps({"kk": {"name": names[1]}, "en": {"name": names[2]}}, ensure_ascii=False), oid))
+        try:
+            add_org_chat(con, Viewer(boss["id"], "admin", True), oid, url, p)
+        except ApiError as exc:
+            sys.exit(f"{url}: {exc}")  # another org's already: the transaction rolls back, nothing is made
+        c = one(con, "SELECT main, mirror FROM chats WHERE org_id = ? AND url = ?", oid, url)
+        if not c or not c["main"]:
+            sys.exit(f"{url}: not linked as the main channel")
+        con.execute("UPDATE chats SET mirror = 1 WHERE org_id = ? AND url = ?", (oid, url))
+    print(f"created office {slug} (id {oid}): {url} mirrored; auto-publish off (admin auto-publish {slug} on)")
 
 
 def _logos_trim(con, root: Path, apply: bool) -> None:
@@ -790,6 +836,13 @@ def main(args: list[str]) -> None:
             sys.exit(f"{slug}: taken")
         create_org(con, None, name, short, emoji, "--official" in args, slug, "school" if "--school" in args else "club")
         print(f"created {slug}")
+    elif cmd == "office" and len(args) == 8:
+        _office(con, *args[1:])
+    elif cmd == "auto-publish" and len(args) == 3 and args[2] in ("on", "off"):
+        o = one(con, "SELECT id FROM orgs WHERE slug = ?", args[1]) or sys.exit(f"{args[1]}: no such org")
+        con.execute("UPDATE orgs SET auto_publish = ? WHERE id = ?", (int(args[2] == "on"), o["id"]))
+        log_action(con, None, "org_auto_publish", f"org:{o['id']}", json.dumps({"on": args[2] == "on"}))
+        print(f"{args[1]}: auto-publish {args[2]}")
     elif cmd == "logos-trim" and args[1:] in ([], ["--apply"]):
         _logos_trim(con, Path(cfg.db_path).resolve().parent / "media", "--apply" in args)
     elif cmd == "rename" and len(args) == 3 and args[2].strip():  # e.g. "Moments" without its sparkles

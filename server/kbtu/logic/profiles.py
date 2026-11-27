@@ -804,14 +804,16 @@ def person(con, v: Viewer, uid: int) -> dict:
     going = []
     if link and u["show_going"]:  # only events I may see myself: a friend's team-only meeting stays theirs
         roles, hidden = _roles(con, v), _hidden_orgs(con)  # read once for the list, not per event (_visible)
-        going = cards(con, v, [e for e in rows(con, """SELECT e.* FROM registrations r JOIN events e ON e.id = r.event_id
-            WHERE r.user_id = ? AND r.status = 'going' AND e.status = 'published' AND e.starts_at > ? ORDER BY e.starts_at""", uid, core.now())
+        going = cards(con, v, [e for e in rows(con, f"""SELECT e.* FROM registrations r JOIN events e ON e.id = r.event_id
+            WHERE r.user_id = ? AND r.status = 'going' AND e.status = 'published' AND e.starts_at > ? AND {core.GUESTS_SEEN.format(e='e.id')}
+            ORDER BY e.starts_at""", uid, core.now())
             if _visible(con, v, e, roles, hidden)])
     # "Bring a friend": the upcoming events I already invited them to, so the Invite sheet opens with them "Invited"
     invited = [r[0] for r in rows(con, """SELECT i.event_id FROM friend_invites i JOIN events e ON e.id = i.event_id
         WHERE i.from_id = ? AND i.to_id = ? AND e.starts_at > ?""", v.id, uid, core.now())] if link else []
-    earned = rows(con, """SELECT e.* FROM registrations r JOIN events e ON e.id = r.event_id
-        WHERE r.user_id = ? AND r.checked_in_at IS NOT NULL AND e.badge_name IS NOT NULL ORDER BY e.starts_at DESC""", uid) if close else []
+    earned = rows(con, f"""SELECT e.* FROM registrations r JOIN events e ON e.id = r.event_id
+        WHERE r.user_id = ? AND r.checked_in_at IS NOT NULL AND e.badge_name IS NOT NULL AND (r.user_id = ? OR {core.GUESTS_SEEN.format(e='e.id')})
+        ORDER BY e.starts_at DESC""", uid, v.id) if close else []
     # the role shows only to the club's own team: outside, just the club
     clubs = rows(con, f"""SELECT m.role, {core.TITLES}, EXISTS (SELECT 1 FROM org_members x WHERE x.org_id = m.org_id AND x.user_id = ?) AS mine, o.*
         FROM org_members m JOIN orgs o ON o.id = m.org_id LEFT JOIN org_roles t ON t.id = m.role_id
@@ -915,6 +917,7 @@ def friends(con, v: Viewer) -> dict:
     roles, hidden = _roles(con, v), _hidden_orgs(con)  # read once for the list, not per event (_visible)
     going = [e for e in rows(con, f"""SELECT DISTINCT e.* FROM registrations r JOIN events e ON e.id = r.event_id JOIN users u ON u.id = r.user_id
         WHERE r.status = 'going' AND u.show_going = 1 AND e.status = 'published' AND COALESCE(e.ends_at, e.starts_at + {NO_END}) > ?
+        AND {core.GUESTS_SEEN.format(e='e.id')}
         AND r.user_id IN (SELECT b FROM friendships WHERE a = ? UNION SELECT a FROM friendships WHERE b = ?)
         ORDER BY e.starts_at LIMIT 30""", core.now(), v.id, v.id) if _visible(con, v, e, roles, hidden)]
     lit = streaks_now(con, [r["person"]["id"] for r in mine])  # friends only: their flames by mine on Profile
