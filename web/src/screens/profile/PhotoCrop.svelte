@@ -1,11 +1,10 @@
 <script lang="ts">
   // A new photo of me (or a club's logo), framed before it's sent, like iOS's "Move and Scale":
   // drag to move, pinch or the wheel to zoom around the fingers, a double tap resets; the window has the lanyard's
-  // rounded square. Choose sends that square (≤1024 px, JPEG; the server keeps 1600). The × or Back cancels.
+  // rounded square. Choose sends that square (≤1024 px, JPEG; the server keeps 1600). Back cancels.
   // The photo is decoded off the main thread, upright by its EXIF, and shrunk to ≤3000 px first (a 48 MP photo would
   // freeze the phone); a gesture writes one transform per frame, no layout. The math: lib/crop.ts.
   import { onMount } from 'svelte';
-  import CloseX from '../../ui/CloseX.svelte';
   import Button from '../../ui/Button.svelte';
   import { close, removeOverlay, hideChrome, say, type Overlay } from '../../lib/state/ui.svelte';
   import { t } from '../../lib/i18n/index.svelte';
@@ -148,12 +147,11 @@
   </div>
   <p class="tip t-foot">{t('look.cropTip')}</p>
   <div class="go"><Button kind="filled" size="l" full onclick={choose} disabled={!w}>{t('look.cropDone')}</Button></div>
-  <CloseX onclick={() => close(overlay.id)} />
 </div>
 
 <style>
   .crop { position: absolute; inset: 0; z-index: var(--z-sheet); background: black; display: flex; flex-direction: column; align-items: center;
-    justify-content: center; gap: 18px; padding: var(--top) 24px var(--close-room); overflow: hidden; }
+    justify-content: center; gap: 18px; padding: var(--top) 24px calc(var(--safe-bottom) + 24px); overflow: hidden; }
   .stage { position: relative; touch-action: none; cursor: grab; }
   .stage:active { cursor: grabbing; }
   .stage canvas { position: absolute; left: 50%; top: 50%; max-width: none; transform: translate(-50%, -50%); transform-origin: center;

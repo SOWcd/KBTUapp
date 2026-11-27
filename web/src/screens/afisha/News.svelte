@@ -155,7 +155,7 @@
     {#if p.casting}<CastingBlock casting={p.casting} />{/if}
     <!-- the card crops it: a tap shows it whole -->
     {#if p.photo}{@const ph = p.photo}<button class="pic" aria-label={p.title} onclick={() => sheets.photos([{ ...ph, id: ph.id ?? -p.id, by: null, mine: true, canDelete: false }], 0)}>
-      <img src={ph.url} alt="" loading="lazy" decoding="async" style:object-position={focusPos(ph)} /></button>{/if}
+      <img draggable="false" src={ph.url} alt="" loading="lazy" decoding="async" style:object-position={focusPos(ph)} /></button>{/if}
     <h3 class="tt">{#if rich}<RichText text={p.title} entities={p.titleFmt} />{:else}{p.title}{/if}</h3>
     {#if body}
       <p class="bd" class:fold={long(body) && !open.has(p.id)}>{#if rich}<RichText text={body} entities={p.fmt} />{:else}<Linked text={body} />{/if}</p>

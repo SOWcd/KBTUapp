@@ -371,7 +371,7 @@
           <p class="tx" class:fade={long[p.id] && !open[p.id]} class:open={open[p.id]} style:--h="{full[p.id] ?? 0}px" use:measure={p.id}><Marked text={p.body} {quote} /></p>
           <!-- the photos (up to 4, the channel's album): a tap shows them whole -->
           {#if p.photos?.length}<div class="pics n{p.photos.length}" style:--ar={p.photos.length === 1 ? Math.min(2, Math.max(0.75, p.photos[0].w / p.photos[0].h)) : null}>{#each p.photos as ph, i (i)}<button class="ph" aria-label={t('fc.photo')}
-            onclick={() => sheets.photos(p.photos.map((x, j) => ({ ...x, id: j + 1, by: null, mine: p.mine, canDelete: false })), i)}><img src={ph.thumb} alt="" loading="lazy" decoding="async" /></button>{/each}</div>{/if}
+            onclick={() => sheets.photos(p.photos.map((x, j) => ({ ...x, id: j + 1, by: null, mine: p.mine, canDelete: false })), i)}><img draggable="false" src={ph.thumb} alt="" loading="lazy" decoding="async" /></button>{/each}</div>{/if}
           {#if long[p.id] && !open[p.id]}<span class="more"><Button kind="plain" size="s" onclick={() => { open[p.id] = true; }}>{t('common.more')}</Button></span>{/if}
           <!-- my post waiting for a moderator: why, one quiet line (to me alone), the AI's tip under it -->
           {#if why}

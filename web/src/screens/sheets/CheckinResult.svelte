@@ -19,7 +19,6 @@
   import { calm } from '../../ui/fold';
   import Poster from '../../ui/Poster.svelte';
   import Button from '../../ui/Button.svelte';
-  import CloseX from '../../ui/CloseX.svelte';
   import ScanQrCode from '@lucide/svelte/icons/scan-qr-code';
 
   let { overlay, kind, title, event = null, onsign, text }: { overlay: Overlay; kind: CiKind; title: string; event?: Id | null; onsign?: () => void; text?: string } = $props(); // text: why not, said exactly (a used ticket, a receipt to check)
@@ -91,7 +90,6 @@
       {/if}
     </div>
   </div>
-  <CloseX onclick={() => close(overlay.id)} />
 </div>
 
 <style>
@@ -103,7 +101,7 @@
   }
   .scrim::before { content: ''; position: absolute; inset: 0; opacity: 0.34; background: radial-gradient(60% 38% at 50% 44%, var(--c), transparent 72%); }
   :global(html.lowfx) .scrim { background: rgba(3, 4, 10, 0.94); -webkit-backdrop-filter: none; backdrop-filter: none; }
-  .wrap { position: absolute; inset: 0; z-index: var(--z-sheet); pointer-events: none; display: flex; flex-direction: column; padding-bottom: var(--close-room); }
+  .wrap { position: absolute; inset: 0; z-index: var(--z-sheet); pointer-events: none; display: flex; flex-direction: column; padding-bottom: var(--safe-bottom); }
   .page { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; display: flex; flex-direction: column; align-items: center; justify-content: center;
     padding: calc(max(var(--top), var(--head-bottom)) + 8px) 24px 20px; }
   .page::-webkit-scrollbar { display: none; }

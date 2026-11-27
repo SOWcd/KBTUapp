@@ -18,7 +18,6 @@
   import { say } from '../../lib/state/ui.svelte';
   import { phrase } from '../../lib/state/data.svelte';
   import { glass, recenter } from '../../ui/glass';
-  import CloseX from '../../ui/CloseX.svelte';
   import Award from '../../ui/Award.svelte';
   import { paintCoinBack } from '../../ui/coinback';
   import MedalArt from '../../ui/Medal.svelte';
@@ -311,7 +310,6 @@
     </div>
   {/if}
   </div>
-  <CloseX onclick={() => leave()} />
 </div>
 
 <style>
@@ -323,9 +321,9 @@
      for seconds): a full-screen blur re-rastered under a canvas that redraws every frame overran the GPU; solid there */
   .scrim.flat { -webkit-backdrop-filter: none; backdrop-filter: none; background: radial-gradient(70% 45% at 50% 30%, rgba(var(--glow), 0.1), transparent 70%), rgba(3, 4, 10, 0.96); }
   :global(html.lowfx) .scrim { -webkit-backdrop-filter: none; backdrop-filter: none; background: radial-gradient(70% 45% at 50% 30%, rgba(var(--glow), 0.1), transparent 70%), rgba(3, 4, 10, 0.96); }
-  .wrap { position: absolute; inset: 0; z-index: var(--z-sheet); pointer-events: none; display: flex; flex-direction: column; background: none; padding-bottom: var(--close-room); }
+  .wrap { position: absolute; inset: 0; z-index: var(--z-sheet); pointer-events: none; display: flex; flex-direction: column; background: none; padding-bottom: var(--safe-bottom); }
   .wrap > :global(*) { pointer-events: auto; }
-  /* the scroll ends above the × and fades out into it: Share never slides under it */
+  /* the scroll ends above the home bar and fades out at its end */
   .page { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; scrollbar-width: none; padding: calc(max(var(--top), var(--head-bottom)) + 8px) 20px 20px; /* below the capsule even where Telegram reports no header */ display: flex; flex-direction: column;
     -webkit-mask-image: linear-gradient(black calc(100% - 20px), transparent); mask-image: linear-gradient(black calc(100% - 20px), transparent); }
   .page::-webkit-scrollbar { display: none; }

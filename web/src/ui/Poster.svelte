@@ -20,8 +20,8 @@
 <div class="poster" class:dim style="width:{big ? '100%' : size + 'px'};height:{big ? '100%' : size + 'px'};border-radius:{radius}px;--c:{item.color ?? item.tint ?? '#3B6BFF'}">
   {#if pic}
     <!-- the big cover over the thumb the lists already loaded: the header is never empty while it comes -->
-    {#if big}<img src={pic.thumb} alt="" decoding="async" style:object-position={focusPos(pic)} />{/if}
-    <img src={big ? pic.url : pic.thumb} alt="" decoding="async" loading="lazy" style:object-position={focusPos(pic)} />
+    {#if big}<img draggable="false" src={pic.thumb} alt="" decoding="async" style:object-position={focusPos(pic)} />{/if}
+    <img draggable="false" src={big ? pic.url : pic.thumb} alt="" decoding="async" loading="lazy" style:object-position={focusPos(pic)} />
   {:else}
     <Emoji name={item.emoji ?? 'sparkles_3d'} size={big ? 120 : Math.round(size * 0.56)} />
   {/if}

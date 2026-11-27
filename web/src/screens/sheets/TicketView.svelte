@@ -1,5 +1,4 @@
 <script lang="ts">
-  import CloseX from '../../ui/CloseX.svelte';
   // The ticket: a pass in the event's colour with the entry QR (KBTU<code>, the organizer's mark in the
   // middle). Opens from the event sheet, Profile → Me, the live capsule and t.me links (tk_<id>).
   // Telegram's Back, a tap outside or Close dismisses it. The pass is lit like the glass: its light and
@@ -159,7 +158,6 @@
     </div>
   {/if}
   </div>
-  <CloseX onclick={() => close(overlay.id)} />
 </div>
 
 <style>
@@ -174,8 +172,8 @@
   @supports not (background: color-mix(in srgb, red 50%, blue)) {
     .scrim { background: var(--dim); }
   }
-  .wrap { position: absolute; inset: 0; z-index: var(--z-sheet); pointer-events: none; display: flex; flex-direction: column; padding-bottom: var(--close-room); }
-  /* the content scrolls in a box that ends above the × (--close-room): a long text or a short phone never puts a
+  .wrap { position: absolute; inset: 0; z-index: var(--z-sheet); pointer-events: none; display: flex; flex-direction: column; padding-bottom: var(--safe-bottom); }
+  /* the content scrolls in a box that ends above the home bar: a long text or a short phone never puts a
      button under it; it fades out above it. Taps on its empty space still reach the scrim (closes) */
   .page { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; scrollbar-width: none; pointer-events: none; display: flex; flex-direction: column; align-items: center;
     gap: 14px; padding: calc(max(var(--top), var(--head-bottom)) + 8px) 20px 20px; /* below the capsule even where Telegram reports no header */

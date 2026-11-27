@@ -873,7 +873,7 @@
 <!-- engine: Field has no date/time type (nor min): these few by hand, in Field's look (.fl) -->
 <div class="panel" class:hinted={member && goKind === 'send'} bind:this={panel} style:--tint={tint} style:--kbh="{keyboard.h}px" oninputcapture={touch} onchangecapture={touch} onclickcapture={touch}>
   <!-- the sheet tinted by the event: its colour, the cover blurred over it, the page's ground on top for contrast -->
-  <div class="wash" aria-hidden="true">{#if f.cover}<img src={f.cover.thumb} alt="" />{/if}<i></i></div>
+  <div class="wash" aria-hidden="true">{#if f.cover}<img draggable="false" src={f.cover.thumb} alt="" />{/if}<i></i></div>
   <header class="bar">
     {#if !inTelegram}<span class="x"><IconButton icon={X} label={t('common.close')} onclick={() => close(overlay.id)} /></span>{/if}
   </header>
@@ -983,7 +983,7 @@
     {#key pick}
     <div class="page">
       <!-- the same ground as the main page: no seam between the two as one slides over the other -->
-      <div class="wash" aria-hidden="true">{#if f.cover}<img src={f.cover.thumb} alt="" />{/if}<i></i></div>
+      <div class="wash" aria-hidden="true">{#if f.cover}<img draggable="false" src={f.cover.thumb} alt="" />{/if}<i></i></div>
       <div class="pg scroll">
         {#if !inTelegram}<h2 class="pt">{pageTitle}</h2>{/if}
         {#if pick === 'cover'}
@@ -1006,7 +1006,7 @@
             <div class="slides">
               {#each f.slides as p, k (p.id)}
                 <!-- engine: IconButton xs, a remove mark on a thumbnail -->
-                <span class="sl"><img src={p.thumb} alt="" /><button class="rmx" onclick={() => (f.slides = f.slides.filter((_, n) => n !== k))} aria-label={t('ed.photoRemove')}><X size={14} strokeWidth={2.6} /></button></span>
+                <span class="sl"><img draggable="false" src={p.thumb} alt="" /><button class="rmx" onclick={() => (f.slides = f.slides.filter((_, n) => n !== k))} aria-label={t('ed.photoRemove')}><X size={14} strokeWidth={2.6} /></button></span>
               {/each}
               {#each { length: slidesUp } as _, k (k)}<span class="sl wait"></span>{/each}
               {#if f.slides.length + slidesUp < SLIDES}
@@ -1159,7 +1159,7 @@
               {@const x = vids[slot]}
               <div class="vslot {slot}">
                 {#if x}
-                  <span class="vframe">{#if x.poster}<img src={x.poster.thumb} alt="" />{:else}<Clapperboard size={22} />{/if}
+                  <span class="vframe">{#if x.poster}<img draggable="false" src={x.poster.thumb} alt="" />{:else}<Clapperboard size={22} />{/if}
                     <!-- engine: IconButton xs over a picture -->
                     <button class="rmx vx" onclick={() => dropVideo(slot)} aria-label={t('ed.photoRemove')}><X size={16} strokeWidth={2.6} /></button></span>
                   <b>{x.status === 'ready' ? t('ed.videoReady') : t('ed.videoWork')}{#if x.duration} · {mmss(x.duration)}{/if}</b>

@@ -1,12 +1,12 @@
 <script lang="ts">
   // An album full screen, as the phone's Photos: the photo grows out of the square it was
   // tapped in and shrinks back into the one it is on when it closes; a swipe goes to the next (the browser's own
-  // scroll, its momentum and snapping), a pull down drags the photo away (it shrinks, the black fades; far or fast
+  // scroll, its momentum and snapping), a pull down (the iOS gesture) drags the photo away (it shrinks, the black fades; far or fast
   // enough it closes into its square, else springs back); pinch or a double tap zooms at the fingers, a zoomed photo
   // pans with a rubber edge. A tap hides and shows the chrome: "3 / 12" in the capsule, the filmstrip (it follows the
   // photo, a finger along it scrubs, a tap jumps), who added it and when, and ⋯: report (another's: gone for me at once, the admin decides) and
   // delete (mine, or any for the club's Head+): in the web app the top-right pill is that one action (Overlay.action),
-  // inside Telegram they stay at the bottom. Telegram's Back or the app's one × (CloseX) leaves. A person's lone photo
+  // inside Telegram they stay at the bottom. Telegram's Back (or the app's own Back) or the pull down leaves. A person's lone photo
   // opens here too: a tap closes it. Every move is transform and opacity (clip-path in the flight).
   import { calm } from '../../ui/fold';
   import Images from '@lucide/svelte/icons/images';
@@ -25,7 +25,6 @@
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic, inTelegram } from '../../lib/tg';
   import { glass } from '../../ui/glass';
-  import CloseX from '../../ui/CloseX.svelte';
 
   let { overlay, photos, start = 0, onremove, ongone, from }: {
     overlay: Overlay; photos: AlbumPhoto[]; start?: number; onremove?: (p: AlbumPhoto) => Promise<AlbumPhoto[] | null>; ongone?: (p: AlbumPhoto) => void;
@@ -282,7 +281,7 @@
 
   const shrink = $derived(1 - Math.min(dy, 600) / 1500); // the pulled photo gets smaller as it goes
   const picMove = $derived(z !== 1 || x || y ? `translate(${x}px, ${y}px) scale(${z})` : dx || dy ? `translate(${dx}px, ${dy}px) scale(${shrink})` : null);
-  // anything to say or do under the photo (an album's); a person's photo has the × alone
+  // anything to say or do under the photo (an album's); a person's photo has none
   const acts = $derived(!!list[at] && (!!list[at].by || !!list[at].event || !list[at].mine || (!!onremove && list[at].canDelete)));
   const shown = $derived(chrome && !dy && z === 1);
 
@@ -341,7 +340,7 @@
       </div></div>
     {/each}
   </div>
-  <div class="chrome" class:off={!shown}>
+  <div class="chrome" class:off={!shown} class:low={list.length < 2}>
     {#if list.length > 1}
       <div class="tray glass">
         <div class="film" bind:this={film} bind:clientWidth={fw} role="tablist" tabindex="-1"
@@ -357,7 +356,7 @@
     {#if list[at]?.by || list[at]?.event}
       {@const p = list[at]}
       {@const ev = p.event}
-      <div class="by" class:low={list.length < 2}>
+      <div class="by">
         <!-- the Gallery's photos come from many events: the one this is from, a tap away -->
         {#if ev}<button class="ev" onclick={() => sheets.event(ev.id)}><span class="ellipsis">{ev.title}</span><ChevronRight size={14} strokeWidth={2.4} /></button>{/if}
         <!-- a Gallery post's author opens their profile (posted under their name) -->
@@ -372,12 +371,11 @@
         <button class="tool r glass glass-pill" use:glass aria-label={moreActs.length === 1 ? moreActs[0].label : t('common.more')} onclick={more}><Icon size={moreActs.length === 1 ? 20 : 22} /></button>
       {/if}
     {:else}
-      <!-- the Gallery off (GALLERY): report and remove at the ×'s sides, as before -->
+      <!-- the Gallery off (GALLERY): report and remove at the caption's sides -->
       {#if list[at] && !list[at].mine}<button class="tool l glass glass-pill" use:glass aria-label={t('cm.report')} onclick={report}><Flag size={20} /></button>{/if}
       {#if onremove && list[at]?.canDelete}<button class="tool r glass glass-pill danger" use:glass aria-label={t('album.remove')} onclick={remove}><Trash size={20} /></button>{/if}
     {/if}
   </div>
-  <div class="chrome" class:off={!chrome || !!dy}><CloseX onclick={() => close(overlay.id)} /></div>
 </div>
 
 <style>
@@ -388,8 +386,8 @@
   .strip::-webkit-scrollbar { display: none; }
   /* zoomed in: one finger pans the photo (ours), the strip holds still */
   .strip.zoomed { overflow-x: hidden; touch-action: none; }
-  /* the photo fills the screen between the capsule and the ×; the chrome lies over it (a tap hides it) */
-  .slide { flex: none; width: 100%; height: 100%; scroll-snap-align: center; scroll-snap-stop: always; padding: calc(var(--top) + 8px) 0 var(--close-room); }
+  /* the photo fills the screen between the capsule and the home bar; the chrome lies over it (a tap hides it) */
+  .slide { flex: none; width: 100%; height: 100%; scroll-snap-align: center; scroll-snap-stop: always; padding: calc(var(--top) + 8px) 0 calc(var(--safe-bottom) + 8px); }
   .pic { position: relative; width: 100%; height: 100%; transition: transform 320ms cubic-bezier(0.2, 0.85, 0.25, 1); will-change: transform; }
   .pic.held { transition: none; } /* under the fingers: no lag */
   .pic img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
@@ -400,23 +398,25 @@
   .chrome.off > :global(*) { pointer-events: none; }
   /* the filmstrip: a calm glass tray (the viewer is black in both themes), slim thumbnails that fade out at its ends,
      the one on show at its true shape in the middle. Ours to drag (touch-action: none): a finger along it scrubs */
-  .tray { position: absolute; left: 12px; right: 12px; bottom: calc(var(--safe-bottom) + 80px); height: 52px; border-radius: var(--r-s);
+  .tray { position: absolute; left: 12px; right: 12px; bottom: calc(var(--safe-bottom) + 16px); height: 52px; border-radius: var(--r-s);
     background-color: rgba(255, 255, 255, 0.08); }
   .film { position: absolute; inset: 0; overflow: hidden; touch-action: none; border-radius: inherit;
     -webkit-mask-image: linear-gradient(90deg, transparent, black 12%, black 88%, transparent); mask-image: linear-gradient(90deg, transparent, black 12%, black 88%, transparent); }
   .fr { position: absolute; left: 50%; top: 6px; height: 40px; padding: 0; overflow: hidden; border-radius: calc(var(--r-xs) / 2); background: rgba(255, 255, 255, 0.12);
     will-change: transform; contain: strict; -webkit-tap-highlight-color: transparent; }
   .fr img { width: 100%; height: 100%; object-fit: cover; display: block; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; pointer-events: none; }
-  .by { position: absolute; left: 16px; right: 16px; bottom: calc(var(--safe-bottom) + 140px); text-align: center; font: 600 13px/1.2 var(--font-text);
-    color: rgba(255, 255, 255, 0.8); text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7); }
-  .by.low { bottom: calc(var(--safe-bottom) + 84px); }
+  /* above the filmstrip, one row: who added it in the middle, ⋯ (report, delete) at its sides, as the phone's toolbar;
+     a lone photo (no strip) has that row at the bottom */
+  .by, .tool { --row: calc(var(--safe-bottom) + 80px); }
+  .low > .by, .low > .tool { --row: calc(var(--safe-bottom) + 16px); }
+  .by { position: absolute; left: 76px; right: 76px; bottom: var(--row); min-height: 44px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; font: 600 13px/1.2 var(--font-text); color: rgba(255, 255, 255, 0.8); text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7); }
   .ev { display: inline-flex; align-items: center; gap: 2px; max-width: 100%; min-height: 32px; font: 600 var(--fs-body)/1.2 var(--font-text); color: inherit; text-shadow: inherit; }
   .ev > :global(svg) { flex: none; opacity: 0.7; }
   .ev:active { opacity: 0.6; }
   .who { display: inline; padding: 0; font: inherit; color: inherit; text-shadow: inherit; }
   .who:active { opacity: 0.6; }
-  /* ⋯ (report, delete) at the ×'s side, as the phone's toolbar */
-  .tool { position: absolute; bottom: calc(var(--safe-bottom) + 20px); width: 44px; height: 44px; display: grid; place-items: center; border-radius: var(--r-full);
+  .tool { position: absolute; bottom: var(--row); width: 44px; height: 44px; display: grid; place-items: center; border-radius: var(--r-full);
     color: #fff; background-color: rgba(255, 255, 255, 0.12); }
   .tool > :global(svg) { position: relative; }
   .tool.l { left: 24px; }

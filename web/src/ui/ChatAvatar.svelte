@@ -10,7 +10,7 @@
 </script>
 
 <span class="ca" class:sq={kind === 'forum'} style="--s:{size}px" style:background={photo ? null : tint}>
-  {#if photo}<img src={photo} alt="" loading="lazy" decoding="async" />{:else}<em>{initials(title)}</em>{/if}
+  {#if photo}<img draggable="false" src={photo} alt="" loading="lazy" decoding="async" />{:else}<em>{initials(title)}</em>{/if}
   <span class="kind"><ChatKind {kind} size={Math.round(size * 0.4)} /></span>
 </span>
 

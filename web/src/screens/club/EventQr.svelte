@@ -6,7 +6,7 @@
   import { onMount } from 'svelte';
   import { api, ApiErr, type Id, type ScreenSession } from '../../lib/api';
   import { QR_TONE } from '../../lib/awards';
-  import { close, removeOverlay, hideChrome, say, overlays, type Overlay } from '../../lib/state/ui.svelte';
+  import { removeOverlay, hideChrome, say, overlays, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { loadMe, session } from '../../lib/state/session.svelte';
   import { eventById } from '../../lib/state/data.svelte';
@@ -16,7 +16,6 @@
   import Qr from '../../ui/Qr.svelte';
   import '../../lib/qrnow'; // its code in the first frame (lib/qr.svelte.ts)
   import KbtuMark from '../../ui/KbtuMark.svelte';
-  import CloseX from '../../ui/CloseX.svelte';
   import Button from '../../ui/Button.svelte';
   import QrCode from '@lucide/svelte/icons/qr-code';
   import ScanLine from '@lucide/svelte/icons/scan-line';
@@ -129,13 +128,12 @@
       {#if board && q.param}<Button kind="secondary" size="m" onclick={() => { haptic.tap(); sheets.handQr(sid); }}>{#snippet icon()}<UserPlus size={17} />{/snippet}{t('scr.hand')}</Button>{/if}
     {/if}
   </div>
-  <CloseX onclick={() => close(overlay.id)} />
 </div>
 {/if}
 
 <style>
   .scrim { position: absolute; inset: 0; z-index: var(--z-sheet); background: rgba(3, 4, 10, 0.94); }
-  .wrap { position: absolute; inset: 0; z-index: var(--z-sheet); display: flex; flex-direction: column; padding-bottom: var(--close-room); pointer-events: none; }
+  .wrap { position: absolute; inset: 0; z-index: var(--z-sheet); display: flex; flex-direction: column; padding-bottom: var(--safe-bottom); pointer-events: none; }
   .page { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; display: flex; flex-direction: column; align-items: center; justify-content: center;
     gap: var(--s-4); padding: calc(max(var(--top), var(--head-bottom)) + 8px) var(--s-4) var(--s-4); pointer-events: auto; }
   .page::-webkit-scrollbar { display: none; }
