@@ -18,19 +18,19 @@
                                 by hand, so the AI translator never overwrites them; English, level and rights stay; not Vice or Head
   .venv/bin/python -m kbtu.admin role <@username | telegram id> <slug> <member | head | vice | president | none>
   .venv/bin/python -m kbtu.admin links <slug> [https://… …]                 the club's socials (none = clear), up to 6
-  .venv/bin/python -m kbtu.admin founder <@username | telegram id>          the Creator status (one person; card number 00000)
+  .venv/bin/python -m kbtu.admin founder <@username | telegram id> [--yes]  the Creator status (one person; card number 00000)
   .venv/bin/python -m kbtu.admin honor [--yes] <user id | @username> [reason]     give the contribution medal (reason visible on the profile)
   .venv/bin/python -m kbtu.admin honor-off [--yes] <user id | @username>          take it back; --yes confirms without stdin
   .venv/bin/python -m kbtu.admin mark <@username | telegram id> <idea | none>  the idea author's blue seal (one person)
-  .venv/bin/python -m kbtu.admin unlink <@username | telegram id>           the KBTU account off this Telegram (a changed student ID,
+  .venv/bin/python -m kbtu.admin unlink <@username | telegram id> [--yes]  the KBTU account off this Telegram (a changed student ID,
                                                                          someone else's sign-in): the next sign-in links afresh
-  .venv/bin/python -m kbtu.admin move <@from | telegram id> <@to | telegram id> [--merge-credits]   a student signed in from a wrong Telegram:
+  .venv/bin/python -m kbtu.admin move <@from | telegram id> <@to | telegram id> [--merge-credits] [--yes]  a student signed in from a wrong Telegram:
                                 the whole account (card, friends, clubs, tickets) moves to their real one, which must have
                                 opened the app and hold nothing yet; check with the student that both are theirs first
-  .venv/bin/python -m kbtu.admin staff <@username | telegram id> <first> <last> [<unit>]
+  .venv/bin/python -m kbtu.admin staff <@username | telegram id> <first> <last> [<unit>] [--yes]
                                 staff, not students (DMP, KBTU's IT testing the app): verified by hand,
                                 they act as students but take no card number and aren't counted in stats; `unlink` takes it back
-  .venv/bin/python -m kbtu.admin staff <@username | telegram id>
+  .venv/bin/python -m kbtu.admin staff <@username | telegram id> [--yes]
                                 one already signed in as a student turns staff: its card number is retired (a gap: moving
                                 the later cards down would hand out a deleted account's burnt number)
   .venv/bin/python -m kbtu.admin staff-ok <@username | telegram id>       KBTU staff without a student ID (DMP): their own
@@ -86,7 +86,7 @@
                                 --ai: help running our tasks with their own AI subscription, a quiet tag beside the line;
                                 credit ai <id> [0|1] toggles that tag, or sets it off/on explicitly; the line's words stay;
                                 gender-neutral, no name, handle, link or identifying detail: it is shown under "Student";
-                                credit ship <id> [YYYY-MM-DD] lists it (today), credit list, credit del <id>;
+                                credit ship <id> [YYYY-MM-DD] lists it (today), credit list, credit del <id> [--yes];
                                 `move ... --merge-credits` puts the target Telegram's lines under the moved account for good:
                                 moving back does not undo it (re-add the lines by hand);
                                 credit ask [--dry]: the bot's "shall we name you?" once per person (and consent text) with a
@@ -97,7 +97,7 @@
                                 total) unless the donor hid it on the Support page. A donor who also uploaded this transfer's
                                 receipt in the app would be counted twice: check `donation list` first.
                                 donation list: id, user id (internal), amount, source, date, public (no names, no
-                                Telegram ids); donation remove <id>: a manual row typed wrong goes, the medal follows
+                                Telegram ids); donation remove <id> [--yes]: a manual row typed wrong goes, the medal follows
   .venv/bin/python -m kbtu.admin team-consent-ask [--dry]   the bot's "agree to teams" (a button to the event's consent
                                 sheet) to everyone signed up to a coming team event without the teams consent, once per
                                 person and event; --dry: the count only. By hand, never on deploy
@@ -134,7 +134,7 @@
   .venv/bin/python -m kbtu.admin mapflaws          the map's open flaws marked in the app (floor, plan units, words)
   .venv/bin/python -m kbtu.admin places            the assistant's campus facts, STALE where never checked or 180+ days
                                 ago (edited by hand in campus_places)
-  .venv/bin/python -m kbtu.admin checkin expect <sid> <base64 gzip json> [--only]   add people to a session's expected list (--only: replace it)
+  .venv/bin/python -m kbtu.admin checkin expect <sid> <base64 gzip json> [--only [--yes]]  add people to a session's expected list (--only: replace it)
   .venv/bin/python -m kbtu.admin checkin new "<title>" <people.json> [club-slug]   a QR check-in session (checkin.py) with
                                 its expected people from tools/checkin_convert.py, run by the club's organizers (who run
                                 events there) and the admin; /show is paired from their phone
@@ -158,7 +158,7 @@
                                 (Heads and up of every club; Almaty time), published as DMP by the creator, which invites them at once; prints its id
   .venv/bin/python -m kbtu.admin meeting call <event id> [--test|--send]   "in an hour" (bot meet_call) to the club boards it invites (never ordinary
                                 students), once each, an hour before; --test: to the creator now; no flag: counts
-  .venv/bin/python -m kbtu.admin event create <club slug> < event.json   a club's event made for it, no role given: one JSON object,
+  .venv/bin/python -m kbtu.admin event create <club slug> < event.json | --gz <base64 gzip json>   a club's event made for it, no role given: one JSON object,
                                 the editor's own fields (title, place, description, startsAt, endsAt, emoji, color, "seats": a number or null for no limit, required, guestHost,
                                 externalUrl, ...) and "cover": "<base64 jpg/png>"; a DRAFT by the creator, never a price (the
                                 club sets it in Studio), in the audit log; prints `draft <id>`
@@ -186,7 +186,7 @@
                                 that department (logic/chatsync.py). chatsync list | chatsync unlink <chat id>
   .venv/bin/python -m kbtu.admin chatsync run <chat id> [--apply]   a sweep by the server's bot (resumes after a restart; a
                                 paused link runs again): without --apply a dry run; waits and prints counts only, never names
-  .venv/bin/python -m kbtu.admin redelete                        after restoring a copy: the accounts deleted since
+  .venv/bin/python -m kbtu.admin redelete [--yes]                after restoring a copy: the accounts deleted since
                                 are deleted again. Restore the newest deletions.log and its matching deletions.salt beside
                                 the database, even for a snapshot predating the first deletion. Startup also runs this check.
 
@@ -220,13 +220,37 @@ def print(*a, **k) -> None:  # noqa: A001
 
 
 EVENT_STDIN = 8 << 20  # event JSON with a base64 picture
+CLI_ID = re.compile(r"[0-9]{1,18}")  # ASCII digits that fit in a SQLite INTEGER
 
 
 def _user(con, who: str):
-    u = find_user(con, who)
+    try:
+        u = find_user(con, who)
+    except ApiError as exc:
+        sys.exit(exc.message or exc.code)
     if not u:
         sys.exit(f"{who}: not found — they must open the app once")
     return u
+
+
+def _confirmed_user(con, u: sqlite3.Row) -> sqlite3.Row:
+    # A concurrent account move can change which app account a confirmed Telegram ID belongs to.
+    return one(con, "SELECT * FROM users WHERE id = ? AND tg_id = ?", u["id"], u["tg_id"]) or sys.exit("account changed; retry the command")
+
+
+def _confirm(action: str, confirmed: bool) -> None:
+    try:
+        if not confirmed and input(f"{action}? [y/N] ").strip().lower() != "y":
+            sys.exit("cancelled")
+    except (EOFError, OSError):
+        sys.exit("confirmation required (use --yes)")
+
+
+def _checkin_people(raw: str | bytes) -> list[dict]:
+    people = json.loads(raw)
+    if not isinstance(people, list) or any(not isinstance(p, dict) for p in people):
+        sys.exit("people: expected a JSON list of objects")
+    return people
 
 
 def _staff_undo(con, uid: int) -> int:
@@ -279,15 +303,20 @@ def _broadcast(con, name: str, url: str, target: str | None = None, platform: st
     print(f"{'would queue' if dry else 'queued'} {count}")
 
 
-def _gz_arg(args: list[str]) -> bytes | None:
-    """`--gz <base64 gzip>` at the end instead of stdin: the prod gate passes arguments, not stdin (ssh claude-kbtu)."""
+def _unpack_gz(encoded: str, label: str) -> bytes:
     import base64
     import gzip
+    import zlib
+    try:
+        return gzip.decompress(base64.b64decode(encoded, validate=True))
+    except (ValueError, OSError, EOFError, zlib.error):
+        sys.exit(f"{label}: base64 of gzip expected")
+
+
+def _gz_arg(args: list[str]) -> bytes | None:
+    """`--gz <base64 gzip>` at the end instead of stdin: the prod gate passes arguments, not stdin (ssh claude-kbtu)."""
     if len(args) >= 2 and args[-2] == "--gz":
-        try:
-            return gzip.decompress(base64.b64decode(args[-1], validate=True))[:EVENT_STDIN + 1]
-        except (ValueError, OSError, EOFError):
-            sys.exit("--gz: base64 of gzip expected")
+        return _unpack_gz(args[-1], "--gz")[:EVENT_STDIN + 1]
     return None
 
 
@@ -295,7 +324,7 @@ def _event_input(given: bytes | None = None) -> dict:
     raw = given if given is not None else getattr(sys.stdin, "buffer", sys.stdin).read(EVENT_STDIN + 1)
     try:
         body = json.loads(raw) if len(raw) <= EVENT_STDIN else None
-    except ValueError:  # not JSON, not UTF-8
+    except (ValueError, RecursionError):
         body = None
     if not isinstance(body, dict):
         sys.exit(f"stdin: one JSON object, {EVENT_STDIN >> 20} MB at most")
@@ -397,6 +426,22 @@ def _event_time(value: object, field: str) -> int:
     sys.exit(f"{field}: expected ISO date and time with an offset")
 
 
+def _almaty_time(value: str) -> int:
+    import calendar
+    from datetime import datetime
+    try:
+        return calendar.timegm(datetime.strptime(value, "%Y-%m-%d %H:%M").timetuple()) - TZ
+    except ValueError:
+        sys.exit("date must be YYYY-MM-DD HH:MM (Almaty)")
+
+
+def _publish_event_cover(staged: str, photos: Path, saved: dict) -> None:
+    src, dst = Path(staged) / saved["path"], photos / saved["path"]
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    for variant in src.parent.glob(f"{src.name}.*"):
+        variant.replace(dst.parent / variant.name)
+
+
 def _demo_seed(con, eids: list[int]) -> None:
     """The stores' reviewers see the app with something in it (android/README.md): the demo account gets a ticket with
     its QR to each event given (a coming, published, free one the owner's own club runs; its door list shows the made-up
@@ -454,10 +499,7 @@ def _event_new(con, cfg: config.Config, org_ref: str, gz: bytes | None = None) -
                 log_action(con, v.id, "staff_event", f"event:{eid}", json.dumps({"do": "publish", "via": "server"}))
                 if saved:
                     # A refused event leaves its poster outside the public media directory.
-                    src, dst = Path(staged) / saved["path"], photos / saved["path"]
-                    dst.parent.mkdir(parents=True, exist_ok=True)
-                    for variant in src.parent.glob(f"{src.name}.*"):
-                        variant.replace(dst.parent / variant.name)
+                    _publish_event_cover(staged, photos, saved)
     except ApiError as exc:
         sys.exit(f"refused: {exc.code} {exc.message or ''}".rstrip())
     print(f"published {eid}")
@@ -531,14 +573,27 @@ def _chatsync(con, cfg, rest: list[str]) -> None:
 
 
 def main(args: list[str]) -> None:
+    cmd = args[0] if args else ""
+    confirmed = False
+    confirmation_at = 0
+    if cmd in ("staff", "move", "founder", "redelete", "unlink") or args[:2] in (["checkin", "expect"], ["donation", "remove"], ["credit", "del"]):
+        confirmation_at = 2 if cmd in ("checkin", "donation", "credit") else 1
+    if confirmation_at and args[confirmation_at:confirmation_at + 1] == ["--yes"]:
+        confirmed = True
+        args = args[:confirmation_at] + args[confirmation_at + 1:]
+    elif confirmation_at and args[-1:] == ["--yes"]:
+        confirmed = True
+        args = args[:-1]
     cfg = config.load()
-    if args == ["redelete"]:
+    if cmd == "redelete":
+        if len(args) != 1:
+            sys.exit(__doc__)
+        _confirm("Replay account deletions and sign out all web sessions", confirmed)
         db.init(cfg.db_path)  # the restored file can predate tables that erasure now covers
     con = db.connect(cfg.db_path)
     from .logic import vol
     vol.ORG, vol.KEY = cfg.volunteers, vol.key(cfg)  # as app.create: a deletion here hashes the same
     guests.KEY = hmac.digest(cfg.token_key, b"kbtu-guest-name", "sha256")
-    cmd = args[0] if args else ""
     gz = _gz_arg(args)
     if gz is not None:
         args = args[:-2]
@@ -576,13 +631,13 @@ def main(args: list[str]) -> None:
         except ApiError as exc:
             sys.exit(f"refused: {exc.code}")
         print("groups", " ".join(f"{g['name']}:{len(g['standings'])}" for g in got["groups"]))
-    elif cmd == "reg-until" and len(args) == 3 and re.fullmatch(r"[0-9]{1,19}", args[1]):
+    elif cmd == "reg-until" and len(args) == 3 and CLI_ID.fullmatch(args[1]):
         at = _event_time(args[2], "time")
         with db.tx(con):
             if not con.execute("UPDATE events SET reg_until = ?, late_signup = 0 WHERE id = ? AND starts_at > ?", (at, int(args[1]), at)).rowcount:
                 sys.exit("no such event, or it starts before that time")
         print("sign-up closes", args[2])
-    elif cmd == "event-link" and len(args) == 3 and re.fullmatch(r"[0-9]{1,19}", args[1]) and re.fullmatch(r"https://\S{1,300}", args[2]):
+    elif cmd == "event-link" and len(args) == 3 and CLI_ID.fullmatch(args[1]) and re.fullmatch(r"https://\S{1,300}", args[2]):
         with db.tx(con):  # the "register elsewhere" button's link (an organizer's ask), in the audit log
             if not con.execute("UPDATE events SET external_url = ? WHERE id = ? AND external_url IS NOT NULL", (args[2], int(args[1]))).rowcount:
                 sys.exit("no such event with an outside link")
@@ -627,13 +682,25 @@ def main(args: list[str]) -> None:
             sys.exit(str(exc))
         print(f"rows {got['rows']}, new {got['added']}, clubs made {len(got['orgs_made'])}, joined now {got['joined']}, "
               f"a President on the sheet made Vice (the club has one in the app) {got['president_as_vice']}")  # counts only
-    elif cmd == "checkin" and len(args) in (4, 5) and args[1] == "expect" and args[4:] in ([], ["--only"]):
+    elif cmd == "checkin" and len(args) in (4, 5) and args[1] == "expect" and CLI_ID.fullmatch(args[2]) and args[4:] in ([], ["--only"]):
         # ponytail: a session's expected list from a base64 gzip JSON argument ([{"name", "studentId"}]), for a team
         # list wanted on the spot; no file reaches the container otherwise
-        import base64
-        import gzip
-        sid, people = int(args[2]), json.loads(gzip.decompress(base64.b64decode(args[3])))
+        raw = _unpack_gz("".join(args[3].split()), "people")
+        try:
+            people = _checkin_people(raw)
+            for p in people:
+                for field in ("name", "studentId"):
+                    if not isinstance(p.get(field), str) or not p[field].strip():
+                        sys.exit("people: each row needs a name and studentId")
+                    p[field].encode("utf-8")  # SQLite requires valid Unicode even for escaped JSON strings.
+        except (ValueError, RecursionError):
+            sys.exit("people: expected valid JSON and Unicode text")
+        sid = int(args[2])
+        if args[4:]:
+            _confirm(f"Replace the expected list for session {sid}", confirmed)
         with db.tx(con):
+            if not one(con, "SELECT 1 FROM qr_sessions WHERE id = ?", sid):
+                sys.exit("no such session")
             if args[4:]:  # --only: this list replaces the one frozen before (the club's roster)
                 con.execute("DELETE FROM qr_expected WHERE session_id = ?", (sid,))
             for p in people:
@@ -648,16 +715,31 @@ def main(args: list[str]) -> None:
             if not o:
                 sys.exit(f"no club {args[4]!r} (see `orgs`)")
             org = o[0]
-        sid = checkin.new(con, args[2], json.loads(Path(args[3]).read_text(encoding="utf-8")), org)
+        try:
+            people = _checkin_people(Path(args[3]).read_text(encoding="utf-8"))
+        except (ValueError, OSError, RecursionError):
+            sys.exit("people: expected a readable UTF-8 JSON file")
+        if any(p.get("email") and not isinstance(p["email"], str) for p in people):
+            sys.exit("people: email must be text")
+        try:
+            sid = checkin.new(con, args[2], people, org)
+        except (UnicodeError, OverflowError, sqlite3.IntegrityError, sqlite3.ProgrammingError):
+            sys.exit("could not create check-in session: check the people file and club")
+        except ApiError as exc:
+            sys.exit(f"refused: {exc.code} {exc.message or ''}".rstrip())
         n = con.execute("SELECT COUNT(*) FROM qr_expected WHERE session_id = ?", (sid,)).fetchone()[0]
         who = f"{args[4]}'s organizers and the admin" if org else "the admin only"
         print(f"session {sid}, {n} expected; run by {who} (pair /show from the app)")
-    elif cmd == "grant" and len(args) == 4 and args[1] == "session":  # a badge to everyone counted in a check-in session
+    elif cmd == "grant" and len(args) == 4 and args[1] == "session" and CLI_ID.fullmatch(args[2]):  # a badge to everyone counted in a check-in session
         from . import checkin
         owner = one(con, "SELECT id FROM users WHERE is_founder = 1 AND role = 'admin'")
         if not owner:
             sys.exit("no owner (the founder admin) yet")
-        print(f"granted {args[3]} to {checkin.grant_all(con, Viewer(owner[0], 'admin', True), int(args[2]), args[3])['granted']} people")
+        try:
+            n = checkin.grant_all(con, Viewer(owner[0], 'admin', True), int(args[2]), args[3])["granted"]
+        except ApiError as exc:
+            sys.exit(f"refused: {exc.code} {exc.message or ''}".rstrip())
+        print(f"granted {args[3]} to {n} people")
     elif cmd == "santa-news" and len(args) == 2 and args[1] != "--dry":  # to one person first
         from .logic import santa
         print(f"queued {santa.news(con, only=_user(con, args[1])['id'])}")
@@ -725,7 +807,8 @@ def main(args: list[str]) -> None:
                 print(f"credit {int(args[2])}: gh {args[3]}")
             elif args[1] == "ship" and len(args) in (3, 4):
                 print(f"credit {int(args[2])} shipped {credits.ship(con, int(args[2]), *args[3:])}")
-            elif args[1] == "del" and len(args) == 3:
+            elif args[1] == "del" and len(args) == 3 and CLI_ID.fullmatch(args[2]):
+                _confirm(f"Delete credit {int(args[2])}", confirmed)
                 credits.delete(con, int(args[2]))
                 print(f"credit {int(args[2])} deleted")
             elif args[1] == "ask" and args[2:] in ([], ["--dry"]):
@@ -760,8 +843,9 @@ def main(args: list[str]) -> None:
         sum_ = donations.total(con, u["id"])
         print(f"donation {did}: total {sum_} KZT, tier {donations.tier(sum_)}, "
               + ("public" if donations.public(con, u["id"]) else "hidden (their own switch on the Support page)"))
-    elif cmd == "donation" and args[1:2] == ["remove"] and len(args) == 3 and args[2].isdigit():  # a manual row typed wrong
+    elif cmd == "donation" and args[1:2] == ["remove"] and len(args) == 3 and CLI_ID.fullmatch(args[2]):  # a manual row typed wrong
         from .logic import donations
+        _confirm(f"Remove donation {int(args[2])}", confirmed)
         try:
             uid = donations.remove_manual(con, int(args[2]))
         except ApiError as e:
@@ -778,7 +862,7 @@ def main(args: list[str]) -> None:
         from .logic import evteams
         n = evteams.consent_ask(con, dry=bool(args[1:]))
         print(f"{'would queue' if args[1:] else 'queued'} {n}")
-    elif cmd == "came" and len(args) == 3 and args[2].isdigit():  # the creator alone, on the organizers' word
+    elif cmd == "came" and len(args) == 3 and CLI_ID.fullmatch(args[2]):  # the creator alone, on the organizers' word
         from .db import tx
         uid, eid = _user(con, args[1])["id"], int(args[2])
         with tx(con):
@@ -790,13 +874,13 @@ def main(args: list[str]) -> None:
                 WHERE event_id = ? AND user_id = ?""", (e["starts_at"] or now(), eid, uid))
             log_action(con, None, "came_by_hand", f"event:{eid}", json.dumps({"user": uid}))
         print("came")
-    elif cmd == "seat" and len(args) == 3 and args[2].isdigit():  # the creator alone, by hand: e.g. a bank that won't share the receipt
+    elif cmd == "seat" and len(args) == 3 and CLI_ID.fullmatch(args[2]):  # the creator alone, by hand: e.g. a bank that won't share the receipt
         from .logic import seats
         print(seats.seat_by_hand(con, _user(con, args[1])["id"], int(args[2])))
     elif cmd == "guest-names" and len(args) == 2 and args[1].isdigit():  # the door's list by name: student_id,name,adult,username
         named, added = guests.door_names(con, int(args[1]), gz.decode("utf-8", "replace").splitlines() if gz is not None else sys.stdin)
         print(f"named {named}, added {added}")
-    elif cmd == "unseat" and len(args) == 3 and args[2].isdigit():  # the creator alone, by hand: an organizer's swap of a guest
+    elif cmd == "unseat" and len(args) == 3 and CLI_ID.fullmatch(args[2]):  # the creator alone, by hand: an organizer's swap of a guest
         from .db import tx
         from .logic import seats
         uid, eid = _user(con, args[1])["id"], int(args[2])
@@ -808,7 +892,7 @@ def main(args: list[str]) -> None:
             notify(con, uid, "seat_removed", f"event:{eid}:{now()}")  # the same template as an organizer's removal
             log_action(con, None, "unseat_by_hand", f"event:{eid}", json.dumps({"user": uid}))
         print("removed")
-    elif cmd == "u18" and len(args) in (2, 3) and args[1].isdigit() and (args[2:] == [] or args[2].isdigit()):
+    elif cmd == "u18" and len(args) in (2, 3) and all(CLI_ID.fullmatch(a) for a in args[1:]):
         # the organizers' "under 18, please leave" to every checked-in minor, now or at a set unix time (the bot sends it then)
         eid, at = int(args[1]), int(args[2]) if args[2:] else now()
         with db.tx(con):
@@ -868,17 +952,19 @@ def main(args: list[str]) -> None:
         slug, name, short, emoji = args[1:5]
         if not re.fullmatch(r"[a-z0-9]{2,24}", slug) or not 1 <= len(short) <= 2 or not re.fullmatch(r"[a-z0-9_]{1,40}", emoji):
             sys.exit("slug: [a-z0-9]{2,24}; short: 1–2 letters; emoji: a key of the 3D set, e.g. laptop_3d")
-        if not _slug_free(con, slug, None):  # nor a short link's, nor an old one's
-            sys.exit(f"{slug}: taken")
-        create_org(con, None, name, short, emoji, "--official" in args, slug, "school" if "--school" in args else "club")
+        with db.tx(con):
+            if not _slug_free(con, slug, None):  # nor a short link's, nor an old one's
+                sys.exit(f"{slug}: taken")
+            create_org(con, None, name, short, emoji, "--official" in args, slug, "school" if "--school" in args else "club")
         print(f"created {slug}")
     elif cmd == "office" and len(args) == 8:
         _office(con, *args[1:])
     elif cmd == "auto-publish" and len(args) == 3 and args[2] in ("on", "off"):
-        o = one(con, "SELECT id FROM orgs WHERE slug = ?", args[1]) or sys.exit(f"{args[1]}: no such org")
-        con.execute("""INSERT INTO org_flags (org_id, auto_publish) VALUES (?, ?)
-            ON CONFLICT (org_id) DO UPDATE SET auto_publish = excluded.auto_publish""", (o["id"], int(args[2] == "on")))
-        log_action(con, None, "org_auto_publish", f"org:{o['id']}", json.dumps({"on": args[2] == "on"}))
+        with db.tx(con):
+            o = one(con, "SELECT id FROM orgs WHERE slug = ?", args[1]) or sys.exit(f"{args[1]}: no such org")
+            con.execute("""INSERT INTO org_flags (org_id, auto_publish) VALUES (?, ?)
+                ON CONFLICT (org_id) DO UPDATE SET auto_publish = excluded.auto_publish""", (o["id"], int(args[2] == "on")))
+            log_action(con, None, "org_auto_publish", f"org:{o['id']}", json.dumps({"on": args[2] == "on"}))
         print(f"{args[1]}: auto-publish {args[2]}")
     elif cmd == "logos-trim" and args[1:] in ([], ["--apply"]):
         _logos_trim(con, Path(cfg.db_path).resolve().parent / "media", "--apply" in args)
@@ -957,11 +1043,7 @@ def main(args: list[str]) -> None:
         if len(matches) != 1:
             sys.exit("no unique match for that account; use id:<app user id> or @username")
         uid = matches[0]["id"]
-        try:
-            if not confirmed and input(f"{cmd} for app user {uid}? [y/N] ").strip().lower() != "y":
-                sys.exit("cancelled")
-        except EOFError:
-            sys.exit("confirmation required")
+        _confirm(f"{cmd} for app user {uid}", confirmed)
         try:
             with db.tx(con):
                 owner = one(con, "SELECT id FROM users WHERE is_founder = 1 AND role = 'admin' AND banned_at IS NULL AND tg_id > 0")
@@ -979,7 +1061,11 @@ def main(args: list[str]) -> None:
             sys.exit(f"refused: {e.code} {e.message}".strip())
     elif cmd == "founder" and len(args) == 2:
         u = _user(con, args[1])
-        con.execute("UPDATE users SET is_founder = (id = ?)", (u["id"],))  # one Creator
+        _confirm(f"Make Telegram {u['tg_id']} the sole Creator", confirmed)
+        with db.tx(con):
+            u = _confirmed_user(con, u)
+            con.execute("UPDATE users SET is_founder = (id = ?)", (u["id"],))  # one Creator
+            log_action(con, None, "founder", f"user:{u['id']}")
         print(f"@{u['tg_username'] or u['tg_id']} is the Creator")
     elif cmd == "mark" and len(args) == 3 and args[2] in ("idea", "none"):
         u = _user(con, args[1])
@@ -990,18 +1076,21 @@ def main(args: list[str]) -> None:
         print(f"@{u['tg_username'] or u['tg_id']}: mark {args[2]}")
     elif cmd == "move" and (len(args) == 3 or args[3:] == ["--merge-credits"]):  # the owner checked both Telegrams with the student: no in-app proof to phish
         a, b = _user(con, args[1]), _user(con, args[2])
-        why = ("the same person" if a["id"] == b["id"] else "staff roles move by hand" if a["role"] != "user" or a["is_founder"] or b["role"] != "user" or b["is_founder"]
-               else "the target is banned" if b["banned_at"]
-               else "both Telegrams are on DMP's list (dmp del one first)" if one(con, "SELECT COUNT(*) FROM dmp_list WHERE tg_id IN (?, ?)", a["tg_id"], b["tg_id"])[0] == 2
-               else next((f"the target has its own {t}" for t, c in sorted(_DEL_GONE)
-               if t not in ("visits", "chat_opens", "bot_outbox", "post_reads", "comment_reads", "web_sessions")
-               if one(con, f"SELECT 1 FROM {t} WHERE {c} = ?", b["id"])), None))
-        if why:
-            sys.exit(f"refused: {why}")
-        cols = ("tg_id", "tg_username", "tg_first_name", "tg_last_name", "tg_photo_url", "tg_photo_path", "tg_photo_src", "tg_photo_at", "can_dm")
-        ra, rb = (tuple(one(con, f"SELECT {', '.join(cols)} FROM users WHERE id = ?", x["id"])) for x in (a, b))
-        sets = ", ".join(f"{c} = ?" for c in cols)
+        _confirm(f"Move the account from Telegram {a['tg_id']} to {b['tg_id']}", confirmed)
         with db.tx(con):  # swap the Telegram side of the two rows; tg_id is UNIQUE, so one steps aside first
+            a, b = _confirmed_user(con, a), _confirmed_user(con, b)
+            why = ("the same person" if a["id"] == b["id"] else "staff roles move by hand" if a["role"] != "user" or a["is_founder"] or b["role"] != "user" or b["is_founder"]
+                   else "the source is banned" if a["banned_at"] is not None
+                   else "the target is banned" if b["banned_at"] is not None
+                   else "both Telegrams are on DMP's list (dmp del one first)" if one(con, "SELECT COUNT(*) FROM dmp_list WHERE tg_id IN (?, ?)", a["tg_id"], b["tg_id"])[0] == 2
+                   else next((f"the target has its own {t}" for t, c in sorted(_DEL_GONE)
+                   if t not in ("visits", "chat_opens", "bot_outbox", "post_reads", "comment_reads", "web_sessions")
+                   if one(con, f"SELECT 1 FROM {t} WHERE {c} = ?", b["id"])), None))
+            if why:
+                sys.exit(f"refused: {why}")
+            cols = ("tg_id", "tg_username", "tg_first_name", "tg_last_name", "tg_photo_url", "tg_photo_path", "tg_photo_src", "tg_photo_at", "can_dm")
+            ra, rb = (tuple(a[c] for c in cols), tuple(b[c] for c in cols))
+            sets = ", ".join(f"{c} = ?" for c in cols)
             con.execute("UPDATE users SET tg_id = (SELECT min(tg_id) FROM users) - 1 WHERE id = ?", (a["id"],))
             con.execute(f"UPDATE users SET {sets} WHERE id = ?", (*ra, b["id"]))
             con.execute(f"UPDATE users SET {sets} WHERE id = ?", (*rb, a["id"]))
@@ -1017,7 +1106,9 @@ def main(args: list[str]) -> None:
         print(f"moved: the account is on @{b['tg_username'] or b['tg_id']} now (run move again the other way to undo)")
     elif cmd == "unlink" and len(args) == 2:  # the card number stays (users.card_no): signing in again gets it back
         u = _user(con, args[1])
+        _confirm(f"Unlink the KBTU account from Telegram {u['tg_id']}", confirmed)
         with db.tx(con):
+            u = _confirmed_user(con, u)
             n = con.execute("DELETE FROM students WHERE user_id = ?", (u["id"],)).rowcount
             con.execute("DELETE FROM schedule_classes WHERE user_id = ?", (u["id"],))
             # a fresh start: staff again only by staff-ok (or DMP's list, added again)
@@ -1090,22 +1181,27 @@ def main(args: list[str]) -> None:
         print(f"@{u['tg_username'] or u['tg_id']}: " + ("confirmed" if n else "nothing typed in to confirm"))
     elif cmd == "staff" and len(args) in (4, 5):  # the student ID can't be a real one, so a KBTU sign-in is refused
         u = _user(con, args[1])
-        if one(con, "SELECT 1 FROM students WHERE user_id = ?", u["id"]):
-            sys.exit(f"@{u['tg_username'] or u['tg_id']}: already signed in with KBTU or staff")
-        staff_row(con, u["id"], args[2], args[3], args[4] if len(args) == 5 else None)
+        _confirm(f"Make Telegram {u['tg_id']} staff", confirmed)
+        with db.tx(con):
+            u = _confirmed_user(con, u)
+            if one(con, "SELECT 1 FROM students WHERE user_id = ?", u["id"]):
+                sys.exit(f"@{u['tg_username'] or u['tg_id']}: already signed in with KBTU or staff")
+            staff_row(con, u["id"], args[2], args[3], args[4] if len(args) == 5 else None)
         print(f"@{u['tg_username'] or u['tg_id']}: staff, acts as a student")
     elif cmd == "staff" and len(args) == 2:
         u = _user(con, args[1])
-        s = one(con, "SELECT student_id, consent_version FROM students WHERE user_id = ?", u["id"])
-        if not s or is_staff(s):
-            sys.exit(f"@{u['tg_username'] or u['tg_id']}: " + ("already staff" if s else "not signed in: use staff <who> <first> <last>"))
-        no = u["card_no"]
+        _confirm(f"Convert Telegram {u['tg_id']} to staff and retire their card number", confirmed)
         with db.tx(con):
+            u = _confirmed_user(con, u)
+            s = one(con, "SELECT student_id, consent_version FROM students WHERE user_id = ?", u["id"])
+            if not s or is_staff(s):
+                sys.exit(f"@{u['tg_username'] or u['tg_id']}: " + ("already staff" if s else "not signed in: use staff <who> <first> <last>"))
             con.execute("UPDATE students SET consent_version = 'staff' WHERE user_id = ?", (u["id"],))
             con.execute("UPDATE users SET card_no = NULL WHERE id = ?", (u["id"],))
             con.execute("DELETE FROM achievement_grants WHERE user_id = ? AND code = 'first50'", (u["id"],))
+            log_action(con, None, "staff_convert", f"user:{u['id']}")
         # its number stays a gap: moving the later ones down would hand someone a deleted account's burnt number
-        print(f"@{u['tg_username'] or u['tg_id']}: staff now, card {no} retired")
+        print(f"@{u['tg_username'] or u['tg_id']}: staff now, card {u['card_no']} retired")
     elif cmd == "student" and len(args) == 6:
         u, sid, t = _user(con, args[1]), args[2].upper(), now()
         if not STUDENT_ID.fullmatch(sid) or args[5] not in "123456" or len(args[5]) != 1:
@@ -1231,26 +1327,31 @@ def main(args: list[str]) -> None:
     elif cmd == "claim" and len(args) == 3 and args[1] == "close":
         n = con.execute("UPDATE grant_links SET expires_at = ? WHERE token = ? AND multi = 1 AND expires_at > ?", (now(), args[2], now())).rowcount
         print("closed" if n else "no open claim link with that token")
-    elif cmd == "meeting" and len(args) == 7 and args[1] == "new" and args[3:] and args[4].isdigit():
-        import calendar
+    elif cmd == "meeting" and len(args) == 7 and args[1] == "new" and CLI_ID.fullmatch(args[4]):
         from .logic import create_event, publish_event
-        boss = one(con, "SELECT id FROM users WHERE is_founder = 1")
-        org = one(con, "SELECT id FROM orgs WHERE slug = 'dmp'")
-        if not boss or not org:
-            sys.exit("needs the creator and the dmp office")
-        v, at = Viewer(boss[0], "admin", True, staff_org=org[0]), calendar.timegm(time.strptime(args[3], "%Y-%m-%d %H:%M")) - TZ
-        e = create_event(con, v, org[0], {"title": args[2], "startsAt": at, "endsAt": at + int(args[4]) * 60, "place": args[5],
-                                          "description": args[6], "emoji": "megaphone_3d", "color": "#2F5BEA", "visibility": "leaders", "leadersFrom": "head", "seats": None})
-        publish_event(con, v, e["id"])
+        at = _almaty_time(args[3])
+        try:
+            with db.tx(con):
+                boss = one(con, "SELECT id FROM users WHERE is_founder = 1")
+                org = one(con, "SELECT id FROM orgs WHERE slug = 'dmp'")
+                if not boss or not org:
+                    sys.exit("needs the creator and the dmp office")
+                v = Viewer(boss[0], "admin", True, staff_org=org[0])
+                e = create_event(con, v, org[0], {"title": args[2], "startsAt": at, "endsAt": at + int(args[4]) * 60, "place": args[5],
+                                                  "description": args[6], "emoji": "megaphone_3d", "color": "#2F5BEA", "visibility": "leaders", "leadersFrom": "head", "seats": None})
+                publish_event(con, v, e["id"])
+        except ApiError as exc:
+            sys.exit(f"refused: {exc.code} {exc.message or ''}".rstrip())
         print(f"published event {e['id']}")
     elif cmd == "event" and len(args) == 3 and args[1] in ("create", "publish"):
+        from tempfile import TemporaryDirectory
         from .logic import add_photo, publish_event, staff_create_event
         boss = one(con, "SELECT id FROM users WHERE is_founder = 1")
         if not boss:
             sys.exit("needs the creator (`founder`)")
         try:
             if args[1] == "publish":
-                e = one(con, "SELECT org_id FROM events WHERE id = ?", int(args[2])) if args[2].isascii() and args[2].isdigit() else None
+                e = one(con, "SELECT org_id FROM events WHERE id = ?", int(args[2])) if CLI_ID.fullmatch(args[2]) else None
                 if not e:
                     sys.exit("no such event")
                 with db.tx(con):
@@ -1261,30 +1362,40 @@ def main(args: list[str]) -> None:
             org = one(con, "SELECT id FROM orgs WHERE slug = ? AND status = 'active'", args[2])
             if not org:
                 sys.exit(f"no active club {args[2]!r} (see `orgs`)")
-            body = _event_input()
+            body = _event_input(gz)
             v = Viewer(boss[0], "admin", True, staff_org=org[0])
-            saved = _event_picture(body, "cover", Path(cfg.db_path).resolve().parent / "media")
-            with db.tx(con):  # a refused event keeps no cover row
-                if saved:
-                    body["coverId"] = add_photo(con, v, saved)["id"]
-                eid = staff_create_event(con, v, org[0], body, "server")["id"]
+            photos = Path(cfg.db_path).resolve().parent / "media"
+            with TemporaryDirectory(dir=photos.parent) as staged:
+                saved = _event_picture(body, "cover", Path(staged))
+                with db.tx(con):  # a refused event keeps no cover row or public file
+                    if saved:
+                        body["coverId"] = add_photo(con, v, saved)["id"]
+                    eid = staff_create_event(con, v, org[0], body, "server")["id"]
+                    if saved:
+                        _publish_event_cover(staged, photos, saved)
             print(f"draft {eid}")
         except ApiError as exc:  # the code alone: its message may be a field's name, never the event's words
             sys.exit(f"refused: {exc.code} {exc.message or ''}".rstrip())
-    elif cmd == "casting" and len(args) == 4 and args[1] == "from-event" and args[2].isdigit():
+    elif cmd == "casting" and len(args) == 4 and args[1] == "from-event" and CLI_ID.fullmatch(args[2]):
         # Reuse the casting post text, cover and place for its event without sending a follower notification.
-        import calendar
         from .logic.newsfeed import _casting_input
-        e = one(con, "SELECT * FROM events WHERE id = ?", int(args[2]))
-        if not e or not e["place"]:
-            sys.exit("no such event, or it has no place")
-        boss = one(con, "SELECT user_id FROM org_members WHERE org_id = ? AND role = 'president'", e["org_id"]) or one(con, "SELECT id FROM users WHERE is_founder = 1")
-        start, end, place = _casting_input({"from": now(), "to": calendar.timegm(time.strptime(args[3], "%Y-%m-%d %H:%M")) - TZ, "place": e["place"]})
-        with db.tx(con):
-            if one(con, "SELECT 1 FROM posts WHERE org_id = ? AND hidden_at IS NULL AND casting_cancelled_at IS NULL AND casting_to > ?", e["org_id"], now()):
-                sys.exit("this club already has a casting on")
-            pid = con.execute("""INSERT INTO posts (org_id, author_id, audience, title, body, photo_file_id, created_at, casting_from, casting_to, casting_place)
-                VALUES (?, ?, 'public', ?, ?, ?, ?, ?, ?, ?)""", (e["org_id"], boss[0], e["title"], e["description"][:2000], e["cover_file_id"], now(), start, end, place)).lastrowid
+        until = _almaty_time(args[3])
+        try:
+            with db.tx(con):
+                e = one(con, "SELECT * FROM events WHERE id = ?", int(args[2]))
+                if not e or not e["place"]:
+                    sys.exit("no such event, or it has no place")
+                boss = one(con, "SELECT user_id FROM org_members WHERE org_id = ? AND role = 'president'", e["org_id"]) or one(con, "SELECT id FROM users WHERE is_founder = 1")
+                if not boss:
+                    sys.exit("needs the club's president or the creator")
+                t = now()
+                start, end, place = _casting_input({"from": t, "to": until, "place": e["place"]})
+                if one(con, "SELECT 1 FROM posts WHERE org_id = ? AND hidden_at IS NULL AND casting_cancelled_at IS NULL AND casting_to > ?", e["org_id"], t):
+                    sys.exit("this club already has a casting on")
+                pid = con.execute("""INSERT INTO posts (org_id, author_id, audience, title, body, photo_file_id, created_at, casting_from, casting_to, casting_place)
+                    VALUES (?, ?, 'public', ?, ?, ?, ?, ?, ?, ?)""", (e["org_id"], boss[0], e["title"], e["description"][:2000], e["cover_file_id"], t, start, end, place)).lastrowid
+        except ApiError as exc:
+            sys.exit(f"refused: {exc.code} {exc.message or ''}".rstrip())
         print(f"casting post {pid}")
     elif cmd == "meeting" and len(args) in (3, 4) and args[1] == "call" and args[2].isdigit() and args[3:] in ([], ["--test"], ["--send"]):
         from .logic.organizing import _invited_leaders
@@ -1315,7 +1426,7 @@ def main(args: list[str]) -> None:
             async with httpx.AsyncClient() as http:
                 return await ai.fill_categories(con, config.load(), http)
         print("filled %d, left empty %d" % asyncio.run(fill()))
-    elif cmd == "photo-call" and len(args) in (2, 3) and args[1].isdigit() and args[2:] in ([], ["--send"]):
+    elif cmd == "photo-call" and len(args) in (2, 3) and CLI_ID.fullmatch(args[1]) and args[2:] in ([], ["--send"]):
         e = one(con, "SELECT id, title FROM events WHERE id = ? AND status = 'published'", int(args[1]))
         if not e:
             sys.exit("no published event with that id")

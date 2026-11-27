@@ -343,7 +343,7 @@ def test_deleted_stay_deleted_after_restore(env, monkeypatch, capsys):
     for k, v in (("BOT_TOKEN", BOT), ("TOKEN_KEY", "A" * 43 + "="), ("DB_PATH", str(restored))):
         monkeypatch.setenv(k, v)
     from kbtu import admin
-    admin.main(["redelete"])
+    admin.main(["redelete", "--yes"])
     assert capsys.readouterr().out.strip() == "0 deleted again (2 in deletions.log)"
 
 
@@ -356,7 +356,7 @@ def test_restore_erases_account_moved_to_another_telegram(env, monkeypatch):
     restored = Path(cfg.db_path).with_name("before-move.db")
     con.execute("VACUUM INTO ?", (str(restored),))
     monkeypatch.setattr(config, "load", lambda: cfg)
-    admin.main(["move", "21", "23"])
+    admin.main(["move", "21", "23", "--yes"])
     delete_now(c, cfg, tma(23))
     server.create(dataclasses.replace(cfg, db_path=str(restored)))
     old = db.connect(str(restored))
