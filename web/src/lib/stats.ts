@@ -33,7 +33,7 @@ type Platform = 'ios' | 'android' | 'desktop' | 'web';
 type Bucket = 0 | 1 | 2 | 3 | 4 | 5;
 type Long = Bucket | 6;
 // the phone's layout numbers, once a launch (server stats.LAY_*): by platform and Telegram's major version, each value by its bucket only
-export type LayMetric ='safe_b' | 'safe_t' | 'content_b' | 'content_t' | 'env_b' | 'stable' | 'gap';
+export type LayMetric = 'safe_b' | 'safe_t' | 'content_b' | 'content_t' | 'env_b' | 'stable' | 'gap';
 type Lay = `lay.${Platform}.${string}.${LayMetric}.${number}` | `lay.${Platform}.${string}.full.${0 | 1}`;
 type Key = Screen | Action | Appeal | Android | Source | Funnel | `hero.${'show' | 'tap'}.${HeroKind}` | `err.${Screen}` | `uniq.${Screen | Action}` | `sess.${Long}` | `time.${Long}`
   | `open.${Platform}.${Bucket}` | `js.${Screen}.${JsKind}` | `api.${Screen}.${ApiKind}` | `tti.${Screen}.${Platform}.${Bucket}` | Lay;
