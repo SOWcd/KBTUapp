@@ -157,7 +157,7 @@
     {#if !was && events}<Group><Row icon={CalendarPlus} title={t('post.eventTip')} accessory="chevron" onclick={() => sheets.editor(pick)} /></Group>{/if}
 
     {#if photo}
-      <div class="shot"><img src={photo.url} alt="" /><span class="rm"><IconButton icon={X} kind="glass" size="s" label={t('ed.photoRemove')} onclick={() => (photo = null)} /></span></div>
+      <div class="shot"><img draggable="false" src={photo.url} alt="" /><span class="rm"><IconButton icon={X} kind="glass" size="s" label={t('ed.photoRemove')} onclick={() => (photo = null)} /></span></div>
     {:else}
       <label class="add" class:busy={uploading}>
         <ImagePlus size={24} /><span>{t('post.photo')}</span>

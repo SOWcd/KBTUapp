@@ -209,7 +209,7 @@
               {:else if p.photo}
                 {@const ph = p.photo}
                 <Row dense title={p.title} subtitle={sub} onclick={() => play(p)}>
-                  {#snippet lead()}<img class="ph" src={ph.url} alt="" loading="lazy" decoding="async" style:object-position={focusPos(ph)} />{/snippet}
+                  {#snippet lead()}<img draggable="false" class="ph" src={ph.url} alt="" loading="lazy" decoding="async" style:object-position={focusPos(ph)} />{/snippet}
                 </Row>
               {:else}<Row dense title={p.title} subtitle={sub} onclick={() => play(p)} />{/if}
             {/each}

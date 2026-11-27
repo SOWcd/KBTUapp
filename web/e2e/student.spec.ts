@@ -22,8 +22,9 @@ async function asideLaunchMoments(page: Page) {
   await page.addLocatorHandler(page.getByRole('dialog', { name: s('inst.title') }), async (d) => {
     await d.getByRole('button', { name: s('inst.later'), exact: true }).click(); // enabled after its short hold
   });
+  // Back closes it (the app's only way out of a full-screen overlay): Telegram's back_button_pressed
   await page.addLocatorHandler(page.getByText(s('unlock.kicker'), { exact: true }).first(), async () => {
-    await page.getByRole('button', { name: s('common.close'), exact: true }).last().click();
+    await page.evaluate(() => (window as unknown as { Telegram: { WebView: { receiveEvent: (e: string) => void } } }).Telegram.WebView.receiveEvent('back_button_pressed'));
   });
 }
 

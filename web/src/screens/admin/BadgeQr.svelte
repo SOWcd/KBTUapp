@@ -8,14 +8,13 @@
   import { onMount } from 'svelte';
   import { api, ApiErr, type BadgeQr, type GrantItem } from '../../lib/api';
   import { manualMedal, manualName, QR_TONE, type Manual } from '../../lib/awards';
-  import { close, removeOverlay, hideChrome, type Overlay } from '../../lib/state/ui.svelte';
+  import { removeOverlay, hideChrome, type Overlay } from '../../lib/state/ui.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
   import Qr from '../../ui/Qr.svelte';
   import '../../lib/qrnow'; // its code in the first frame (lib/qr.svelte.ts)
   import Medal from '../../ui/Medal.svelte';
   import KbtuMark from '../../ui/KbtuMark.svelte';
-  import CloseX from '../../ui/CloseX.svelte';
   import QrCode from '@lucide/svelte/icons/qr-code';
 
   let { overlay, award, code }: { overlay: Overlay; award: Manual; code: GrantItem['code'] } = $props();
@@ -77,12 +76,11 @@
       <p class="got">{t('aw.showGot', { n: q.got })}</p>
     {/if}
   </div>
-  <CloseX onclick={() => close(overlay.id)} />
 </div>
 
 <style>
   .scrim { position: absolute; inset: 0; z-index: var(--z-sheet); background: rgba(3, 4, 10, 0.94); }
-  .wrap { position: absolute; inset: 0; z-index: var(--z-sheet); display: flex; flex-direction: column; padding-bottom: var(--close-room); pointer-events: none; }
+  .wrap { position: absolute; inset: 0; z-index: var(--z-sheet); display: flex; flex-direction: column; padding-bottom: var(--safe-bottom); pointer-events: none; }
   .page { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; display: flex; flex-direction: column; align-items: center; justify-content: center;
     gap: var(--s-4); padding: calc(max(var(--top), var(--head-bottom)) + 8px) var(--s-4) var(--s-4); pointer-events: auto; }
   .page::-webkit-scrollbar { display: none; }
