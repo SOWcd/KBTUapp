@@ -273,7 +273,7 @@
   .paper .shade { background: linear-gradient(180deg, transparent 38%, color-mix(in srgb, var(--c2) 82%, transparent)); }
   .paper .act small { color: var(--ink2); opacity: 1; }
   .paper .go { background: var(--ink); color: var(--c1); }
-  .paper .go.done { background: rgba(0, 0, 0, 0.1); color: var(--ink); }
+  .paper .go.done { background: color-mix(in srgb, var(--ink) 12%, transparent); color: var(--ink); }
 
   /* the list: chips that filter it in place, then plain rows on the ground */
   .dir { scroll-margin-top: var(--page-top); }
