@@ -163,6 +163,9 @@ Ideas and fixes are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Security is
 - `FORUM=1`: the find-people forum for the app's staff (`founder`: the creator alone).
 - `BOARD=1`: the assistant, sign-up questions, the map's flaws for every student; `BOARD=staff`: admins and
   moderators only. Its old in-app forum is off for good.
+  Assistant questions and event fills share 30 attempts per student in 24 hours and 1,000 across all students per
+  UTC day, reserved before AI calls. The global count lives in `meta` across restarts; failures still count, and
+  an exhausted or unreadable allowance blocks calls even when a provider key is billed.
 - `NEWS_CHANNEL`: the news channel (default `@KBTUevents`; the old name `EVENTS_CHANNEL` still read).
 - `FORUM_CHANNEL=<chat id>`: the forum channel: students post from the app, the bot publishes (`logic/fchannel.py`).
   `FORUM_GROUP`: its discussion group.
