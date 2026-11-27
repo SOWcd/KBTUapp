@@ -471,10 +471,12 @@
     display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .chev { position: absolute; top: var(--s-3); right: var(--s-2); color: var(--text-3); display: flex; }
   /* one or two places: a row each (the square, the name, the chevron on one line), so the feed starts a line higher */
-  .wide .door { flex-direction: row; align-items: center; min-height: var(--ctl-l); padding: var(--s-2) var(--s-6) var(--s-2) var(--s-2); }
-  .wide .sq { flex: none; width: var(--ctl-s); height: var(--ctl-s); border-radius: var(--r-s); }
+  .wide .door { flex-direction: row; align-items: center; min-height: var(--ctl-l); padding: var(--s-2) var(--s-6) var(--s-2) var(--s-3); }
+  .wide .sq { flex: none; }
+  .wide .dl { hyphens: manual; }
   .wide .chev { top: 50%; right: var(--s-2); transform: translateY(-50%); }
-  @media (max-width: 359px) { .dl { font-size: var(--fs-cap); } .door { padding: var(--s-3) var(--s-2) var(--s-3) var(--s-3); } }
+  @media (max-width: 359px) { .dl { font-size: var(--fs-cap); } .door { padding: var(--s-3) var(--s-2) var(--s-3) var(--s-3); }
+    .wide .door { padding: var(--s-2) var(--s-2) var(--s-2) var(--s-3); } .wide .chev { display: none; } }
   /* the "N new" pill: floats under the capsule, takes no room in the list */
   .pill { position: sticky; top: calc(var(--head-bottom) + var(--s-2) - var(--page-top)); z-index: var(--z-sticky); height: 0; display: flex; justify-content: center; }
   .pin { display: flex; height: max-content; }
