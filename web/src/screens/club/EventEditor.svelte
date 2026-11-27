@@ -93,8 +93,8 @@
   let { overlay, org, id, staff = false }: { overlay: Overlay; org: Id; id?: Id; staff?: boolean } = $props();
   // an event opened from Admin and edited here is staff's too: the club's DMP memo is neither shown nor sent (but to the creator)
   const asStaff = $derived(staff || (!!id && staffEvents.has(id)));
-  // his covers and videos go as the club's too (X-Staff-Org)
-  $effect(() => { if (!staff && !lent) return; staffOrg.id = org; return () => { staffOrg.id = 0; }; });
+  // his covers and videos go as the club's too (X-Staff-Org); on leaving, whatever was there before (a lent Studio's own)
+  $effect(() => { if (!staff && !lent) return; const was = staffOrg.id; staffOrg.id = org; return () => { if (staffOrg.id === org) staffOrg.id = was; }; });
   const club = $derived(data.orgs.find((o) => o.id === org));
   const oversee = $derived(!!club?.canOversee);
   const mine = $derived(session.me?.memberships.find((m) => m.org.id === org));
@@ -168,7 +168,7 @@
   let touched = $state(false);
   const touch = () => { if (!touched) { base = JSON.stringify(f); touched = true; } };
   let said = $state(''); // what is being written to KRI: kept with the text draft, so a failed try or a closed app loses nothing
-  const dirty = $derived(!!said.trim() || touched && JSON.stringify(f) !== base);
+  let loading = $state(!!untrack(() => id)); // an edit until the server's copy is in: the blank form is inert (Publish made a second event)
   const live = $derived(!!saved && saved.status !== 'draft');
   const tint = $derived(shade(f.color));
   $effect(() => { overlay.tint = tint; }); // the sheets it opens take its colour
@@ -296,9 +296,10 @@
   // purpose stays
   let photoColor = $state<string | null>(null);
   async function readColor(pick: boolean) {
-    if (!f.cover) return;
-    const was = photoColor, c = await coverColor(f.cover);
-    if (!f.cover) return;
+    const cover = f.cover;
+    if (!cover) return;
+    const was = photoColor, c = await coverColor(cover);
+    if (f.cover?.id !== cover.id) return; // another photo came meanwhile: this colour is stale
     photoColor = c;
     if (c && (pick || f.color === was)) f.color = c;
   }
@@ -314,6 +315,7 @@
   const KEY = { tall: 'videoId', wide: 'wideVideoId' } as const;
   let vids = $state<Record<Slot, Video | null>>({ tall: null, wide: null });
   let vUp = $state<Record<Slot, number>>({ tall: -1, wide: -1 }); // the upload's share done, -1 when none is running
+  const stop = new AbortController(); // the editor closed: a running upload stops
   async function pickVideo(ev: Event, slot: Slot) {
     const el = ev.currentTarget as HTMLInputElement, file = el.files?.[0];
     el.value = '';
@@ -321,8 +323,8 @@
     if (file.size > 500 * 1024 * 1024) { say(t('ed.videoBig'), 'pleading_face_3d'); return; }
     if (slot === 'tall' && (await seconds(file)) > 60.5) { haptic.error(); say(t('ed.videoLong'), 'pleading_face_3d'); return; }
     vUp[slot] = 0;
-    try { const x = await api.uploadVideo(file, (d) => (vUp[slot] = d), slot === 'wide'); vids[slot] = x; f[KEY[slot]] = x.id; haptic.ok(); }
-    catch { haptic.error(); say(t('ed.videoBad'), 'pleading_face_3d'); }
+    try { const x = await api.uploadVideo(file, (d) => (vUp[slot] = d), slot === 'wide', stop.signal); vids[slot] = x; f[KEY[slot]] = x.id; haptic.ok(); }
+    catch { if (!stop.signal.aborted) { haptic.error(); say(t('ed.videoBad'), 'pleading_face_3d'); } }
     finally { vUp[slot] = -1; }
   }
   // the length before sending hundreds of megabytes (0 when the webview can't read it: the server checks again)
@@ -374,6 +376,9 @@
   // more photos after the cover, swiped sideways in the Feed and the sheet: nine at most, in the order picked
   const SLIDES = 9;
   let slidesUp = $state(0); // how many are being sent
+  // an upload still running is something to lose too: Back asks instead of dropping it unseen
+  const uploads = $derived(vUp.tall >= 0 || vUp.wide >= 0 || slidesUp > 0 || !!uploading);
+  const dirty = $derived(uploads || !!said.trim() || touched && JSON.stringify(f) !== base);
   async function pickSlides(ev: Event) {
     const el = ev.currentTarget as HTMLInputElement, files = [...(el.files ?? [])].slice(0, SLIDES - f.slides.length);
     el.value = '';
@@ -413,13 +418,19 @@
           deadline: !!e.regUntil, late: !!e.lateSignup, regDate: e.regUntil ? dateInput(e.regUntil) : '', regTime: e.regUntil ? time(e.regUntil) : '18:00',
           tba: !e.place && !e.placeUrl && !e.online, memo: e.memo ?? {} };
         if (campusPlace(e.place)) { f.place = placeOf(e.place); f.placeUrl = ''; }
-        // a cover's tint used to be the photo's average colour: such an event starts on the photo's dot
-        if (e.cover && (photoColor = await coverColor(e.cover)) && e.tint !== shade(f.color)) f.color = photoColor;
         base = JSON.stringify(f);
+        loading = false;
         restoreText();
+        // a cover's tint used to be the photo's average colour: such an event starts on the photo's dot (unless changed meanwhile)
+        if (!e.cover) return;
+        const c = await coverColor(e.cover);
+        if (gone || f.cover?.id !== e.cover.id) return;
+        photoColor = c;
+        if (c && e.tint !== shade(f.color)) { const same = base === JSON.stringify(f); f.color = c; if (same) base = JSON.stringify(f); }
       }).catch(() => { say(t('common.error'), 'warning_3d'); base = JSON.stringify(f); close(overlay.id); });
     } else restoreText();
-    return hideChrome();
+    const chrome = hideChrome();
+    return () => { stop.abort(); chrome(); };
   });
 
   function leave() {
@@ -486,9 +497,10 @@
 
   // publish: out now (a member's draft I answer: my yes); send: a member's own to the club's President and Vices
   async function submit(kind: 'publish' | 'draft' | 'save' | 'send') {
+    if (id && !saved || filling) return; // the edit not read yet (a second event), or KRI still filling the card
     tried = true;
     if (Object.values(err).some(Boolean)) { haptic.error(); return; }
-    if (vUp.tall >= 0 || vUp.wide >= 0 || slidesUp || uploading) { haptic.error(); say(t('ed.videoWait'), 'pleading_face_3d'); return; }
+    if (uploads) { haptic.error(); say(t('ed.videoWait'), 'pleading_face_3d'); return; }
     if (busy) return;
     const sentAt = textDraft.stamp();
     busy = kind;
@@ -871,7 +883,7 @@
 {#snippet tintPhoto()}<button class="tp" class:on={f.color === photoColor} style="--c:{photoColor}" onclick={() => (f.color = photoColor!)} aria-label={t('ed.tintPhoto')}><ImageIcon size={15} strokeWidth={2.4} /></button>{/snippet}
 
 <!-- engine: Field has no date/time type (nor min): these few by hand, in Field's look (.fl) -->
-<div class="panel" class:hinted={member && goKind === 'send'} bind:this={panel} style:--tint={tint} style:--kbh="{keyboard.h}px" oninputcapture={touch} onchangecapture={touch} onclickcapture={touch}>
+<div class="panel" class:hinted={member && goKind === 'send'} bind:this={panel} inert={loading} style:--tint={tint} style:--kbh="{keyboard.h}px" oninputcapture={touch} onchangecapture={touch} onclickcapture={touch}>
   <!-- the sheet tinted by the event: its colour, the cover blurred over it, the page's ground on top for contrast -->
   <div class="wash" aria-hidden="true">{#if f.cover}<img draggable="false" src={f.cover.thumb} alt="" />{/if}<i></i></div>
   <header class="bar">
@@ -1010,7 +1022,7 @@
               {/each}
               {#each { length: slidesUp } as _, k (k)}<span class="sl wait"></span>{/each}
               {#if f.slides.length + slidesUp < SLIDES}
-                <label class="sl add" aria-label={t('ed.slidesAdd')}><ImagePlus size={20} /><input type="file" accept="image/*" multiple onchange={pickSlides} disabled={slidesUp > 0} /></label>
+                <label class="sl add" aria-label={t('ed.slidesAdd')}><ImagePlus size={20} /><input type="file" accept="image/*" multiple aria-label={t('ed.slidesAdd')} onchange={pickSlides} disabled={slidesUp > 0} /></label>
               {/if}
             </div>
             <p class="hint">{t('ed.slidesHint')}</p>
@@ -1166,7 +1178,7 @@
                 {:else}
                   <label class="vframe add" class:busy={vUp[slot] >= 0}><Clapperboard size={22} />
                     {#if vUp[slot] >= 0}<i class="prog" style:width="{vUp[slot] * 100}%"></i>{/if}
-                    <input type="file" accept="video/*" onchange={(ev) => pickVideo(ev, slot)} disabled={vUp[slot] >= 0} /></label>
+                    <input type="file" accept="video/*" aria-label={t(slot === 'tall' ? 'ed.videoTall' : 'ed.videoWide')} onchange={(ev) => pickVideo(ev, slot)} disabled={vUp[slot] >= 0} /></label>
                   <b>{vUp[slot] >= 0 ? t('ed.videoUp', { n: Math.round(vUp[slot] * 100) }) : t(slot === 'tall' ? 'ed.videoTall' : 'ed.videoWide')}</b>
                 {/if}
                 <i class="hint">{t(slot === 'tall' ? 'ed.videoHint' : 'ed.videoWideHint')}</i>

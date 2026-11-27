@@ -335,7 +335,7 @@
   }));
   function flaw(at: { x: number; y: number }): boolean {
     const [u, v] = uvAt(at.x, at.y);
-    if (u < 0 || u > 1 || v < 0 || v > 1 || !canFlaw()) return false;
+    if (gone || u < 0 || u > 1 || v < 0 || v > 1 || !canFlaw()) return false; // a hold that fired as the map closed
     haptic.soft(); held = true; press = null; lastTap = 0; seen = 0;
     const [px, py] = toPlan(ver, u, v), f = cur, vr = ver;
     draft = { ver: vr, f, u, v };
@@ -344,6 +344,7 @@
     void sheets.askText({ title: t('map.flawTitle'), text: t('map.flawText', { floor: f }), ok: t('map.flawSend'), cancel: t('common.cancel'), placeholder: t('map.flawPh'), max: 300 })
       .then((body) => body ? api.mapFlaw({ ver: vr, floor: f, u, v, px, py, body }).then(() => {
         haptic.ok(); say(t('map.flawThanks'), 'sparkles_3d');
+        if (gone) return; // sent; the map is closed, nothing of it to mark
         const id = -Date.now(); // the server answers 204: mine until the next visit lists it with its own id
         mine = [...mine, { id, ver: vr, floor: f, u, v, px, py, body }];
         okId = id; clearTimeout(okT); okT = window.setTimeout(() => (okId = 0), 1400);
@@ -736,12 +737,15 @@
     ro.observe(stage);
     if (leaving) void openRoute(); else void loadGraph();
     const clockT = setInterval(() => (clock = nowTs()), 60_000); // "free now" moves on with the hour
-    return () => { clearInterval(clockT); delete d.map; underEl?.style.removeProperty('visibility'); ro.disconnect(); clearTimeout(glideT); clearTimeout(scanT); undoChrome(); map.remove(); if (own) paintFor(theme.current); };
+    return () => {
+      gone = true; clearTimeout(holdT); clearTimeout(reframeT); clearTimeout(okT); under?.cancel(); // closed without leave(): the page under unscaled
+      clearInterval(clockT); delete d.map; underEl?.style.removeProperty('visibility'); ro.disconnect(); clearTimeout(glideT); clearTimeout(scanT); undoChrome(); map.remove(); if (own) paintFor(theme.current); };
   });
 
   function leave() {
     if (gone) return;
     gone = true;
+    clearTimeout(holdT); // a finger still down: no note's sheet opens over the closing map
     if (!appeared) { removeOverlay(overlay.id); return; } // closed before it showed
     let a: Animation;
     if (iris) {
@@ -852,20 +856,20 @@
     <!-- the maps: a tap lists them -->
     <div class="maps" class:away={!!rt.route}>
       <button class="rb glass glass-pill" class:on={menu} use:glass onclick={() => { haptic.tap(); menu = !menu; }}
-        aria-label={t('map.maps')} aria-expanded={menu} aria-haspopup="menu"><Layers size={20} /></button>
+        aria-label={t('map.maps')} aria-expanded={menu}><Layers size={20} /></button>
       {#if menu}
-        <div class="menu glass glass-sheet" use:glass role="menu">
-          {#each VERS as v (v)}<button role="menuitemradio" aria-checked={ver === v} class:on={ver === v} onclick={() => { menu = false; setVer(v); }}>{t(`map.ver.${v}` as 'map.ver.main')}</button>{/each}
+        <div class="menu glass glass-sheet" use:glass>
+          {#each VERS as v (v)}<button aria-pressed={ver === v} class:on={ver === v} onclick={() => { menu = false; setVer(v); }}>{t(`map.ver.${v}` as 'map.ver.main')}</button>{/each}
         </div>
       {/if}
     </div>
     <!-- on the way only the look button stays: the floors move into the step card -->
-    <div class="rail glass glass-pill" class:away={!!rt.route} class:dragging inert={!!rt.route} use:glass use:swipeable role="tablist" aria-label={t('map.floors')} style:--kp={kp}>
+    <div class="rail glass glass-pill" class:away={!!rt.route} class:dragging inert={!!rt.route} use:glass use:swipeable role="group" aria-label={t('map.floors')} style:--kp={kp}>
       <!-- the knob: a clear glass lens, the rail's numbers again inside it, magnified around its middle -->
       <span class="knob" bind:this={knob} aria-hidden="true"><span class="mag">{#each [0, 1, 2, 3, 4, 5] as n (n)}<i class:gone={!railFloors.includes(n)}>{n || t('map.bShort')}</i>{/each}</span></span>
       <!-- all six always there: the old map's missing basement folds away in step with the knob, so the rail narrows
            instead of jumping (owner, Oct 24 video) -->
-      {#each [0, 1, 2, 3, 4, 5] as n (n)}{@const gone = !railFloors.includes(n)}<button role="tab" aria-selected={cur === n} class:on={cur === n}
+      {#each [0, 1, 2, 3, 4, 5] as n (n)}{@const gone = !railFloors.includes(n)}<button aria-pressed={cur === n} class:on={cur === n}
         class:r={routeFloors.has(n)} class:gone tabindex={gone ? -1 : undefined} aria-hidden={gone || undefined} onclick={() => { if (!railSwiped) pick(n); }}
         aria-label={floorName(n)}>{n || t('map.bShort')}</button>{/each}
     </div>
