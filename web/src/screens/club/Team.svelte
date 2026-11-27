@@ -155,7 +155,6 @@
   }
   async function leave() {
     if (!m) return;
-    if (m.role === 'president') { haptic.error(); say(t('team.presLeave'), 'pleading_face_3d'); return; }
     if (!(await sheets.ask({ title: t('team.leaveAsk', { club: m.org.name }), text: t('team.leaveText'), ok: t('team.leave'), cancel: t('common.cancel'), danger: true }))) return;
     if (!(await run(() => api.removeMember(m.org.id, me!), t('team.left'), 'waving_hand_3d_default'))) return;
     close(overlay.id); // not my team any more: the sheet would show the next club's
@@ -275,7 +274,8 @@
         {/each}
         {#if !shown.length}<EmptyState inline text={t('clubs.nothing')} />{/if}
       </Group>
-      <Group><Row tone="destructive" title={t('team.leave')} onclick={leave} /></Group>
+      <!-- the President hands the club over first: no Leave that only says no -->
+      {#if m.role !== 'president'}<Group><Row tone="destructive" title={t('team.leave')} onclick={leave} /></Group>{/if}
     {:else}
       <Skeleton n={4} />
     {/if}

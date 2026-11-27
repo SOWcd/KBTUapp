@@ -2396,7 +2396,7 @@ const en: Dict = {
   'studio.todoPresMe': "I'm the President",
   'studio.invitePres': "Invite the President",
   'studio.invitePresGo': "Send the link",
-  'studio.noUserHow': "Settings → Username",
+  'studio.noUserHow': "Settings → Username, then reopen the app",
   'studio.upcoming': "Upcoming",
   'studio.drafts': "Drafts",
   'studio.past': "Past",

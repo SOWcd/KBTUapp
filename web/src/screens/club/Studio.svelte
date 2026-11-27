@@ -46,6 +46,7 @@
   import Row from '../../ui/Row.svelte';
   import Segmented from '../../ui/Segmented.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
+  import Skeleton from '../../ui/Skeleton.svelte';
   import Crown from '@lucide/svelte/icons/crown';
   import Trash2 from '@lucide/svelte/icons/trash-2';
   import BookUser from '@lucide/svelte/icons/book-user';
@@ -145,8 +146,11 @@
 
   // kept per club and loaded with the app (the club in view), so Studio opens full; a visit or a change refreshes it
   const events = $derived((m && data.studio[m.org.id]) || []);
-  function refresh() { if (m) void loadStudio(m.org.id); }
-  $effect(() => { void data.rev; if (m) void untrack(() => loadStudio(m.org.id)); });
+  // nothing kept yet: placeholders, never the first-event button over a club's real events; a failed first read: Retry
+  let failed = $state(false);
+  function refresh() { const o = m?.org.id; if (o) void loadStudio(o).then((ok) => { if (m?.org.id === o) failed = !ok; }); }
+  $effect(() => { void data.rev; void m?.org.id; untrack(refresh); });
+  const kept = $derived(!!m && m.org.id in data.studio);
 
   const over = (e: EventCard) => (e.endsAt ?? e.startsAt + 3 * 3600) <= nowTs();
   const upcoming = $derived(events.filter((e) => e.status !== 'draft' && !over(e)));
@@ -202,7 +206,7 @@
   const giveBack = (ev: MouseEvent, e: EventCard) => { haptic.tap(); menu(ev.currentTarget as Element, WHY.map((r) => ({ label: t(`rv.why.${r}`), onselect: () => void answer(e, r) })), 'end'); };
   const checking = $derived(events.filter((e) => (e.toCheck ?? 0) > 0));
   const volunteering = $derived(events.filter((e) => (e.volunteersAsked ?? 0) > 0 && !over(e))); // volunteers waiting for an answer
-  const guesting = $derived(events.filter((e) => (e.teamAsks ?? 0) > 0 && !over(e))); // our own people asking to come as guests
+  const guesting = $derived(presVice ? events.filter((e) => (e.teamAsks ?? 0) > 0 && !over(e)) : []); // our own people asking to come as guests: the President's and the Vices' to answer
   // drafts found in our channel's posts (server autoev.py): check and publish, one tap into the editor
   const found = $derived(staff ? drafts.filter((e) => e.fromPost && !over(e)) : []);
   // the week the coming Wednesday's memo to DMP covers (from Thursday on, the week after next; as the server's _next_week)
@@ -229,9 +233,10 @@
   // rosters, the ✓, short names, the week's memos) opens from here, and every roster goes to my chat as a CSV
   const dmp = $derived(!!m?.oversee);
   let memos = $state(0);
-  $effect(() => { if (dmp) api.registryMemos().then((l) => (memos = l.length)).catch(() => {}); });
+  $effect(() => { void data.rev; if (dmp) api.registryMemos().then((l) => (memos = l.length)).catch(() => {}); else memos = 0; });
   let exporting = $state(false);
   async function exportCsv() {
+    if (exporting) return;
     exporting = true; haptic.tap();
     try { await api.registryExport(); haptic.ok(); say(t('reg.sent'), 'sparkles_3d'); }
     catch (e) { haptic.error(); say(e instanceof ApiErr && e.message === 'no_dm' ? t('att.noDm') : t('common.error'), 'warning_3d'); }
@@ -328,10 +333,11 @@
     {#if todo}
       <Group caption={t('studio.todo')}>
         {#if noUser}<!-- "Message the club" is a DM to the President: without a @username nobody can write (lib/clubdm) -->
-          <Row icon={TriangleAlert} title={t('studio.noUserT')} subtitle={t('studio.noUserHow')} />{/if}
+          <Row icon={TriangleAlert} title={t('studio.noUserT')} subtitle={t('studio.noUserHow')} />{/if}<!-- the app reads it at launch: the line says to reopen -->
         {#each coAsks as x (x.event.id)}
           <Row title={x.event.title} subtitle={t('co.ask', { club: nameOf(x.host) })}>
-            {#snippet lead()}{#if x.event.cover}<img draggable="false" class="cov" src={coverFor(x.event.cover, 'list')!.thumb} alt="" />{:else}<OrgLogo org={x.host} size={30} />{/if}{/snippet}
+            <!-- a row with buttons at its end can't be a button: its picture opens the event, to read before the yes -->
+            {#snippet lead()}<button class="lb" onclick={() => sheets.event(x.event.id)} aria-label={x.event.title}>{#if x.event.cover}<img draggable="false" class="cov" src={coverFor(x.event.cover, 'list')!.thumb} alt="" />{:else}<OrgLogo org={x.host} size={30} />{/if}</button>{/snippet}
             {#snippet trailing()}<span class="yn"><IconButton icon={X} size="s" kind="gray" label={t('co.no')} onclick={(ev) => coNo(ev, x)} />
               <Button kind="tinted" size="s" onclick={() => coAnswer(x, true)}>{t('co.yes')}</Button></span>{/snippet}
           </Row>
@@ -339,7 +345,7 @@
         {#each reviewing as e (e.id)}
           <!-- a member's draft: the picture opens it in the editor; a reason from the list sends it back, yes publishes it -->
           <Row title={e.title} subtitle={t('rv.ask')}>
-            {#snippet lead()}<button onclick={() => openRow(e)} aria-label={t('studio.edit')}><Poster item={e} size={44} radius={12} /></button>{/snippet}
+            {#snippet lead()}<button class="lb" onclick={() => openRow(e)} aria-label={t('studio.edit')}><Poster item={e} size={44} radius={12} /></button>{/snippet}
             {#snippet trailing()}<span class="yn"><IconButton icon={X} size="s" kind="gray" label={t('rv.return')} onclick={(ev) => giveBack(ev, e)} />
               <Button kind="tinted" size="s" onclick={() => { haptic.tap(); void answer(e); }}>{t('rv.approve')}</Button></span>{/snippet}
           </Row>
@@ -360,7 +366,7 @@
         {#each found as e (e.id)}
           <!-- the post's picture on it; the eye: as students will see it, the pencil: the editor (EventManage's two doors) -->
           <Row title={e.title} subtitle={t('studio.fromPost')}>
-            {#snippet lead()}<Poster item={e} size={44} radius={12} />{/snippet}
+            {#snippet lead()}<button class="lb" onclick={() => { haptic.tap(); sheets.draftPreview(e.id); }} aria-label={t('ed.preview')}><Poster item={e} size={44} radius={12} /></button>{/snippet}
             {#snippet trailing()}<span class="yn"><IconButton icon={Eye} size="s" label={t('ed.preview')} onclick={() => { haptic.tap(); sheets.draftPreview(e.id); }} />
               <IconButton icon={Pencil} size="s" label={t('studio.edit')} onclick={() => openRow(e)} /></span>{/snippet}
           </Row>
@@ -385,7 +391,7 @@
     {#if dmp}
       <Group caption={t('tab.dmp')}>
         <Row icon={BookUser} title={t('reg.title')} subtitle={t('reg.studioSub')} count={data.registry?.length ?? 0} accessory="chevron" onclick={() => sheets.registry()} />
-        <Row icon={Mail} title={t('reg.memos')} count={memos} accessory="chevron" onclick={() => sheets.registry()} />
+        {#if memos}<Row icon={Mail} title={t('reg.memos')} count={memos} accessory="chevron" onclick={() => sheets.registry('memos')} />{/if}
         <Row icon={Network} title={t('ct.dmp')} subtitle={t('ct.dmpSub')} accessory="chevron" onclick={() => sheets.dmpChats()} />
         <Row icon={FileDown} title={t('reg.export')} subtitle={t('reg.exportSub')} disabled={exporting} onclick={exportCsv} />
       </Group>
@@ -423,6 +429,8 @@
           {:else}<EmptyState inline text={t('studio.empty')} />{/each}
         </div>
       </div>
+    {:else if !kept}
+      {#if failed}<EmptyState onretry={refresh} />{:else}<Skeleton kind="cards" n={2} />{/if}
     {:else}<!-- a club with no event yet: its first one is the screen's one main button (a member's: a draft for approval) -->
       <Button kind="primary" size="l" full onclick={() => sheets.editor(m.org.id)}>{#snippet icon()}<Plus size={20} />{/snippet}{sw('ed.new')}</Button>
     {/if}
@@ -466,6 +474,8 @@
   .n { margin-left: var(--s-1); color: var(--text-3); font-weight: 450; }
   .day { display: flex; flex-direction: column; gap: var(--s-3); }
   .yn { display: flex; align-items: center; gap: var(--s-2); }
+  .lb { display: flex; padding: 0; border: 0; background: none; cursor: pointer; }
+  .lb:active { opacity: 0.7; }
   .cov { width: 30px; height: 30px; border-radius: var(--r-xs); object-fit: cover; }
   .events { display: flex; flex-direction: column; gap: var(--s-3); }
   .report-tools { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); flex-wrap: wrap; }

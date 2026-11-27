@@ -2396,7 +2396,7 @@ const kk: Dict = {
   'studio.todoPresMe': "Президент — мен",
   'studio.invitePres': "Президентті шақыру",
   'studio.invitePresGo': "Сілтеме жіберу",
-  'studio.noUserHow': "Баптаулар → Пайдаланушы аты",
+  'studio.noUserHow': "Баптаулар → Пайдаланушы аты, сосын қолданбаны қайта аш",
   'studio.upcoming': "Алда",
   'studio.drafts': "Нобайлар",
   'studio.past': "Өткен",

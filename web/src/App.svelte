@@ -139,7 +139,7 @@
   const rosterWelcome = () => import('./screens/sheets/RosterWelcome.svelte'), rosterAsk = () => import('./screens/sheets/RosterAsk.svelte');
   sheets.consent = () => { asked = true; void loadMe(); };
   let registryOpened = false; // in this launch, by any path: the desk's auto-open stays off after it (lib/desk.ts)
-  sheets.registry = () => { registryOpened = true; return lazy(() => import('./screens/dmp/RegistrySheet.svelte'), {}); };
+  sheets.registry = (focus?: 'memos') => { registryOpened = true; return lazy(() => import('./screens/dmp/RegistrySheet.svelte'), { focus }); };
   sheets.celebrate = () => void celebrate();
   setLoginHook((after, lock) => sheets.login(after, lock));
 
