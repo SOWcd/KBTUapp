@@ -3,7 +3,7 @@ import './ui/tokens.css';
 import './ui/base.css';
 import { mount } from 'svelte';
 import App from './App.svelte';
-import { boot, hapticTaps, inTelegram, tg } from './lib/tg';
+import { boot, hapticTaps, inTelegram, onAndroid, tg } from './lib/tg';
 import { bootOut } from './lib/boot';
 import { native } from './lib/native';
 import { i18n, loadLang } from './lib/i18n/index.svelte';
@@ -15,6 +15,9 @@ document.documentElement.lang = i18n.lang;
 if (!inTelegram && !/^\/(show|screen)\/?$/.test(location.pathname)) document.documentElement.dataset.web = '';
 // the iPhone app draws the tab bar itself (UITabBar): Nav keeps only its corner button (lib/native.ts 'tabs')
 if (native.has('tabs')) document.documentElement.dataset.ntabs = '';
+// Telegram on Android reports its bottom inset (the system bar, 48 px) though the web view already ends above that bar
+// or the bar is hidden in fullscreen: tokens.css drops it there (measured Nov 27, startapp=vp: dock 58 px off the bottom)
+if (inTelegram && onAndroid) document.documentElement.dataset.android = '';
 // theme before the first paint: no white flash in dark mode
 applyTheme(initialTheme(tg.colorScheme()));
 boot(getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#000');
