@@ -316,12 +316,15 @@ def vote(con, v: Viewer, app_id: int, body: dict) -> dict:
         verdict, stars, note = body.get("verdict"), body.get("stars"), " ".join(str(body.get("note") or "").split())
         if verdict not in VERDICTS or not (stars is None or isinstance(stars, int) and not isinstance(stars, bool) and 1 <= stars <= 5) or len(note) > 500:
             raise ApiError("bad_input")
+        # a "no" is decided unless a "no" vote set it (that vote and the stage share their moment): a vote stays open to the next one
+        decided = a["stage"] == "yes" or a["stage"] == "no" and not one(
+            con, "SELECT 1 FROM round_votes WHERE app_id = ? AND verdict = 'no' AND at = ?", app_id, a["updated_at"])
         con.execute("""INSERT INTO round_votes (app_id, user_id, verdict, stars, note, at) VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT (app_id, user_id) DO UPDATE SET verdict = excluded.verdict, stars = excluded.stars, note = excluded.note, at = excluded.at""",
                     (app_id, v.id, verdict, stars, note, now()))
-        if a["stage"] not in ("yes", "no"):
+        if not decided:
             con.execute("UPDATE round_apps SET stage = ?, updated_at = ? WHERE id = ?", (verdict, now(), app_id))
-    return {"stage": a["stage"] if a["stage"] in ("yes", "no") else verdict}
+    return {"stage": a["stage"] if decided else verdict}
 
 
 def decide(con, v: Viewer, app_id: int, body: dict) -> dict:

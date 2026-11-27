@@ -97,6 +97,20 @@ def test_votes_keep_decisions_until_explicitly_changed(env, stage, verdict):
     assert con.execute("SELECT stage FROM round_apps WHERE id = ?", (app_id,)).fetchone()[0] == verdict
 
 
+def test_a_no_vote_is_not_a_decision(env):
+    """A "no" vote sets the stage, but the next vote still moves it: only a decided "no" stands."""
+    con, boss, rid, apps, oid, ids = _round(env)
+    app_id = apps[ANN]
+    assert casting.vote(con, boss, app_id, {"verdict": "no"}) == {"stage": "no"}
+    assert casting.vote(con, boss, app_id, {"verdict": "next"}) == {"stage": "next"}
+    assert casting.vote(con, boss, app_id, {"verdict": "no"}) == {"stage": "no"}
+    assert casting.vote(con, boss, app_id, {"verdict": "maybe"}) == {"stage": "maybe"}
+    casting.decide(con, boss, app_id, {"stage": "no"})
+    con.execute("UPDATE round_apps SET updated_at = updated_at - 5 WHERE id = ?", (app_id,))  # decided a moment before the votes
+    assert casting.vote(con, boss, app_id, {"verdict": "no"}) == {"stage": "no"}
+    assert casting.vote(con, boss, app_id, {"verdict": "next"}) == {"stage": "no"}  # a later "no" vote doesn't undo the decision
+
+
 def test_the_group_link_leaves_with_the_member(env):
     """Accepted, then banned or removed from the club: the round no longer hands over the group's invite."""
     con, boss, rid, apps, oid, ids = _round(env, "https://t.me/+AbC_d-12")
