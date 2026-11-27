@@ -218,12 +218,12 @@ def test_comment_ids_and_author_notices_survive_retention(env, monkeypatch):
         T.resolve(con, logic.Viewer(reporter, "moderator", True), old, "remove")
     assert not con.execute("SELECT 1 FROM bot_outbox WHERE ref = ?", (f"tb:{old}",)).fetchone()
     assert con.execute("SELECT 1 FROM bot_outbox WHERE ref = 'rr:999'").fetchone()
-    con.execute("UPDATE tgc_comments SET status = 'restored', dm_id = 77 WHERE id = ?", (new,))
-    wrong = {"kind": "tgc_back", "ref": f"tb:{new}", "user_id": ann}
+    con.execute("UPDATE tgc_comments SET status = 'restored', dm_id = 77, dm_chat_id = 2 WHERE id = ?", (new,))
+    wrong = {"kind": "tgc_back", "ref": f"tb:{new}", "user_id": ann, "tg_id": 1}
     assert tgc.render(con, wrong, "en") is None
-    assert asyncio.run(tgc.edit_first(cfg, None, con, wrong, {})) is None
+    assert asyncio.run(tgc.edit_first(cfg, None, con, wrong, {"chat_id": 2})) is None
     tgc.sent(con, wrong, {"result": {"message_id": 88}})
-    assert con.execute("SELECT dm_id FROM tgc_comments WHERE id = ?", (new,)).fetchone()[0] == 77
+    assert tuple(con.execute("SELECT dm_id, dm_chat_id FROM tgc_comments WHERE id = ?", (new,)).fetchone()) == (77, 2)
     assert "Bob&#x27;s words" in tgc.render(con, {**wrong, "user_id": bob}, "en")[0]
     con.close()
 

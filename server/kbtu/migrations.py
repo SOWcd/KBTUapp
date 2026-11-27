@@ -2719,4 +2719,7 @@ MIGRATIONS: list[tuple[int, str]] = [
       SELECT id, rejected_by FROM roster_pending WHERE rejected_by IS NOT NULL;
     UPDATE roster_pending SET claimed_by = CASE WHEN claimed_by = rejected_by THEN NULL ELSE claimed_by END,
       rejected_by = NULL WHERE rejected_by IS NOT NULL;"""),
+    # A comment verdict may edit its earlier DM only in the same chat. Legacy message ids have no known chat:
+    # leave it NULL rather than guessing after an account relink.
+    (260, "ALTER TABLE tgc_comments ADD COLUMN dm_chat_id INTEGER;"),
 ]
