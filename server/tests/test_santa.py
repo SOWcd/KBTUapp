@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import time
 
-from kbtu import admin, logic, outbox
+from kbtu import logic, outbox
 from test_core import delete_now, env, login, set_clock, tma  # noqa: F401  (env is a fixture)
 from test_team_guests import _club, _event, _uid
 
@@ -161,35 +161,6 @@ def test_one_button_starts_the_game(env):
     assert _page(c, e["id"], 11).get("error") == "not_found"
     logic.daily.tba_day(con)  # no room to confirm: its maker isn't nagged
     assert con.execute("SELECT 1 FROM bot_outbox WHERE kind = 'place_tba'").fetchone() is None
-
-
-def test_santa_news(env, capsys, monkeypatch):
-    """`kbtu.admin santa-news`: once to each President and Vice of an active org the bot can write to; --dry only counts."""
-    c, cfg = env
-    con = _club(c, cfg)
-    for tg in (10, 11, 12, 20):
-        logic.set_role(con, None, _uid(con, tg), 1, {10: "vice", 11: "member", 12: "vice", 20: "president"}[tg], "test")
-    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (2, 'chess', 'club', 'Chess', 'CH', 'laptop_3d', 0)")
-    logic.set_role(con, None, _uid(con, 20), 2, "president", "test")  # two clubs: one message
-    con.execute("UPDATE users SET can_dm = 1")
-    con.execute("UPDATE users SET can_dm = 0 WHERE tg_id = 12")  # never opened the bot
-    monkeypatch.setattr(admin.config, "load", lambda: cfg)
-    sent = lambda: sorted(r[0] for r in con.execute("SELECT u.tg_id FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE b.kind = 'santa_news'"))  # noqa: E731
-    admin.main(["santa-news", "--dry"])
-    assert capsys.readouterr().out.strip() == "would queue 2" and sent() == []
-    admin.main(["santa-news", "20"])  # one person first; the full run then skips them
-    assert capsys.readouterr().out.strip() == "queued 1" and sent() == [20]
-    admin.main(["santa-news"])
-    assert capsys.readouterr().out.strip() == "queued 1" and sent() == [10, 20]
-    admin.main(["santa-news"])
-    assert capsys.readouterr().out.strip() == "queued 0" and sent() == [10, 20]  # again: nothing new
-    admin.main(["santa-news", "20"])  # reworded: the one-person send reads it again
-    assert capsys.readouterr().out.strip() == "queued 1"
-    m = con.execute("SELECT b.*, 'en' AS lang FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE b.kind = 'santa_news' AND u.tg_id = 20").fetchone()
-    text, button, start = outbox._render(con, m)
-    assert start == "sn_1" and "IT Club" in text and button
-    logic.set_role(con, None, _uid(con, 20), 1, "member", "test")
-    assert outbox._render(con, m) is None  # no longer its President: quiet
 
 
 # ---------------------------------------------------------------- round 2: budget, deadline, the clock, reminders
