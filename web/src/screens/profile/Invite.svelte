@@ -31,7 +31,7 @@
 </script>
 
 <!-- a tap anywhere opens RefSheet; for screen readers and keyboards the title is that button and the medal its own (a
-     button can't hold another: axe's nested-interactive, #362), so the tile itself is no button -->
+     button can't hold another: axe's nested-interactive, issue 362), so the tile itself is no button -->
 <div class="sq inv surface {metal}" onclick={open} role="presentation">
   <span class="burst" aria-hidden="true"></span>
   <span class="top">

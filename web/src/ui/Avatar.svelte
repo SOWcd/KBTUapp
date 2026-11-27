@@ -30,7 +30,7 @@
       onerror={() => (broken = true)} />
   {:else}
     <!-- the initials stand in for the photo, a picture of the person (its img is alt=""), not a label: drawn by CSS so
-         a button's name stays the person's name (axe's label-in-name, #362) -->
+         a button's name stays the person's name (axe's label-in-name, issue 362) -->
     <span class="ini" style="background:{tone};font-size:{Math.round(size * 0.38)}px" data-ini={initials} aria-hidden="true"></span>
   {/if}
   {#if (person.founder || person.mark === 'idea') && size >= 28}<span class="seal"><Founder size={Math.max(14, Math.round(size * 0.36))} idea={!person.founder} /></span>{/if}
