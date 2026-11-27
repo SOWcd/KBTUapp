@@ -27,6 +27,8 @@ class Config:
     background: bool = True     # the postman and the schedule refresh (bot.py); tests turn them off
     cf_account_id: str = ""     # Cloudflare Workers AI translates event and club texts (ai.py); either empty: off
     cf_ai_token: str = field(default="", repr=False)
+    cf_zone_id: str = ""        # the domain's Cloudflare zone: removed photos are purged from its cache (media.drop)
+    cf_purge_token: str = field(default="", repr=False)  # a token with Cache Purge only; either empty: no purge
     forum: bool = False         # F1 find people: on for the app's staff only while it's tried out
     forum_founder: bool = False  # FORUM=founder: the Creator alone, before the staff
     # the policy's section 12 (the assistant, sign-up questions, the map's flaws): BOARD=1 every student,
@@ -184,6 +186,8 @@ def load() -> Config:
         background=env.get("BACKGROUND", "1") != "0",  # 0: no postman (tools/loadtest.py)
         cf_account_id=env.get("CF_ACCOUNT_ID", "").strip(),
         cf_ai_token=env.get("CF_AI_TOKEN", "").strip(),
+        cf_zone_id=env.get("CF_ZONE_ID", "").strip(),
+        cf_purge_token=env.get("CF_PURGE_TOKEN", "").strip(),
         forum=env.get("FORUM", "0") == "1",
         forum_founder=env.get("FORUM", "0") == "founder",
         board={"1": "all", "staff": "staff"}.get(env.get("BOARD", "").strip(), ""),

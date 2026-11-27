@@ -657,7 +657,7 @@ def _changed(con, v: Viewer, e: sqlite3.Row, after: sqlite3.Row) -> None:
     if e["status"] != "published" or not (moved or placed):
         return
     soon = core.now() >= after["starts_at"] - 2 * 3600
-    quiet = not moved and not e["place_url"] and not after["place_url"] and after["place"]  # a room on campus: TBA -> room, room -> room
+    quiet = not moved and e["online"] is None and not e["place_url"] and not after["place_url"] and after["place"]  # a room on campus: TBA -> room, room -> room
     for r in rows(con, """SELECT r.user_id, r.status, r.checked_in_at, u.n_remind FROM registrations r JOIN users u ON u.id = r.user_id
             WHERE r.event_id = ? AND r.status IN ('going','hold','waitlist')""", eid):
         if moved:
@@ -1303,11 +1303,12 @@ def _held(con, v: Viewer, e: sqlite3.Row, r: sqlite3.Row, admit: bool) -> dict |
 
 
 def flagged(con, rid: int) -> bool:
-    """The seat's receipt has warnings nobody reviewed (a duplicate, a short amount): the door looks at it first.
-    Only a clean receipt selected for a spot check is exempt; partial evidence needs approval too."""
+    """The seat's receipt carries a flag nobody reviewed (a duplicate, a short amount, read in part, resent, or a clean
+    one picked for a spot check): the door looks at it first. A receipt OCR alone can't tell from a forgery is never
+    let through on the app's word when a person was meant to look."""
     # only this seat's receipts: one from before a removal or a cancel (the seat's created_at restarts on a new sign-up) is the old seat's
     return one(con, """SELECT 1 FROM receipts c JOIN registrations r ON r.id = c.registration_id WHERE c.registration_id = ? AND c.status = 'accepted'
-        AND c.flags NOT IN ('', 'spot') AND c.reviewed_at IS NULL AND c.created_at >= r.created_at""", rid) is not None
+        AND c.flags != '' AND c.reviewed_at IS NULL AND c.created_at >= r.created_at""", rid) is not None
 
 
 RATE_FOR = 7 * 86400   # a rating is taken from the end of the event this long

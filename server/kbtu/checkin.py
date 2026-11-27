@@ -319,8 +319,10 @@ def _counts(con, ids: list[int], *, projector: bool = False) -> dict:
     if not ids:
         return out
     qs = logic._qs(ids)
+    # a leave-only scan at a meetup (_mark) leaves done_at NULL: neither still joining nor a departure of an arrival
     for r in rows(con, f"""SELECT session_id, COUNT(*) FILTER (WHERE done_at IS NOT NULL) AS done,
-            COUNT(*) FILTER (WHERE done_at IS NULL) AS pending, COUNT(*) FILTER (WHERE left_at IS NOT NULL) AS departed
+            COUNT(*) FILTER (WHERE done_at IS NULL AND left_at IS NULL) AS pending,
+            COUNT(*) FILTER (WHERE left_at IS NOT NULL AND done_at IS NOT NULL) AS departed
             FROM qr_marks WHERE session_id IN ({qs}) GROUP BY session_id""", *ids):
         out[r["session_id"]].update({k: r[k] for k in ("done", "pending", "departed")})
     for r in _hand_rows(con, ids):
@@ -822,9 +824,24 @@ def mark(con, key: bytes, v: Viewer, p: str) -> dict:
         raise ApiError("bad_input", "qr")
     with tx(con):
         s = one(con, "SELECT * FROM qr_sessions WHERE id = ?", sid)
-        if not s or phase != s["phase"]:
+        if not s:
             raise ApiError("bad_input", "qr")
+        if phase != s["phase"]:
+            return _switched(con, v, s, phase)
         return _mark(con, v, s, slot)
+
+
+def _switched(con, v: Viewer, s, phase: str) -> dict:
+    """A scan of the other phase's code, e.g. the app retrying an "in" scan after the organizer switched to "out":
+    someone already counted for it gets the confirmation again, not "invalid QR". Never marks anything."""
+    had = one(con, "SELECT done_at, left_at FROM qr_marks WHERE session_id = ? AND user_id = ?", s["id"], v.id)
+    left = phase == "out"
+    if not had or not had["left_at" if left else "done_at"]:
+        raise ApiError("bad_input", "qr")
+    student = bool(one(con, "SELECT 1 FROM students WHERE user_id = ? AND manual = 0", v.id))
+    title, event = _title_for(con, s, v.id, student)
+    return {"title": title, "done": student, "left": left, "event": event, "again": student and not left,
+            **({"team": True} if s["crew_event_id"] else {})}
 
 
 def _mark(con, v: Viewer, s, slot: int) -> dict:

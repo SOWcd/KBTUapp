@@ -12,6 +12,7 @@
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t } from '../../lib/i18n/index.svelte';
+  import { sw } from '../../lib/i18n/staff';
   import { haptic } from '../../lib/tg';
   import { ago } from '../../lib/time';
   import Sheet from '../../ui/Sheet.svelte';
@@ -128,7 +129,7 @@
   </div>
 {/snippet}
 
-<Sheet {overlay} full title={t('adm.forumChannel')} icon={MessagesSquare}>
+<Sheet {overlay} full title={sw('adm.forumChannel')} icon={MessagesSquare}>
   {#if mod}
     <div class="col">
       <!-- what waits for a decision is in Admin → Inbox; here what is out, and what was taken down -->

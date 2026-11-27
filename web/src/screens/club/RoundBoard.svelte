@@ -25,6 +25,7 @@
   import CalendarClock from '@lucide/svelte/icons/calendar-clock';
   import { dateInput, nowTs } from '../../lib/time';
   import { placeOf } from '../../lib/i18n/index.svelte';
+  import { sw } from '../../lib/i18n/staff';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
   import { phrase } from '../../lib/state/data.svelte';
   import { studioChanged } from '../../lib/state/data.svelte';
@@ -301,10 +302,10 @@
       {#if adding}
         <div class="stack" transition:fold>
           <!-- engine: Field has no date/time type: by hand, in Field's look (.fl) -->
-          <label class="fl"><span>{t('ed.date')}</span><input type="date" bind:value={nf.date} /></label>
+          <label class="fl"><span>{sw('ed.date')}</span><input type="date" bind:value={nf.date} /></label>
           <div class="two">
-            <label class="fl"><span>{t('ed.start')}</span><input type="time" bind:value={nf.from} /></label>
-            <label class="fl"><span>{t('ed.end')}</span><input type="time" bind:value={nf.to} /></label>
+            <label class="fl"><span>{sw('ed.start')}</span><input type="time" bind:value={nf.from} /></label>
+            <label class="fl"><span>{sw('ed.end')}</span><input type="time" bind:value={nf.to} /></label>
           </div>
           <span class="lbl">{t('cast.ivLen')}</span>
           <Segmented items={[...[15, 20, 30, 45].map((m) => ({ value: m, label: String(m) })), { value: 0, label: t('cast.ivOpen') }]} bind:value={nf.minutes} label={t('cast.ivLen')} />

@@ -74,6 +74,27 @@ def test_android_app_reported(env, monkeypatch):
     assert ("android_app", "user_id") in logic.account._DEL_GONE
 
 
+def test_device_rows_in_the_outbox_swept(env, monkeypatch):
+    """A bot_outbox row that says someone used Android (the Play app's thanks, a --platform broadcast) goes after 90 days
+    like user_platforms; a --platform row keeps only its mark through the 30-day blanking; other rows stay."""
+    c, cfg = env
+    login(c, 90, "stu")
+    con = db.connect(cfg.db_path)
+    uid = con.execute("SELECT id FROM users WHERE tg_id = 90").fetchone()[0]
+    night = ((int(time.time()) + 5 * 3600) // 86400 + 2) * 86400 - 4 * 3600        # two days on, 01:00 Almaty
+    set_clock(monkeypatch, lambda: night)
+    con.executemany("INSERT INTO bot_outbox (user_id, kind, ref, payload, send_after, sent_at) VALUES (?, ?, ?, ?, ?, ?)", [
+        (uid, "android_welcome", "", "{}", night - 91 * 86400, night - 91 * 86400),
+        (uid, "android_welcome", "p1", "{}", night - 89 * 86400, night - 89 * 86400),
+        (uid, "app_broadcast", "old", '{"url":"https://t.me/x","p":1}', night - 91 * 86400, night - 91 * 86400),
+        (uid, "app_broadcast", "mid", '{"url":"https://t.me/x","p":1}', night - 31 * 86400, night - 31 * 86400),
+        (uid, "app_broadcast", "all", '{"url":"https://t.me/x"}', night - 91 * 86400, night - 91 * 86400),
+        (uid, "remind_2h", "r", "not json", night - 91 * 86400, night - 91 * 86400)])
+    logic.stats_day(con)
+    assert dict(con.execute("SELECT kind || ':' || ref, payload FROM bot_outbox")) == {
+        "android_welcome:p1": "{}", "app_broadcast:mid": '{"p":1}', "app_broadcast:all": "{}", "remind_2h:r": "{}"}
+
+
 def test_android_welcome_once_after_the_yes(env, monkeypatch, capsys):
     """The installed app's first launch queues the bot's one thanks, but only once the creator turned it on (admin
     android-welcome on, which also thanks whoever opened it before); off stops new ones; a preview goes to one person."""

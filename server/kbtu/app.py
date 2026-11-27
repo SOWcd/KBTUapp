@@ -627,6 +627,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     dist = Path(cfg.web_dist).resolve()
     photos = Path(cfg.db_path).resolve().parent / "media"   # next to the database: one volume to back up
     receipts = Path(cfg.db_path).resolve().parent / "receipts"   # private: never under /media, only through the API
+    media.PURGE = (photos, f"https://{cfg.domain}/media/", cfg.cf_zone_id, cfg.cf_purge_token) if cfg.cf_zone_id and cfg.cf_purge_token else None
     # the "To calendar" link is signed by one worker and may be opened on another: one key for all, from the env
     logic.seats.ICS_KEY = hmac.new(cfg.token_key, b"kbtu-ics", hashlib.sha256).digest()
     logic.seats.REF_KEY = hmac.new(cfg.token_key, b"kbtu-event-ref", hashlib.sha256).digest()  # "My link"'s code
@@ -2905,9 +2906,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         logic.stats.add(con, v.id, body)
 
     @app.post("/api/stats/andr", status_code=204)
-    def android_page_stats(con: Con, k: str = ""):
-        """kbtu.sow.kz/android.html's steps (a sendBeacon, signed out): the Android tester funnel's counts, no person"""
-        logic.stats.page_hit(con, k)
+    def android_page_stats(request: Request, con: Con, k: str = ""):
+        """kbtu.sow.kz/android.html's steps (a sendBeacon, signed out): the Android tester funnel's counts, no person
+        (the address only throttles, in memory, this minute)"""
+        logic.stats.page_hit(con, k, _visitor_ip(request))
 
     @app.get("/api/admin/stats")
     def admin_stats(con: Con, v: Me):

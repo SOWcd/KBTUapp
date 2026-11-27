@@ -4,6 +4,7 @@ create-event and cover-upload routes alone), never its money, in the owner's log
 from __future__ import annotations
 
 import base64
+import gzip
 import io
 import json
 import time
@@ -155,9 +156,12 @@ def test_from_the_server(env, monkeypatch, capsys):
     kind, eid = out.split()  # the id alone: no title, no name
     assert kind == "draft" and tuple(con.execute("SELECT org_id, status, created_by, cover_file_id FROM events WHERE id = ?", (eid,)).fetchone()) == (1, "draft", ids["boss"], None)
     cover = base64.b64encode(_png((10, 200, 10))).decode()
-    with_cover = run(["event", "create", "it"], json.dumps(_body(cover=cover)).encode()).split()[1]
-    f = con.execute("SELECT f.kind, f.owner_id FROM events e JOIN files f ON f.id = e.cover_file_id WHERE e.id = ?", (with_cover,)).fetchone()
-    assert tuple(f) == ("event_cover", ids["boss"])
+    gz = base64.b64encode(gzip.compress(json.dumps(_body(cover=cover)).encode())).decode()
+    with_cover = run(["event", "create", "it", "--gz", gz]).split()[1]
+    f = con.execute("SELECT f.kind, f.owner_id, f.path FROM events e JOIN files f ON f.id = e.cover_file_id WHERE e.id = ?", (with_cover,)).fetchone()
+    assert (f["kind"], f["owner_id"]) == ("event_cover", ids["boss"])
+    photos = Path(env[1].db_path).parent / "media"
+    assert (photos / f"{f['path']}.webp").is_file() and (photos / f"{f['path']}.t.webp").is_file()
     assert _lines(con) == [(ids["boss"], f"event:{i}", {"org": 1, "via": "server"}) for i in (eid, with_cover)]
     n = con.execute("SELECT COUNT(*) FROM events").fetchone()[0]
     assert "JSON" in refused(["event", "create", "it"], b"{not json")
@@ -171,8 +175,11 @@ def test_from_the_server(env, monkeypatch, capsys):
     assert refused(["event", "create", "it"], json.dumps(_body(visibility="members", meeting=True)).encode()) == "refused: forbidden plain"
     assert refused(["event", "create", "it"], json.dumps(_body(guestHost="Astana Hub", externalUrl="https://a.kz")).encode()) == "refused: forbidden partner"
     files = con.execute("SELECT COUNT(*) FROM files").fetchone()[0]
-    assert refused(["event", "create", "it"], json.dumps({"title": "", "cover": cover}).encode()) == "refused: bad_input"
+    before = set(photos.rglob("*"))
+    unused_cover = base64.b64encode(_png((200, 10, 10))).decode()
+    assert refused(["event", "create", "it"], json.dumps({"title": "", "cover": unused_cover}).encode()) == "refused: bad_input"
     assert con.execute("SELECT COUNT(*) FROM files").fetchone()[0] == files  # a refused event keeps no cover row
+    assert set(photos.rglob("*")) == before
     con.execute("UPDATE orgs SET status = 'archived' WHERE id = 2")
     assert "no active club" in refused(["event", "create", "b"], json.dumps(_body()).encode())
     assert con.execute("SELECT COUNT(*) FROM events").fetchone()[0] == n

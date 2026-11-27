@@ -21,6 +21,14 @@ def test_casting_from_event(env, monkeypatch):
     con.execute("""INSERT INTO events (id, org_id, title, description, place, starts_at, ends_at, status, visibility, created_by, created_at, updated_at, emoji, color)
         VALUES (500, 91, 'Casting!', 'Come', 'Hall 1', 1, 2, 'published', 'public', ?, 0, 0, 'megaphone_3d', '#2F5BEA')""", (ann["id"],))
     until = time.strftime("%Y-%m-%d 23:59", time.gmtime(time.time() + 5 * 3600 + 86400))
+    with pytest.raises(SystemExit, match="date must be"):
+        admin.main(["casting", "from-event", "500", "2026-02-30 12:00"])
+    with pytest.raises(SystemExit, match="bad_input"):
+        admin.main(["casting", "from-event", "500", "2000-01-01 12:00"])
+    con.execute("DELETE FROM org_members WHERE org_id = 91")
+    with pytest.raises(SystemExit, match="president or the creator"):
+        admin.main(["casting", "from-event", "500", until])
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (91, ?, 'president', 0)", (ann["id"],))
     admin.main(["casting", "from-event", "500", until])
     p = con.execute("SELECT * FROM posts WHERE org_id = 91").fetchone()
     assert (p["title"], p["body"], p["casting_place"], p["author_id"], p["audience"]) == ("Casting!", "Come", "Hall 1", ann["id"], "public")
@@ -74,6 +82,11 @@ def test_meeting_new_and_call(env, monkeypatch):
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (91, ?, 'head', 0)", (ann["id"],))
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (91, ?, 'member', 0)", (bob["id"],))
     at = time.gmtime(time.time() + 5 * 3600 + 86400)
+    with pytest.raises(SystemExit, match="date must be"):
+        admin.main(["meeting", "new", "Bad date", "2026-02-30 12:00", "60", "Hall", "Topics"])
+    with pytest.raises(SystemExit, match="refused: closed"):
+        admin.main(["meeting", "new", "Old meeting", "2000-01-01 12:00", "60", "Hall", "Topics"])
+    assert not con.execute("SELECT 1 FROM events WHERE org_id = 90").fetchone()  # publication failure rolls back the draft
     admin.main(["meeting", "new", "Law and order", time.strftime("%Y-%m-%d 17:00", at), "60", "Independence Hall", "Topics"])
     e = con.execute("SELECT e.id, e.status, e.visibility, e.leaders_from, e.starts_at, o.slug FROM events e JOIN orgs o ON o.id = e.org_id WHERE e.title = 'Law and order'").fetchone()
     assert (e["status"], e["visibility"], e["leaders_from"], e["slug"]) == ("published", "leaders", "head", "dmp")

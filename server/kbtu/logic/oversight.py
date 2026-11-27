@@ -355,11 +355,17 @@ def set_role(con, actor: int | None, uid: int, oid: int, role: str, by: str) -> 
 
 
 def find_user(con, who: str) -> sqlite3.Row | None:
-    """A Telegram account by @username or Telegram ID: the person must have opened the app once."""
+    """An account by Telegram ID or unique @username. Refuse usernames shared by multiple rows."""
     who = who.strip()
     if who.isdigit():
-        return one(con, "SELECT * FROM users WHERE tg_id = ?", int(who))
-    return one(con, "SELECT * FROM users WHERE lower(tg_username) = lower(?)", who.lstrip("@")) if who.lstrip("@") else None
+        return one(con, "SELECT * FROM users WHERE tg_id = ?", int(who)) if re.fullmatch(r"[0-9]{1,18}", who) else None
+    username = who.lstrip("@")
+    if not username:
+        return None
+    matches = rows(con, "SELECT * FROM users WHERE lower(tg_username) = lower(?) LIMIT 2", username)
+    if len(matches) > 1:
+        raise ApiError("bad_input", "ambiguous username; use the Telegram ID")
+    return matches[0] if matches else None
 
 
 def _admin_org(con, o: sqlite3.Row) -> dict:
