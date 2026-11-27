@@ -7,10 +7,13 @@ on:
   push:
     branches: [main]
   pull_request:
+  # by hand, on a branch: the screen snapshots retaken (job `snapshots`), nothing else runs
+  workflow_dispatch:
 permissions:
   contents: read  # the token can read the code and nothing else
 jobs:
   english:
+    if: github.event_name != 'workflow_dispatch'
     # the pre-commit hook (.githooks/pre-commit) on what this PR or push adds: Cyrillic only in the UI strings
     runs-on: ubuntu-latest
     steps:
@@ -22,6 +25,7 @@ jobs:
           git cat-file -e "$base^{commit}" 2>/dev/null || base=HEAD~1
           .githooks/pre-commit "$base"
   changes:
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     outputs:
       server: ${{ steps.f.outputs.server }}
@@ -131,4 +135,38 @@ jobs:
           path: |
             web/e2e/results
             web/e2e/report
+          retention-days: 14
+  snapshots:
+    # "Run workflow" on a branch (gh workflow run ci.yml --ref <branch>): every screen of e2e/snap.spec.ts retaken in the
+    # same Linux browser, as the artifact `snapshots`. The token stays read-only: a person looks at the pictures and
+    # commits them to web/e2e/snapshots/ (web/e2e/README.md)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: server/requirements.txt
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: docker pull -q "mcr.microsoft.com/playwright:v$(jq -r '.packages["node_modules/@playwright/test"].version' package-lock.json)-noble" &
+      - run: pip install -r ../server/requirements.txt
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - run: e2e/linux.sh --project=snap-dark --project=snap-light --update-snapshots e2e/snap.spec.ts
+        env:
+          QA_PYTHON: python
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshots
+          path: web/e2e/snapshots
           retention-days: 14
