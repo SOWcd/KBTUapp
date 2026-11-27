@@ -44,6 +44,9 @@
   --ease-spring: cubic-bezier(.32, .72, 0, 1);   /* sheets, iOS-like settle */
   --ease-in: cubic-bezier(.4, 0, 1, 1);
   --ease-bounce: cubic-bezier(.34, 1.45, .5, 1); /* a press let go: a small overshoot */
+  /* a tab switch: the nav's lens and the pages' crossfade move on this one spring, so they read as one motion
+     (Nav reads both for the lens's stretch: keep --t-tab in ms) */
+  --t-tab: 340ms; --ease-tab: var(--ease-spring);
   --t-fast: 120ms; --t-base: 220ms; --t-slow: 380ms;
 
   /* layers */
