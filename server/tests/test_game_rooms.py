@@ -121,6 +121,25 @@ def test_stale_and_duplicate_moves(env):
     assert c.post(f"/api/rooms/{room['id']}", headers=tma(HOST), json={"type": "vote_now"}).status_code == 400  # no id, no version
 
 
+def test_action_ids_are_each_players_own(env):
+    """One player's action id can't swallow another's move (applied: true for a move that never landed)."""
+    c, cfg = env
+    room = _act(c, HOST, _start(c, _room(c)), "same-id-01", type="vote_now").json()["room"]
+    p2 = _get(c, P2, room["id"]).json()
+    target = next(p["id"] for p in p2["players"] if p["id"] != p2["me"])
+    assert _act(c, P2, p2, "same-id-01", type="vote", target=target).json()["applied"]
+    assert _state(cfg, room["id"])["votes"] == {str(p2["me"]): target}
+
+
+def test_vote_target_is_a_person_id(env):
+    c, cfg = env
+    room = _act(c, HOST, _start(c, _room(c)), "vote-now-01", type="vote_now").json()["room"]
+    other = next(p["id"] for p in room["players"] if p["id"] != room["me"])
+    for bad in (float(other), str(other)):
+        assert _act(c, HOST, room, "vote-0001", type="vote", target=bad).status_code == 400
+    assert _state(cfg, room["id"])["votes"] == {}
+
+
 def test_deadlines_resolve_on_the_next_read(env, monkeypatch):
     c, cfg = env
     t0 = int(time.time())

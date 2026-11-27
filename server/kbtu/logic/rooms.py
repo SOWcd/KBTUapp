@@ -165,11 +165,12 @@ def act(con, v: Viewer, rid: int, body: dict) -> dict:
         if body.get("type") == "leave":  # on any version: whatever the phone shows, it means out
             _leave(con, r, s, v.id, players)
             return {"applied": True, "room": None}
-        applied = aid in s["acts"]
+        key = f"{v.id}:{aid}"  # each player's own: another's id never swallows my move
+        applied = key in s["acts"]
         if not applied and have == r["version"]:
             t = core.now()
             _game(r).act(s, players, r["host_id"], v.id, body, t)
-            s["acts"] = [*s["acts"], aid][-ACTS_KEPT:]
+            s["acts"] = [*s["acts"], key][-ACTS_KEPT:]
             con.execute("UPDATE game_rooms SET state = ?, version = version + 1, updated_at = ? WHERE id = ? AND version = ?",
                         (json.dumps(s), t, rid, r["version"]))  # the write lock is held: the version is still the one read
             r, applied = {**dict(r), "version": r["version"] + 1}, True

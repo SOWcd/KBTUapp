@@ -91,7 +91,7 @@ def act(s: dict, players: list[int], host: int, uid: int, body: dict, t: int) ->
         target = body.get("target")
         if s["phase"] != "vote":
             raise ApiError("conflict", "phase")
-        if target not in players or target == uid or isinstance(target, bool):
+        if type(target) is not int or target not in players or target == uid:  # an int: 2.0 == 2 would be kept and shown as 2.0
             raise ApiError("bad_input", "target")
         s["votes"][str(uid)] = target  # a change of mind is allowed until everyone has voted
         if len(s["votes"]) == len(players):
