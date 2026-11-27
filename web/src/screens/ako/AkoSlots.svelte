@@ -35,20 +35,7 @@
   const picked = $derived(all.find((s) => s.id === chosen) ?? null);
   const minutes = $derived(view.slot?.minutes ?? view.slots[0]?.minutes ?? 30);
   const decided = $derived(view.status === 'accepted' || view.status === 'declined');
->>>>>>>
 
-### EDIT web/src/screens/ako/AkoSlots.svelte
-<<<<<<<
-    {#if picked}
-      {#key picked.id}
-        <div class="a-note ok done gap" role="status">
-          <span class="ck"><Check size={18} strokeWidth={3} /></span>
-          <span class="dtx"><b>{aw('ako.slotPicked', { when: when(picked) })}</b><span>{aw('ako.almaty')}</span></span>
-        </div>
-      {/key}
-    {/if}
-=======
-    <!-- the picked time is confirmed in the wizard's sticky bar (Ako.svelte); on the status page, by the interview card -->
 
   async function book(s: Slot) {
     if (pending != null || s.id === view.slot?.id) return;
@@ -107,14 +94,7 @@
 
     {#if err}<p class="a-note bad gap" role="alert">{aw(err)}</p>{/if}
 
-    {#if picked}
-      {#key picked.id}
-        <div class="a-note ok done gap" role="status">
-          <span class="ck"><Check size={18} strokeWidth={3} /></span>
-          <span class="dtx"><b>{aw('ako.slotPicked', { when: when(picked) })}</b><span>{aw('ako.almaty')}</span></span>
-        </div>
-      {/key}
-    {/if}
+    <!-- the picked time is confirmed in the wizard's sticky bar (Ako.svelte); on the status page, by the interview card -->
   {/if}
 </div>
 
@@ -155,15 +135,9 @@
   @keyframes pop { from { transform: scale(0.92); } }
   @keyframes wait { to { opacity: 0.6; } }
 
->>>>>>>
 
-### EDIT web/src/screens/ako/AkoSlots.svelte
-<<<<<<<
-    .grid, .t.on, .t.wait, .done { animation: none; }
-=======
-    .grid, .t.on, .t.wait { animation: none; }
   @media (prefers-reduced-motion: reduce) {
-    .grid, .t.on, .t.wait, .done { animation: none; }
+    .grid, .t.on, .t.wait { animation: none; }
     .day, .t { transition: none; }
   }
 </style>
