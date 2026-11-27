@@ -2707,4 +2707,16 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE TRIGGER report_body_off AFTER UPDATE OF status ON reports WHEN new.status != 'open' AND new.body IS NOT NULL BEGIN
         UPDATE reports SET body = NULL WHERE id = new.id;
     END;"""),
+    # a sheet's row turned down for each student who said it was theirs (roster.decide), so one refusal never hides it from
+    # the next; the old single rejected_by moves here and that column stays unused
+    (259, """CREATE TABLE IF NOT EXISTS roster_rejections (
+      row_id  INTEGER NOT NULL REFERENCES roster_pending(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (row_id, user_id)
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS roster_rejections_by_user ON roster_rejections(user_id);
+    INSERT OR IGNORE INTO roster_rejections (row_id, user_id)
+      SELECT id, rejected_by FROM roster_pending WHERE rejected_by IS NOT NULL;
+    UPDATE roster_pending SET claimed_by = CASE WHEN claimed_by = rejected_by THEN NULL ELSE claimed_by END,
+      rejected_by = NULL WHERE rejected_by IS NOT NULL;"""),
 ]

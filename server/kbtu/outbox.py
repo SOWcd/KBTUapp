@@ -20,6 +20,7 @@ from .bot_dm import MUTE_ROW, _feedback_buttons
 from .chores import _chores, _userpics, offsite_round, post_channel, refresh_chats
 from .config import Config
 from .logic import notifications, now, one, rows
+from .logic.core import evdel
 
 log = logging.getLogger("kbtu.bot")
 
@@ -404,8 +405,9 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         return None
     if kind == "memo_ready":  # memo:<org>:<monday>, to whoever has "memo"; gone if nothing asks DMP any more or it's sent
         o = one(con, "SELECT name FROM orgs WHERE id = ?", int(ref[1]))
-        n = one(con, """SELECT COUNT(*) FROM events WHERE org_id = ? AND status IN ('draft', 'published') AND memo IS NOT NULL
-            AND memo_sent_at IS NULL AND starts_at >= ? AND starts_at < ?""", int(ref[1]), int(ref[2]), int(ref[2]) + 7 * 86400)[0]
+        n = one(con, f"""SELECT COUNT(*) FROM events WHERE org_id = ? AND status IN ('draft', 'published') AND memo IS NOT NULL
+            AND memo_only = 0 AND NOT {evdel('events')} AND memo_sent_at IS NULL AND starts_at >= ? AND starts_at < ?""",
+                int(ref[1]), int(ref[2]), int(ref[2]) + 7 * 86400)[0]
         return (*texts.bot_message(lang, kind, org=o["name"], n=n), f"memo_{ref[1]}") if o and n else None
     if kind == "saved_tomorrow":  # sv:<day>: my saved events tomorrow I'm not going to (gone if I signed up meanwhile)
         day = int(ref[1])
@@ -415,7 +417,8 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
                    m["user_id"], (day + 1) * 86400 - 5 * 3600, (day + 2) * 86400 - 5 * 3600)
         return listed(evs) if evs else None
     if kind == "place_tba":  # tba:<day>, to an event's maker: all their coming events still without a place
-        evs = rows(con, "SELECT id, title, i18n, starts_at FROM events WHERE created_by = ? AND status = 'published' AND place = '' AND starts_at > ? ORDER BY starts_at",
+        evs = rows(con, """SELECT id, title, i18n, starts_at FROM events WHERE created_by = ? AND status = 'published'
+            AND place = '' AND online IS NULL AND starts_at > ? AND id NOT IN (SELECT event_id FROM santa_events) ORDER BY starts_at""",
                    m["user_id"], logic.now())
         return listed(evs) if evs else None
     if kind == "friend_new":  # fn:<the other one>:<day>; gone if they're no longer friends by then
