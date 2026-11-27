@@ -270,11 +270,13 @@ def _broadcast(con, name: str, url: str, target: str | None = None, platform: st
             AND (? IS NULL OR ? IS NOT NULL OR EXISTS (SELECT 1 FROM user_platforms p WHERE p.user_id = u.id AND p.kind = ?))
             AND (? = 0 OR ? IS NOT NULL OR NOT EXISTS (SELECT 1 FROM android_app a WHERE a.user_id = u.id))"""  # a failed one, or a preview, may go again
         args = (only, only, only, only, name, platform, only, platform, android, only)
+        # 'p': the row tells someone's device kind, so the nightly sweep deletes it after 90 days like user_platforms
+        p = ", 'p', 1" if platform else ""
         if dry:
             count = one(con, f"SELECT COUNT(*) {recipients}", *args)[0]
         else:
             count = con.execute(f"""INSERT OR REPLACE INTO bot_outbox (user_id, kind, ref, payload, send_after)
-                SELECT u.id, 'app_broadcast', ?, json_object('url', ? || CASE WHEN ? THEN '?lang=' || u.lang ELSE '' END), ?
+                SELECT u.id, 'app_broadcast', ?, json_object('url', ? || CASE WHEN ? THEN '?lang=' || u.lang ELSE '' END{p}), ?
                 {recipients} ORDER BY u.id""", (name, url, android, now(), *args)).rowcount
     print(f"{'would queue' if dry else 'queued'} {count}")
 
