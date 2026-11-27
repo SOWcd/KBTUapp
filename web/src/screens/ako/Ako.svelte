@@ -222,6 +222,7 @@
 
   .way { margin-bottom: var(--s-5); }
   .wrow { display: flex; align-items: center; justify-content: space-between; min-height: 48px; }
+  .wrow :global(.a-quiet svg) { margin-left: -6px; } /* the chevron's own side bearing: its stroke starts at the page edge */
   .line { height: 3px; border-radius: var(--r-full); background: var(--fill); overflow: hidden; }
   .line i { display: block; height: 100%; border-radius: var(--r-full); background: var(--accent); transform-origin: left center;
     transition: transform var(--t-slow) var(--ease-spring); }
@@ -272,7 +273,7 @@
   :global(.ako .a-h1) { font: 700 var(--fs-title)/1.08 var(--font-display); letter-spacing: -0.03em; text-wrap: balance; }
   :global(.ako .a-h2) { font: 700 var(--fs-sec)/1.22 var(--font-display); letter-spacing: -0.02em; text-wrap: balance; }
   :global(.ako .a-lead) { margin-top: var(--s-3); font: 450 var(--fs-row)/1.45 var(--font-text); color: var(--text-2); }
-  :global(.ako .a-sec) { margin: var(--s-8) var(--s-1) var(--s-3); font: 600 var(--fs-body)/1.2 var(--font-text); color: var(--text-3); }
+  :global(.ako .a-sec) { margin: var(--s-8) 0 var(--s-3); font: 600 var(--fs-body)/1.2 var(--font-text); color: var(--text-3); }
   /* :where: a component's own class must win over the shared look (padding: 0 on a card lost to it and doubled) */
   :global(:where(.ako) .a-sub) { font: 450 var(--fs-body)/1.4 var(--font-text); color: var(--text-2); }
   :global(:where(.ako) .a-card) { padding: var(--s-5); border-radius: var(--r-l); background: var(--surface); box-shadow: var(--card-rim); }

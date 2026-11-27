@@ -89,8 +89,10 @@
 
   /** two short grey lines: the program's short name, under it the interview (only where the program has one) */
   function line(a: AkoRow): string {
-    const p = desk?.programs.find((x) => x.key === a.program);
-    return [p?.info[i18n.lang]?.title, a.slot ? whenLine(a.slot.at) : p?.interview ? aw('akd.noSlot') : ''].filter(Boolean).join('\n');
+    const p = desk?.programs.find((x) => x.key === a.program), info = p?.info[i18n.lang];
+    // two programs under one short name (the MBA tracks): the track's own name tells them apart
+    const twin = !!info && desk!.programs.some((x) => x.key !== p!.key && x.info[i18n.lang]?.title === info.title);
+    return [[info?.title, twin ? info?.sub : ''].filter(Boolean).join(' · '), a.slot ? whenLine(a.slot.at) : p?.interview ? aw('akd.noSlot') : ''].filter(Boolean).join('\n');
   }
 
   // ---- interview days ----
@@ -264,7 +266,7 @@
   @keyframes part-in { from { opacity: 0; transform: translateY(6px); } }
   @media (prefers-reduced-motion: reduce) { .part { animation: none; } }
   .num { font-variant-numeric: tabular-nums; }
-  .part :global(.st) { white-space: pre-line; } /* an applicant's two grey lines: the program, the interview */
+  .part :global(.st) { white-space: pre; overflow: hidden; text-overflow: ellipsis; } /* an applicant's two grey lines (the program, the interview): each stays one line */
 
   /* search: the M control on --fill; 17 px text, so iOS doesn't zoom in */
   .find { display: flex; align-items: center; gap: var(--s-2); height: var(--ctl-m); padding: 0 var(--s-4); border-radius: var(--r-full); background: var(--fill); color: var(--text-3); }

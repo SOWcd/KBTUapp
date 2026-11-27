@@ -187,9 +187,7 @@
 
   .times { animation: rise var(--t-base) var(--ease) both; }
   .again, .left { margin-top: var(--s-6); }
-  .again .a-note { margin: var(--s-3) 0 var(--s-4); }
-  .again .a-h2, .left .a-h2 { padding: 0 var(--s-1); }
-  .left .a-lead { padding: 0 var(--s-1); }
+
   .done { display: flex; align-items: center; gap: var(--s-2); min-height: 56px; }
   .left .done { margin-top: var(--s-3); }
 

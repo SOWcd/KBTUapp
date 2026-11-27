@@ -120,7 +120,7 @@
   .mk { width: 6px; height: 6px; border-radius: var(--r-full); background: transparent; }
   .mk.has { background: var(--accent); }
 
-  .dh { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0 var(--s-3); margin: var(--s-6) var(--s-1) var(--s-3); }
+  .dh { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0 var(--s-3); margin: var(--s-6) 0 var(--s-3); }
   .dh b { font: 600 var(--fs-row)/1.3 var(--font-text); }
   .dh b::first-letter { text-transform: uppercase; }
 
