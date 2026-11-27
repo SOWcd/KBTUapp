@@ -84,6 +84,8 @@ const en: Dict = {
   'fc.photoAnon': "A moderator checks an anonymous post with photos",
   'fc.long': "Under photos: 900 characters at most",
   'fc.whyPhoto': "Anonymous, with photos",
+  'fc.whyReported': "Edited after a report",
+  'fc.repWas': "The words when reported, changed since",
   'fc.noise': "KRI found no meaning here: it looks like a test or random letters. Rewrite it — it wasn't posted",
   'fc.ad': "Any advertising is banned on the forum. Your post wasn't published",
   'fc.comments': "Comments",

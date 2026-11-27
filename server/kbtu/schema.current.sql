@@ -1095,7 +1095,7 @@ CREATE TABLE "reports" (
         created_at INTEGER NOT NULL,
         resolved_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
         resolved_at INTEGER
-    ) STRICT;
+    , body TEXT) STRICT;
 CREATE TABLE research_answers (
       id TEXT PRIMARY KEY NOT NULL,
       form_id INTEGER NOT NULL REFERENCES forms(id) ON DELETE CASCADE,
@@ -1980,6 +1980,9 @@ CREATE TRIGGER santa_moved_upd BEFORE UPDATE OF status, user_id ON registrations
         FROM santa_people p WHERE p.event_id = OLD.event_id AND p.user_id != OLD.user_id
           AND (SELECT COUNT(*) FROM santa_people x WHERE x.event_id = OLD.event_id AND x.user_id != OLD.user_id) IN (1, 2)
         ORDER BY p.user_id;
+    END;
+CREATE TRIGGER report_body_off AFTER UPDATE OF status ON reports WHEN new.status != 'open' AND new.body IS NOT NULL BEGIN
+        UPDATE reports SET body = NULL WHERE id = new.id;
     END;
 CREATE TRIGGER qr_hand_roster_gone AFTER DELETE ON roster_pending BEGIN
         DELETE FROM qr_hand_marks WHERE who = 'r' || old.door_key;

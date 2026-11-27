@@ -2700,4 +2700,11 @@ MIGRATIONS: list[tuple[int, str]] = [
       auto_publish   INTEGER NOT NULL DEFAULT 0 CHECK (auto_publish IN (0, 1)),
       guests_private INTEGER NOT NULL DEFAULT 0 CHECK (guests_private IN (0, 1))
     ) STRICT;"""),
+    # a forum channel post's words when it was reported (moderation.report), for the moderator if it was edited since; only
+    # while the report is open (the trigger wipes it at the decision), and wiped with the post's words (fchannel._wipe)
+    (258, """ALTER TABLE reports ADD COLUMN body TEXT;
+    DROP TRIGGER IF EXISTS report_body_off;
+    CREATE TRIGGER report_body_off AFTER UPDATE OF status ON reports WHEN new.status != 'open' AND new.body IS NOT NULL BEGIN
+        UPDATE reports SET body = NULL WHERE id = new.id;
+    END;"""),
 ]
