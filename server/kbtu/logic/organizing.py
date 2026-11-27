@@ -657,7 +657,7 @@ def _changed(con, v: Viewer, e: sqlite3.Row, after: sqlite3.Row) -> None:
     if e["status"] != "published" or not (moved or placed):
         return
     soon = core.now() >= after["starts_at"] - 2 * 3600
-    quiet = not moved and not e["place_url"] and not after["place_url"] and after["place"]  # a room on campus: TBA -> room, room -> room
+    quiet = not moved and e["online"] is None and not e["place_url"] and not after["place_url"] and after["place"]  # a room on campus: TBA -> room, room -> room
     for r in rows(con, """SELECT r.user_id, r.status, r.checked_in_at, u.n_remind FROM registrations r JOIN users u ON u.id = r.user_id
             WHERE r.event_id = ? AND r.status IN ('going','hold','waitlist')""", eid):
         if moved:
