@@ -1,7 +1,8 @@
 #!/bin/sh
 # English everywhere outside UI strings (AGENTS.md, Rules): refuses Cyrillic in added lines, except in the UI strings
 # (web/src/lib/i18n/), the bot's texts (server/kbtu/texts.py) and server/kbtu/i18n/ (legal pages, school names), the pitch pages (web/public/pitch*.html), the brief (web/public/sabit.html), the install pages (web/public/install.html, android.html: their three languages inline), the Play store listing (android/listing.md) and the iPhone app's system prompts (ios/KBTUApp/*.lproj).
-# In tests, write Cyrillic as \u escapes.
+# In tests, write Cyrillic as \u escapes. It also refuses citations of the private spec and plan (section or item
+# numbers): a comment states its rule itself.
 #   as the pre-commit hook, on what is staged:  git config core.hooksPath .githooks  (once per clone)
 #   in CI, on what a PR or a push adds:         .githooks/pre-commit <base commit>
 # Only added lines count, so older text elsewhere never blocks a commit that doesn't touch it.
@@ -16,5 +17,9 @@ git -c core.quotepath=off diff "$@" -U0 --no-color --no-ext-diff --diff-filter=d
     if (/^@@ -\d+(?:,\d+)? \+(\d+)/) { $n = $1; next }
     next unless /^\+/;
     if (/\p{Cyrillic}/) { print STDERR "$f:$n: $_"; $bad = 1 }
+    if (/SPEC\s*\x{a7}\s?\d|\bPLAN\s+(?:item\s+|stage\s+)?\d/) { print STDERR "$f:$n: $_"; $doc = 1 }
     $n++;
-    END { if ($bad) { print STDERR "Cyrillic outside the UI strings (AGENTS.md, Rules): move it to i18n, or use \\u escapes in tests.\n"; exit 1 } }'
+    END {
+      print STDERR "Cyrillic outside the UI strings (AGENTS.md, Rules): move it to i18n, or use \\u escapes in tests.\n" if $bad;
+      print STDERR "A reference to a document outside this repo (AGENTS.md, Style): write the rule itself.\n" if $doc;
+      exit 1 if $bad || $doc }'
