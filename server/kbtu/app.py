@@ -2496,7 +2496,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                                                logic.subjects.on(now_cfg.subjects_file))
             if logic.assistant.DOCS:
                 year = logic.assistant.intake(logic.one(con, "SELECT course FROM students WHERE user_id = ?", v.id))
-                msgs = await run_in_threadpool(logic.assistant.with_docs, msgs, logic.assistant.docs_query(body), await question_vec(body), year)
+                msgs = await run_in_threadpool(logic.assistant.with_docs, msgs, logic.assistant.docs_query(body),
+                                               await question_vec(body), year, ok=ok)
             # Disable reasoning so the token budget goes to the cited answer.
             # Hedge slow responses with a second key after llm.HEDGE seconds.
             # Google first, for this answer alone (policy section 5), only with this student's own yes

@@ -10,6 +10,7 @@ import asyncio
 import itertools
 import json
 import logging
+import sqlite3
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -112,9 +113,11 @@ def _count(path: str | None, link: str, ok: bool, ms: int = 0) -> None:
     if not path:
         return
     from . import db  # here: llm is imported by db's users
-    c = db.connect(path)
+    c = None
     try:
-        with c:
+        c = db.connect(path)
+        c.execute("PRAGMA busy_timeout = 200")  # telemetry must not hold up an answer behind another writer
+        with db.tx(c):
             key = f"ai_use:{time.strftime('%Y-%m-%d', time.gmtime())}"
             row = c.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
             use = json.loads(row[0]) if row else {}
@@ -125,8 +128,11 @@ def _count(path: str | None, link: str, ok: bool, ms: int = 0) -> None:
                 n[2] += ms
                 n[3] += 1
             c.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (key, json.dumps(use)))
+    except (sqlite3.Error, ValueError, TypeError, AttributeError) as exc:
+        log.warning("ai usage not saved (%s)", type(exc).__name__)
     finally:
-        c.close()
+        if c is not None:
+            c.close()
 
 
 def _rest_until(name: str, until: float) -> None:
@@ -152,8 +158,8 @@ async def chat(cfg, http: httpx.AsyncClient, messages: list[dict], *, max_tokens
     another company's at once; the first usable answer wins, then the rest one by one. Busy: none answered; BadAnswers: none usable.
     effort: Munito's `reasoning_effort` ("none": no thinking first). Measured on prod: an event's announcement sent
     both DeepSeek flash models reasoning through all 3500 tokens with no answer (21-37 s each, then the next link); with
-    "none" the same form came in 1-2 s. Only Munito's hosts get the field: another provider may refuse an unknown one,
-    and a 400 rests its link for hours. lead: links ("provider:model,...", outside only= and chain=) asked first, each
+    "none" the same form came in 1-2 s. Only Munito's hosts get the field: another provider may refuse an unknown one.
+    lead: links ("provider:model,...", outside only= and chain=) asked first, each
     within LEAD_WAIT and once more after a busy failure; then everything above as without it. No key: nothing asked.
     lead_ok: asked (in a thread) right before each send to a lead; False: that lead is skipped, the chain runs (the
     student's yes withdrawn while the question was on its way)."""
@@ -183,7 +189,7 @@ async def chat(cfg, http: httpx.AsyncClient, messages: list[dict], *, max_tokens
             _rest_until(link.name, time.time() + REST)
             await asyncio.to_thread(_count, path, link.name, False)
             return None
-        if r.status_code in (429, 503) or r.status_code >= 500:
+        if r.status_code == 429 or r.status_code >= 500:
             busy = True
             if (hint := r.headers.get("retry-after")) is not None:
                 try:
@@ -194,10 +200,11 @@ async def chat(cfg, http: httpx.AsyncClient, messages: list[dict], *, max_tokens
             log.warning("ai %s: http %d, resting", link.name, r.status_code)
             await asyncio.to_thread(_count, path, link.name, False)
             return None
-        if r.status_code != 200:  # a refused key, an unknown model, Cloudflare's spent day (4006)
-            _rest_until(link.name, time.time() + REST_BROKEN)
-            said = "(withheld: it repeats the key)" if link.token in r.text else r.text[:160].replace("\n", " ")  # never headers
-            log.warning("ai %s: http %d: %s", link.name, r.status_code, said)
+        if r.status_code != 200:
+            # A bad key or missing model affects every request to this link. A request error skips one attempt.
+            if r.status_code in (401, 402, 403, 404):
+                _rest_until(link.name, time.time() + REST_BROKEN)
+            log.warning("ai %s: http %d", link.name, r.status_code)
             await asyncio.to_thread(_count, path, link.name, False)
             return None
         try:
