@@ -1,6 +1,6 @@
 <script lang="ts">
   import { withNick } from '../../lib/perms';
-  // Profile → Friends, a sheet from the row under my badge (SPEC §4.7): requests first, then everyone with Add at
+  // Profile → Friends, a sheet from the row under my badge: requests first, then everyone with Add at
   // the list's end (a friend's next event on their row; where friends go shows on the events' own rows), then my own requests
   // still waiting. Adding is the AddFriend
   // sheet: a one-time QR or link (friends at once) or a request by @username. Guests get the sign-in card. The data is

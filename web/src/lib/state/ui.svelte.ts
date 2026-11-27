@@ -30,11 +30,11 @@ export function goTab(tab: Tab): void {
 }
 
 // ---- overlays ----
-/** `title`: what the capsule says while this overlay is on top (SPEC §8.2); '' = the one below speaks. `theme`: the
+/** `title`: what the capsule says while this overlay is on top; '' = the one below speaks. `theme`: the
  *  capsule's then, when the overlay has one of its own (the map's switch; the dark QR and ticket). `icon`: a small mark
  *  before the title for a full-screen mode (the QR, the map, the scanner, settings). `byUser`: the close came
  *  from a hand (Back, Escape, the scrim, a pull), not from the code after a save, so a sheet with typed text asks first. */
-/** holdBack: Telegram's Back button waits while the overlay comes in (the map's iris, PLAN 80) */
+/** holdBack: Telegram's Back button waits while the overlay comes in (the map's iris) */
 /** feed: the Feed in a row, under it the nav and capsule take its dark tinted glass (chrome.ts) */
 /** quiet: it has a large title of its own still in view (a Pane): the capsule shows the live status or nothing, and not
  *  the overlay below. mark: its title is in its own header (a Sheet's heading): the capsule shows its icon alone.
@@ -42,9 +42,18 @@ export function goTab(tab: Tab): void {
 export interface Overlay { id: number; component: Component<any>; props: Record<string, unknown>; closing: boolean; key?: SheetKey | null; byUser?: boolean; title?: string; theme?: 'light' | 'dark'; icon?: Component<any>; holdBack?: boolean; feed?: boolean; quiet?: boolean; mark?: boolean; bare?: boolean;
   /** a tinted page (the event editor): its colour, which the sheets opened over it take (Sheet), and the capsule */
   tint?: string | null;
+  /** the screen's one action in the web app's top-right pill (ui/StandaloneBar), as the capsule shows its name; null:
+   *  it has none (the app menu shows); unset: the one below decides. Inside Telegram that corner is Telegram's, so the
+   *  screen keeps its own button there (`!inTelegram` hides it where the pill has it) */
+  action?: TopAction | null;
   /** what the anonymous counters call it (lib/stats.ts); a generic error toast is counted against the top one that has it */
   stat?: Screen }
+/** run gets the pill's tap, so a menu opens at the pill (ui/menu) */
+export interface TopAction { icon: Component<any>; label: string; run: (e: MouseEvent) => void }
 export const overlays: Overlay[] = $state([]);
+/** the top-right pill's action: the top overlay that speaks (a titled one, or one that set action) decides, so a
+ *  menu or a quiet helper over a screen leaves that screen's action in place */
+export const topAction = (): TopAction | null => [...overlays].reverse().find((o) => !o.closing && (o.title || o.quiet || o.action !== undefined))?.action ?? null;
 let seq = 0;
 
 /** Same component and entity id return to the live view. A key can distinguish modes or identify a contextual view.
@@ -75,7 +84,7 @@ export function close(id?: number, byUser = id == null): void {
 }
 
 /** While any sheet or full-screen overlay is up the nav hides; the capsule stays above it, says the top overlay's
- *  title and takes no taps (SPEC §8.2: it never disappears). Returns the undo. */
+ *  title and takes no taps (it never disappears). Returns the undo. */
 export function hideChrome(): () => void {
   const d = document.documentElement.dataset;
   d.sheet = String(Number(d.sheet || 0) + 1);

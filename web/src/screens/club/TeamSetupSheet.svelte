@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Team 2.0 (SPEC §2b), from Team: the club's own roles — a name, a colour and toggles of rights, as admin rights in
+  // Team 2.0, from Team: the club's own roles — a name, a colour and toggles of rights, as admin rights in
   // Telegram, made by whoever runs the team, only with rights they
   // have and below their own level — and its tags, groups of people ("people"). The team runner also sees who is banned
   // and can lift it. Who has a tag is set here too, in the tag (not on the fly in a person's card, where
@@ -54,7 +54,7 @@
   let fcolor = $state(TEAM_COLORS[0]);
   let frights = $state<Right[]>([]);
   let ffixed = $state<ClubLevel | null>(null); // an official role: its name and level stay, rights up to the level
-  let fdept = $state(false); // a tag that is a department (PLAN 47)
+  let fdept = $state(false); // a tag that is a department
   let busy = $state(false);
   function edit(k: 'role' | 'tag', x?: ClubRole | ClubTag) {
     const r = x && 'rights' in x ? x : null;

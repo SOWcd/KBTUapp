@@ -97,6 +97,36 @@ def test_team_link_card(env, monkeypatch):
     assert sent[-1]["result"]["reply_markup"]["inline_keyboard"][0][0]["url"].split("_")[-1] != tok
 
 
+def test_team_link_back(env, monkeypatch):
+    """Undo of turning the link off: the same token opens again, Vice+ only, only moments after, never over a newer one
+    or past its end."""
+    c, cfg = env
+    pres, mem = login(c, 20, "pres"), login(c, 22, "mem")
+    login(c, 30, "aaa"), login(c, 31, "bbb")
+    _club(cfg, pres["id"], **{f"u{mem['id']}": "member"})
+    P, M = tma(20, "Pres"), tma(22, "Mem")
+    t0 = logic.now()
+    set_clock(monkeypatch, lambda: t0)
+    assert c.post("/api/orgs/1/team-link/back", headers=P).status_code == 404            # nothing turned off
+    link = c.post("/api/orgs/1/team-link", headers=P).json()
+    assert c.post("/api/orgs/1/team-link/back", headers=P).status_code == 404            # still on: nothing to undo
+    assert c.delete("/api/orgs/1/team-link", headers=P).status_code == 204
+    assert c.post("/api/orgs/1/team-link/back", headers=M).status_code == 403            # a member can't
+    assert c.post("/api/orgs/1/team-link/back", headers=P).json() == {"expiresAt": link["expiresAt"]}
+    assert c.post("/api/orgs/1/team-link", headers=P).json() == link                     # the same token, live again
+    assert c.post(f"/api/invites/{link['token']}", headers=tma(30)).json()["id"] == 1
+    # too late for the toast's Undo
+    assert c.delete("/api/orgs/1/team-link", headers=P).status_code == 204
+    set_clock(monkeypatch, lambda: t0 + logic.teams.TEAM_LINK_UNDO + 1)
+    assert c.post("/api/orgs/1/team-link/back", headers=P).status_code == 404
+    # a newer link made since: Undo brings back that one, the old token stays closed
+    fresh = c.post("/api/orgs/1/team-link", headers=P).json()["token"]
+    assert c.delete("/api/orgs/1/team-link", headers=P).status_code == 204
+    assert c.post("/api/orgs/1/team-link/back", headers=P).status_code == 200
+    assert c.post("/api/orgs/1/team-link", headers=P).json()["token"] == fresh
+    assert c.post(f"/api/invites/{link['token']}", headers=tma(31)).status_code == 404
+
+
 def _ms(c, cfg, monkeypatch):
     """A Microsoft sign-in from Telegram `tg` with the account `oid` (as test_ms_sign_in fakes it)."""
     graph = {}

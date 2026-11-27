@@ -379,8 +379,8 @@
     <!-- the photos, in the order picked: each its own state (uploading, failed: tap to try again), its x; a tap views it -->
     {#if pics.length}<div class="pics">
       {#each pics as p, i (p.url)}<span class="pic" class:up={!p.id && !p.failed} class:failed={p.failed}>
-        {#if p.failed}<button class="img" onclick={() => retry(p)} aria-label={t('fc.retry')}><img src={p.thumb} alt="" /><span class="re"><RotateCw size={20} strokeWidth={2.2} /></span></button>
-        {:else}<button class="img" onclick={() => p.id && view(pics.filter((x) => x.id).indexOf(p))} aria-label="{t('fc.photo')} {i + 1}" disabled={!p.id}><img src={p.thumb} alt="" /></button>{/if}
+        {#if p.failed}<button class="img" onclick={() => retry(p)} aria-label={t('fc.retry')}><img draggable="false" src={p.thumb} alt="" /><span class="re"><RotateCw size={20} strokeWidth={2.2} /></span></button>
+        {:else}<button class="img" onclick={() => p.id && view(pics.filter((x) => x.id).indexOf(p))} aria-label="{t('fc.photo')} {i + 1}" disabled={!p.id}><img draggable="false" src={p.thumb} alt="" /></button>{/if}
         <button class="off" onclick={() => unpick(p)} aria-label={t('fc.photoOff')}><X size={14} strokeWidth={2.6} /></button></span>{/each}
     </div>{/if}
     {#if anon && pics.length}<p class="note warn">{t('fc.photoAnon')}</p>{/if}

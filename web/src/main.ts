@@ -45,7 +45,8 @@ void loadLang(i18n.lang).catch(() => {}).then(async () => {
   // /show (owner, Oct 29; /screen, the first name, still works): the organizer's big screen on a laptop (server
   // checkin.py), the app otherwise (the screen into the body: #app is a phone-wide column on a computer)
   // (its own chunk: the app's first chunk doesn't carry it, nor the QR encoder it draws with)
-  if (/^\/(show|screen)\/?$/.test(location.pathname)) mount((await import('./screens/Screen.svelte')).default, { target: document.body });
+  // /show?lib=<key>: a library room's seats on its wall (screens/library/LibraryScreen.svelte), its own chunk too
+  if (/^\/(show|screen)\/?$/.test(location.pathname)) mount((await (new URLSearchParams(location.search).has('lib') ? import('./screens/library/LibraryScreen.svelte') : import('./screens/Screen.svelte'))).default, { target: document.body });
   // the design system's lab (every ui/ component in every state): the dev server only, its own chunk, `?lab` in the URL;
   // a production build drops this branch and the chunk with it
   else if (import.meta.env.DEV && new URLSearchParams(location.search).has('lab')) bootOut(), mount((await import('./screens/lab/Lab.svelte')).default, { target: app });

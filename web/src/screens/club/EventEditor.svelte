@@ -8,7 +8,7 @@
   // Publishing runs an instant check first (lib/eventCheck.ts: a trip once went out free while its text asked 7500
   // tenge) with a one-tap fix per note. A new event or a draft: "Publish" or "Draft"; a published one: "Save" (the
   // server tells registered people when the time or place moves). Leaving with changes asks. An official club's Vice+
-  // can make it paid (§4.3). A member without the "events" right makes a draft and sends it to the club's President
+  // can make it paid. A member without the "events" right makes a draft and sends it to the club's President
   // and Vices, who approve (it goes out) or return it with a reason (server organizing.submit_event).
   import { keyboard } from '../../lib/state/keyboard.svelte';
   import { teamSize } from '../../lib/teams';
@@ -69,6 +69,7 @@
   import { useDraft } from '../../lib/draft';
   import { sheets } from '../../lib/state/sheets';
   import { placeOf, t, tn } from '../../lib/i18n/index.svelte';
+  import { sw, swn } from '../../lib/i18n/staff';
   import { campusPlace, EVENT_BUILDINGS } from '../../lib/campusPlace';
   import CampusPlacePicker from './CampusPlacePicker.svelte';
   import { hit } from '../../lib/clubs';
@@ -93,8 +94,8 @@
   let { overlay, org, id, staff = false }: { overlay: Overlay; org: Id; id?: Id; staff?: boolean } = $props();
   // an event opened from Admin and edited here is staff's too: the club's DMP memo is neither shown nor sent (but to the creator)
   const asStaff = $derived(staff || (!!id && staffEvents.has(id)));
-  // his covers and videos go as the club's too (X-Staff-Org)
-  $effect(() => { if (!staff && !lent) return; staffOrg.id = org; return () => { staffOrg.id = 0; }; });
+  // his covers and videos go as the club's too (X-Staff-Org); on leaving, whatever was there before (a lent Studio's own)
+  $effect(() => { if (!staff && !lent) return; const was = staffOrg.id; staffOrg.id = org; return () => { if (staffOrg.id === org) staffOrg.id = was; }; });
   const club = $derived(data.orgs.find((o) => o.id === org));
   const oversee = $derived(!!club?.canOversee);
   const mine = $derived(session.me?.memberships.find((m) => m.org.id === org));
@@ -168,17 +169,17 @@
   let touched = $state(false);
   const touch = () => { if (!touched) { base = JSON.stringify(f); touched = true; } };
   let said = $state(''); // what is being written to KRI: kept with the text draft, so a failed try or a closed app loses nothing
-  const dirty = $derived(!!said.trim() || touched && JSON.stringify(f) !== base);
+  let loading = $state(!!untrack(() => id)); // an edit until the server's copy is in: the blank form is inert (Publish made a second event)
   const live = $derived(!!saved && saved.status !== 'draft');
   const tint = $derived(shade(f.color));
   $effect(() => { overlay.tint = tint; }); // the sheets it opens take its colour
   let tried = $state(false); // errors show after the first submit
   let busy = $state('');
 
-  // a club meeting (§2b): team-only, the whole club or one tag expected; no seats, deadline, price or 1st-year tag
+  // a club meeting: team-only, the whole club or one tag expected; no seats, deadline, price or 1st-year tag
   const isMeeting = $derived(f.teamOnly && f.meeting);
   let tags = $state<import('../../lib/api').ClubTag[]>([]);
-  // a Head with departments calls only those (PLAN 35): the first is picked, the rest of the club's aren't offered
+  // a Head with departments calls only those: the first is picked, the rest of the club's aren't offered
   let ownDepts = $state<Id[]>([]), inDept = $state(false); // in a department only the chat sync gave: none to call
   const deptOnly = $derived(inDept && RANK[session.me?.memberships.find((x) => x.org.id === org)?.role ?? 'member'] < RANK.vice);
   // "For whom": any team-only event, required or not; picking a department doesn't make it required
@@ -226,23 +227,23 @@
   }
   const err = $derived({
     title: f.title.trim() ? '' : t('ed.need'),
-    when: !Number.isFinite(startTs) || f.endDate && endTs == null ? t('ed.need') : !live && startTs <= nowTs() ? t('ed.past') : endTs != null && endTs <= startTs ? t('ed.endEarly') : '',
+    when: !Number.isFinite(startTs) || f.endDate && endTs == null ? t('ed.need') : !live && startTs <= nowTs() ? sw('ed.past') : endTs != null && endTs <= startTs ? sw('ed.endEarly') : '',
     // online: no place; a link, if any, https with a plain host (the server checks it again)
-    place: f.online ? (!f.onlineUrl.trim() || ONLINE_LINK.test(f.onlineUrl.trim()) ? '' : t('ed.onlineBad')) : f.tba ? ''
-      : badGis ? t('ed.placeLinkBad') : placeText.length > 80 ? t('ed.placeTooLong') : !placeKind ? t('ed.need')
-      : placeType !== placeKind ? t(placeType === 'room' ? 'ed.placeRoomBad' : 'ed.placeElsewhereBad') : '',
+    place: f.online ? (!f.onlineUrl.trim() || ONLINE_LINK.test(f.onlineUrl.trim()) ? '' : sw('ed.onlineBad')) : f.tba ? ''
+      : badGis ? sw('ed.placeLinkBad') : placeText.length > 80 ? sw('ed.placeTooLong') : !placeKind ? t('ed.need')
+      : placeType !== placeKind ? sw(placeType === 'room' ? 'ed.placeRoomBad' : 'ed.placeElsewhereBad') : '',
     // capacity is a choice, never a default (the server refuses an event without it): a number, or no limit
-    seats: isMeeting || f.partner || capSeats ? '' : !f.cap ? t('ed.capNeed') : f.cap === 'unlimited' || Number.isInteger(+f.seats) && +f.seats > 0 ? '' : t('ed.need'),
+    seats: isMeeting || f.partner || capSeats ? '' : !f.cap ? sw('ed.capNeed') : f.cap === 'unlimited' || Number.isInteger(+f.seats) && +f.seats > 0 ? '' : t('ed.need'),
     price: !f.paid || (Number.isInteger(+f.price) && +f.price >= 1 && +f.price <= 1_000_000) ? '' : t('ed.need'),
     payTo: !f.paid || f.payTo.trim().length >= 2 ? '' : t('ed.need'),
-    payPhone: !f.paid || /^(\+?7|8)?7\d{9}$/.test(f.payPhone.replace(/[\s()-]/g, '')) ? '' : t('ed.phoneBad'),
+    payPhone: !f.paid || /^(\+?7|8)?7\d{9}$/.test(f.payPhone.replace(/[\s()-]/g, '')) ? '' : sw('ed.phoneBad'),
     freeFirst: !f.paid || !f.freeFirst || (Number.isInteger(+f.freeFirst) && +f.freeFirst >= 0 && +f.freeFirst <= 5000) ? '' : t('ed.need'),
-    host: !f.partner ? '' : !f.host.trim() || f.host.trim().length > 60 ? t('ed.need') : GUEST_BANNED.test(f.host) ? t('ed.partnerOwn') : '',
-    link: !f.partner || /^https:\/\/[^\s/?#]+\.[^\s/?#]+(?:[/?#]\S*)?$/.test(f.link.trim()) ? '' : t('ed.partnerLinkBad'),
-    form: f.form.some((q) => q.label.trim().length < 2 || q.kind === 'choice' && opts(q.opts).length < 2) ? t('ed.formBad') : '',
-    teams: !f.teams || !teamsOk || (Number.isInteger(+f.teamMin) && Number.isInteger(+f.teamMax) && +f.teamMin >= 2 && +f.teamMax <= 10 && +f.teamMin <= +f.teamMax) ? '' : t('ed.teamsBad'),
-    teamCap: !f.teams || !teamsOk || f.teamCap === '' || (Number.isInteger(+f.teamCap) && +f.teamCap >= 2 && +f.teamCap <= 500) ? '' : t('ed.teamCapBad'),
-    reg: regMode !== 'date' ? '' : !Number.isFinite(regTs) ? t('ed.need') : Number.isFinite(startTs) && regTs > startTs ? t('ed.regLate') : f.santa && !saved?.santa?.drawn && Number.isFinite(startTs) && regTs > startTs - 3600 ? t('santa.badUntil') : !live && regTs <= nowTs() ? t('ed.past') : '',
+    host: !f.partner ? '' : !f.host.trim() || f.host.trim().length > 60 ? t('ed.need') : GUEST_BANNED.test(f.host) ? sw('ed.partnerOwn') : '',
+    link: !f.partner || /^https:\/\/[^\s/?#]+\.[^\s/?#]+(?:[/?#]\S*)?$/.test(f.link.trim()) ? '' : sw('ed.partnerLinkBad'),
+    form: f.form.some((q) => q.label.trim().length < 2 || q.kind === 'choice' && opts(q.opts).length < 2) ? sw('ed.formBad') : '',
+    teams: !f.teams || !teamsOk || (Number.isInteger(+f.teamMin) && Number.isInteger(+f.teamMax) && +f.teamMin >= 2 && +f.teamMax <= 10 && +f.teamMin <= +f.teamMax) ? '' : sw('ed.teamsBad'),
+    teamCap: !f.teams || !teamsOk || f.teamCap === '' || (Number.isInteger(+f.teamCap) && +f.teamCap >= 2 && +f.teamCap <= 500) ? '' : sw('ed.teamCapBad'),
+    reg: regMode !== 'date' ? '' : !Number.isFinite(regTs) ? t('ed.need') : Number.isFinite(startTs) && regTs > startTs ? sw('ed.regLate') : f.santa && !saved?.santa?.drawn && Number.isFinite(startTs) && regTs > startTs - 3600 ? t('santa.badUntil') : !live && regTs <= nowTs() ? sw('ed.past') : '',
   });
 
   // A pasted 2GIS share can include both the address and the URL.
@@ -283,22 +284,23 @@
     const p = await upload(ev);
     uploading = '';
     if (!p) return;
-    if (p.id === f.cover?.id) { say(t('ed.fmtSame'), 'thinking_face_3d'); return; } // the cover itself: its crop is one drag away
+    if (p.id === f.cover?.id) { say(sw('ed.fmtSame'), 'thinking_face_3d'); return; } // the cover itself: its crop is one drag away
     f.formats = { ...f.formats, [k]: p }; haptic.ok();
   }
   const setCrop = (k: CoverFormat, focus: [number, number]) => { const o = f.formats[k]; f.formats = { ...f.formats, [k]: o?.id ? { ...o, focus } : { focus } }; };
   function resetFormat(k: CoverFormat) { haptic.soft(); f.formats = Object.fromEntries(Object.entries(f.formats).filter(([x]) => x !== k)); }
   // the event's picture as every Poster takes it: the cover with its formats
   const art = $derived({ cover: f.cover ? { ...f.cover, formats: f.formats } : null, emoji: f.emoji, color: f.color });
-  const fmtTag = (k: CoverFormat) => (f.formats[k]?.id ? t('ed.fmtPhoto') : f.formats[k] ? t('ed.fmtCrop') : '');
+  const fmtTag = (k: CoverFormat) => (f.formats[k]?.id ? sw('ed.fmtPhoto') : f.formats[k] ? sw('ed.fmtCrop') : '');
 
   // the photo's own colour (around its focus) is the first dot and gets picked with a new photo; a dot chosen on
-  // purpose stays (SPEC §4.8b)
+  // purpose stays
   let photoColor = $state<string | null>(null);
   async function readColor(pick: boolean) {
-    if (!f.cover) return;
-    const was = photoColor, c = await coverColor(f.cover);
-    if (!f.cover) return;
+    const cover = f.cover;
+    if (!cover) return;
+    const was = photoColor, c = await coverColor(cover);
+    if (f.cover?.id !== cover.id) return; // another photo came meanwhile: this colour is stale
     photoColor = c;
     if (c && (pick || f.color === was)) f.color = c;
   }
@@ -308,21 +310,22 @@
   }
 
   // the event's videos (server video.py): the vertical one plays in the Feed, the horizontal one behind the event's
-  // sheet (PLAN 32). Sent in pieces with a progress bar, then compressed on the server while the form stays usable;
+  // sheet. Sent in pieces with a progress bar, then compressed on the server while the form stays usable;
   // their status lives beside the form (f has only the ids), so the polling doesn't make it dirty
   type Slot = 'tall' | 'wide';
   const KEY = { tall: 'videoId', wide: 'wideVideoId' } as const;
   let vids = $state<Record<Slot, Video | null>>({ tall: null, wide: null });
   let vUp = $state<Record<Slot, number>>({ tall: -1, wide: -1 }); // the upload's share done, -1 when none is running
+  const stop = new AbortController(); // the editor closed: a running upload stops
   async function pickVideo(ev: Event, slot: Slot) {
     const el = ev.currentTarget as HTMLInputElement, file = el.files?.[0];
     el.value = '';
     if (!file) return;
-    if (file.size > 500 * 1024 * 1024) { say(t('ed.videoBig'), 'pleading_face_3d'); return; }
-    if (slot === 'tall' && (await seconds(file)) > 60.5) { haptic.error(); say(t('ed.videoLong'), 'pleading_face_3d'); return; }
+    if (file.size > 500 * 1024 * 1024) { say(sw('ed.videoBig'), 'pleading_face_3d'); return; }
+    if (slot === 'tall' && (await seconds(file)) > 60.5) { haptic.error(); say(sw('ed.videoLong'), 'pleading_face_3d'); return; }
     vUp[slot] = 0;
-    try { const x = await api.uploadVideo(file, (d) => (vUp[slot] = d), slot === 'wide'); vids[slot] = x; f[KEY[slot]] = x.id; haptic.ok(); }
-    catch { haptic.error(); say(t('ed.videoBad'), 'pleading_face_3d'); }
+    try { const x = await api.uploadVideo(file, (d) => (vUp[slot] = d), slot === 'wide', stop.signal); vids[slot] = x; f[KEY[slot]] = x.id; haptic.ok(); }
+    catch { if (!stop.signal.aborted) { haptic.error(); say(sw('ed.videoBad'), 'pleading_face_3d'); } }
     finally { vUp[slot] = -1; }
   }
   // the length before sending hundreds of megabytes (0 when the webview can't read it: the server checks again)
@@ -344,7 +347,7 @@
       const id = x.id, timer = setInterval(() => api.video(id).then((y) => { if (vids[slot]?.id === id) vids[slot] = y; }).catch(() => {}), 3000);
       return () => clearInterval(timer);
     });
-    $effect(() => { const x = vids[slot]; if (x?.status === 'failed') { say(t(x.error === 'too_long' ? 'ed.videoLong' : 'ed.videoBad'), 'pleading_face_3d'); vids[slot] = null; f[KEY[slot]] = null; } });
+    $effect(() => { const x = vids[slot]; if (x?.status === 'failed') { say(sw(x.error === 'too_long' ? 'ed.videoLong' : 'ed.videoBad'), 'pleading_face_3d'); vids[slot] = null; f[KEY[slot]] = null; } });
   }
   function dropVideo(slot: Slot) { vids[slot] = null; f[KEY[slot]] = null; }
 
@@ -356,12 +359,12 @@
     const input = ev.currentTarget as HTMLInputElement, file = input.files?.[0];
     input.value = '';
     if (!file || !saved) return;
-    if (file.size > 5 * 1024 * 1024) { haptic.error(); say(t('ed.docBig'), 'pleading_face_3d'); return; }
-    const name = await sheets.askText({ title: t('ed.docName'), placeholder: t('event.doc'), value: saved.doc?.title ?? t('event.doc'), max: 40, line: true, ok: t('common.save'), cancel: t('common.cancel') });
+    if (file.size > 5 * 1024 * 1024) { haptic.error(); say(sw('ed.docBig'), 'pleading_face_3d'); return; }
+    const name = await sheets.askText({ title: sw('ed.docName'), placeholder: t('event.doc'), value: saved.doc?.title ?? t('event.doc'), max: 40, line: true, ok: t('common.save'), cancel: t('common.cancel') });
     if (name == null || !saved) return;
     docUp = true; docName = name;
     try { const e = await api.putEventDoc(saved.id, file, name === t('event.doc') ? '' : name); saved = { ...saved, doc: e.doc }; haptic.ok(); }
-    catch (err) { haptic.error(); say(t(err instanceof ApiErr && (err.message === 'too_many_pages' || err.message === 'too_big') ? 'ed.docBig' : 'ed.docBad'), 'pleading_face_3d'); }
+    catch (err) { haptic.error(); say(sw(err instanceof ApiErr && (err.message === 'too_many_pages' || err.message === 'too_big') ? 'ed.docBig' : 'ed.docBad'), 'pleading_face_3d'); }
     finally { docUp = false; }
   }
   async function dropDoc() {
@@ -371,9 +374,12 @@
     try { await api.dropEventDoc(saved.id); haptic.soft(); } catch { if (saved) saved = { ...saved, doc: was }; haptic.error(); }
   }
 
-  // more photos after the cover, swiped sideways in the Feed and the sheet (PLAN 33): nine at most, in the order picked
+  // more photos after the cover, swiped sideways in the Feed and the sheet: nine at most, in the order picked
   const SLIDES = 9;
   let slidesUp = $state(0); // how many are being sent
+  // an upload still running is something to lose too: Back asks instead of dropping it unseen
+  const uploads = $derived(vUp.tall >= 0 || vUp.wide >= 0 || slidesUp > 0 || !!uploading);
+  const dirty = $derived(uploads || !!said.trim() || touched && JSON.stringify(f) !== base);
   async function pickSlides(ev: Event) {
     const el = ev.currentTarget as HTMLInputElement, files = [...(el.files ?? [])].slice(0, SLIDES - f.slides.length);
     el.value = '';
@@ -399,7 +405,7 @@
     panel.animate([{ transform: 'translate3d(0,100%,0)' }, { transform: 'none' }], { duration: 380, easing: 'cubic-bezier(.2,.9,.25,1)' });
     if (id) {
       api.event(id).then(async (got) => {
-        const e = original(got); // the text as typed, never a translation (PLAN 9)
+        const e = original(got); // the text as typed, never a translation
         saved = e;
         vids = { tall: e.video ?? null, wide: e.wideVideo ?? null };
         f = { emoji: e.emoji ?? EMOJI[0], color: e.color ?? BRAND, cover: e.cover, formats: e.cover?.formats ?? {}, slides: e.slides ?? [], videoId: e.video?.id ?? null, wideVideoId: e.wideVideo?.id ?? null, title: e.title, date: dateInput(e.startsAt), start: time(e.startsAt),
@@ -413,13 +419,19 @@
           deadline: !!e.regUntil, late: !!e.lateSignup, regDate: e.regUntil ? dateInput(e.regUntil) : '', regTime: e.regUntil ? time(e.regUntil) : '18:00',
           tba: !e.place && !e.placeUrl && !e.online, memo: e.memo ?? {} };
         if (campusPlace(e.place)) { f.place = placeOf(e.place); f.placeUrl = ''; }
-        // a cover's tint used to be the photo's average colour: such an event starts on the photo's dot
-        if (e.cover && (photoColor = await coverColor(e.cover)) && e.tint !== shade(f.color)) f.color = photoColor;
         base = JSON.stringify(f);
+        loading = false;
         restoreText();
+        // a cover's tint used to be the photo's average colour: such an event starts on the photo's dot (unless changed meanwhile)
+        if (!e.cover) return;
+        const c = await coverColor(e.cover);
+        if (gone || f.cover?.id !== e.cover.id) return;
+        photoColor = c;
+        if (c && e.tint !== shade(f.color)) { const same = base === JSON.stringify(f); f.color = c; if (same) base = JSON.stringify(f); }
       }).catch(() => { say(t('common.error'), 'warning_3d'); base = JSON.stringify(f); close(overlay.id); });
     } else restoreText();
-    return hideChrome();
+    const chrome = hideChrome();
+    return () => { stop.abort(); chrome(); };
   });
 
   function leave() {
@@ -486,9 +498,10 @@
 
   // publish: out now (a member's draft I answer: my yes); send: a member's own to the club's President and Vices
   async function submit(kind: 'publish' | 'draft' | 'save' | 'send') {
+    if (id && !saved || filling) return; // the edit not read yet (a second event), or KRI still filling the card
     tried = true;
     if (Object.values(err).some(Boolean)) { haptic.error(); return; }
-    if (vUp.tall >= 0 || vUp.wide >= 0 || slidesUp || uploading) { haptic.error(); say(t('ed.videoWait'), 'pleading_face_3d'); return; }
+    if (uploads) { haptic.error(); say(sw('ed.videoWait'), 'pleading_face_3d'); return; }
     if (busy) return;
     const sentAt = textDraft.stamp();
     busy = kind;
@@ -505,12 +518,12 @@
         || known.department && (f.forBoard || tag?.name.toLowerCase() !== known.department.toLowerCase())
         || known.cohost && !coWant && !saved || known.partner && !f.partner) {
         const actual = [audienceVal, tickets && priceVal, f.partner && f.host, known.cohost && t('co.invite') + ' · ' + coVal].filter(Boolean).join(' · ');
-        if (!await sheets.ask({ title: t('ed.chatReview'), text: actual, ok: t('common.save'), cancel: t('common.cancel') })) return;
+        if (!await sheets.ask({ title: sw('ed.chatReview'), text: actual, ok: t('common.save'), cancel: t('common.cancel') })) return;
       }
       // teams off on an event that has some: they break up (the server lets them go)
-      if (saved?.teams?.count && !(f.teams && teamsOk) && !(await sheets.ask({ title: t('ed.teamsOffAsk'), text: t('ed.teamsOffText'), ok: t('common.save'), cancel: t('common.cancel'), danger: true }))) return;
+      if (saved?.teams?.count && !(f.teams && teamsOk) && !(await sheets.ask({ title: sw('ed.teamsOffAsk'), text: sw('ed.teamsOffText'), ok: t('common.save'), cancel: t('common.cancel'), danger: true }))) return;
       if (kind === 'draft' && fromChat && tickets && f.paid && !await sheets.ask({
-        title: t('ed.chatReview'), text: [priceVal, f.payTo, f.payPhone].join(' · '), ok: t('ed.saveDraft'), cancel: t('common.cancel'),
+        title: sw('ed.chatReview'), text: [priceVal, f.payTo, f.payPhone].join(' · '), ok: sw('ed.saveDraft'), cancel: t('common.cancel'),
       })) return;
       const first = !saved;
       let e = saved ? await api.updateEvent(saved.id, input()) : await api.createEvent(org, input());
@@ -526,17 +539,17 @@
       studioChanged();
       haptic.ok();
       // a student initiative tells its followers once a week (the server's rule): the toast says if they heard, and when next
-      if (kind === 'publish') { burst(); say(pub?.told === undefined || !initiative ? phrase('say.published') : t(pub.told ? 'ed.toldNext' : 'ed.toldLater', { when: dayMonthShort(pub.tellAfter ?? nowTs() + 7 * 86400) }), 'party_popper_3d'); }
+      if (kind === 'publish') { burst(); say(pub?.told === undefined || !initiative ? phrase('say.published') : sw(pub.told ? 'ed.toldNext' : 'ed.toldLater', { when: dayMonthShort(pub.tellAfter ?? nowTs() + 7 * 86400) }), 'party_popper_3d'); }
       else if (kind === 'send') say(t('rv.sent'), 'party_popper_3d');
       else say(kind === 'draft' ? phrase('say.draftSaved') : moved ? t('say.eventMoved') : phrase('say.eventSaved'), 'sparkles_3d');
       close(overlay.id);
       if (staff) { if (!eventById(e.id)) data.opened.push(e); sheets.manage(e.id, true); } // on to Admin's own view of it
     } catch (x) {
       haptic.error();
-      say(x instanceof ApiErr && x.message === 'partner' ? t('ed.partnerBad') : x instanceof ApiErr && x.message === 'taken' ? t('ed.partnerTaken')
-        : x instanceof ApiErr && x.message === 'paid' ? t('ed.paidLocked') : x instanceof ApiErr && x.message === 'price' ? t('ed.paidOfficial')
+      say(x instanceof ApiErr && x.message === 'partner' ? sw('ed.partnerBad') : x instanceof ApiErr && x.message === 'taken' ? sw('ed.partnerTaken')
+        : x instanceof ApiErr && x.message === 'paid' ? t('ed.paidLocked') : x instanceof ApiErr && x.message === 'price' ? sw('ed.paidOfficial')
         : x instanceof ApiErr && x.message === 'drafts' ? t('rv.limit')
-        : x instanceof ApiErr && x.message === 'cohost' ? t('co.bad') : x instanceof ApiErr && x.message === 'needs_phone' ? t('ed.phoneLocked') : x instanceof ApiErr && x.message === 'santa_signed' ? t('santa.locked') : x instanceof ApiErr && x.message === 'santa_until' ? t('santa.badUntil') : x instanceof ApiErr && x.message === 'santa_audience' ? t('santa.audience') : x instanceof ApiErr && x.code === 'conflict' ? t('ed.badSeats') : t('common.error'), 'warning_3d');
+        : x instanceof ApiErr && x.message === 'cohost' ? t('co.bad') : x instanceof ApiErr && x.message === 'needs_phone' ? sw('ed.phoneLocked') : x instanceof ApiErr && x.message === 'santa_signed' ? t('santa.locked') : x instanceof ApiErr && x.message === 'santa_until' ? t('santa.badUntil') : x instanceof ApiErr && x.message === 'santa_audience' ? t('santa.audience') : x instanceof ApiErr && x.code === 'conflict' ? sw('ed.badSeats') : t('common.error'), 'warning_3d');
     } finally { busy = ''; }
   }
   // the club's President or a Vice sends a member's draft back: a reason from the list, never typed words
@@ -677,12 +690,12 @@
       ai = [...new Set([...ai, ...marked({ title: got('title') as string, date: got('date') as string, endDate: got('endDate') as string, start: got('start') as string,
         end: got('end') as string, place: got('place') as string, description: got('description') as string, price: got('price') as number }, canPrice)])];
       if (changed.length || wait.length) { haptic.ok(); said = ''; turns++; fromAi = true; fromChat = true; }
-      else { haptic.error(); say(t('ed.fillNone'), 'thinking_face_3d'); }
+      else { haptic.error(); say(sw('ed.fillNone'), 'thinking_face_3d'); }
     } catch (e) {
       if (gone) return;
       haptic.error();
       const c = e instanceof ApiErr ? e.code : '';
-      say(t(c === 'rate_limited' ? 'as.limit' : c === 'unavailable' ? 'as.busy' : c === 'bad_input' ? 'ed.fillShort' : 'common.error'), 'pleading_face_3d');
+      say(sw(c === 'rate_limited' ? 'as.limit' : c === 'unavailable' ? 'as.busy' : c === 'bad_input' ? 'ed.fillShort' : 'common.error'), 'pleading_face_3d');
     } finally { filling = false; }
   }
   let ai = $state<Marked[]>([]);
@@ -750,15 +763,15 @@
   const only = (p?: Page) => { stack = p ? [p] : []; };
   const PAGE: Record<Exclude<Page, `cover.${CoverFormat}`>, string> = { cover: 'ed.cover', place: 'ed.place', about: 'ed.about', price: 'ex.price', seats: 'ed.seats',
     reg: 'ex.regUntil', who: 'ex.who', more: 'ex.more', video: 'ed.video', form: 'ed.form', vol: 'ed.vol', teams: 'ed.teams', partner: 'ed.partner', cohost: 'co.invite', memo: 'studio.memoShort', check: 'ex.checkTitle' };
-  const pageTitle = $derived(!pick ? '' : fmt ? t(FMT_NAME[fmt]) : t(PAGE[pick as keyof typeof PAGE] as 'ed.cover'));
-  // the capsule's title (SPEC §8.2), between Telegram's Back and ⋯: the event, or the page that is open
-  $effect(() => { overlay.title = pageTitle || (live ? t('ed.edit') : t('ed.new')); overlay.icon = live ? PencilLine : CalendarPlus; });
+  const pageTitle = $derived(!pick ? '' : fmt ? sw(FMT_NAME[fmt]) : sw(PAGE[pick as keyof typeof PAGE] as 'ed.cover'));
+  // the capsule's title, between Telegram's Back and ⋯: the event, or the page that is open
+  $effect(() => { overlay.title = pageTitle || (live ? sw('ed.edit') : sw('ed.new')); overlay.icon = live ? PencilLine : CalendarPlus; });
 
   // the rows' values
   const money = (n: number) => t('ex.tenge', { n: n.toLocaleString('ru-RU') });
   const tickets = $derived(!isMeeting && !f.partner);
   // "Questions at sign-up": "Phone, 2 questions" / "Phone" / "No"
-  const askVal = $derived([f.needsPhone ? t('ed.formPhone') : '', f.santa ? t('santa.title') : '', f.form.length ? tn('ed.formN', f.form.length) : ''].filter(Boolean).join(', ') || t('ex.no'));
+  const askVal = $derived([f.needsPhone ? sw('ed.formPhone') : '', f.santa ? t('santa.title') : '', f.form.length ? swn('ed.formN', f.form.length) : ''].filter(Boolean).join(', ') || t('ex.no'));
   const priceVal = $derived(f.paid && +f.price > 0 ? money(+f.price) : t('ex.free'));
   const regVal = $derived(regMode === 'end' ? t('ex.untilEnd') : regMode === 'date' && Number.isFinite(regTs) ? relDay(regTs) + ', ' + f.regTime : t('ex.untilStart'));
   // the day shows as soon as it's set, a time or not (a fill without one left it looking empty)
@@ -767,34 +780,34 @@
   // the end's day: its own date when set, else the day the end time falls on (dimmed: nothing chosen)
   const endDay = $derived(f.endDate ? fromInputs(f.endDate, '12:00') : endTs != null ? endTs : Number.isFinite(dayTs) ? dayTs : null);
   const endDayText = $derived(endDay != null ? `${weekdayShort(endDay)}, ${dayMonthShort(endDay)}` : '—');
-  const whoVal = $derived(f.leaders ? t('ed.whoLeaders') : f.teamOnly ? t('ed.whoTeam') : t('ed.whoAll'));
-  const audienceVal = $derived([whoVal, f.teamOnly && (f.forBoard ? t('ed.meetingBoard') : tags.find(g => g.id === f.meetingTag)?.name),
-    (schoolOnly ?? !!saved?.school) && school && t('ed.schoolOnly', { school: nameOf(school) })].filter(Boolean).join(' · '));
+  const whoVal = $derived(f.leaders ? sw('ed.whoLeaders') : f.teamOnly ? sw('ed.whoTeam') : sw('ed.whoAll'));
+  const audienceVal = $derived([whoVal, f.teamOnly && (f.forBoard ? sw('ed.meetingBoard') : tags.find(g => g.id === f.meetingTag)?.name),
+    (schoolOnly ?? !!saved?.school) && school && sw('ed.schoolOnly', { school: nameOf(school) })].filter(Boolean).join(' · '));
   const LEAD = { president: 'ed.leadPres', vice: 'ed.leadVice', head: 'ed.leadHead' } as const;
   const memoN = $derived(Object.keys(f.memo).length);
   const priceBad = $derived(!!(err.price || err.payTo || err.payPhone || err.freeFirst));
   const vidN = $derived([vids.tall, vids.wide].filter(Boolean).length);
   // the card's own line, as the Afisha writes it: the day, the time, the place
-  const placeVal = $derived(f.online ? t('event.online') : f.tba ? t('ed.tba') : placeText && placeOf(placeText));
+  const placeVal = $derived(f.online ? t('event.online') : f.tba ? sw('ed.tba') : placeText && placeOf(placeText));
   const cardLine = $derived([dayText, f.start, placeVal].filter(Boolean).join(' · '));
   // what "More" holds that is switched on, so the row says it without being opened
   const moreBad = $derived(!!(err.form || err.teams || err.teamCap || err.host || err.link));
-  const moreVal = $derived([askVal !== t('ex.no') && tickets ? t('ed.form') : '', f.teams && teamsOk ? t('ed.teams') : '', f.vol && tickets ? t('ed.vol') : '', vidN ? t('ed.video') : '',
-    saved?.doc ? t('event.doc') : '', co && co.status !== 'declined' ? coShort(co.org) : '', f.partner ? t('ed.partner') : ''].filter(Boolean).join(', '));
+  const moreVal = $derived([askVal !== t('ex.no') && tickets ? sw('ed.form') : '', f.teams && teamsOk ? sw('ed.teams') : '', f.vol && tickets ? sw('ed.vol') : '', vidN ? sw('ed.video') : '',
+    saved?.doc ? t('event.doc') : '', co && co.status !== 'declined' ? coShort(co.org) : '', f.partner ? sw('ed.partner') : ''].filter(Boolean).join(', '));
 
   // the pull-downs (2-4 choices) on a row's value
   const whoMenu = $derived<MenuItem[]>([
-    { label: t('ed.whoAll'), checked: !f.teamOnly && !f.leaders, onselect: () => { f.teamOnly = false; f.leaders = false; } },
-    { label: t('ed.whoTeam'), checked: f.teamOnly, onselect: () => { f.teamOnly = true; f.leaders = false; } },
-    ...(oversee ? [{ label: t('ed.whoLeaders'), checked: f.leaders, onselect: () => { f.leaders = true; f.teamOnly = false; } }] : []),
+    { label: sw('ed.whoAll'), checked: !f.teamOnly && !f.leaders, onselect: () => { f.teamOnly = false; f.leaders = false; } },
+    { label: sw('ed.whoTeam'), checked: f.teamOnly, onselect: () => { f.teamOnly = true; f.leaders = false; } },
+    ...(oversee ? [{ label: sw('ed.whoLeaders'), checked: f.leaders, onselect: () => { f.leaders = true; f.teamOnly = false; } }] : []),
   ]);
-  const leadMenu = $derived<MenuItem[]>((['president', 'vice', 'head'] as const).map((k) => ({ label: t(LEAD[k]), checked: f.leadersFrom === k, onselect: () => { f.leadersFrom = k; } })));
+  const leadMenu = $derived<MenuItem[]>((['president', 'vice', 'head'] as const).map((k) => ({ label: sw(LEAD[k]), checked: f.leadersFrom === k, onselect: () => { f.leadersFrom = k; } })));
   const tagMenu = $derived<MenuItem[]>([
-    ...(deptOnly && f.meeting ? [] : [{ label: t('ed.meetingAll'), checked: f.meetingTag == null && !f.forBoard, onselect: () => { f.meetingTag = null; f.forBoard = false; } }]),
+    ...(deptOnly && f.meeting ? [] : [{ label: sw('ed.meetingAll'), checked: f.meetingTag == null && !f.forBoard, onselect: () => { f.meetingTag = null; f.forBoard = false; } }]),
     // the board (Head+, from roles): built in, no tag to make
-    ...(deptOnly ? [] : [{ label: t('ed.meetingBoard'), checked: f.forBoard, onselect: () => { f.meetingTag = null; f.forBoard = true; } }]),
+    ...(deptOnly ? [] : [{ label: sw('ed.meetingBoard'), checked: f.forBoard, onselect: () => { f.meetingTag = null; f.forBoard = true; } }]),
     ...tags.filter((g) => !deptOnly || ownDepts.includes(g.id)).map((g) => ({ label: g.name, checked: !f.forBoard && f.meetingTag === g.id, onselect: () => { f.meetingTag = g.id; f.forBoard = false; } })),
-    ...(tags.length ? [] : [{ label: t('ed.meetingSetup'), onselect: () => sheets.teamSetup(org, readTags) }]),
+    ...(tags.length ? [] : [{ label: sw('ed.meetingSetup'), onselect: () => sheets.teamSetup(org, readTags) }]),
   ]);
 
   // "Check my event": on the phone, at once, on every Publish/Save; a price or seats in a meeting's or a partner's
@@ -824,7 +837,7 @@
   }
   // the one main button: what it does for this person and this event
   const goKind = $derived<'save' | 'publish' | 'send'>(live || member && !!review?.askedAt ? 'save' : member ? 'send' : 'publish');
-  const goLabel = $derived(goKind === 'save' ? t('common.save') : goKind === 'send' ? t(review?.reason ? 'rv.sendAgain' : 'rv.send') : judge ? t('rv.approve') : t('ed.publish'));
+  const goLabel = $derived(goKind === 'save' ? t('common.save') : goKind === 'send' ? t(review?.reason ? 'rv.sendAgain' : 'rv.send') : judge ? t('rv.approve') : sw('ed.publish'));
   // Publish/Save: the check first; nothing found goes straight on
   function publish() {
     if (Object.values(err).some(Boolean)) {
@@ -846,16 +859,16 @@
     haptic.tap(); writing = true;
     try {
       const x = await api.eventFill(org, `${f.title}. ${f.description}`.trim());
-      if (x.description) suggestion = x.description; else say(t('ed.fillNone'), 'thinking_face_3d');
+      if (x.description) suggestion = x.description; else say(sw('ed.fillNone'), 'thinking_face_3d');
     } catch (e) {
       const c = e instanceof ApiErr ? e.code : '';
-      say(t(c === 'rate_limited' ? 'as.limit' : c === 'unavailable' ? 'as.busy' : c === 'bad_input' ? 'ed.fillShort' : 'common.error'), 'warning_3d');
+      say(sw(c === 'rate_limited' ? 'as.limit' : c === 'unavailable' ? 'as.busy' : c === 'bad_input' ? 'ed.fillShort' : 'common.error'), 'warning_3d');
     } finally { writing = false; }
   }
 
   async function remove() {
     if (!saved || busy) return;
-    if (!(await sheets.ask({ title: t('ed.deleteAsk'), ok: t('ed.deleteGo'), cancel: t('tk.keep'), danger: true }))) return;
+    if (!(await sheets.ask({ title: sw('ed.deleteAsk'), ok: sw('ed.deleteGo'), cancel: t('tk.keep'), danger: true }))) return;
     busy = 'delete';
     try {
       await api.deleteEvent(saved.id);
@@ -868,12 +881,12 @@
   }
 </script>
 
-{#snippet tintPhoto()}<button class="tp" class:on={f.color === photoColor} style="--c:{photoColor}" onclick={() => (f.color = photoColor!)} aria-label={t('ed.tintPhoto')}><ImageIcon size={15} strokeWidth={2.4} /></button>{/snippet}
+{#snippet tintPhoto()}<button class="tp" class:on={f.color === photoColor} style="--c:{photoColor}" onclick={() => (f.color = photoColor!)} aria-label={sw('ed.tintPhoto')}><ImageIcon size={15} strokeWidth={2.4} /></button>{/snippet}
 
 <!-- engine: Field has no date/time type (nor min): these few by hand, in Field's look (.fl) -->
-<div class="panel" class:hinted={member && goKind === 'send'} bind:this={panel} style:--tint={tint} style:--kbh="{keyboard.h}px" oninputcapture={touch} onchangecapture={touch} onclickcapture={touch}>
+<div class="panel" class:hinted={member && goKind === 'send'} bind:this={panel} inert={loading} style:--tint={tint} style:--kbh="{keyboard.h}px" oninputcapture={touch} onchangecapture={touch} onclickcapture={touch}>
   <!-- the sheet tinted by the event: its colour, the cover blurred over it, the page's ground on top for contrast -->
-  <div class="wash" aria-hidden="true">{#if f.cover}<img src={f.cover.thumb} alt="" />{/if}<i></i></div>
+  <div class="wash" aria-hidden="true">{#if f.cover}<img draggable="false" src={f.cover.thumb} alt="" />{/if}<i></i></div>
   <header class="bar">
     {#if !inTelegram}<span class="x"><IconButton icon={X} label={t('common.close')} onclick={() => close(overlay.id)} /></span>{/if}
   </header>
@@ -882,23 +895,23 @@
     {#if kriOn}
       <!-- KRI: one line that says what it needs next, one field to answer in; the card below is the result -->
       <div class="kri" class:busy={filling}>
-        <p class="kq"><Sparkles size={15} strokeWidth={2.4} /><span>{filling ? t('as.thinking') : t(`ed.chat.${kriNext}`)}</span></p>
-        <Composer bind:value={said} placeholder={t(kriNext === 'payTo' ? 'ed.payTo' : kriNext === 'payPhone' ? 'ed.payPhone' : turns ? 'ed.chatPh' : 'ed.kriPh')}
+        <p class="kq"><Sparkles size={15} strokeWidth={2.4} /><span>{filling ? t('as.thinking') : sw(`ed.chat.${kriNext}`)}</span></p>
+        <Composer bind:value={said} placeholder={sw(kriNext === 'payTo' ? 'ed.payTo' : kriNext === 'payPhone' ? 'ed.payPhone' : turns ? 'ed.chatPh' : 'ed.kriPh')}
           maxlength={4000} sending={filling} onsend={tell} pill />
       </div>
     {/if}
     {#if lacks.length}
       <!-- what the announcement didn't say: each one tapped goes to its field -->
       <div class="miss">
-        <span>{t('ed.missing')}</span>
-        {#each lacks as k (k)}<button class="mk" onclick={() => jump(k)}>{t(k === 'date' ? 'ed.date' : k === 'time' ? 'ed.time' : 'ed.place')}</button>{/each}
+        <span>{sw('ed.missing')}</span>
+        {#each lacks as k (k)}<button class="mk" onclick={() => jump(k)}>{sw(k === 'date' ? 'ed.date' : k === 'time' ? 'ed.time' : 'ed.place')}</button>{/each}
       </div>
     {/if}
     {#if differs.length}
       <!-- the new text says otherwise: the form's value stays; a tap takes the new one -->
       <div class="miss">
-        <span>{t('ed.differs')}</span>
-        {#each differs as d (d.k)}<button class="mk" onclick={() => take(d)}>{t(DIFF_KEY[d.k])}: {d.k === 'price' ? `${d.v} ₸` : d.v}</button>{/each}
+        <span>{sw('ed.differs')}</span>
+        {#each differs as d (d.k)}<button class="mk" onclick={() => take(d)}>{sw(DIFF_KEY[d.k])}: {d.k === 'price' ? `${d.v} ₸` : d.v}</button>{/each}
       </div>
     {/if}
 
@@ -908,11 +921,11 @@
 
     <!-- the event's card as the Afisha shows it, and the form's first field: the name is typed on the cover itself -->
     <div class="card" class:bad={tried && err.title} class:busy={uploading === 'cover'}>
-      <button class="art" onclick={() => open('cover')} aria-label={t('ed.cover')}><Poster item={art} big radius={0} fmt="card" /></button>
+      <button class="art" onclick={() => open('cover')} aria-label={sw('ed.cover')}><Poster item={art} big radius={0} fmt="card" /></button>
       <i class="veil" aria-hidden="true"></i>
       <div class="tools">
         <button class="tool glass glass-pill" onclick={showPreview} aria-label={t('ed.preview')}><Eye size={18} /></button>
-        <button class="tool glass glass-pill" onclick={() => open('cover')}><ImagePlus size={18} /><span>{t('ed.cover')}</span></button>
+        <button class="tool glass glass-pill" onclick={() => open('cover')}><ImagePlus size={18} /><span>{sw('ed.cover')}</span></button>
       </div>
       <div class="words">
         <!-- engine: Field size="title" with its label for screen readers only (the card's big name has none in sight) -->
@@ -923,21 +936,21 @@
     {#if tried && err.title}<p class="err">{err.title}</p>{/if}
     <!-- whose event it is, one quiet line under the card; the full sentence on a tap -->
     {#if asStaff}<button class="who" onclick={() => { haptic.tap(); say(t('mg.asStaff'), 'locked_3d'); }}><ShieldCheck size={14} strokeWidth={2.4} />
-      <span class="ellipsis">{clubNames[2] || clubNames[0]} · {t('ed.asAdmin')}</span></button>{/if}
+      <span class="ellipsis">{clubNames[2] || clubNames[0]} · {sw('ed.asAdmin')}</span></button>{/if}
     {#if castLike}
       <!-- a casting made as an event (JCC): the club's recruitment does it properly -->
-      <Notice tone="accent" text={t('ed.castHint')} action={{ label: t('ed.castOpen'), onclick: () => { close(overlay.id); sheets.roundSetup(org); } }} />
+      <Notice tone="accent" text={sw('ed.castHint')} action={{ label: sw('ed.castOpen'), onclick: () => { close(overlay.id); sheets.roundSetup(org); } }} />
     {/if}
 
     <div class="pill when" class:bad={tried && err.when} class:ai={ai.includes('when')} onchangecapture={() => unmark('when')}>
       <i class="rail" aria-hidden="true"></i>
       <!-- one line of text ("Mon, 9 Nov  18:00"); the phone's own pickers sit under each part -->
-      <div class="wr"><span class="dot"></span><b>{t('ed.start')}</b>
-        <label class="tv">{dayText}<input type="date" bind:value={f.date} aria-label={t('ed.date')} /></label>
-        <label class="tv">{f.start || '—'}<input type="time" bind:value={f.start} aria-label={t('ed.start')} /></label></div>
-      <div class="wr"><span class="dot o"></span><b>{t('ed.end')}</b>
-        <label class="tv" class:ph={!f.endDate}>{endDayText}<input type="date" bind:value={f.endDate} min={f.date} aria-label={t('ed.endDate')} /></label>
-        <label class="tv" class:ph={!f.end}>{f.end || '—'}<input type="time" bind:value={f.end} aria-label={t('ed.end')} /></label></div>
+      <div class="wr"><span class="dot"></span><b>{sw('ed.start')}</b>
+        <label class="tv">{dayText}<input type="date" bind:value={f.date} aria-label={sw('ed.date')} /></label>
+        <label class="tv">{f.start || '—'}<input type="time" bind:value={f.start} aria-label={sw('ed.start')} /></label></div>
+      <div class="wr"><span class="dot o"></span><b>{sw('ed.end')}</b>
+        <label class="tv" class:ph={!f.endDate}>{endDayText}<input type="date" bind:value={f.endDate} min={f.date} aria-label={sw('ed.endDate')} /></label>
+        <label class="tv" class:ph={!f.end}>{f.end || '—'}<input type="time" bind:value={f.end} aria-label={sw('ed.end')} /></label></div>
     </div>
     {#if tried && err.when}<p class="err">{err.when}</p>{/if}
 
@@ -948,10 +961,10 @@
       <span class="gt clamp-2" class:ph={!f.description.trim()}>{f.description.trim() || t('ex.aboutAdd')}</span></button>
 
     {#if tickets}
-      <Group caption={t('ex.tickets')} footnote={!canPrice && !isMeeting && !member ? (full ? t('ed.paidRight') : t('ed.paidOfficial')) : undefined}>
+      <Group caption={t('ex.tickets')} footnote={!canPrice && !isMeeting && !member ? (full ? sw('ed.paidRight') : sw('ed.paidOfficial')) : undefined}>
         {#if canPrice}<Row icon={Ticket} title={t('ex.price')} value={tried && priceBad ? '' : priceVal} invalid={tried && priceBad} accessory="chevron" onclick={() => open('price')} />
         {:else}<Row icon={Ticket} title={t('ex.price')} value={t('ex.free')} />{/if}
-        <Row icon={Users} title={t('ed.seats')} value={tried && err.seats ? '' : seatsN ? String(seatsN) : f.cap === 'unlimited' ? t('ex.unlimited') : t('ed.capPick')} invalid={tried && !!err.seats} accessory="chevron" onclick={() => open('seats')} />
+        <Row icon={Users} title={sw('ed.seats')} value={tried && err.seats ? '' : seatsN ? String(seatsN) : f.cap === 'unlimited' ? t('ex.unlimited') : sw('ed.capPick')} invalid={tried && !!err.seats} accessory="chevron" onclick={() => open('seats')} />
         <Row icon={Clock} title={t('ex.regUntil')} value={tried && err.reg ? '' : regVal} invalid={tried && !!err.reg} accessory="chevron" onclick={() => open('reg')} />
       </Group>
     {/if}
@@ -962,7 +975,7 @@
     </Group>
 
     {#if saved?.status === 'draft' && (!member || review?.mine)}
-      <Button kind="plain" destructive full onclick={remove}>{#snippet icon()}<Trash size={18} />{/snippet}{t('ed.delete')}</Button>
+      <Button kind="plain" destructive full onclick={remove}>{#snippet icon()}<Trash size={18} />{/snippet}{sw('ed.delete')}</Button>
     {/if}
   </div>
 
@@ -971,7 +984,7 @@
     <footer class="dock">
       {#if member && goKind === 'send'}<p class="dh">{t('rv.sendHint')}</p>{/if}
       <div class="acts glass glass-pill">
-        {#if !live && goKind !== 'save'}<Button kind="gray" size="l" loading={busy === 'draft'} disabled={!!busy && busy !== 'draft'} onclick={() => submit('draft')}>{t('ed.saveDraft')}</Button>{/if}
+        {#if !live && goKind !== 'save'}<Button kind="gray" size="l" loading={busy === 'draft'} disabled={!!busy && busy !== 'draft'} onclick={() => submit('draft')}>{sw('ed.saveDraft')}</Button>{/if}
         {#if judge}<Button kind="gray" size="l" onclick={giveBack}>{t('rv.return')}</Button>{/if}
         <span class="main"><Button kind="filled" size="l" full loading={busy === goKind} disabled={goKind === 'save' && !dirty} onclick={publish}>{goLabel}</Button></span>
       </div>
@@ -983,7 +996,7 @@
     {#key pick}
     <div class="page">
       <!-- the same ground as the main page: no seam between the two as one slides over the other -->
-      <div class="wash" aria-hidden="true">{#if f.cover}<img src={f.cover.thumb} alt="" />{/if}<i></i></div>
+      <div class="wash" aria-hidden="true">{#if f.cover}<img draggable="false" src={f.cover.thumb} alt="" />{/if}<i></i></div>
       <div class="pg scroll">
         {#if !inTelegram}<h2 class="pt">{pageTitle}</h2>{/if}
         {#if pick === 'cover'}
@@ -992,30 +1005,30 @@
             {#each FORMATS as k (k)}
               <button class="fm f-{k}" onclick={() => (f.cover ? open(`cover.${k}`) : photoIn?.click())}>
                 <span class="fr"><Poster item={art} big radius={0} fmt={k} /></span>
-                <b>{t(FMT_NAME[k])}</b>
+                <b>{sw(FMT_NAME[k])}</b>
                 <i class:set={!!fmtTag(k)}>{fmtTag(k) || ' '}</i>
               </button>
             {/each}
           </div>
-          <p class="hint">{t(f.cover ? 'ed.fmtTip' : 'ed.coverTip')}</p>
+          <p class="hint">{sw(f.cover ? 'ed.fmtTip' : 'ed.coverTip')}</p>
           <div class="btns">
-            <Button kind="tinted" full loading={uploading === 'cover'} onclick={() => photoIn?.click()}>{#snippet icon()}<ImagePlus size={18} />{/snippet}{f.cover ? t('ed.photoChange') : t('ed.photo')}</Button>
-            {#if f.cover}<Button kind="gray" onclick={dropPhoto}>{#snippet icon()}<X size={16} />{/snippet}{t('ed.photoRemove')}</Button>{/if}
+            <Button kind="tinted" full loading={uploading === 'cover'} onclick={() => photoIn?.click()}>{#snippet icon()}<ImagePlus size={18} />{/snippet}{f.cover ? sw('ed.photoChange') : sw('ed.photo')}</Button>
+            {#if f.cover}<Button kind="gray" onclick={dropPhoto}>{#snippet icon()}<X size={16} />{/snippet}{sw('ed.photoRemove')}</Button>{/if}
           </div>
           {#if f.cover}
             <div class="slides">
               {#each f.slides as p, k (p.id)}
                 <!-- engine: IconButton xs, a remove mark on a thumbnail -->
-                <span class="sl"><img src={p.thumb} alt="" /><button class="rmx" onclick={() => (f.slides = f.slides.filter((_, n) => n !== k))} aria-label={t('ed.photoRemove')}><X size={14} strokeWidth={2.6} /></button></span>
+                <span class="sl"><img draggable="false" src={p.thumb} alt="" /><button class="rmx" onclick={() => (f.slides = f.slides.filter((_, n) => n !== k))} aria-label={sw('ed.photoRemove')}><X size={14} strokeWidth={2.6} /></button></span>
               {/each}
               {#each { length: slidesUp } as _, k (k)}<span class="sl wait"></span>{/each}
               {#if f.slides.length + slidesUp < SLIDES}
-                <label class="sl add" aria-label={t('ed.slidesAdd')}><ImagePlus size={20} /><input type="file" accept="image/*" multiple onchange={pickSlides} disabled={slidesUp > 0} /></label>
+                <label class="sl add" aria-label={sw('ed.slidesAdd')}><ImagePlus size={20} /><input type="file" accept="image/*" multiple aria-label={sw('ed.slidesAdd')} onchange={pickSlides} disabled={slidesUp > 0} /></label>
               {/if}
             </div>
-            <p class="hint">{t('ed.slidesHint')}</p>
+            <p class="hint">{sw('ed.slidesHint')}</p>
             <LookPick bind:color={f.color} colors={COLORS} lead={photoColor ? tintPhoto : undefined} />
-            <p class="hint">{t('ed.tint')}</p>
+            <p class="hint">{sw('ed.tint')}</p>
           {:else}
             <LookPick bind:emoji={f.emoji} bind:color={f.color} colors={COLORS} />
           {/if}
@@ -1025,8 +1038,8 @@
           {@const k = fmt}
           <CoverCrop photo={coverFor(art.cover, k) as Media} fmt={k} onpick={(p) => setCrop(k, p)} />
           <Group>
-            <Row icon={ImagePlus} title={t(uploading === k ? 'ed.docUp' : 'ed.fmtOwn')} accessory="chevron" onclick={() => ownIn?.click()} />
-            {#if f.formats[k]}<Row icon={RotateCcw} title={t('ed.fmtReset')} onclick={() => resetFormat(k)} />{/if}
+            <Row icon={ImagePlus} title={sw(uploading === k ? 'ed.docUp' : 'ed.fmtOwn')} accessory="chevron" onclick={() => ownIn?.click()} />
+            {#if f.formats[k]}<Row icon={RotateCcw} title={sw('ed.fmtReset')} onclick={() => resetFormat(k)} />{/if}
           </Group>
           <input bind:this={ownIn} type="file" accept="image/*" onchange={(ev) => pickOwn(ev, k)} hidden />
 
@@ -1034,31 +1047,31 @@
           <!-- online or a place: one or the other, and "place unknown" only for a place -->
           <Group><Row title={t('event.online')} accessory="switch" checked={f.online} onchange={(v) => { f.online = v; if (v) f.tba = false; }} /></Group>
           {#if f.online}
-            <Field label={t('ed.onlineLink')} bind:value={f.onlineUrl} type="url" inputmode="url" maxlength={500} placeholder="https://meet.google.com/…" enterkeyhint="done"
+            <Field label={sw('ed.onlineLink')} bind:value={f.onlineUrl} type="url" inputmode="url" maxlength={500} placeholder="https://meet.google.com/…" enterkeyhint="done"
               error={tried && err.place ? err.place : undefined} />
           {:else}
             {#if !f.tba}
               <Group>
                 {#each placeOptions as choice (choice)}
-                  <Row title={t(PLACE_OPTIONS[choice])} accessory="check" checked={placeType === choice} onclick={() => choosePlace(choice)} />
+                  <Row title={sw(PLACE_OPTIONS[choice])} accessory="check" checked={placeType === choice} onclick={() => choosePlace(choice)} />
                 {/each}
               </Group>
               {#if placeType === 'room'}
                 <CampusPlacePicker bind:value={() => f.place, (v) => { placeChoice = 'room'; f.place = v; }} placeholder="305"
                   error={tried && err.place ? err.place : undefined} />
               {:else if placeType === 'elsewhere'}
-                <Field label={t('ed.placeAddress')} bind:value={() => f.place, (v) => { placeChoice = 'elsewhere'; f.place = v; }} maxlength={600} enterkeyhint="done"
+                <Field label={sw('ed.placeAddress')} bind:value={() => f.place, (v) => { placeChoice = 'elsewhere'; f.place = v; }} maxlength={600} enterkeyhint="done"
                   error={tried && err.place && !badGis ? err.place : undefined} />
-                <Field label={t('ed.placeLink')} bind:value={f.placeUrl} type="url" inputmode="url" maxlength={500} placeholder="https://2gis.kz/…" enterkeyhint="done"
+                <Field label={sw('ed.placeLink')} bind:value={f.placeUrl} type="url" inputmode="url" maxlength={500} placeholder="https://2gis.kz/…" enterkeyhint="done"
                   error={tried && badGis ? err.place : undefined} />
               {/if}
             {/if}
-            <Group footnote={t('ed.tbaHint')}><Row title={t('ed.tba')} accessory="switch" checked={f.tba} onchange={(v) => (f.tba = v)} /></Group>
+            <Group footnote={sw('ed.tbaHint')}><Row title={sw('ed.tba')} accessory="switch" checked={f.tba} onchange={(v) => (f.tba = v)} /></Group>
           {/if}
 
         {:else if pick === 'about'}
-          <Field label={t('ed.about')} multiline rows={7} bind:value={f.description} maxlength={2000} placeholder={t('ed.aboutPh')} />
-          {#if !isMeeting && !f.teamOnly && !f.leaders}<p class="hint">{t('ce.aboutHint')}</p>{/if}<!-- only public events go to the AI (PLAN 9) -->
+          <Field label={sw('ed.about')} multiline rows={7} bind:value={f.description} maxlength={2000} placeholder={sw('ed.aboutPh')} />
+          {#if !isMeeting && !f.teamOnly && !f.leaders}<p class="hint">{t('ce.aboutHint')}</p>{/if}<!-- only public events go to the AI -->
           {#if session.board}
             {#if suggestion}
               <Notice tone="accent" title={t('ex.aiSuggest')}>
@@ -1077,77 +1090,77 @@
           <Segmented items={[{ value: 'free', label: t('ex.free') }, { value: 'paid', label: t('ex.paidSeg') }]} value={f.paid ? 'paid' : 'free'} label={t('ex.price')}
             onchange={(v) => { touch(); f.paid = v === 'paid'; }} />
           {#if f.paid}
-            <Field label={t('ed.price')} bind:value={f.price} type="number" inputmode="numeric" placeholder="2000" error={tried && err.price ? err.price : undefined} />
-            <Field label={t('ed.payTo')} bind:value={f.payTo} maxlength={80} placeholder={t('ed.payToPh')} error={tried && err.payTo ? err.payTo : undefined} />
-            <Field label={t('ed.payPhone')} bind:value={f.payPhone} type="tel" inputmode="tel" autocomplete="tel" placeholder="+7 (707) 123 45 67" error={tried && err.payPhone ? err.payPhone : undefined} />
-            <p class="hint">{t('ed.payHint')}</p>
-            <Field label={t('ed.freeFirst')} bind:value={f.freeFirst} type="number" inputmode="numeric" placeholder={t('ed.freeFirstPh')} error={tried && err.freeFirst ? err.freeFirst : undefined} />
-            <p class="hint">{t('ed.freeFirstHint')}</p>
-          {:else}<p class="hint">{t('ed.paidHint')}</p>{/if}
+            <Field label={sw('ed.price')} bind:value={f.price} type="number" inputmode="numeric" placeholder="2000" error={tried && err.price ? err.price : undefined} />
+            <Field label={sw('ed.payTo')} bind:value={f.payTo} maxlength={80} placeholder={sw('ed.payToPh')} error={tried && err.payTo ? err.payTo : undefined} />
+            <Field label={sw('ed.payPhone')} bind:value={f.payPhone} type="tel" inputmode="tel" autocomplete="tel" placeholder="+7 (707) 123 45 67" error={tried && err.payPhone ? err.payPhone : undefined} />
+            <p class="hint">{sw('ed.payHint')}</p>
+            <Field label={sw('ed.freeFirst')} bind:value={f.freeFirst} type="number" inputmode="numeric" placeholder={sw('ed.freeFirstPh')} error={tried && err.freeFirst ? err.freeFirst : undefined} />
+            <p class="hint">{sw('ed.freeFirstHint')}</p>
+          {:else}<p class="hint">{sw('ed.paidHint')}</p>{/if}
 
         {:else if pick === 'seats'}
           <!-- limited or not: picked by hand, nothing chosen until then -->
-          <Segmented items={[{ value: 'limited', label: t('ed.capLimited') }, { value: 'unlimited', label: t('ex.unlimited') }]} value={f.cap} label={t('ed.seats')}
+          <Segmented items={[{ value: 'limited', label: sw('ed.capLimited') }, { value: 'unlimited', label: t('ex.unlimited') }]} value={f.cap} label={sw('ed.seats')}
             onchange={(v) => { touch(); f.cap = v; }} />
-          {#if f.cap === 'limited'}<Field label={t('ed.seats')} bind:value={f.seats} type="number" inputmode="numeric" placeholder="50" error={tried && err.seats ? err.seats : undefined} />
-          {:else if f.cap === 'unlimited'}<p class="hint">{t('ed.capOpen')}</p>
+          {#if f.cap === 'limited'}<Field label={sw('ed.seats')} bind:value={f.seats} type="number" inputmode="numeric" placeholder="50" error={tried && err.seats ? err.seats : undefined} />
+          {:else if f.cap === 'unlimited'}<p class="hint">{sw('ed.capOpen')}</p>
           {:else if tried && err.seats}<p class="err">{err.seats}</p>{/if}
 
         {:else if pick === 'reg'}
           <!-- until the start, a date before it, or (free and uncapped) the end: one choice in sight -->
           <Segmented items={[{ value: 'start', label: t('ex.untilStart') }, { value: 'date', label: t('ex.untilDate') }, ...(lateOk ? [{ value: 'end', label: t('ex.untilEnd') }] : [])]}
             value={regMode} label={t('ex.regUntil')} onchange={(v) => { touch(); f.late = v === 'end'; deadlineOn(v === 'date'); }} />
-          {#if regMode === 'end'}<p class="hint">{t('ed.lateHint')}</p>
-          {:else if !lateOk}<p class="hint">{t('ed.lateOnly')}</p>{/if}
+          {#if regMode === 'end'}<p class="hint">{sw('ed.lateHint')}</p>
+          {:else if !lateOk}<p class="hint">{sw('ed.lateOnly')}</p>{/if}
           {#if regMode === 'date'}
             <div class="two">
-              <label class="fl" class:bad={tried && err.reg}><span>{t('ed.regDate')}</span><input type="date" bind:value={f.regDate} /></label>
-              <label class="fl" class:bad={tried && err.reg}><span>{t('ed.regTime')}</span><input type="time" bind:value={f.regTime} /></label>
+              <label class="fl" class:bad={tried && err.reg}><span>{sw('ed.regDate')}</span><input type="date" bind:value={f.regDate} /></label>
+              <label class="fl" class:bad={tried && err.reg}><span>{sw('ed.regTime')}</span><input type="time" bind:value={f.regTime} /></label>
             </div>
             {#if tried && err.reg}<p class="err">{err.reg}</p>{/if}
-            <p class="hint">{t('ed.deadlineHint')}</p>
+            <p class="hint">{sw('ed.deadlineHint')}</p>
           {/if}
 
         {:else if pick === 'who'}
           <!-- who it is for; "for first-years" is gone from the editor (an event that has it keeps it, sent back
                as it is), the phone is asked in "Questions at sign-up" -->
           {#if !f.partner && !plain}
-            <Group footnote={f.leaders ? t('ed.leadersHint') : initiative && !f.teamOnly && !onAfisha ? t('ed.noChannel') : undefined}>
+            <Group footnote={f.leaders ? sw('ed.leadersHint') : initiative && !f.teamOnly && !onAfisha ? sw('ed.noChannel') : undefined}>
               {#if oversee}<Row icon={Globe} title={t('ex.who')} value={whoVal} menu={whoMenu} />
-              {:else}<Row icon={Globe} title={t('ed.teamOnly')} accessory="switch" checked={f.teamOnly} onchange={(v) => (f.teamOnly = v)} />{/if}
-              {#if f.leaders}<Row icon={Crown} title={t('ex.leadersFrom')} value={t(LEAD[f.leadersFrom])} menu={leadMenu} />{/if}
+              {:else}<Row icon={Globe} title={sw('ed.teamOnly')} accessory="switch" checked={f.teamOnly} onchange={(v) => (f.teamOnly = v)} />{/if}
+              {#if f.leaders}<Row icon={Crown} title={t('ex.leadersFrom')} value={sw(LEAD[f.leadersFrom])} menu={leadMenu} />{/if}
               {#if f.teamOnly && tagsRead}
-                <Row icon={TagIcon} title={t('ed.meetingWho')} menu={tagMenu}
-                  value={f.forBoard ? t('ed.meetingBoard') : tags.find((g) => g.id === f.meetingTag)?.name ?? t('ed.meetingAll')} />
+                <Row icon={TagIcon} title={sw('ed.meetingWho')} menu={tagMenu}
+                  value={f.forBoard ? sw('ed.meetingBoard') : tags.find((g) => g.id === f.meetingTag)?.name ?? sw('ed.meetingAll')} />
               {/if}
-              <!-- a Head with a department calls only theirs (PLAN 35): required puts their department back -->
-              {#if f.teamOnly}<Row icon={CalendarCheck} title={t('ed.meeting')} accessory="switch" checked={f.meeting} onchange={(v) => { f.meeting = v; if (v && deptOnly) { f.meetingTag = ownDepts.includes(f.meetingTag ?? -1) ? f.meetingTag : ownDepts[0] ?? null; f.forBoard = false; } }} />{/if}
+              <!-- a Head with a department calls only theirs: required puts their department back -->
+              {#if f.teamOnly}<Row icon={CalendarCheck} title={sw('ed.meeting')} accessory="switch" checked={f.meeting} onchange={(v) => { f.meeting = v; if (v && deptOnly) { f.meetingTag = ownDepts.includes(f.meetingTag ?? -1) ? f.meetingTag : ownDepts[0] ?? null; f.forBoard = false; } }} />{/if}
             </Group>
           {/if}
-          {#if school}<Group footnote={t('ed.schoolOnlyHint')}>
-            <Row icon={GraduationCap} title={t('ed.schoolOnly', { school: nameOf(school) })} accessory="switch" checked={schoolOnly ?? !!saved?.school} onchange={(v) => (schoolOnly = v)} />
+          {#if school}<Group footnote={sw('ed.schoolOnlyHint')}>
+            <Row icon={GraduationCap} title={sw('ed.schoolOnly', { school: nameOf(school) })} accessory="switch" checked={schoolOnly ?? !!saved?.school} onchange={(v) => (schoolOnly = v)} />
           </Group>{/if}
 
         {:else if pick === 'more'}
           <!-- the rare things, each a row with its own page -->
           {#if tickets || teamsOk || f.teams}
             <Group caption={t('ex.tickets')}>
-              {#if tickets}<Row icon={ListChecks} title={t('ed.form')} value={tried && err.form ? '' : askVal} invalid={tried && !!err.form} accessory="chevron" onclick={() => open('form')} />{/if}
-              {#if teamsOk || f.teams}<Row icon={UsersRound} title={t('ed.teams')} value={tried && (err.teams || err.teamCap) ? '' : f.teams && teamsOk ? `${teamSize(+f.teamMin, +f.teamMax)}${+f.teamCap > 0 ? ' · ' + t('ed.teamCapN', { n: +f.teamCap }) : ''}` : t('ex.no')} invalid={tried && !!(err.teams || err.teamCap)} accessory="chevron" onclick={() => open('teams')} />{/if}
-              {#if tickets && !plain}<Row icon={HandHeart} title={t('ed.vol')} value={f.vol ? f.volN : t('ex.no')} accessory="chevron" onclick={() => open('vol')} />{/if}
+              {#if tickets}<Row icon={ListChecks} title={sw('ed.form')} value={tried && err.form ? '' : askVal} invalid={tried && !!err.form} accessory="chevron" onclick={() => open('form')} />{/if}
+              {#if teamsOk || f.teams}<Row icon={UsersRound} title={sw('ed.teams')} value={tried && (err.teams || err.teamCap) ? '' : f.teams && teamsOk ? `${teamSize(+f.teamMin, +f.teamMax)}${+f.teamCap > 0 ? ' · ' + sw('ed.teamCapN', { n: +f.teamCap }) : ''}` : t('ex.no')} invalid={tried && !!(err.teams || err.teamCap)} accessory="chevron" onclick={() => open('teams')} />{/if}
+              {#if tickets && !plain}<Row icon={HandHeart} title={sw('ed.vol')} value={f.vol ? f.volN : t('ex.no')} accessory="chevron" onclick={() => open('vol')} />{/if}
             </Group>
           {/if}
           <input class="doc-in" type="file" accept="application/pdf" bind:this={docPick} onchange={pickDoc} /><!-- outside: Rows' lines need them adjacent -->
           <Group>
-            {#if !plain}<Row icon={Clapperboard} title={t('ed.video')} value={vidN ? String(vidN) : t('ex.no')} accessory="chevron" onclick={() => open('video')} />{/if}
+            {#if !plain}<Row icon={Clapperboard} title={sw('ed.video')} value={vidN ? String(vidN) : t('ex.no')} accessory="chevron" onclick={() => open('video')} />{/if}
             {#if saved && !plain && !member}
               {#if saved.doc && !docUp}<Row icon={FileText} title={saved.doc.title ?? t('event.doc')} value={tn('ed.docPages', saved.doc.pages.length)}
-                menu={[{ label: t('ed.docReplace'), onselect: () => docPick?.click() }, { label: t('ed.photoRemove'), destructive: true, onselect: dropDoc }]} />
-              {:else if docUp}<Row icon={FileText} title={docName} value={t('ed.docUp')} />
-              {:else}<Row icon={FileText} title={t('ed.docAdd')} accessory="chevron" onclick={() => docPick?.click()} />{/if}
+                menu={[{ label: sw('ed.docReplace'), onselect: () => docPick?.click() }, { label: sw('ed.photoRemove'), destructive: true, onselect: dropDoc }]} />
+              {:else if docUp}<Row icon={FileText} title={docName} value={sw('ed.docUp')} />
+              {:else}<Row icon={FileText} title={sw('ed.docAdd')} accessory="chevron" onclick={() => docPick?.click()} />{/if}
             {/if}
             {#if coOk}<Row icon={Blend} title={t('co.invite')} value={coVal} accessory="chevron" onclick={() => open('cohost')} />{/if}
-            {#if canPartner && !isMeeting && (saved?.guestHost || known.partner)}<Row icon={Handshake} title={t('ed.partner')} value={tried && (err.host || err.link) ? '' : f.partner ? f.host.trim() || t('ed.need') : t('ex.no')}
+            {#if canPartner && !isMeeting && (saved?.guestHost || known.partner)}<Row icon={Handshake} title={sw('ed.partner')} value={tried && (err.host || err.link) ? '' : f.partner ? f.host.trim() || t('ed.need') : t('ex.no')}
               invalid={tried && !!(err.host || err.link)} accessory="chevron" onclick={() => open('partner')} />{/if}
             {#if full && !member && !f.placeUrl && !f.leaders && (!asStaff || lent)}<Row icon={Mail} title={t('studio.memoShort')} value={memoN ? String(memoN) : t('ex.no')} accessory="chevron" onclick={() => open('memo')} />{/if}
           </Group>
@@ -1159,17 +1172,17 @@
               {@const x = vids[slot]}
               <div class="vslot {slot}">
                 {#if x}
-                  <span class="vframe">{#if x.poster}<img src={x.poster.thumb} alt="" />{:else}<Clapperboard size={22} />{/if}
+                  <span class="vframe">{#if x.poster}<img draggable="false" src={x.poster.thumb} alt="" />{:else}<Clapperboard size={22} />{/if}
                     <!-- engine: IconButton xs over a picture -->
-                    <button class="rmx vx" onclick={() => dropVideo(slot)} aria-label={t('ed.photoRemove')}><X size={16} strokeWidth={2.6} /></button></span>
-                  <b>{x.status === 'ready' ? t('ed.videoReady') : t('ed.videoWork')}{#if x.duration} · {mmss(x.duration)}{/if}</b>
+                    <button class="rmx vx" onclick={() => dropVideo(slot)} aria-label={sw('ed.photoRemove')}><X size={16} strokeWidth={2.6} /></button></span>
+                  <b>{x.status === 'ready' ? sw('ed.videoReady') : sw('ed.videoWork')}{#if x.duration} · {mmss(x.duration)}{/if}</b>
                 {:else}
                   <label class="vframe add" class:busy={vUp[slot] >= 0}><Clapperboard size={22} />
                     {#if vUp[slot] >= 0}<i class="prog" style:width="{vUp[slot] * 100}%"></i>{/if}
-                    <input type="file" accept="video/*" onchange={(ev) => pickVideo(ev, slot)} disabled={vUp[slot] >= 0} /></label>
-                  <b>{vUp[slot] >= 0 ? t('ed.videoUp', { n: Math.round(vUp[slot] * 100) }) : t(slot === 'tall' ? 'ed.videoTall' : 'ed.videoWide')}</b>
+                    <input type="file" accept="video/*" aria-label={sw(slot === 'tall' ? 'ed.videoTall' : 'ed.videoWide')} onchange={(ev) => pickVideo(ev, slot)} disabled={vUp[slot] >= 0} /></label>
+                  <b>{vUp[slot] >= 0 ? sw('ed.videoUp', { n: Math.round(vUp[slot] * 100) }) : sw(slot === 'tall' ? 'ed.videoTall' : 'ed.videoWide')}</b>
                 {/if}
-                <i class="hint">{t(slot === 'tall' ? 'ed.videoHint' : 'ed.videoWideHint')}</i>
+                <i class="hint">{sw(slot === 'tall' ? 'ed.videoHint' : 'ed.videoWideHint')}</i>
               </div>
             {/each}
           </div>
@@ -1177,52 +1190,52 @@
         {:else if pick === 'form'}
           <!-- what a participant is asked, in one place: the phone first, a ready-made one; then the event's
                own questions (Oct 30): up to five, text or a choice; with the forum's policy section -->
-          <Group footnote={t('ed.formPhoneHint')}><Row icon={Phone} title={t('ed.formPhone')} accessory="switch" checked={f.needsPhone} onchange={(v) => (f.needsPhone = v)} /></Group>
+          <Group footnote={sw('ed.formPhoneHint')}><Row icon={Phone} title={sw('ed.formPhone')} accessory="switch" checked={f.needsPhone} onchange={(v) => (f.needsPhone = v)} /></Group>
           <!-- Secret Santa (server santa.py): sign-up asks a wishlist, the draw is in the event's management; fixed once drawn -->
           {#if !f.partner}<Group footnote={t('santa.edHint')}><Row icon={Gift} title={t('santa.title')} accessory="switch" checked={f.santa} disabled={!!saved?.santa?.drawn} onchange={(v) => (f.santa = v)} /></Group>{/if}
           {#if session.board}
           {#each f.form as q, i (i)}
             <div class="qc">
-              <div class="qrow"><Field label={t('cast.qText')} bind:value={q.label} maxlength={80} placeholder={t('ed.formQ')} />
-                <IconButton icon={X} kind="plain" size="s" label={t('ed.photoRemove')} onclick={() => (f.form = f.form.filter((_, k) => k !== i))} /></div>
-              <Segmented items={[{ value: 'text', label: t('ed.formText') }, { value: 'choice', label: t('ed.formChoice') }]} bind:value={q.kind} label={t('cast.qText')} />
-              {#if q.kind === 'choice'}<Field label={t('ed.formOptsL')} bind:value={q.opts} maxlength={300} placeholder={t('ed.formOpts')} />{/if}
-              <Group><Row title={t('ed.formReq')} accessory="switch" checked={q.required} onchange={(v) => (q.required = v)} /></Group>
+              <div class="qrow"><Field label={t('cast.qText')} bind:value={q.label} maxlength={80} placeholder={sw('ed.formQ')} />
+                <IconButton icon={X} kind="plain" size="s" label={sw('ed.photoRemove')} onclick={() => (f.form = f.form.filter((_, k) => k !== i))} /></div>
+              <Segmented items={[{ value: 'text', label: sw('ed.formText') }, { value: 'choice', label: sw('ed.formChoice') }]} bind:value={q.kind} label={t('cast.qText')} />
+              {#if q.kind === 'choice'}<Field label={sw('ed.formOptsL')} bind:value={q.opts} maxlength={300} placeholder={sw('ed.formOpts')} />{/if}
+              <Group><Row title={sw('ed.formReq')} accessory="switch" checked={q.required} onchange={(v) => (q.required = v)} /></Group>
             </div>
           {/each}
           {#if tried && err.form}<p class="err">{err.form}</p>{/if}
           {#if f.form.length < 5}<span class="lone"><Button kind="tinted" size="s" onclick={() => (f.form = [...f.form, { label: '', kind: 'text', opts: '', required: false }])}>
-            {#snippet icon()}<Plus size={16} />{/snippet}{t('ed.formAdd')}</Button></span>{/if}
-          <p class="hint">{t('ed.formHint')}</p>
+            {#snippet icon()}<Plus size={16} />{/snippet}{sw('ed.formAdd')}</Button></span>{/if}
+          <p class="hint">{sw('ed.formHint')}</p>
           {/if}
 
         {:else if pick === 'vol'}
           <!-- volunteers: students apply, the organizers say yes or no in the event's management -->
-          <Group footnote={t('ed.volHint')}><Row title={t('ed.vol')} accessory="switch" checked={f.vol} onchange={(v) => (f.vol = v)} /></Group>
+          <Group footnote={sw('ed.volHint')}><Row title={sw('ed.vol')} accessory="switch" checked={f.vol} onchange={(v) => (f.vol = v)} /></Group>
           {#if f.vol}
-            <Field label={t('ed.volN')} bind:value={f.volN} type="number" inputmode="numeric" />
-            <Group><Row title={t('ed.volSenior')} accessory="switch" checked={f.volSenior} onchange={(v) => (f.volSenior = v)} /></Group>
+            <Field label={sw('ed.volN')} bind:value={f.volN} type="number" inputmode="numeric" />
+            <Group><Row title={sw('ed.volSenior')} accessory="switch" checked={f.volSenior} onchange={(v) => (f.volSenior = v)} /></Group>
           {/if}
 
         {:else if pick === 'teams'}
           <!-- team events: captains make teams and invite by link, the organizers form the rest (Teams in the event's screen) -->
-          <Group footnote={!teamsOk ? t('ed.teamsFree') : f.paid ? t('ed.teamsPaid') : t('ed.teamsHint')}><Row title={t('ed.teamsOn')} accessory="switch" checked={f.teams && teamsOk} disabled={!teamsOk} onchange={(v) => (f.teams = v)} /></Group>
+          <Group footnote={!teamsOk ? sw('ed.teamsFree') : f.paid ? sw('ed.teamsPaid') : sw('ed.teamsHint')}><Row title={sw('ed.teamsOn')} accessory="switch" checked={f.teams && teamsOk} disabled={!teamsOk} onchange={(v) => (f.teams = v)} /></Group>
           {#if f.teams && teamsOk}
             <div class="two">
-              <Field label={t('ed.teamMin')} bind:value={f.teamMin} type="number" inputmode="numeric" />
-              <Field label={t('ed.teamMax')} bind:value={f.teamMax} type="number" inputmode="numeric" />
+              <Field label={sw('ed.teamMin')} bind:value={f.teamMin} type="number" inputmode="numeric" />
+              <Field label={sw('ed.teamMax')} bind:value={f.teamMax} type="number" inputmode="numeric" />
             </div>
             {#if err.teams}<p class="err">{err.teams}</p>{/if}
-            <Field label={t('ed.teamCap')} bind:value={f.teamCap} type="number" inputmode="numeric" placeholder={t('ex.unlimited')}
+            <Field label={sw('ed.teamCap')} bind:value={f.teamCap} type="number" inputmode="numeric" placeholder={t('ex.unlimited')}
               error={err.teamCap || undefined} />
-            {#if capSeats}<p class="t-foot capn">{t('ed.teamCapSeats', { n: capSeats })}</p>{/if}
+            {#if capSeats}<p class="t-foot capn">{sw('ed.teamCapSeats', { n: capSeats })}</p>{/if}
           {/if}
 
         {:else if pick === 'partner'}
-          <Group footnote={t('ed.partnerHint')}><Row title={t('ed.partner')} accessory="switch" checked={f.partner} onchange={(v) => (f.partner = v)} /></Group>
+          <Group footnote={sw('ed.partnerHint')}><Row title={sw('ed.partner')} accessory="switch" checked={f.partner} onchange={(v) => (f.partner = v)} /></Group>
           {#if f.partner}
-            <Field label={t('ed.partnerHost')} bind:value={f.host} maxlength={60} placeholder={t('ed.partnerHostPh')} error={tried && err.host ? err.host : undefined} />
-            <Field label={t('ed.partnerLink')} bind:value={f.link} type="url" inputmode="url" maxlength={500} placeholder="https://" error={tried && err.link ? err.link : undefined} />
+            <Field label={sw('ed.partnerHost')} bind:value={f.host} maxlength={60} placeholder={sw('ed.partnerHostPh')} error={tried && err.host ? err.host : undefined} />
+            <Field label={sw('ed.partnerLink')} bind:value={f.link} type="url" inputmode="url" maxlength={500} placeholder="https://" error={tried && err.link ? err.link : undefined} />
           {/if}
 
         {:else if pick === 'cohost'}
@@ -1253,14 +1266,14 @@
               {#if tickets}
                 <Row title={t('ex.price')} value={priceVal} />
                 {#if f.paid}
-                  <Row title={t('ed.payTo')} value={f.payTo} />
-                  <Row title={t('ed.payPhone')} value={f.payPhone} accessory="chevron" onclick={() => open('price')} />
+                  <Row title={sw('ed.payTo')} value={f.payTo} />
+                  <Row title={sw('ed.payPhone')} value={f.payPhone} accessory="chevron" onclick={() => open('price')} />
                 {/if}
-                <Row title={t('ed.seats')} value={seatsN ? String(seatsN) : f.cap === 'unlimited' ? t('ex.unlimited') : t('ed.capPick')} />
+                <Row title={sw('ed.seats')} value={seatsN ? String(seatsN) : f.cap === 'unlimited' ? t('ex.unlimited') : sw('ed.capPick')} />
                 <Row title={t('ex.regUntil')} value={regVal} />
               {:else if f.partner}
-                <Row title={t('ed.partnerHost')} value={f.host} />
-                <Row title={t('ed.partnerLink')} value={f.link} accessory="chevron" onclick={() => open('partner')} />
+                <Row title={sw('ed.partnerHost')} value={f.host} />
+                <Row title={sw('ed.partnerLink')} value={f.link} accessory="chevron" onclick={() => open('partner')} />
               {/if}
             </Group>
           {/if}

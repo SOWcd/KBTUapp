@@ -1,7 +1,7 @@
 // Shared data the screens read, kept in one place per entity so a change shows everywhere at once
 // (one home per thing). Actions update optimistically and roll back if the server says no.
 import { api, ApiErr, type ResearchAnswers, type ResearchSurvey, type ResearchRequest, type Support, type Sponsor, type AlbumPhoto, type GalleryAlbum, type GalleryPage, type AdminStats, type Inbox, type ClassItem, type Membership, type EventCard, type Chats, type Credits, type EventFull, type Friends, type Id, type Org, type PersonCard, type Post, type RegistryOrg, type ChatTree, type StaffMute, type TeamMember, type VolLedger, type Appeal, type SgQueue, type Solved, type TeamPick } from '../api';
-import type { DonationReview, MyRegistration, SantaChats, ScreenSession, TeamSetup, MeetupScans } from '../api';
+import type { DonationReview, MyRegistration, SantaChats, ScreenSession, TeamSetup, MeetupScans, LibState } from '../api';
 import { joinClasses } from '../classes';
 import { teamError } from '../teams';
 import { teamConsentOk, TEAM_CONSENT } from '../teamConsent';
@@ -64,6 +64,7 @@ export const data = $state({
   sg: null as SgQueue | null,                 // SG's queue (its granted people): with the app, never kept on the phone
   asks: null as Appeal[] | null,              // my questions to the help desk (ASK on): with the app, never kept on the phone
   helpq: null as SgQueue | null,              // the help desk's queue (its granted people): with the app, never kept on the phone
+  library: null as LibState | null,           // library seats (LIBRARY on for me): with the app, never kept on the phone
   vol: null as VolLedger | null,              // a club's volunteers ledger (its President and whom she grants): with the app, never kept on the phone (contacts)
   registry: null as RegistryOrg[] | null,
   chatTrees: null as ChatTree[] | null,       // DMP's tree of every club's groups (counts only): with the registry     // DMP's registry, this month: loaded with the app, never kept on the phone (contacts)
@@ -305,8 +306,8 @@ export function loadNews(join = false): Promise<void> {
 
 /** A club's events for Studio and its people for Team, kept per club; the club in view loads with the app, the others
  * the first time they're picked; every visit refreshes quietly. */
-export async function loadStudio(org: Id): Promise<void> {
-  try { data.studio[org] = await api.orgEvents(org); } catch { /* the last copy stays */ }
+export async function loadStudio(org: Id): Promise<boolean> {
+  try { data.studio[org] = await api.orgEvents(org); return true; } catch { return false; /* the last copy stays */ }
 }
 export async function loadTeam(org: Id): Promise<void> {
   try { data.team[org] = await api.team(org); } catch { data.team[org] ??= []; /* the last copy stays; never an endless placeholder */ }
@@ -334,6 +335,9 @@ export function volGone(e: unknown): boolean {
   return true;
 }
 
+export async function loadLibrary(): Promise<void> {
+  try { data.library = await api.library(); } catch { /* offline: the last copy stays */ }
+}
 export async function loadAppeals(): Promise<void> {
   try { const r = await api.appeals(); data.appeals = r.items; data.solved = r.solved; } catch { /* offline: the last copy stays */ }
 }
@@ -348,8 +352,8 @@ export async function loadHelpq(): Promise<void> {
   try { data.helpq = await api.helpQueue(); } catch (e) { if (e instanceof ApiErr && e.code !== 'unavailable') data.helpq = null; }
 }
 
-export async function loadVol(): Promise<void> {
-  try { data.vol = await api.volLedger(); } catch (e) { volGone(e); }
+export async function loadVol(): Promise<boolean> {
+  try { data.vol = await api.volLedger(); return true; } catch (e) { volGone(e); return false; }
 }
 
 export async function loadRegistry(): Promise<boolean> {
@@ -661,6 +665,7 @@ export function errorText(e: unknown): string {
     if (team) return t(team);
     if (e.code === 'closed') return e.message === 'deadline' ? t('event.regClosed') : t('event.closed');
     if (e.code === 'full') return t('event.full');
+    if (e.code === 'rate_limited' && e.message === 'unchecked') return t('pay.queue'); // a paid event's receipts wait for the organizer
     if (e.code === 'guest_list') return t('event.guestList'); // tickets only from the organizers' list
     if (e.code === 'forbidden' && e.message === 'team') return t('event.team');
     if (e.code === 'conflict' && e.message === 'answers') { void loadAfisha(); return t('qs.changed'); } // the questions changed meanwhile
@@ -699,7 +704,7 @@ export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void, team?: Team
     const agrees = !leaving && !!before.teamMax && !fullNow && !session.me?.teams?.consent;
     if (agrees && !(await sheets.ask({ title: t('tm.consentT'), text: t('tm.signupText'), ok: t('tm.signupOk'), cancel: t('common.cancel'),
       link: { label: t('tm.consentLink'), url: `${location.origin}/privacy?lang=${i18n.lang}` } }))) return;
-    // the event needs a phone and none is kept: asked right here, sent with the same tap and kept (PLAN 71)
+    // the event needs a phone and none is kept: asked right here, sent with the same tap and kept
     const phone = !leaving && before.needsPhone && !session.me?.student?.phone
       ? await sheets.askText({ title: t('pd.ask'), text: t('pd.askText'), ok: t('event.go'), cancel: t('common.cancel'), placeholder: '+7 (707) 123 45 67', max: 18, tel: true })
       : undefined;
@@ -763,7 +768,7 @@ export async function askDm(eid?: Id, again = false): Promise<void> {
   try { session.me = await api.dmOn(eid); haptic.ok(); say(t('dm.on'), 'speech_balloon_3d'); } catch { /* the next launch tells the server */ }
 }
 
-/** A leaders meeting (§4.10): "Can't make it" — the answer DMP sees; "I'll be there" is toggleGoing. */
+/** A leaders meeting: "Can't make it" — the answer DMP sees; "I'll be there" is toggleGoing. */
 export function declineInvite(id: Id, note?: string): void {
   asStudent(async () => {
     if (goingPending.has(id)) return;
@@ -786,7 +791,7 @@ export function toggleSaved(id: Id): void {
   }));
 }
 
-/** Apply to join, or withdraw a pending application after a question (§4.5). The button answers at once. */
+/** Apply to join, or withdraw a pending application after a question. The button answers at once. */
 export function toggleJoin(id: Id): void {
   asStudent(() => writing(async () => {
     const o = [...data.orgs, ...data.small].find((x) => x.id === id); if (!o) return;

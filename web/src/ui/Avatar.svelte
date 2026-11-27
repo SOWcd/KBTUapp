@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Avatar: the person's own photo or Telegram's (never the portal photo, SPEC §3). Tapping it opens the universal profile card.
+  // Avatar: the person's own photo or Telegram's (never the portal photo). Tapping it opens the universal profile card.
   import Founder from './Founder.svelte';
   import { sheets } from '../lib/state/sheets';
   import { prefetchPerson } from '../lib/state/data.svelte';
@@ -26,7 +26,7 @@
 {#snippet face()}
   {#if person.avatar && !broken}
     <!-- the person's tone under the photo while it loads (his own profile showed a white square first) -->
-    <img src={person.avatar} alt="" width={size} height={size} decoding="async" loading={size >= 64 ? 'eager' : 'lazy'} style="background:{tone}"
+    <img draggable="false" src={person.avatar} alt="" width={size} height={size} decoding="async" loading={size >= 64 ? 'eager' : 'lazy'} style="background:{tone}"
       onerror={() => (broken = true)} />
   {:else}
     <span class="ini" style="background:{tone};font-size:{Math.round(size * 0.38)}px">{initials}</span>

@@ -1,4 +1,4 @@
-"""SQLite: one file, WAL, foreign keys on (SPEC §5). Each request takes a connection of its own from a Pool (threads
+"""SQLite: one file, WAL, foreign keys on. Each request takes a connection of its own from a Pool (threads
 and worker processes stay apart); a write that checks and then inserts (the last seat) runs inside `tx`, which takes
 the write lock up front (BEGIN IMMEDIATE), so two requests can't both see a free seat."""
 from __future__ import annotations

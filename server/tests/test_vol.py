@@ -804,6 +804,13 @@ def test_never_ones_own_shift_even_unlinked(zz):
     assert c.post(f"/api/vol/people/{h['vol_id']}/link", headers=tma(P), json={"user": None}).status_code == 200
     assert c.post(f"/api/vol/shifts/{h['id']}/resolve", headers=tma(P), json={"left": None}).json()["message"] == "own"
     assert con.execute("SELECT out_at FROM vol_shifts WHERE id = ?", (h["id"],)).fetchone()[0] is None
+    # nor the President's (or a Vice's) edits by hand: a shift taken out, a miss added or dropped
+    mid = con.execute("INSERT INTO vol_misses (vol_id, n, by, at) VALUES (?, 1, ?, 0)", (h["vol_id"], pres)).lastrowid
+    for r in (c.patch(f"/api/vol/shifts/{h['id']}", headers=tma(P), json={"gone": True, "reason": "a duplicate"}),
+              c.post(f"/api/vol/people/{h['vol_id']}/misses", headers=tma(P), json={"n": -1, "reason": "excused"}),
+              c.post(f"/api/vol/misses/{mid}/drop", headers=tma(P), json={"reason": "typo"})):
+        assert r.status_code == 403 and r.json()["message"] == "own"
+    assert con.execute("SELECT gone_at FROM vol_shifts WHERE id = ?", (h["id"],)).fetchone()[0] is None
 
 
 def test_no_shift_after_finish(zz):

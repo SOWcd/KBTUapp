@@ -1,9 +1,9 @@
-"""HTTP layer (SPEC §6): FastAPI routes over logic.py, the Telegram initData check, sign-in with KBTU, share
+"""HTTP layer: FastAPI routes over logic.py, the Telegram initData check, sign-in with KBTU, share
 cards, and the built frontend with an SPA fallback.
 
 Run from server/:  .venv/bin/uvicorn kbtu.app:create --factory --port 8080
-Routes cover what the frontend's Api interface calls (web/src/lib/api/index.ts); the rest of SPEC §6 comes
-with the screens that need it. Handlers that only touch SQLite are plain functions (FastAPI runs them in its
+Routes cover what the frontend's Api interface calls (web/src/lib/api/index.ts); new ones come
+with the screens that need them. Handlers that only touch SQLite are plain functions (FastAPI runs them in its
 thread pool); those that wait on the network (Telegram) are async."""
 from __future__ import annotations
 
@@ -292,7 +292,7 @@ def viewer(request: Request, con: Con) -> Iterator[Viewer]:
         logic.log_action(con, v.id, "staff_event", f"event:{eid}", json.dumps({"do": f"{request.method} {request.scope['route'].path}", **({"full": True, "org": v.staff_org} if v.lent_full else {})}))
 
 def _upsert(con, tg: dict, admins: frozenset[int]) -> Viewer:
-    """The Telegram user as our user: created on the first call, names and photo kept fresh (SPEC §5)."""
+    """The Telegram user as our user: created on the first call, names and photo kept fresh."""
     t = logic.now()
     if tg["id"] >= logic.apple.SYNTH:  # never a Telegram ID (52 bits): the Apple-made accounts' range (logic/apple.py)
         raise ApiError("forbidden", "init_data")
@@ -557,6 +557,26 @@ def reports_viewer(request: Request, v: Me) -> Viewer:
 Reports = Annotated[Viewer, Depends(reports_viewer)]
 
 
+def library_viewer(request: Request, v: Me) -> Viewer:
+    """Library seats (logic/library.py): LIBRARY=1 everyone, staff the app's admins and moderators; off: not here."""
+    if not logic.library.on(request.app.state.cfg.library, v):
+        raise ApiError("not_found")
+    return v
+
+
+Library = Annotated[Viewer, Depends(library_viewer)]
+
+
+def library_admin(v: Library) -> Viewer:
+    """The admin's library routes whose body is big (the sticker pages): refused before a byte of it is read."""
+    if v.role != "admin":
+        raise ApiError("forbidden")
+    return v
+
+
+LibraryAdmin = Annotated[Viewer, Depends(library_admin)]
+
+
 def create(cfg: config.Config | None = None) -> FastAPI:
     cfg = cfg or config.load()
     logic.core._SHARED.clear(); logic.profiles._RARITY[0] = 0  # per-worker caches belong to one database (tests make many)
@@ -569,7 +589,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         logic.sync_levels(con)  # a new achievement or level counts what students already did
         logic.name_slugs(con)
         logic.fill_abbrs(con)
-        logic.oversight.reconcile_erased_admins(con, cfg.admins)
+        logic.oversight.drop_stale_admins(con, cfg.admins)
         logic.refill(con)  # Fill waitlist places made available by startup migrations.
         if cfg.seed:
             logic.seed_schools(con, Path(cfg.db_path).resolve().parent / "media")  # KBTU's schools, once
@@ -606,11 +626,13 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     app.router.route_class = _Route
     dist = Path(cfg.web_dist).resolve()
     photos = Path(cfg.db_path).resolve().parent / "media"   # next to the database: one volume to back up
-    receipts = Path(cfg.db_path).resolve().parent / "receipts"   # private (§4.3): never under /media, only through the API
+    receipts = Path(cfg.db_path).resolve().parent / "receipts"   # private: never under /media, only through the API
+    media.PURGE = (photos, f"https://{cfg.domain}/media/", cfg.cf_zone_id, cfg.cf_purge_token) if cfg.cf_zone_id and cfg.cf_purge_token else None
     # the "To calendar" link is signed by one worker and may be opened on another: one key for all, from the env
     logic.seats.ICS_KEY = hmac.new(cfg.token_key, b"kbtu-ics", hashlib.sha256).digest()
     logic.seats.REF_KEY = hmac.new(cfg.token_key, b"kbtu-event-ref", hashlib.sha256).digest()  # "My link"'s code
     logic.appeals.ASK = cfg.ask  # the bot's help-desk answer message goes only where the desk opens (ASK)
+    logic.library.MODE = cfg.library  # LIBRARY: the bot's seat messages go only while it is on
     logic.gallery.MODE = cfg.gallery  # GALLERY: who posts to the Gallery ("all", "staff"); empty: the albums alone
     logic.chatsync.POLICY = logic.CONSENT if cfg.chat_sync else ""  # clubs mirrored from their chats (CHAT_SYNC); empty: off
     logic.guests.KEY = hmac.digest(cfg.token_key, b"kbtu-guest-name", "sha256")
@@ -820,7 +842,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                                    **({"tgComment": True} if cfg.tgc_chat and logic.tgcomments.saved(con, v) else {}),
                                    **({"vol": x} if (x := logic.vol.summary(con, v)) else {}),
                                    **({"appeals": logic.appeals.summary(con, v)} if logic.appeals.on(con, cfg.appeals, v) else {}),
-                                   **({"ask": logic.appeals.ask_summary(con, v)} if logic.appeals.ask_on(con, cfg.ask, v) else {})}
+                                   **({"ask": logic.appeals.ask_summary(con, v)} if logic.appeals.ask_on(con, cfg.ask, v) else {}),
+                                   **({"library": logic.library.summary(con, v)} if logic.library.on(app.state.cfg.library, v) else {})}
 
     async def app_chats(uid: int, tg: int) -> None:
         """After /api/me's answer: am I in the app's channel and group (logic/appchats.py, once a day at most)."""
@@ -851,7 +874,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/me/delete")
     def ask_delete(con: Con, v: Me, body: dict | None = Body(None)):
-        """§4.8: in a week, with the way back meanwhile (logic.ask_delete); the bot's round runs it (outbox.send_due)."""
+        """Deleting my account: in a week, with the way back meanwhile (logic.ask_delete); the bot's round runs it (outbox.send_due)."""
         return logic.ask_delete(con, v, (body or {}).get("photos") is True)
 
     @app.post("/api/me/consent")
@@ -994,8 +1017,6 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             raise ApiError("bad_input")
         if not ms:
             raise ApiError("forbidden", "ms_first")
-        if STUDENT_ID.fullmatch(ms.get("employeeId") or "") and ms["employeeId"] != sid:
-            raise ApiError("conflict", "sid_mismatch")  # Check the directory ID when KBTU supplies it.
         now = logic.now()
         with db.tx(con):
             if logic.one(con, "SELECT 1 FROM students WHERE user_id = ?", v.id):
@@ -1677,7 +1698,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     # ------------------------------------------------------------ Studio
 
-    # ---- friends (§4.7) ----
+    # ---- friends ----
     @app.get("/api/friends")
     def friends(con: Con, v: Me):
         return logic.friends(con, v)
@@ -2088,6 +2109,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def team_link_off(oid: int, con: Con, v: Me):
         logic.team_link_off(con, v, oid)
 
+    @app.post("/api/orgs/{oid}/team-link/back")  # Undo of turning it off: the same link again, moments later
+    def team_link_back(oid: int, con: Con, v: Me):
+        return logic.team_link_back(con, v, oid)
+
     @app.post("/api/invites/{token}")
     def accept_invite(token: str, con: Con, v: Me):
         return logic.accept_invite(con, v, token)
@@ -2128,7 +2153,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def update_member(oid: int, uid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.update_member(con, v, oid, uid, body)
 
-    # Team 2.0 (§2b): the club's roles and tags, probation, removal by request, bans
+    # Team 2.0: the club's roles and tags, probation, removal by request, bans
     @app.get("/api/orgs/{oid}/team")
     def team_setup(oid: int, con: Con, v: Me):
         return logic.team_setup(con, v, oid)
@@ -2283,7 +2308,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             return logic.me(con, v)
         return await run_in_threadpool(done)
 
-    # paid events (§4.3): the receipt is the body, like /api/photos; its image only through the API, to whom may see it
+    # paid events: the receipt is the body, like /api/photos; its image only through the API, to whom may see it
     @app.post("/api/events/{eid}/receipt")
     async def upload_receipt(eid: int, request: Request, con: Con, v: Me):
         data = await read_upload(request)
@@ -2311,7 +2336,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def review_receipt(rid: int, con: Con, v: Me, body: dict = Body(...)):
         logic.review_receipt(con, v, rid, body.get("reject"), body.get("why"))
 
-    # comments under posts and events, reports (§4.10)
+    # comments under posts and events, reports
     @app.get("/api/{kind}s/{tid}/comments")
     def get_comments(kind: str, tid: int, con: Con, v: Me):
         return logic.comments(con, v, kind, tid)
@@ -2470,7 +2495,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                                                logic.subjects.on(now_cfg.subjects_file))
             if logic.assistant.DOCS:
                 year = logic.assistant.intake(logic.one(con, "SELECT course FROM students WHERE user_id = ?", v.id))
-                msgs = await run_in_threadpool(logic.assistant.with_docs, msgs, logic.assistant.docs_query(body), await question_vec(body), year)
+                msgs = await run_in_threadpool(logic.assistant.with_docs, msgs, logic.assistant.docs_query(body),
+                                               await question_vec(body), year, ok=ok)
             # Disable reasoning so the token budget goes to the cited answer.
             # Hedge slow responses with a second key after llm.HEDGE seconds.
             # Google first, for this answer alone (policy section 5), only with this student's own yes
@@ -2584,6 +2610,77 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         if student and v.student:  # students with the forum's switch and its policy section (agreed to), like a forum post (a guest: 401 below)
             board_writer(request, board_viewer(request, v), con)
         logic.mapflaws.report(con, v, body, student)
+
+    # library seats (logic/library.py, LIBRARY): the sheet, a scanned table, a seat, "nobody here" and its answers;
+    # the room's big screen by its key (seat states only); the admin's rooms, tables and sticker sheet
+    @app.get("/api/library")
+    def library_state(con: Con, v: Library, response: Response):
+        response.headers["Cache-Control"] = "private, no-store"
+        return logic.library.state(con, v)
+
+    @app.post("/api/library/table")
+    def library_table(con: Con, v: Library, body: dict = Body(...)):
+        return logic.library.table(con, v, body)
+
+    @app.post("/api/library/sit")
+    def library_sit(con: Con, v: Library, body: dict = Body(...)):
+        return logic.library.sit(con, v, body)
+
+    @app.post("/api/library/report")
+    def library_report(con: Con, v: Library, body: dict = Body(...)):
+        return logic.library.report(con, v, body)
+
+    @app.post("/api/library/still")
+    def library_still(con: Con, v: Library, body: dict = Body(...)):
+        return logic.library.still(con, v, body)
+
+    @app.post("/api/library/here")
+    def library_here(con: Con, v: Library):
+        return logic.library.here(con, v)
+
+    @app.post("/api/library/leave")
+    def library_leave(con: Con, v: Library):
+        return logic.library.leave(con, v)
+
+    @app.delete("/api/library/consent", status_code=204)
+    def library_withdraw(con: Con, v: Library):
+        logic.library.withdraw(con, v)
+
+    @app.get("/api/library/screen/{key}")
+    def library_screen(key: str, con: Con, request: Request, response: Response):
+        if not request.app.state.cfg.library:
+            raise ApiError("not_found")
+        response.headers["Cache-Control"] = "no-store"
+        return logic.library.screen(con, key)
+
+    @app.get("/api/admin/library")
+    def library_rooms(con: Con, v: Library, response: Response):
+        response.headers["Cache-Control"] = "private, no-store"
+        return logic.library.admin_list(con, v)
+
+    @app.post("/api/admin/library/rooms")
+    def library_add_room(con: Con, v: Library, body: dict = Body(...)):
+        return logic.library.add_room(con, v, body)
+
+    @app.patch("/api/admin/library/rooms/{rid}")
+    def library_edit_room(rid: int, con: Con, v: Library, body: dict = Body(...)):
+        return logic.library.edit_room(con, v, rid, body)
+
+    @app.post("/api/admin/library/rooms/{rid}/tables")
+    def library_add_tables(rid: int, con: Con, v: Library, body: dict = Body(...)):
+        return logic.library.add_tables(con, v, rid, body)
+
+    @app.patch("/api/admin/library/tables/{tid}")
+    def library_edit_table(tid: int, con: Con, v: Library, body: dict = Body(...)):
+        return logic.library.edit_table(con, v, tid, body)
+
+    @app.post("/api/admin/library/rooms/{rid}/stickers", status_code=204)
+    async def library_stickers(rid: int, con: Con, v: LibraryAdmin, request: Request,
+                               body: object = Depends(json_body(logic.library.PAGES * logic.library.PAGE_BYTES * 4 // 3 + 4096))):
+        """The sticker sheet the app drew, as a PDF into the admin's chat with the bot (it prints from any phone)."""
+        room, pdf = await run_in_threadpool(logic.library.stickers, con, v, rid, body)
+        lang = logic.one(con, "SELECT lang FROM users WHERE id = ?", v.id)["lang"]
+        await send_file(request.state.tg["id"], "stickers.pdf", pdf, texts.pick(texts.BOT, lang)["lib_stickers"][0].format(room=room), "application/pdf")  # a plain caption: no HTML escaping
 
     # Native research: verified students answer once; proposals are reviewed only in Admin.
     research_body = Depends(json_body(logic.research.BODY_MOST))
@@ -2712,11 +2809,12 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         u = logic.one(con, "SELECT tg_id, lang FROM users WHERE id = ?", v.id)
         await send_file(u["tg_id"], *texts.attendees_csv(u["lang"], e["title"], people))
 
-    async def send_file(tg_id: int, name: str, data: bytes, caption: str) -> None:
-        """A CSV into the person's own chat with the bot (asked for by them): it opens on any phone and can be forwarded."""
+    async def send_file(tg_id: int, name: str, data: bytes, caption: str, mime: str = "text/csv") -> None:
+        """A file (a CSV, the library's stickers) into the person's own chat with the bot (asked for by them): it opens
+        on any phone and can be forwarded."""
         try:
-            async with httpx.AsyncClient(timeout=20) as http:
-                r = await bot._tg(cfg, http, "sendDocument", {"chat_id": str(tg_id), "caption": caption}, files={"document": (name, data, "text/csv")})
+            async with httpx.AsyncClient(timeout=60) as http:
+                r = await bot._tg(cfg, http, "sendDocument", {"chat_id": str(tg_id), "caption": caption}, files={"document": (name, data, mime)})
             answer = r.json()
         except (httpx.HTTPError, ValueError) as exc:
             log.warning("file: %s", type(exc).__name__)
@@ -2727,7 +2825,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             log.warning("file: %s", answer.get("description"))
             raise ApiError("unavailable", "telegram")
 
-    # ------------------------------------------------------------ starting a club (§4.6)
+    # ------------------------------------------------------------ starting a club
 
     @app.get("/api/club-applications/mine")
     def my_club_application(con: Con, v: Me):
@@ -2755,7 +2853,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def decide_official(rid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.decide_official(con, v, rid, bool(body.get("approve")), body.get("reason"))
 
-    # ------------------------------------------------------------ the chats directory (§4.11)
+    # ------------------------------------------------------------ the chats directory
 
     @app.get("/api/chats")
     def list_chats(con: Con, v: Me):
@@ -2807,9 +2905,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         logic.stats.add(con, v.id, body)
 
     @app.post("/api/stats/andr", status_code=204)
-    def android_page_stats(con: Con, k: str = ""):
-        """kbtu.sow.kz/android.html's steps (a sendBeacon, signed out): the Android tester funnel's counts, no person"""
-        logic.stats.page_hit(con, k)
+    def android_page_stats(request: Request, con: Con, k: str = ""):
+        """kbtu.sow.kz/android.html's steps (a sendBeacon, signed out): the Android tester funnel's counts, no person
+        (the address only throttles, in memory, this minute)"""
+        logic.stats.page_hit(con, k, _visitor_ip(request))
 
     @app.get("/api/admin/stats")
     def admin_stats(con: Con, v: Me):
@@ -3012,7 +3111,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def admin_delete_event(eid: int, con: Con, v: Me):
         logic.admin_delete_event(con, v, eid)  # hidden now, gone a day later (the Undo's day)
 
-    # ------------------------------------------------------------ the clubs registry for DMP (§4.13)
+    # ------------------------------------------------------------ the clubs registry for DMP
 
     @app.get("/api/registry/orgs")
     def registry(con: Con, v: Me, back: int = 0):
@@ -3096,20 +3195,20 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                     raise ApiError("need_student")
                 start = f"r_{logic._qr_code(con, v.id, 'link_code')}"
                 fields = {"name": logic.shown_name(logic.one(con, logic.PERSON + " WHERE u.id = ?", v.id))}
-            elif kind == "join":  # a one-time member link (§4.5), Vice+; each card is a fresh link; many: the team's 7-day link
+            elif kind == "join":  # a one-time member link, Vice+; each card is a fresh link; many: the team's 7-day link
                 link = logic.team_link(con, v, ref) if body.get("many") is True else logic.invite(con, v, ref)
                 start = f"join_{ref}_{link['token']}"
                 fields = {"club": logic.one(con, "SELECT name FROM orgs WHERE id = ?", ref)["name"]}
                 if "expiresAt" in link:
                     kind, fields["until"] = "jm", texts.when(link["expiresAt"], lang).split(",")[0]
-            else:  # a new club's one-time President link (§2), the admin; each card is a fresh link
+            else:  # a new club's one-time President link, the admin; each card is a fresh link
                 start = f"pres_{ref}_{logic.president_link(con, v, ref)['token']}"
                 fields = {"club": logic.one(con, "SELECT name FROM orgs WHERE id = ?", ref)["name"]}
             title, text, button = texts.share_invite(kind, lang, **fields)
             result = {"type": "article", "id": f"{kind}-{ref}-{stamp}", "title": title,
                       "input_message_content": {"message_text": text, "parse_mode": "HTML", "link_preview_options": {"is_disabled": True}},
                       "reply_markup": {"inline_keyboard": [[{"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp={start}"}]]}}
-        elif kind == "aw":  # an achievement of mine (§4.11): the reader's button opens their own progress toward it
+        elif kind == "aw":  # an achievement of mine: the reader's button opens their own progress toward it
             code = body.get("code")
             a = next((x for x in logic.achievements(con, v.id) if x["code"] == code and x["level"] > 0), None) if v.student and code not in logic.PRIVATE and code != "activist" else None  # Chief activist counts anonymous posts: never shared
             if not a:

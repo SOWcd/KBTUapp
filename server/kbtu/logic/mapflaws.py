@@ -1,6 +1,7 @@
 """The map's flaws, marked in the app (endless small mistakes, and screenshots bloat the work): a long
 press on the plan, a line of text, and the spot lands in the admin's list with its floor and plan units. The app's staff
-mark ten a day each; students three, with the forum's switch (its policy section covers it). Fixed ones go 30 days after."""
+mark ten a day each; students three, with the forum's switch (its policy section covers it). Fixed ones go 30 days after;
+unresolved ones go 180 days after submission."""
 from __future__ import annotations
 
 import math
@@ -11,6 +12,7 @@ from .core import ApiError, Viewer, need_student, now, one, rows
 
 A_DAY, A_DAY_STUDENT = 10, 3
 KEEP = 30 * 86400
+OPEN_KEEP = 180 * 86400
 _CTRL = re.compile("[\x00-\x1f\x7f-\x9f\u202a-\u202e\u2066-\u2069]")
 
 
@@ -60,4 +62,5 @@ def done(con, v: Viewer, fid: int, on: object = True) -> None:
 
 
 def sweep(con) -> None:
-    con.execute("DELETE FROM map_flaws WHERE done_at < ?", (now() - KEEP,))
+    con.execute("DELETE FROM map_flaws WHERE done_at <= ? OR (done_at IS NULL AND created_at <= ?)",
+                (now() - KEEP, now() - OPEN_KEEP))

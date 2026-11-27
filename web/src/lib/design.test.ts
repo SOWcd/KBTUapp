@@ -5,7 +5,7 @@ import ceilings from './design-ratchet.json';
 // down, and so may color-mix() (iOS before 16.2 drops the whole declaration: Telegram still runs there). Each file's
 // count today is its ceiling (design-ratchet.json); a screen moved onto the tokens lowers its own.
 // After lowering on purpose: UPDATE_RATCHET=1 npx vitest run src/lib/design.test.ts, then review the JSON's diff.
-// Two more since Nov 3 (ui-engine-audit.md §4): `weight`, font weights off the scale 450 / 500 (--fw-row's) / 600 /
+// Two more since Nov 3: `weight`, font weights off the scale 450 / 500 (--fw-row's) / 600 /
 // 700 / 800; `legacy`, uses of base.css's old classes (.set-row / .set-group / .set-cap / .set-foot, .field, .switch,
 // .seg) that ui/Row, Group, Field and Segmented replace: both may only go down as the screens move.
 // ponytail: regex counts, not a CSS parser; a false hit only makes a ceiling one higher than it needs to be

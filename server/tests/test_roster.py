@@ -17,8 +17,43 @@ def _ach_codes(person: dict) -> dict:
     return {x["code"]: x["level"] for x in a} | {v["code"]: int(v["have"]) for x in a for v in x.get("variants", [])}
 
 
+def test_prefill_intake_clock_survives_reloads_and_delayed_rest(env, monkeypatch):
+    _, cfg = env
+    con = db.connect(cfg.db_path)
+    loaded = logic.now()
+    clock = [loaded]
+    set_clock(monkeypatch, lambda: clock[0])
+    good = {"email": "example@kbtu.kz", "student_id": "25B010001", "first": "Example", "last": "Student"}
+    rest = {"first": "Other", "last": "Student"}  # no usable mail or ID still gets a deadline
+    logic.account.prefill_import(con, [good, rest], "first")
+    clock[0] += 86400
+    logic.account.prefill_import(con, [good], "second")
+    logic.account.prefill_rest_import(con, [good, rest], "first")
+    for table in ("prefill", "prefill_rest"):
+        assert [r[0] for r in con.execute(f"SELECT loaded_at FROM {table}")] == [loaded]
+    clock[0] = loaded + logic.account.PREFILL_KEEP + 86400
+    with pytest.raises(ValueError):
+        logic.account.prefill_rest_import(con, [rest], "second")
+    assert not con.execute("SELECT 1 FROM meta WHERE key = 'prefill_rest:second'").fetchone()
+
+
+@pytest.mark.parametrize("known_load", [False, True])
+def test_prefill_retention_migration_dates_legacy_rows(env, known_load):
+    _, cfg = env
+    con = db.connect(cfg.db_path)
+    for table in ("prefill", "prefill_rest"):
+        con.execute(f"ALTER TABLE {table} DROP COLUMN loaded_at")
+        con.execute(f"INSERT INTO {table} (email, student_id) VALUES ('example@kbtu.kz', '25B010001')")
+    if known_load:
+        con.execute("INSERT INTO meta (key, value) VALUES ('prefill_list:old', '100'), ('prefill_list:new', '200')")
+    con.execute("PRAGMA user_version = 260")
+    db.init(cfg.db_path)
+    for table in ("prefill", "prefill_rest"):
+        assert con.execute(f"SELECT loaded_at FROM {table}").fetchone()[0] == (100 if known_load else 0)
+
+
 def test_roster_name_match():
-    """PLAN 95's name check (made-up names): two words shared in any order and spelling, Cyrillic or Latin, Kazakh
+    """The roster load's name check (made-up names): two words shared in any order and spelling, Cyrillic or Latin, Kazakh
     letters, a patronymic more; one shared word isn't enough."""
     from kbtu import roster
     erlan, nurlan = "\u0415\u0440\u043b\u0430\u043d", "\u041d\u0443\u0440\u043b\u0430\u043d\u043e\u0432"   # Yerlan Nurlanov in Russian
@@ -29,11 +64,17 @@ def test_roster_name_match():
     assert [roster.classify(p) for p in ("member", "President", "Vice president", "Head of SMM", "HR", "ex president")] == [
         ("member", None, None), ("president", None, None), ("vice", None, None), ("head", "Head of SMM", "SMM"), ("member", "HR", None),
         ("member", "ex president", None)]
+    assert roster.classify("Executive Head") == ("head", "Executive Head", "Executive")
+    assert roster.classify("Expert") == ("member", "Expert", None)
+    for p in ("Ex Head", "Ex. Head", "Ex-Head"):
+        assert roster.classify(p) == ("member", p, None)
+    dept = "\u0426\u0438\u0444\u0440\u043e\u0432\u0430\u044f \u0433\u0440\u0443\u043f\u043f\u0430"
+    assert roster.classify(f"Vice Head of {dept}") == ("member", f"Vice Head of {dept}", dept)
     assert (roster.course_of("23BD", 2026), roster.course_of("3rd year"), roster.tg_of("@Some_User"), roster.tg_of("+77001234567")) == (4, 3, "some_user", None)
 
 
 def test_roster_load_and_join(env):
-    """PLAN 95 with made-up rows: the load is idempotent and makes missing clubs official; a student already in the app
+    """The roster load with made-up rows: the load is idempotent and makes missing clubs official; a student already in the app
     whose university email and name match joins at once (role, position as the club role's name, department, city, year,
     phone) with a toast once; listed but not signed in with Microsoft: a welcome with the club and position only; the
     username but another name: asked without the phone or city; "Yes, it's me" requests approval, the claim
@@ -85,8 +126,42 @@ def test_roster_load_and_join(env):
     assert roster.asks(con, bek["id"]) and not con.execute("SELECT phone FROM students WHERE user_id = ?", (bek["id"],)).fetchone()[0]
 
 
+def test_roster_claim_decisions(env):
+    c, cfg = env
+    pres, ann, bek, cal = (login(c, tg, name)["id"] for tg, name in ((70, "pres"), (71, "ann"), (72, "bek"), (73, "cal")))
+    con = db.connect(cfg.db_path)
+    oid = logic.create_org(con, None, "Chess", "CH", "crown_3d", True)
+    logic.set_role(con, None, pres, oid, "president", "test")
+    rid = con.execute("""INSERT INTO roster_pending (key, org_id, sheet, role, tg, created_at)
+        VALUES ('k1', ?, 's', 'member', 'old_handle', 0)""", (oid,)).lastrowid
+    claim, decide = f"/api/roster/{rid}/claim", f"/api/roster/requests/{rid}"
+
+    def handle(tg):
+        return {"Authorization": "tma " + auth.sign_init_data({"id": tg, "first_name": "X", "username": "old_handle"}, BOT)}
+
+    for tg in (71, 72):  # the handle passes from one student to another
+        assert c.post(claim, headers=handle(tg)).status_code == 204
+        assert c.post(decide, headers=tma(70), json={"ok": False}).status_code == 204
+    for tg in (71, 72):
+        assert c.post(claim, headers=handle(tg)).status_code == 404
+    assert [r[0] for r in con.execute("SELECT user_id FROM roster_rejections WHERE row_id = ? ORDER BY user_id", (rid,))] == [ann, bek]
+
+    assert c.post(claim, headers=handle(73)).status_code == 204
+    con.execute("INSERT INTO org_bans (org_id, user_id, created_at) VALUES (?, ?, 0)", (oid, cal))
+    decision = c.post(decide, headers=tma(70), json={"ok": True})
+    assert decision.status_code == 403 and decision.json()["message"] == "banned"
+    assert not con.execute("SELECT 1 FROM audit_log WHERE action = 'roster_ok'").fetchone()
+    assert not con.execute("SELECT 1 FROM org_members WHERE user_id = ?", (cal,)).fetchone()
+
+    con.execute("DELETE FROM org_bans WHERE org_id = ? AND user_id = ?", (oid, cal))
+    assert c.post(decide, headers=tma(70), json={"ok": True}).status_code == 204
+    assert con.execute("SELECT role FROM org_members WHERE org_id = ? AND user_id = ?", (oid, cal)).fetchone()[0] == "member"
+    assert con.execute("SELECT COUNT(*) FROM audit_log WHERE action = 'roster_ok'").fetchone()[0] == 1
+    assert not con.execute("SELECT 1 FROM roster_rejections WHERE row_id = ?", (rid,)).fetchone()
+
+
 def test_roster_app_wins(env):
-    """PLAN 95, students already in the app: what the app has wins. A membership held keeps its role (no
+    """The roster load, students already in the app: what the app has wins. A membership held keeps its role (no
     promotion, no demotion); a missing one is added, a President on the sheet where the club has another in the app
     comes in as Vice (counted in the load's summary); department, title, city, phone and year fill only what's empty."""
     from kbtu import roster

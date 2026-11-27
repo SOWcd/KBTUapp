@@ -732,6 +732,46 @@ CREATE TABLE kri_consents (  -- IF NOT EXISTS: tests rewind user_version
       user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
       version TEXT NOT NULL,
       at INTEGER NOT NULL) STRICT;
+CREATE TABLE lib_consents (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      version TEXT NOT NULL,
+      at      INTEGER NOT NULL
+    ) STRICT;
+CREATE TABLE lib_reports (
+      id          INTEGER PRIMARY KEY,
+      sit_id      INTEGER NOT NULL REFERENCES lib_sits(id) ON DELETE CASCADE,
+      reporter_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at  INTEGER NOT NULL,
+      answered_at INTEGER,
+      still_at    INTEGER,
+      false_at    INTEGER
+    ) STRICT;
+CREATE TABLE lib_rooms (
+      id         INTEGER PRIMARY KEY,
+      name       TEXT NOT NULL,
+      screen     TEXT NOT NULL UNIQUE,
+      created_at INTEGER NOT NULL,
+      gone_at    INTEGER
+    ) STRICT;
+CREATE TABLE lib_sits (
+      id         INTEGER PRIMARY KEY,
+      table_id   INTEGER NOT NULL REFERENCES lib_tables(id) ON DELETE CASCADE,
+      seat       INTEGER NOT NULL,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      started_at INTEGER NOT NULL,
+      until      INTEGER NOT NULL,
+      ended_at   INTEGER,
+      why        TEXT
+    ) STRICT;
+CREATE TABLE lib_tables (
+      id         INTEGER PRIMARY KEY,
+      room_id    INTEGER NOT NULL REFERENCES lib_rooms(id) ON DELETE CASCADE,
+      label      TEXT NOT NULL,
+      seats      INTEGER NOT NULL CHECK (seats BETWEEN 1 AND 12),
+      code       TEXT NOT NULL UNIQUE,
+      created_at INTEGER NOT NULL,
+      gone_at    INTEGER
+    ) STRICT;
 CREATE TABLE map_flaws (
       id         INTEGER PRIMARY KEY,
       user_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -778,6 +818,11 @@ CREATE TABLE org_bans (
         by_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
         created_at INTEGER NOT NULL,
         PRIMARY KEY (org_id, user_id)
+    ) STRICT;
+CREATE TABLE org_flags (  -- IF NOT EXISTS: tests rewind user_version
+      org_id         INTEGER PRIMARY KEY REFERENCES orgs(id) ON DELETE CASCADE,
+      auto_publish   INTEGER NOT NULL DEFAULT 0 CHECK (auto_publish IN (0, 1)),
+      guests_private INTEGER NOT NULL DEFAULT 0 CHECK (guests_private IN (0, 1))
     ) STRICT;
 CREATE TABLE org_history (
       id      INTEGER PRIMARY KEY,
@@ -881,7 +926,7 @@ CREATE TABLE prefill (
       school      TEXT,
       phone       TEXT,
       came        INTEGER NOT NULL DEFAULT 0 CHECK (came IN (0, 1))
-    ) STRICT;
+    , loaded_at INTEGER NOT NULL DEFAULT 0) STRICT;
 CREATE TABLE prefill_rest (
       id          INTEGER PRIMARY KEY,
       email       TEXT,
@@ -893,7 +938,7 @@ CREATE TABLE prefill_rest (
       school      TEXT,
       phone       TEXT,
       came        INTEGER NOT NULL DEFAULT 0 CHECK (came IN (0, 1))
-    ) STRICT;
+    , loaded_at INTEGER NOT NULL DEFAULT 0) STRICT;
 CREATE TABLE profile_views (
       day       INTEGER NOT NULL,   -- Almaty day number
       viewer_id INTEGER NOT NULL,
@@ -1050,7 +1095,7 @@ CREATE TABLE "reports" (
         created_at INTEGER NOT NULL,
         resolved_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
         resolved_at INTEGER
-    ) STRICT;
+    , body TEXT) STRICT;
 CREATE TABLE research_answers (
       id TEXT PRIMARY KEY NOT NULL,
       form_id INTEGER NOT NULL REFERENCES forms(id) ON DELETE CASCADE,
@@ -1104,6 +1149,11 @@ CREATE TABLE roster_pending (
         claimed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,  -- "Yes, it's me" on another name: for the club to confirm
         created_at INTEGER NOT NULL
     , door_key TEXT) STRICT;
+CREATE TABLE roster_rejections (
+      row_id  INTEGER NOT NULL REFERENCES roster_pending(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (row_id, user_id)
+    ) STRICT;
 CREATE TABLE roster_toasts (
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         org_id  INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
@@ -1369,7 +1419,7 @@ CREATE TABLE tgc_comments (
       review     INTEGER NOT NULL DEFAULT 0 CHECK (review IN (0, 1)),  -- deleted on the reports and the AI: a moderator confirms or restores
       shown      INTEGER NOT NULL DEFAULT 0 CHECK (shown IN (0, 1)),   -- deleted, and its author (whom the bot can't write to) saw it in the app
       rule       TEXT CHECK (rule IN ('spam', 'insult', 'danger', 'other')),  -- the rule it broke: the AI's guess, then the moderator's word
-      dm_id      INTEGER, clause TEXT CHECK (clause IN ('abuse', 'fake', 'spam', 'pdata', 'disrupt', 'other')),                               -- the bot's message to its author: a verdict edits it in place
+      dm_id      INTEGER, clause TEXT CHECK (clause IN ('abuse', 'fake', 'spam', 'pdata', 'disrupt', 'other')), dm_chat_id INTEGER,                               -- the bot's message to its author: a verdict edits it in place
       UNIQUE (chat_id, msg_id)
     ) STRICT;
 CREATE TABLE tgc_reports (
@@ -1692,6 +1742,14 @@ CREATE INDEX helper_offers_by_user ON helper_offers(user_id, created_at);
 CREATE INDEX ig_media_by_org ON ig_media(org_id, handle);
 CREATE INDEX join_requests_by_user ON join_requests(user_id);
 CREATE UNIQUE INDEX one_pending_request ON join_requests(org_id, user_id) WHERE status = 'pending';
+CREATE INDEX lib_reports_by_reporter ON lib_reports(reporter_id, created_at);
+CREATE INDEX lib_reports_by_sit ON lib_reports(sit_id);
+CREATE INDEX lib_reports_open ON lib_reports(created_at) WHERE answered_at IS NULL AND still_at IS NULL;
+CREATE INDEX lib_sits_by_user ON lib_sits(user_id, started_at);
+CREATE UNIQUE INDEX lib_sits_mine ON lib_sits(user_id) WHERE ended_at IS NULL;
+CREATE UNIQUE INDEX lib_sits_seat ON lib_sits(table_id, seat) WHERE ended_at IS NULL;
+CREATE INDEX lib_sits_until ON lib_sits(until) WHERE ended_at IS NULL;
+CREATE INDEX lib_tables_by_room ON lib_tables(room_id);
 CREATE INDEX map_flaws_open ON map_flaws(done_at, created_at);
 CREATE INDEX official_requests_by_org ON official_requests(org_id, id);
 CREATE UNIQUE INDEX one_official_request ON official_requests(org_id) WHERE status = 'pending';
@@ -1743,6 +1801,7 @@ CREATE INDEX roster_by_email ON roster_pending(email);
 CREATE INDEX roster_by_org ON roster_pending(org_id);
 CREATE INDEX roster_by_tg ON roster_pending(tg);
 CREATE UNIQUE INDEX roster_pending_door_key ON roster_pending(door_key);
+CREATE INDEX roster_rejections_by_user ON roster_rejections(user_id);
 CREATE INDEX round_apps_by_user ON round_apps (user_id);
 CREATE INDEX slots_by_round ON round_slots(round_id, starts_at);
 CREATE UNIQUE INDEX one_live_round ON rounds(org_id) WHERE status != 'done';
@@ -1927,6 +1986,9 @@ CREATE TRIGGER santa_moved_upd BEFORE UPDATE OF status, user_id ON registrations
         FROM santa_people p WHERE p.event_id = OLD.event_id AND p.user_id != OLD.user_id
           AND (SELECT COUNT(*) FROM santa_people x WHERE x.event_id = OLD.event_id AND x.user_id != OLD.user_id) IN (1, 2)
         ORDER BY p.user_id;
+    END;
+CREATE TRIGGER report_body_off AFTER UPDATE OF status ON reports WHEN new.status != 'open' AND new.body IS NOT NULL BEGIN
+        UPDATE reports SET body = NULL WHERE id = new.id;
     END;
 CREATE TRIGGER qr_hand_roster_gone AFTER DELETE ON roster_pending BEGIN
         DELETE FROM qr_hand_marks WHERE who = 'r' || old.door_key;

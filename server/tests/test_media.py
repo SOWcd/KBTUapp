@@ -28,6 +28,8 @@ def test_photos(env):
     exif[0x8825] = {2: (43.0, 14.0, 0.0), 4: (76.0, 55.0, 0.0)}   # GPSInfo: where the photo was taken
     raw = io.BytesIO()
     Image.new("RGB", (3000, 2000), (200, 40, 40)).save(raw, "JPEG", exif=exif)
+    xmp = b"http://ns.adobe.com/xap/1.0/\x00<x:xmpmeta xmlns:x='adobe:ns:meta/'><rdf:RDF/></x:xmpmeta>"   # XMP: may hold GPS too
+    raw = io.BytesIO(raw.getvalue()[:2] + b"\xff\xe1" + (len(xmp) + 2).to_bytes(2, "big") + xmp + raw.getvalue()[2:])
     assert c.post("/api/photos", headers=tma(30), content=raw.getvalue()).status_code == 403          # not an organizer
     assert c.post("/api/photos", headers=tma(20), content=b"not an image").json()["message"] == "not_an_image"
     up = c.post("/api/photos", headers=tma(20), content=raw.getvalue()).json()
@@ -49,6 +51,7 @@ def test_photos(env):
     served = c.get("/" + up["url"])
     assert served.headers["content-type"] == "image/webp" and "immutable" in served.headers["cache-control"]
     assert not Image.open(io.BytesIO(served.content)).getexif()                                        # no EXIF, no GPS
+    assert all(b"<x:xmpmeta" not in c.get("/" + up["url"].removesuffix(".webp") + ext).content for ext in (".webp", ".t.webp", ".jpg"))  # no XMP
     start = int(time.time()) + 86400
     body = {"seats": None, "title": "Poster", "place": "305", "startsAt": start, "emoji": "laptop_3d", "color": "#3B6BFF", "coverId": up["id"]}
     ev = c.post("/api/orgs/1/events", headers=tma(20), json=body).json()
@@ -62,7 +65,7 @@ def test_photos(env):
     assert kept["cover"] is not None and kept["cover"]["focus"] == [0.25, 0.8]                         # absent keeps both
     gone = c.patch(f"/api/events/{ev['id']}", headers=tma(20), json={**body, "coverId": None}).json()
     assert gone["cover"] is None
-    # PLAN 33: photos after the cover, swiped sideways; a co-organizer keeps the others' when saving
+    # Photos after the cover, swiped sideways; a co-organizer keeps the others' when saving
     login(c, 21, "vic")
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) SELECT 1, id, 'vice', 0 FROM users WHERE tg_id = 21")
     def pic(tg, rgb):
@@ -143,7 +146,7 @@ def test_videos(env, tmp_path):
     x = logic.next_video(con)
     with pytest.raises(video.BadVideo):
         asyncio.run(video.compress(Path(cfg.db_path).parent / "uploads" / str(x["id"]), Path(cfg.db_path).parent / "media"))
-    # PLAN 32: a horizontal clip behind the sheet: 720 on the short side, muted, 20 s at most; only in its own slot
+    # A horizontal clip behind the sheet: 720 on the short side, muted, 20 s at most; only in its own slot
     wsrc = tmp_path / "wide.mov"
     subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc2=s=1920x1080:r=30:d=2", "-f", "lavfi", "-i", "sine=d=2",
                     "-c:v", "libx264", "-preset", "ultrafast", "-c:a", "aac", str(wsrc)], check=True)
@@ -577,3 +580,31 @@ def test_trim_frame(tmp_path):
     stored = lambda saved: Image.open(tmp_path / f"{saved['path']}.webp").convert("RGB")  # noqa: E731
     assert light_edges(stored(media.save(framed, tmp_path, logo=True)))
     assert not light_edges(stored(media.save(framed, tmp_path)))
+
+
+def test_a_dropped_photo_is_purged_from_the_cdn(tmp_path, monkeypatch):
+    """media.drop: what it removes under the served folder is purged from Cloudflare's cache by URL; elsewhere, or with
+    no zone and token set, nothing is asked."""
+    import httpx
+    import threading
+    calls, done = [], threading.Event()
+
+    def post(url, **kw):
+        calls.append((url, kw["headers"]["Authorization"], kw["json"]["files"]))
+        done.set()
+        return httpx.Response(200)
+    monkeypatch.setattr(media.httpx, "post", post)
+    served, private = tmp_path / "media", tmp_path / "receipts"
+    for root in (served, private):
+        (root / "ab").mkdir(parents=True)
+        for ext in (".webp", ".t.webp", ".jpg"):
+            (root / f"ab/abc{ext}").write_bytes(b"x")
+    monkeypatch.setattr(media, "PURGE", None)
+    media.drop(served, ["ab/abc"])                     # no zone, no token: off
+    monkeypatch.setattr(media, "PURGE", (served.resolve(), "https://app.test/media/", "zone1", "tok"))
+    media.drop(private, ["ab/abc"])                    # a receipt was never served
+    media.drop(served, ["ab/missing", None])           # nothing removed: nothing to purge
+    (served / "ab/abc.webp").write_bytes(b"x")
+    media.drop(served, ["ab/abc"])
+    assert done.wait(5) and calls == [("https://api.cloudflare.com/client/v4/zones/zone1/purge_cache", "Bearer tok", ["https://app.test/media/ab/abc.webp"])]
+    assert not any(served.rglob("*.*")) and not any(private.rglob("*.*"))

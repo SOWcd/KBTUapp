@@ -1,5 +1,5 @@
 <script lang="ts">
-  // News as stories (PLAN 46): a club's posts full screen, one at a time. A tap on the right goes on, on the
+  // News as stories: a club's posts full screen, one at a time. A tap on the right goes on, on the
   // left back; past a club's last post the next club follows, past the last club it closes; a pull down, Back or the
   // cross closes. No timer: posts are read, not glanced at. Seen posts are marked read (the circle's ring and the dot go).
   // No reactions or comments on a club's own post (two reactions were thin; talk lives in the forum). In ⋯: edit, pin, show on
@@ -19,7 +19,7 @@
   import { cancelCasting, data, loadNews, phrase } from '../../lib/state/data.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { ago, relDay, time } from '../../lib/time';
-  import { haptic, onAndroid, openLink } from '../../lib/tg';
+  import { haptic, inTelegram, onAndroid, openLink } from '../../lib/tg';
   import { compact } from '../../lib/chats';
   import { coverFor, focusPos } from '../../lib/photo';
   import { castingOn, tagName, storyStart, seenEv, markSeen, type StoryGroup } from '../../lib/posts';
@@ -127,13 +127,16 @@
       ...(q.canDelete ? [{ label: t('news.hide'), destructive: true, onselect: () => void takeDown() }] : []),
     ], 'end');
   }
+  // the web app: ⋯ is the top pill (Overlay.action); inside Telegram it stays in the story's header
+  const mored = $derived(!!p && (p.canEdit || p.canDelete || !!session.me?.student));
+  $effect(() => { if (!inTelegram) overlay.action = mored ? { icon: Ellipsis, label: t('common.more'), run: more } : null; });
   function report() { if (!p) return; const q = p; sheets.report('post', q.id, q.title, () => drop(q)); }
 </script>
 
 <div class="st" class:flat={onAndroid} bind:this={root} style:transform={pull ? `translate3d(0,${pull}px,0) scale(${1 - Math.min(pull, 300) / 2000})` : ''} class:back={!dragging}
   onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up} role="dialog" aria-modal="true" tabindex="-1" aria-label={g?.org.name}>
   {#if g && ev}
-    {#key ev.id}<div class="bg ev" style="--c:{ev.tint}">{#if ev.cover}{@const c = coverFor(ev.cover, 'feed')!}<img class="haze" src={c.thumb} alt="" aria-hidden="true" /><img class="whole" src={c.url} alt="" decoding="async" style:aspect-ratio="{c.w} / {c.h}" />{:else}<Poster item={ev} size={180} radius={36} />{/if}</div>{/key}
+    {#key ev.id}<div class="bg ev" style="--c:{ev.tint}">{#if ev.cover}{@const c = coverFor(ev.cover, 'feed')!}<img draggable="false" class="haze" src={c.thumb} alt="" aria-hidden="true" /><img draggable="false" class="whole" src={c.url} alt="" decoding="async" style:aspect-ratio="{c.w} / {c.h}" />{:else}<Poster item={ev} size={180} radius={36} />{/if}</div>{/key}
     <button class="tapzone" onclick={tap} aria-label={t('story.next')}></button>
     <div class="top">
       <div class="bars">{#each g.items as _, i (i)}<i class:done={i < pi} class:now={i === pi}></i>{/each}</div>
@@ -152,7 +155,7 @@
   {:else if g && p}
     {#key p.id}
       <div class="bg" class:pic={!!p.photo}>
-        {#if p.photo}<img src={p.photo.url} alt="" decoding="async" style:object-position={focusPos(p.photo)} />{/if}
+        {#if p.photo}<img draggable="false" src={p.photo.url} alt="" decoding="async" style:object-position={focusPos(p.photo)} />{/if}
       </div>
     {/key}
     <button class="tapzone" onclick={tap} aria-label={t('story.next')}></button>
@@ -163,7 +166,7 @@
         <button class="org" onclick={() => sheets.club(g.org.id)}><OrgLogo org={g.org} size={36} />
           <span><small>{ago(p.createdAt)}{#if p.tag}{' · ' + tagName(p.tag)}{/if}{#if p.editedAt}{' · ' + t('news.edited')}{/if}</small></span></button>
         {#if p.pinned}<span class="pinned" aria-label={t('news.pinned')}><Pin size={15} /></span>{/if}
-        {#if p.canEdit || p.canDelete || session.me?.student}<button class="ib" onclick={more} aria-label={t('common.more')} aria-haspopup="menu"><Ellipsis size={20} /></button>{/if}
+        {#if mored && inTelegram}<button class="ib" onclick={more} aria-label={t('common.more')} aria-haspopup="menu"><Ellipsis size={20} /></button>{/if}
         <button class="ib" onclick={() => close(overlay.id)} aria-label={t('common.close')}><X size={20} /></button>
       </div>
     </div>
@@ -184,7 +187,7 @@
     {/key}
 
     {#if p.tg}
-      <!-- a Telegram channel's post: its counts there, a tap opens it (PLAN 86) -->
+      <!-- a Telegram channel's post: its counts there, a tap opens it -->
       {@const tg = p.tg}
       <div class="acts">
         {#each tg.reactions.slice(0, 2) as [e, n] (e)}<button onclick={() => openLink(tg.url)}><span class="tge">{e}</span><b class="num">{compact(n)}</b></button>{/each}

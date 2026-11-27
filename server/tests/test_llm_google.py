@@ -125,7 +125,7 @@ def test_only_the_assistants_answer_leads_with_google(env, monkeypatch):
     for board, policy, lead, fch, want in (("all", "1", "google", 0, llm.GOOGLE), ("all", "1", "", 0, llm.GOOGLE), ("all", "1", "off", 0, None),
                                            ("staff", "1", "google", 0, None), ("all", "new", "google", 0, None),
                                            ("staff", "1", "google", -100123, llm.GOOGLE), ("staff", "new", "google", -100123, None)):
-        x = TestClient(server.create(dataclasses.replace(cfg, board=board, assist_lead=lead, forum_channel=fch, gemini_key=KEY)))
+        x = TestClient(server.create(dataclasses.replace(cfg, board=board, assist_lead=lead, forum_channel=fch, gemini_key=KEY, admins=frozenset({1}))))
         x.app.state.policy = policy  # "1": the version login() writes; "new": the student is on an earlier one
         seen.clear()
         assert x.post("/api/assistant", headers=tma(1), json={"q": "where is the dean's office?"}).status_code == 200

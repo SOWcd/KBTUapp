@@ -104,15 +104,15 @@
       <div class="bg">
         {#if e.video?.url && Math.abs(i - cur) <= 1}
           <video src={e.video.url} poster={e.video.poster?.url} muted={!sound} loop playsinline preload={i === cur ? 'auto' : 'metadata'} use:playing={i === cur && shown}></video>
-        {:else if e.video?.poster}<img src={e.video.poster.url} alt="" decoding="async" loading="lazy" class="still" />
+        {:else if e.video?.poster}<img draggable="false" src={e.video.poster.url} alt="" decoding="async" loading="lazy" class="still" />
         {:else if e.cover && e.slides?.length}
           {@const c = coverFor(e.cover, 'feed')!}
-          <!-- the cover (the Feed's own crop or photo of it) and its photos, swiped sideways like a TikTok photo post (PLAN 33) -->
+          <!-- the cover (the Feed's own crop or photo of it) and its photos, swiped sideways like a TikTok photo post -->
           <div class="strip" onscroll={(s) => (pic[e.id] = Math.round(s.currentTarget.scrollLeft / s.currentTarget.clientWidth))}>
-            <img src={c.url} alt="" decoding="async" loading={i < 2 ? 'eager' : 'lazy'} style:object-position={focusPos(c)} />
-            {#each e.slides as p (p.id)}<img src={p.url} alt="" decoding="async" loading="lazy" />{/each}
+            <img draggable="false" src={c.url} alt="" decoding="async" loading={i < 2 ? 'eager' : 'lazy'} style:object-position={focusPos(c)} />
+            {#each e.slides as p (p.id)}<img draggable="false" src={p.url} alt="" decoding="async" loading="lazy" />{/each}
           </div>
-        {:else if e.cover}{@const c = coverFor(e.cover, 'feed')!}<img src={c.url} alt="" decoding="async" loading={i < 2 ? 'eager' : 'lazy'} style:object-position={focusPos(c)} />
+        {:else if e.cover}{@const c = coverFor(e.cover, 'feed')!}<img draggable="false" src={c.url} alt="" decoding="async" loading={i < 2 ? 'eager' : 'lazy'} style:object-position={focusPos(c)} />
         {:else}<span class="art"><Emoji name={e.emoji ?? 'sparkles_3d'} size={170} /></span>{/if}
       </div>
       <div class="shade"></div>
@@ -181,7 +181,7 @@
   .feed::-webkit-scrollbar { display: none; }
   .x { position: absolute; top: calc(var(--safe-top) + var(--s-3)); left: var(--s-3); display: flex; }
   /* the slide is role=button and :active reaches it from every rail button inside, so base.css's press give scaled the
-     whole screen to .965 at each Going / Save / Share and the Feed re-snapped 12 px (B3's jump, PLAN 81): it never gives */
+     whole screen to .965 at each Going / Save / Share and the Feed re-snapped 12 px (B3's jump): it never gives */
   .slide { position: relative; height: 100%; scroll-snap-align: start; scroll-snap-stop: always; overflow: hidden; color: var(--on-accent); background: var(--tint); transform: none; opacity: 1; }
   .bg { position: absolute; inset: 0; }
   .bg img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.06); }

@@ -1,5 +1,4 @@
 <script lang="ts">
-  import CloseX from '../../ui/CloseX.svelte';
   // The ticket: a pass in the event's colour with the entry QR (KBTU<code>, the organizer's mark in the
   // middle). Opens from the event sheet, Profile → Me, the live capsule and t.me links (tk_<id>).
   // Telegram's Back, a tap outside or Close dismisses it. The pass is lit like the glass: its light and
@@ -39,7 +38,7 @@
   let { overlay, id }: { overlay: Overlay; id: Id } = $props();
 
   const e = $derived(eventById(id));
-  $effect(() => { overlay.title = t('cap.ticket'); overlay.icon = Ticket; overlay.theme = 'dark'; }); // the capsule (SPEC §8.2), dark as the scrim
+  $effect(() => { overlay.title = t('cap.ticket'); overlay.icon = Ticket; overlay.theme = 'dark'; }); // the capsule, dark as the scrim
   const my = $derived(e?.my);
   const pending = $derived(goingPending.has(id));
   const valid = $derived(!!e && e.status !== 'cancelled' && my?.status === 'going' && !!my.ticketCode);
@@ -90,7 +89,7 @@
 
   async function cancelReg() {
     if (pending) return;
-    if (e?.meeting) { // a club meeting (§2b): "can't make it" says why
+    if (e?.meeting) { // a club meeting: "can't make it" says why
       const why = await sheets.askText({ title: t('meet.whyTitle'), text: t('meet.whyText'), ok: t('meet.send'), cancel: t('common.cancel'),
         placeholder: t('meet.whyPh'), max: 140 });
       if (!why) return;
@@ -145,7 +144,7 @@
     </div>
 
     {#if valid && !my?.checkedInAt}<p class="hint">{#if data.offline}<span class="off"><WifiOff size={13} />{t('tk.offline')}</span>{/if}{t('tk.hint')}</p>{/if}
-    <!-- the receipt looks wrong (§4.3): why, and another file in its place, in the pay sheet -->
+    <!-- the receipt looks wrong: why, and another file in its place, in the pay sheet -->
     {#if valid && my?.receiptFlags?.length}<button class="pill glass glass-pill doubt" use:glass onclick={() => { close(overlay.id); sheets.pay(id); }}><TriangleAlert size={17} />{t('tk.receiptDoubt')}</button>{/if}
     <!-- the bot may not write yet: no reminders, no ticket in the chat -->
     {#if valid && !started && session.me && !session.me.canDm}<button class="pill glass glass-pill" use:glass onclick={() => askDm(id, true)}><Bell size={17} />{t('tk.dmOn')}</button>{/if}
@@ -159,7 +158,6 @@
     </div>
   {/if}
   </div>
-  <CloseX onclick={() => close(overlay.id)} />
 </div>
 
 <style>
@@ -174,8 +172,8 @@
   @supports not (background: color-mix(in srgb, red 50%, blue)) {
     .scrim { background: var(--dim); }
   }
-  .wrap { position: absolute; inset: 0; z-index: var(--z-sheet); pointer-events: none; display: flex; flex-direction: column; padding-bottom: var(--close-room); }
-  /* the content scrolls in a box that ends above the × (--close-room): a long text or a short phone never puts a
+  .wrap { position: absolute; inset: 0; z-index: var(--z-sheet); pointer-events: none; display: flex; flex-direction: column; padding-bottom: var(--safe-bottom); }
+  /* the content scrolls in a box that ends above the home bar: a long text or a short phone never puts a
      button under it; it fades out above it. Taps on its empty space still reach the scrim (closes) */
   .page { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; scrollbar-width: none; pointer-events: none; display: flex; flex-direction: column; align-items: center;
     gap: 14px; padding: calc(max(var(--top), var(--head-bottom)) + 8px) 20px 20px; /* below the capsule even where Telegram reports no header */

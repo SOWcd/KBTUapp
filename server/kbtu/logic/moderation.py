@@ -10,7 +10,7 @@ from .core import (ApiError, PERSON, PERSON_COLS, Viewer, _org, can, deleting, l
     person_ref, rows, shown_name)
 
 
-# ---------------------------------------------------------------- comments and reports (§4.10)
+# ---------------------------------------------------------------- comments and reports
 
 COMMENTS_A_MINUTE, REPORTS_A_DAY = 10, 20
 
@@ -42,7 +42,7 @@ def _moderates(con, v: Viewer, org: int) -> bool:
 
 def comments(con, v: Viewer, kind: str, tid: int) -> dict:
     """Comments under a post or an event: questions to the organizer ("where's the entrance?"). Students read and write
-    (short names, §3); the club's Head+ answer as the club, take any down and turn the thread off; authors take theirs."""
+    (short names); the club's Head+ answer as the club, take any down and turn the thread off; authors take theirs."""
     need_student(v)
     t = _thread(con, v, kind, tid)
     # the flags are the club's own (Head+ with posts): the app's staff see the thread as any student does; they act in
@@ -165,8 +165,10 @@ def report(con, v: Viewer, target: object, tid: object, reason: object, note: ob
             return
         if one(con, "SELECT COUNT(*) FROM reports WHERE reporter_id = ? AND created_at > ?", v.id, core.now() - 86400)[0] >= REPORTS_A_DAY:
             raise ApiError("rate_limited")
-        con.execute("INSERT OR IGNORE INTO reports (reporter_id, target, target_id, reason, note, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-                    (v.id, target, tid, reason, note, core.now()))
+        # a channel post: its words now, so an edit before the decision can't hide what was reported
+        body = one(con, "SELECT body FROM fchan_posts WHERE id = ?", tid)[0] if target == "fpost" else None
+        con.execute("INSERT OR IGNORE INTO reports (reporter_id, target, target_id, reason, note, created_at, body) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (v.id, target, tid, reason, note, core.now(), body))
         if target == "user":  # never suggested to each other (People you may know), the report resolved later included
             pymk.forget(con, v.id, tid)
         if target == "event":
@@ -224,6 +226,10 @@ def report_queue(con, v: Viewer) -> list[dict]:
             p = one(con, f"SELECT body, tg_msg FROM fchan_posts WHERE id = ? AND {FPOST_UP}", r["target_id"])
             text, where = (p["body"], ("fpost", r["target_id"], p["tg_msg"])) if p else (None, None)
             photos = fchannel._photos(con, [r["target_id"]]).get(r["target_id"], [])
+            # edited since: the words as they were reported, oldest report's first
+            was = one(con, """SELECT body FROM reports WHERE target = 'fpost' AND target_id = ? AND status = 'open' AND body IS NOT NULL
+                ORDER BY id LIMIT 1""", r["target_id"])
+            was = was[0] if was and p and was[0] != p["body"] else None
         elif r["target"] == "post":
             # no post screen of its own to open: its words are the thing to judge, title and body
             p = one(con, "SELECT title, body FROM posts WHERE id = ? AND hidden_at IS NULL", r["target_id"])
@@ -239,7 +245,7 @@ def report_queue(con, v: Viewer) -> list[dict]:
         # what the reporters wrote, newest first, never who wrote it
         notes = [{"reason": n["reason"], "note": n["note"], "at": n["created_at"]} for n in rows(con, """SELECT reason, note, created_at FROM reports
             WHERE status = 'open' AND target = ? AND target_id = ? AND note IS NOT NULL ORDER BY created_at DESC, id DESC LIMIT 5""", r["target"], r["target_id"])]
-        out.append({**({"photos": photos} if r["target"] == "fpost" else {}), "target": r["target"], "id": r["target_id"], "text": text, "where": {"kind": where[0], "id": where[1], **({"msg": where[2]} if len(where) > 2 else {})}, "count": r["n"],
+        out.append({**({"photos": photos, "was": was} if r["target"] == "fpost" else {}), "target": r["target"], "id": r["target_id"], "text": text, "where": {"kind": where[0], "id": where[1], **({"msg": where[2]} if len(where) > 2 else {})}, "count": r["n"],
                     "reasons": {k: reasons.count(k) for k in dict.fromkeys(reasons)}, "notes": notes, "at": r["first"]})
     # and the channel's comments in Telegram; those the reports removed first (a person waits for the verdict)
     return sorted(out + tgcomments.queue_items(con, v), key=lambda x: (not x.get("removed"), x["at"]))

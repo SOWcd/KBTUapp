@@ -10,7 +10,7 @@ from test_core import _board_on, env, login, tma  # noqa: F401  (env: the fixtur
 
 
 def test_map_graph(env):
-    """Indoor routes' graph (PLAN item 22): anyone reads Claude's draft; nobody saves it (the editor is off)."""
+    """Indoor routes' graph: anyone reads Claude's draft; nobody saves it (the editor is off)."""
     c, _ = env
     login(c, 20, "ali")
     g = c.get("/api/map/graph", headers=tma(20)).json()

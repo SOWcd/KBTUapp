@@ -5,7 +5,7 @@
   import Move from '@lucide/svelte/icons/move';
   import type { CoverFormat, Media } from '../../lib/api';
   import { focusPos, panFocus } from '../../lib/photo';
-  import { t } from '../../lib/i18n/index.svelte';
+  import { sw } from '../../lib/i18n/staff';
 
   let { photo, fmt, onpick }: { photo: Media; fmt: CoverFormat; onpick: (focus: [number, number]) => void } = $props();
   let last: [number, number] | null = null;
@@ -23,13 +23,13 @@
   const unit = (v: number) => Math.round(Math.min(1, Math.max(0, v)) * 1000) / 1000;
 </script>
 
-<div class="frame {fmt}" role="slider" tabindex="0" aria-label={t('ed.cropTip')} aria-valuenow={Math.round(at[0] * 100)}
+<div class="frame {fmt}" role="slider" tabindex="0" aria-label={sw('ed.cropTip')} aria-valuenow={Math.round(at[0] * 100)}
      aria-valuetext="{Math.round(at[0] * 100)}%, {Math.round(at[1] * 100)}%"
      onpointerdown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); last = [e.clientX, e.clientY]; }}
      onpointermove={drag} onpointerup={() => (last = null)} onpointercancel={() => (last = null)}
      onkeydown={(e) => { const d = KEYS[e.key]; if (d) { e.preventDefault(); moved = true; onpick([unit(at[0] + d[0]), unit(at[1] + d[1])]); } }}>
   <img src={photo.url} alt="" draggable="false" style:object-position={focusPos(photo)} />
-  {#if !moved}<span class="tip glass glass-pill"><Move size={15} strokeWidth={2.4} />{t('ed.cropTip')}</span>{/if}
+  {#if !moved}<span class="tip glass glass-pill"><Move size={15} strokeWidth={2.4} />{sw('ed.cropTip')}</span>{/if}
 </div>
 
 <style>

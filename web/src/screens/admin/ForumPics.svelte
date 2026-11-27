@@ -9,7 +9,7 @@
 </script>
 
 {#if photos?.length}
-  <span class="fp">{#each photos as p, i (i)}<button onclick={(e) => { e.stopPropagation(); view(i); }} aria-label={t('fc.photo')}><img src={p.thumb} alt="" loading="lazy" /></button>{/each}</span>
+  <span class="fp">{#each photos as p, i (i)}<button onclick={(e) => { e.stopPropagation(); view(i); }} aria-label={t('fc.photo')}><img draggable="false" src={p.thumb} alt="" loading="lazy" /></button>{/each}</span>
 {/if}
 
 <style>

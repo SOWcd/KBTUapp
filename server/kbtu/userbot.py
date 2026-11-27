@@ -1,4 +1,4 @@
-"""The userbot (PLAN 86 part 2): an old Telegram account, signed in once (tools/userbot_login.py), that joins each org's
+"""The userbot: an old Telegram account, signed in once (tools/userbot_login.py), that joins each org's
 main public channel and mirrors its posts into the org's news (mirror.py has the rules). It runs in the bot's process
 beside the postman (bot.run), never in a request: one account is one point of failure, and Telegram makes it wait
 (FloodWait) when it hurries. TG_API_ID, TG_API_HASH and TG_SESSION in the environment; any missing: off, nothing else
@@ -61,6 +61,7 @@ async def run(cfg: Config) -> None:
         return
     dead = (AuthKeyDuplicatedError, AuthKeyUnregisteredError, SessionRevokedError, UserDeactivatedError)
     said = False
+    retry: set[tuple[int, int]] = set()
     while True:
         client = TelegramClient(StringSession(cfg.tg_session), int(cfg.tg_api_id), cfg.tg_api_hash, catch_up=False)
         tasks: list[asyncio.Task] = []
@@ -79,7 +80,7 @@ async def run(cfg: Config) -> None:
                 con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('userbot_id', ?)", (str(me),))
             mirror.alive(con)
             await client.get_dialogs()  # the joined channels' access hashes: a StringSession keeps no entities
-            work = Mirror(cfg, client, con, me)
+            work = Mirror(cfg, client, con, me, retry=retry)
             work.listen()
             tasks = [asyncio.create_task(work.joins()), asyncio.create_task(work.sweeps()), asyncio.create_task(work.catch_up())]
             await client.run_until_disconnected()
@@ -113,18 +114,19 @@ async def run(cfg: Config) -> None:
 class Mirror:
     """One connection's work: the handlers for new, edited and deleted posts, the joins and the sweeps."""
 
-    def __init__(self, cfg: Config, client, con, me: int = 0) -> None:
+    def __init__(self, cfg: Config, client, con, me: int = 0, *, retry: set[tuple[int, int]] | None = None) -> None:
         self.client, self.con, self.root = client, con, Path(cfg.db_path).resolve().parent / "media"
         self.me, self.bot = me, int(cfg.bot_token.split(":", 1)[0]) if cfg.bot_token.split(":", 1)[0].isdigit() else 0
         self.asked: dict[tuple[int, int], float] = {}  # (channel, post): when its comments were last looked at
         self.cfg, self.http, self.looks = cfg, None, set()  # the model's looks at new posts (logic/autoev.py), in the background
         self.admins: dict[int, tuple[float, set[int]]] = {}  # a source group's admins' ids (in memory only): when listed, who
+        self.retry = retry if retry is not None else set()  # failed posts, kept across reconnects
 
     def listen(self) -> None:
         from telethon import events
 
         async def fresh(ev) -> None:
-            await self.guard(self.post(ev.message))
+            await self.take(ev.message)
 
         async def deleted(ev) -> None:
             channel = getattr(ev.original_update, "channel_id", None)  # a deletion elsewhere has none: not ours
@@ -136,20 +138,38 @@ class Mirror:
         self.client.add_event_handler(deleted, events.MessageDeleted())
         self.client.add_event_handler(self.met, events.ChatAction())
 
-    async def guard(self, job) -> None:
+    async def guard(self, job) -> bool:
         """One post's work; FloodWait slept off, a bad post logged, never the listener down."""
         from telethon.errors import FloodWaitError
         try:
             await job
+            return True
         except FloodWaitError as exc:
             log.warning("userbot: flood wait %ds", exc.seconds)
             await asyncio.sleep(exc.seconds + 5)
         except Exception:  # noqa: BLE001
             log.exception("userbot post")
+        return False
+
+    async def take(self, m, *, advance: bool = True) -> bool:
+        """Remember a failed post for the next sweep; later successes may move the channel's cursor past it."""
+        channel = getattr(m.peer_id, "channel_id", None)
+        if not channel:
+            return True
+        key = (channel, m.id)
+        ok = False
+        try:
+            ok = await self.guard(self.post(m, advance=advance))
+            return ok
+        finally:
+            if ok:
+                self.retry.discard(key)
+            else:
+                self.retry.add(key)
 
     # ponytail: mirror's writes on self.con run on the event loop (a busy database holds it up to busy_timeout); the
     # handlers share one connection, so a thread each needs its own connection or a lock: do it if the loop ever stalls
-    async def post(self, m) -> None:
+    async def post(self, m, *, advance: bool = True) -> None:
         """A channel post (new or edited) into its org's news; anything from a chat we don't mirror is dropped unread."""
         channel = getattr(m.peer_id, "channel_id", None)
         if not channel or m.action is not None or (oid := mirror.source(self.con, channel)) is None:
@@ -168,10 +188,10 @@ class Mirror:
                 got = await self.client.get_messages(m.peer_id, ids=siblings) if siblings else []
                 caption = next((x for x in got if x and (x.message or "").strip()), None)
                 if caption is not None:
-                    await self.post(caption)
+                    await self.post(caption, advance=advance)
                 else:
                     album_empty = True
-        pid = mirror.take(self.con, channel, msg, album_empty=album_empty)
+        pid = mirror.take(self.con, channel, msg, album_empty=album_empty, advance=advance)
         if msg.photo and logic.photo_free(self.con, msg.photo["path"]):  # an album's second photo, an edit's same one
             self.drop(msg.photo["path"])
         if new and pid and logic.autoev.worth(msg.text):  # a new post that reads like an announcement: the model looks once
@@ -256,9 +276,12 @@ class Mirror:
                     if not mirror.stays(self.con, channel):  # a group it was added to by hand stays as it was
                         try:
                             await self.client(LeaveChannelRequest(await self.client.get_input_entity(PeerChannel(channel))))
-                        except (ValueError, TypeError):
+                        except FloodWaitError:
+                            raise
+                        except (ValueError, TypeError, RPCError):
                             pass  # not in it any more: forget it all the same
                     mirror.left(self.con, channel)
+                    self.retry.difference_update({key for key in self.retry if key[0] == channel})
                     log.warning("userbot: left @%s", name)
                 elif todo := [n for n in mirror.to_join(self.con) if skip.get(n, 0) < time.time()]:
                     name = todo[0]
@@ -356,14 +379,15 @@ class Mirror:
 
     async def first(self, ent, topic: int | None = None, group: int = 0) -> None:
         """A first link: the channel's (or the group topic's admins') last few posts of the last month (an album is
-        one), oldest first; a group's topic is read up to its newest message (mirror.seen)."""
+        one), oldest first; skipped messages advance its cursor too."""
         since, picked, groups = time.time() - mirror.FIRST_DAYS * 86400, [], set()
+        skipped = None
         async for m in self.client.iter_messages(ent, limit=mirror.FIRST_TAKE * 10, reply_to=topic):
-            if topic:
-                mirror.seen(self.con, group, m.id)
             if m.date.timestamp() < since:
+                skipped = skipped or m
                 break
             if m.action is not None or topic and (self.topic_of(m) != topic or not await self.own(group, m)):
+                skipped = skipped or m
                 continue
             key = m.grouped_id or -m.id
             if key not in groups:
@@ -372,7 +396,9 @@ class Mirror:
                 groups.add(key)
             picked.append(m)
         for m in reversed(picked):
-            await self.guard(self.post(m))
+            await self.take(m)
+        if skipped is not None:
+            mirror.seen(self.con, skipped.peer_id.channel_id, skipped.id)
 
     async def translations(self, ent, channel: int) -> None:
         """A post's translations written by the channel itself in its comments: the replies are read in
@@ -412,26 +438,26 @@ class Mirror:
                         await self.list_topics(ent, channel)
                         if not grp:
                             continue
-                        if not mirror.last(self.con, channel):  # a topic just picked
-                            await self.first(ent, grp, channel)
-                        else:
-                            async for m in self.client.iter_messages(ent, min_id=mirror.last(self.con, channel), reverse=True, limit=50, reply_to=grp):
-                                if m.date.timestamp() >= since:
-                                    await self.guard(self.post(m))
-                                mirror.seen(self.con, channel, m.id)
+                    pending = {mid for ch, mid in self.retry if ch == channel}
+                    if not (last := mirror.last(self.con, channel)):
+                        await self.first(ent, grp, channel)
                     else:
-                        async for m in self.client.iter_messages(ent, min_id=mirror.last(self.con, channel), reverse=True, limit=50):
-                            if m.date.timestamp() >= since:
-                                await self.guard(self.post(m))
+                        async for m in self.client.iter_messages(ent, min_id=last, reverse=True, limit=50, reply_to=grp):
+                            if m.date.timestamp() < since or await self.take(m, advance=False):
+                                mirror.seen(self.con, channel, m.id)
+                    if grp is None:
                         await self.translations(ent, channel)
-                    ids = mirror.recent(self.con, channel)
+                    ids = sorted(set(mirror.recent(self.con, channel)) | pending)
                     for i in range(0, len(ids), 100):
                         chunk = ids[i:i + 100]
                         got = await self.client.get_messages(ent, ids=chunk)
                         mirror.gone(self.con, channel, [n for n, m in zip(chunk, got) if m is None], self.root)
-                        for m in got:
+                        for mid, m in zip(chunk, got):
                             if m is not None:
-                                await self.guard(self.post(m))
+                                # An individual retry can be ahead of the history page we just read.
+                                await self.take(m, advance=False)
+                            else:
+                                self.retry.discard((channel, mid))
                     await asyncio.sleep(2)
                 mirror.alive(self.con)
             except FloodWaitError as exc:

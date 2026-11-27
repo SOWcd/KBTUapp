@@ -40,7 +40,7 @@ def test_unlock_moment(env):
 
 
 def test_first_fifty(env, monkeypatch):
-    """Card numbers and "First 500" (§4.4, §4.11): the number is the order of first KBTU sign-in and stays the person's;
+    """Card numbers and "First 500": the number is the order of first KBTU sign-in and stays the person's;
     the Creator's card shows 0 and takes no place, so the grant goes to cards 1..FIRST_N; a deleted account's number
     stays empty, never given again: a return gets a new one."""
     c, cfg = env
@@ -99,7 +99,7 @@ def test_anthem_award(env):
 
 
 def test_grants(env):
-    """Manual achievements (§4.11): the admin only; "Bug hunter" adds up, a secret one is given once; each new level is
+    """Manual achievements: the admin only; "Bug hunter" adds up, a secret one is given once; each new level is
     celebrated (the bot's card, the unlock moment) and audited."""
     import dataclasses
     c, cfg = env
@@ -133,7 +133,7 @@ def test_grants(env):
 
 
 def test_grant_scanner(env):
-    """The owner's batch scanner (PLAN "Creator awards"): a badge QR is one grant, a wrong code finds nobody, a
+    """The owner's batch scanner: a badge QR is one grant, a wrong code finds nobody, a
     secret one only once; undo within a minute takes the level and its unsent card back; "You gave" lists them."""
     import dataclasses
     c, cfg = env
@@ -324,6 +324,13 @@ def test_streak_flame(env):
     assert page(tma(93, "Bea"))["now"] == want and page(tma(92, "Ali"))["now"] == want
     assert "now" not in page(tma(94, "Cat"))                                                         # a stranger: the medal alone
     assert cat["id"] and not con.execute("SELECT 1 FROM bot_outbox WHERE ref LIKE 'ach:streak:%'").fetchone()
+    # an earned level stays though the live count drops (a past week's public event published or unpublished since)
+    con.execute("INSERT OR REPLACE INTO achievement_levels (user_id, code, level, reached_at, seen) VALUES (?, 'streak', 3, 0, 3)", (bea["id"],))
+    con.commit()
+    mine = page(tma(93, "Bea"))
+    assert mine["level"] == 3 and [x["reached"] for x in mine["levels"]] == [True, True, True, False] and mine["count"] >= 8
+    logic.profiles._celebrate(con, bea["id"], {**logic.profiles._levels(con, bea["id"]), "streak": 0})  # a lower live level never overwrites it
+    assert con.execute("SELECT level FROM achievement_levels WHERE user_id = ? AND code = 'streak'", (bea["id"],)).fetchone()[0] == 3
 
 
 def test_badge_skin(env):

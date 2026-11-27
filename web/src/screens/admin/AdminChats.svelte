@@ -1,6 +1,6 @@
 <script lang="ts">
-  // Admin → Chats (§4.11): the directory's t.me links, for everyone or for a school and/or a course; a sheet of its own
-  // in the admin hub. The admin says whose a chat is (PLAN 86: then it shows on that
+  // Admin → Chats: the directory's t.me links, for everyone or for a school and/or a course; a sheet of its own
+  // in the admin hub. The admin says whose a chat is (then it shows on that
   // club's or school's page too; t.me/kbtusite is SITE's). Staff set what each chat is for (its section): the AI's
   // section shows marked unchecked until someone picks one.
   import { staffOnly } from '../../lib/state/staffGate.svelte';
@@ -11,6 +11,7 @@
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { loadInbox, phrase } from '../../lib/state/data.svelte';
   import { t } from '../../lib/i18n/index.svelte';
+  import { sw } from '../../lib/i18n/staff';
   import { haptic, openLink } from '../../lib/tg';
   import Sheet from '../../ui/Sheet.svelte';
   import TelegramMark from '../../ui/TelegramMark.svelte';
@@ -21,9 +22,9 @@
   let { overlay }: { overlay: Overlay } = $props();
   staffOnly(() => overlay, 'staff');
   let busy = $state(false);
-  // ---- the chats directory (§4.11): t.me links for everyone, or for a school and/or a course ----
+  // ---- the chats directory: t.me links for everyone, or for a school and/or a course ----
   let chats = $state<Chat[] | null>(null);
-  // suggested by students through the bot (PLAN item 45): Add puts it in the catalog, the cross declines it
+  // suggested by students through the bot: Add puts it in the catalog, the cross declines it
   let pending = $state<Chat[]>([]);
   $effect(() => { api.chats().then((c) => { chats = c.all; pending = c.pending ?? []; }).catch(() => (chats = [])); });
   async function approve(c: Chat) {
@@ -56,8 +57,8 @@
     try {
       const c = await api.addChat({ title: nch.title.trim(), url: nch.url.trim(), kind: nch.kind, school: nch.school.trim() || null, course: nch.course || null });
       chats = [...(chats ?? []), c]; chatForm = false; nch = { title: '', url: '', kind: 'group', school: '', course: 0 };
-      haptic.ok(); say(t('adm.chatAdded'), 'raising_hands_3d_default');
-    } catch (e) { haptic.error(); say(e instanceof ApiErr && e.code === 'bad_input' ? t('adm.chatBad') : e instanceof ApiErr && e.message === 'org' ? t('chats.why.org') : t('common.error'), 'warning_3d'); }
+      haptic.ok(); say(sw('adm.chatAdded'), 'raising_hands_3d_default');
+    } catch (e) { haptic.error(); say(e instanceof ApiErr && e.code === 'bad_input' ? sw('adm.chatBad') : e instanceof ApiErr && e.message === 'org' ? t('chats.why.org') : t('common.error'), 'warning_3d'); }
     finally { busy = false; }
   }
   async function dropChat(c: Chat) {
@@ -68,21 +69,21 @@
 </script>
 
 {#snippet sec(c: Chat)}
-  <span class="secl"><select class="sec" aria-label={t('adm.chatSection')} value={c.section ?? ''} onchange={(ev) => setSection(c, ev)}>
+  <span class="secl"><select class="sec" aria-label={sw('adm.chatSection')} value={c.section ?? ''} onchange={(ev) => setSection(c, ev)}>
     {#if !c.section}<option value="">{t('chats.sec.other')}</option>{/if}
     {#each CHAT_SECTIONS as s (s)}<option value={s}>{t(`chats.sec.${s}`)}</option>{/each}</select>
-    {#if c.sectionAi}<em class="aimark">{t('adm.chatAi')}</em>{/if}</span>
+    {#if c.sectionAi}<em class="aimark">{sw('adm.chatAi')}</em>{/if}</span>
 {/snippet}
 
-<Sheet {overlay} icon={TelegramMark} full title={t('adm.chats')}>
-  <p class="t-foot lead">{t('adm.chatsLead')}</p>
+<Sheet {overlay} icon={TelegramMark} full title={sw('adm.chats')}>
+  <p class="t-foot lead">{sw('adm.chatsLead')}</p>
   {#if pending.length}
-    <h3 class="t-cap gh">{t('adm.chatPending')} · {pending.length}</h3>
+    <h3 class="t-cap gh">{sw('adm.chatPending')} · {pending.length}</h3>
     <div class="chl surface">{#each pending as c (c.id)}<div class="chr">
       <span class="av" class:sq={c.kind === 'forum'}>{#if c.photo}<img src={c.photo} alt="" />{/if}</span>
       <!-- the link itself, so a look tells a real chat from a stray one -->
-      <span class="tx"><a class="pv ellipsis" href={c.url} onclick={(e) => { e.preventDefault(); openLink(c.url); }}>{c.title}<i>{c.org ? `${t('oc.whose')}: ${shortOf(c.org)} · ` : ''}{c.url.includes('/+') ? t('adm.chatInvite') + ' · ' : ''}{c.url.replace('https://', '')} · {t(`chats.${c.kind}`)}{c.members ? ' · ' + c.members : ''}</i></a>{@render sec(c)}</span>
-      <Button kind="primary" size="s" onclick={() => approve(c)}>{t('adm.chatApprove')}</Button>
+      <span class="tx"><a class="pv ellipsis" href={c.url} onclick={(e) => { e.preventDefault(); openLink(c.url); }}>{c.title}<i>{c.org ? `${t('oc.whose')}: ${shortOf(c.org)} · ` : ''}{c.url.includes('/+') ? sw('adm.chatInvite') + ' · ' : ''}{c.url.replace('https://', '')} · {t(`chats.${c.kind}`)}{c.members ? ' · ' + c.members : ''}</i></a>{@render sec(c)}</span>
+      <Button kind="primary" size="s" onclick={() => approve(c)}>{sw('adm.chatApprove')}</Button>
       <button onclick={() => decline(c)} aria-label={t('cm.delete')}><X size={16} /></button>
     </div>{/each}</div>
   {/if}
@@ -94,20 +95,20 @@
   {/if}
   {#if chatForm}
     <form class="new" onsubmit={addChat}>
-      <label class="field"><span class="t-cap">{t('adm.chatUrl')}</span><input bind:value={nch.url} placeholder="https://t.me/…" autocapitalize="none" spellcheck="false" /></label>
-      <label class="field"><span class="t-cap">{t('adm.chatTitle')}</span><input bind:value={nch.title} maxlength="80" /></label>
+      <label class="field"><span class="t-cap">{sw('adm.chatUrl')}</span><input bind:value={nch.url} placeholder="https://t.me/…" autocapitalize="none" spellcheck="false" /></label>
+      <label class="field"><span class="t-cap">{sw('adm.chatTitle')}</span><input bind:value={nch.title} maxlength="80" /></label>
       <div class="kind"><Segmented items={(['group', 'forum', 'channel'] as const).map((k) => ({ value: k, label: t(`chats.${k}`) }))} bind:value={nch.kind} /></div>
       <div class="two">
-        <label class="field"><span class="t-cap">{t('adm.chatSchool')}</span><input bind:value={nch.school} maxlength="40" /></label>
-        <label class="field"><span class="t-cap">{t('adm.chatCourse')}</span><select bind:value={nch.course}><option value={0}>{t('chats.everyone')}</option>{#each [1, 2, 3, 4, 5, 6] as n (n)}<option value={n}>{t('chats.course', { n })}</option>{/each}</select></label>
+        <label class="field"><span class="t-cap">{sw('adm.chatSchool')}</span><input bind:value={nch.school} maxlength="40" /></label>
+        <label class="field"><span class="t-cap">{sw('adm.chatCourse')}</span><select bind:value={nch.course}><option value={0}>{t('chats.everyone')}</option>{#each [1, 2, 3, 4, 5, 6] as n (n)}<option value={n}>{t('chats.course', { n })}</option>{/each}</select></label>
       </div>
       <div class="acts btns">
         <Button kind="neutral" size="m" full onclick={() => (chatForm = false)}>{t('common.cancel')}</Button>
-        <Button kind="primary" size="m" full type="submit" loading={busy} disabled={!nch.url.trim()}>{t('adm.chatAdd')}</Button>
+        <Button kind="primary" size="m" full type="submit" loading={busy} disabled={!nch.url.trim()}>{sw('adm.chatAdd')}</Button>
       </div>
     </form>
   {:else}
-    <button class="addchat" onclick={() => (chatForm = true)}><Plus size={16} />{t('adm.chatAdd')}</button>
+    <button class="addchat" onclick={() => (chatForm = true)}><Plus size={16} />{sw('adm.chatAdd')}</button>
   {/if}
 
 </Sheet>

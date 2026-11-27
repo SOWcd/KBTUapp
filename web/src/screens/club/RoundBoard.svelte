@@ -1,6 +1,6 @@
 <script lang="ts">
   import { fold } from '../../ui/fold';
-  // The casting team's board for the live round (PLAN "Casting"): applications by stage (new, maybe, next, taken, no),
+  // The casting team's board for the live round: applications by stage (new, maybe, next, taken, no),
   // a department filter, "review one by one" (the next new one after each verdict). An application opens in place:
   // the profile, the picks in order, the answers, what only the app knows (the club's events they came to, friends in
   // the club, an earlier try, in the app since), the team's votes with who; my verdict with stars and a note; the
@@ -22,9 +22,11 @@
   import Segmented from '../../ui/Segmented.svelte';
   import IconButton from '../../ui/IconButton.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
+  import Skeleton from '../../ui/Skeleton.svelte';
   import CalendarClock from '@lucide/svelte/icons/calendar-clock';
   import { dateInput, nowTs } from '../../lib/time';
   import { placeOf } from '../../lib/i18n/index.svelte';
+  import { sw } from '../../lib/i18n/staff';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
   import { phrase } from '../../lib/state/data.svelte';
   import { studioChanged } from '../../lib/state/data.svelte';
@@ -43,11 +45,14 @@
 
   let r = $state<Round | null>(null);
   let apps = $state<RoundApp[]>([]);
+  let status = $state<'loading' | 'ready' | 'error'>('loading'); // the first read: placeholders, then Retry if it failed
   async function load() {
+    status = 'loading';
     try {
-      r = await api.round(org);
-      apps = r ? await api.roundApps(r.id) : [];
-    } catch { say(t('common.error'), 'warning_3d'); }
+      const x = await api.round(org);
+      apps = x ? await api.roundApps(x.id) : [];
+      r = x; status = 'ready';
+    } catch { status = 'error'; if (r) say(t('common.error'), 'warning_3d'); }
   }
   $effect(() => { void load(); });
 
@@ -75,9 +80,12 @@
     if (!next) { say(t('cast.allSeen'), 'partying_face_3d'); walking = false; cur = null; return; }
     walking = true; openApp(next);
   }
+  // one verdict at a time: a second tap must not land on the next applicant review mode opens
+  let busy = $state(false);
   async function vote(verdict: 'no' | 'maybe' | 'next') {
-    if (!cur) return;
+    if (!cur || busy) return;
     const a = cur;
+    busy = true;
     try {
       const res = await api.voteApp(a.id, { verdict, stars, note });
       a.stage = res.stage;
@@ -86,15 +94,19 @@
       haptic.select();
       if (walking) review(); else cur = null;
     } catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
+    finally { busy = false; }
   }
   async function decide(s: AppStage, tagId: Id | null = null) {
-    if (!cur) return;
+    if (!cur || busy) return;
     const a = cur;
+    busy = true;
     try {
       const res = await api.decideApp(a.id, { stage: s, tagId });
       a.stage = res.stage; a.takenTag = res.takenTag;
-      haptic.ok(); cur = null;
+      haptic.ok();
+      if (walking) review(); else cur = null; // review mode goes on to the next new one, as a vote does
     } catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
+    finally { busy = false; }
   }
 
   async function closeIntake() {
@@ -133,7 +145,8 @@
   // interviews: the slots by day with who booked them, adding a day's slots, inviting the shortlisted, who came
   let view = $state<'apps' | 'iv'>('apps');
   let slots = $state<RoundSlot[]>([]);
-  const loadSlots = () => { if (r) api.roundSlots(r.id).then((x) => (slots = x)).catch(() => {}); };
+  let slotsState = $state<'loading' | 'ready' | 'error'>('loading');
+  const loadSlots = () => { if (r) api.roundSlots(r.id).then((x) => { slots = x; slotsState = 'ready'; }).catch(() => { if (slotsState !== 'ready') slotsState = 'error'; }); };
   $effect(() => { if (view === 'iv' && r) loadSlots(); });
   const ivDays = $derived.by(() => {
     const by = new Map<string, RoundSlot[]>();
@@ -221,7 +234,9 @@
 <!-- one Back (AGENTS.md): Telegram's Back leaves an application for the list, then closes the board -->
 <Sheet {overlay} icon={Kanban} full title={r?.title ?? t('cast.board')} hold={() => cur != null} onhold={() => { cur = null; walking = false; }}>
   <div class="stack">
-  {#if cur && r}
+  {#if !r}
+    {#if status === 'error'}<EmptyState onretry={load} />{:else if status === 'loading'}<Skeleton n={4} />{/if}
+  {:else if cur}
     {@const a = cur}
     <div class="who">
       <Avatar person={a.person} size={56} />
@@ -267,10 +282,10 @@
     <div class="stars">{#each [1, 2, 3, 4, 5] as n (n)}<button class:on={(stars ?? 0) >= n} onclick={() => (stars = stars === n ? null : n)} aria-label={String(n)}><Star size={24} /></button>{/each}</div>
     <Field label={t('memo.note')} multiline rows={2} maxlength={500} bind:value={note} placeholder={t('cast.notePh')} />
     <div class="btns">
-      <Button kind="gray" destructive full onclick={() => vote('no')}>{t('cast.v.no')}</Button>
-      <Button kind="gray" full onclick={() => vote('maybe')}>{t('cast.v.maybe')}</Button>
+      <Button kind="gray" destructive full disabled={busy} onclick={() => vote('no')}>{t('cast.v.no')}</Button>
+      <Button kind="gray" full disabled={busy} onclick={() => vote('maybe')}>{t('cast.v.maybe')}</Button>
     </div>
-    <Button kind="tinted" full onclick={() => vote('next')}>{t('cast.v.next')}</Button>
+    <Button kind="tinted" full disabled={busy} onclick={() => vote('next')}>{t('cast.v.next')}</Button>
 
     <h3 class="cap">{t('cast.decision')}</h3>
     <div class="wrap">
@@ -283,7 +298,7 @@
       <Chip selected={a.stage === 'no'} onclick={() => decide('no')}>{t('cast.v.no')}</Chip>
     </div>
     {/if}
-  {:else if r}
+  {:else}
     <p class="hint">{r.open ? t('cast.until', { when: dayMonth(r.closesAt) + ', ' + time(r.closesAt) }) : t('cast.intakeClosed')} · {tn('cast.apps', apps.length)}</p>
     {#if apps.length}
       <!-- the funnel: applied, invited, came, taken -->
@@ -301,10 +316,10 @@
       {#if adding}
         <div class="stack" transition:fold>
           <!-- engine: Field has no date/time type: by hand, in Field's look (.fl) -->
-          <label class="fl"><span>{t('ed.date')}</span><input type="date" bind:value={nf.date} /></label>
+          <label class="fl"><span>{sw('ed.date')}</span><input type="date" bind:value={nf.date} /></label>
           <div class="two">
-            <label class="fl"><span>{t('ed.start')}</span><input type="time" bind:value={nf.from} /></label>
-            <label class="fl"><span>{t('ed.end')}</span><input type="time" bind:value={nf.to} /></label>
+            <label class="fl"><span>{sw('ed.start')}</span><input type="time" bind:value={nf.from} /></label>
+            <label class="fl"><span>{sw('ed.end')}</span><input type="time" bind:value={nf.to} /></label>
           </div>
           <span class="lbl">{t('cast.ivLen')}</span>
           <Segmented items={[...[15, 20, 30, 45].map((m) => ({ value: m, label: String(m) })), { value: 0, label: t('cast.ivOpen') }]} bind:value={nf.minutes} label={t('cast.ivLen')} />
@@ -346,7 +361,11 @@
             {/each}
           {/each}
         </Group>
-      {:else}<EmptyState inline text={t('cast.ivEmpty')} />{/each}
+      {:else}
+        {#if slotsState === 'ready'}<EmptyState inline text={t('cast.ivEmpty')} />
+        {:else if slotsState === 'error'}<EmptyState onretry={loadSlots} />
+        {:else}<Skeleton n={2} />{/if}
+      {/each}
     {:else}
 
     {#if r.departments.length > 1}

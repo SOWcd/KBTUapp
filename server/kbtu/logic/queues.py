@@ -132,7 +132,7 @@ def video_shape(x: sqlite3.Row) -> dict:
 
 def new_video(con, v: Viewer, size, wide: object = False) -> dict:
     """An upload starts (Head+, as a cover): its size is said up front, the pieces follow (PUT, app.py). `wide`: for the
-    sheet's background (PLAN 32), compressed for it."""
+    sheet's background, compressed for it."""
     if not organizes(con, v):
         raise ApiError("forbidden")
     if not isinstance(size, int) or isinstance(size, bool) or not 0 < size <= video.MAX_BYTES:

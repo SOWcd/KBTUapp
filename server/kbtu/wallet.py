@@ -1,4 +1,4 @@
-"""Apple Wallet: one pass per person, their badge QR (§4.4) that every event's door scanner already takes
+"""Apple Wallet: one pass per person, their badge QR that every event's door scanner already takes
 (organizing.checkin's PROFILE_QR). Added once, never changes: no web service, no push updates. The pass carries the
 same link the profile's QR shows, so it lets in exactly whom the badge lets in, and stops working with it (the code
 is wiped with the account). Signing needs a Pass Type ID certificate (README "Feature switches"); without one: off."""

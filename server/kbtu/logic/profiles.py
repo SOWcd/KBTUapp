@@ -20,7 +20,7 @@ from .core import (TZ, ApiError, NO_END, PERSON, PERSON_COLS, PROFILE_QR, SEASON
 # ---------------------------------------------------------------- people and awards
 
 def attended(con, uid: int) -> list[int]:
-    """Check-in times at published events, oldest first (achievements are computed from these, §4.11)."""
+    """Check-in times at published events, oldest first (achievements are computed from these)."""
     return [r[0] for r in rows(con, """SELECT r.checked_in_at FROM registrations r JOIN events e ON e.id = r.event_id
         WHERE r.user_id = ? AND r.checked_in_at IS NOT NULL AND e.status = 'published' ORDER BY r.checked_in_at""", uid)]
 
@@ -38,7 +38,7 @@ def _week(t: int) -> int:
 
 
 def _streak(mine: set[int], busy: set[int], this_week: int) -> tuple[int, int]:
-    """Weeks in a row with a check-in (§4.11): the longest run (the medal's: an earned level never goes away) and the
+    """Weeks in a row with a check-in: the longest run (the medal's: an earned level never goes away) and the
     current one. A week without a public event neither breaks nor adds (nothing to go to is no reason to
     lose it), and this week breaks nothing until it's over."""
     # ponytail: holidays and the session pause it only when they have no events; read the academic calendar if one bites
@@ -92,7 +92,7 @@ def _unlock_activist(con, uid: int, have: int, level: int) -> int | None:
     return maybe(con, record)
 
 
-ACHIEVEMENTS = [  # code, emoji, needs, secret (§4.11)
+ACHIEVEMENTS = [  # code, emoji, needs, secret
     ("regular", "trophy_3d", (5, 15, 30, 50), False),
     ("streak", "fire_3d", (2, 4, 8, 16), False),  # weeks in a row with a check-in (_streak): the drawn medal (st), the flame on profiles
     ("first_in", "high_voltage_3d", (1, 3, 10), False), ("soul", "raising_hands_3d_default", (3, 10, 25, 50), False),
@@ -213,7 +213,7 @@ def _celebrate(con, uid: int, before: dict[str, int], after: int | None = None) 
         if level > before[code]:
             con.execute("""INSERT INTO achievement_levels (user_id, code, level, reached_at) VALUES (?, ?, ?, ?)
                 ON CONFLICT (user_id, code) DO UPDATE SET level = excluded.level, reached_at = excluded.reached_at
-                WHERE excluded.code != 'activist' OR excluded.level > achievement_levels.level""", (uid, code, level, core.now()))
+                WHERE excluded.code NOT IN ('activist', 'streak') OR excluded.level > achievement_levels.level""", (uid, code, level, core.now()))
             if code not in PRIVATE and code not in QUIET:  # these unlocks are shown in the app only
                 notify(con, uid, "achievement", f"ach:{code}:{level}", after=after)
 
@@ -271,7 +271,7 @@ def sync_levels(con) -> None:
 BADGES = {"init26": ("init26p", "init26", "init26f")}  # performer, volunteer, guest (first-year)
 BADGE_OF = {c: b for b, vs in BADGES.items() for c in vs}
 
-GRANTABLE = ("bugs", "dmp", "creator_laugh", "creator_found", "init26", "init26f", "init26p", "supporter", "club_founder", "honor")  # the manual ones (§4.11); "First 500" is given at verification
+GRANTABLE = ("bugs", "dmp", "creator_laugh", "creator_found", "init26", "init26f", "init26p", "supporter", "club_founder", "honor")  # the manual ones; "First 500" is given at verification
 ADDS_UP = ("bugs", "dmp")  # one grant is +1, not "held": Bug hunter per bug, Attendance per meeting (a day, _grant)
 CREATOR_ONLY = ("creator_laugh", "creator_found", "supporter", "honor")
 QUIET = ("activist", "ideas", "coder", "streak")  # no bot card: the app's unlock moment only
@@ -624,7 +624,7 @@ FIRST_N = 500  # Keep the stored "first50" key so existing grants still count fo
 
 
 def card_no(con, uid: int) -> None:
-    """A student's number on the card (§4.4): the order of first KBTU sign-in, kept for good, so a deleted account never
+    """A student's number on the card: the order of first KBTU sign-in, kept for good, so a deleted account never
     frees it. The Creator's card shows 00000 and takes no number, staff none at all: the numbers count students."""
     # the last number given lives in meta: MAX + 1 alone gives the last card's number again once its account is purged
     n = con.execute(f"""UPDATE users SET card_no = 1 + MAX((SELECT COALESCE(MAX(card_no), 0) FROM users),
@@ -637,7 +637,7 @@ def card_no(con, uid: int) -> None:
 
 
 def first_fifty(con, uid: int) -> None:
-    """At a KBTU sign-in: the card number, then "First 500" (§4.11), the cards 00001-00500 (and the Creator's 00000).
+    """At a KBTU sign-in: the card number, then "First 500", the cards 00001-00500 (and the Creator's 00000).
     Kept as a grant; celebrated in the app only."""
     card_no(con, uid)
     u = one(con, "SELECT card_no, is_founder FROM users WHERE id = ?", uid)
@@ -665,7 +665,7 @@ def anthem_heard(con, v: Viewer) -> list[dict]:
 
 
 def unlocked(con, v: Viewer) -> list[dict]:
-    """Levels reached that the app hasn't celebrated yet (the unlock moment, §4.11), oldest first."""
+    """Levels reached that the app hasn't celebrated yet (the unlock moment), oldest first."""
     if not v.student:
         return []
     level = _activist_level(con, v.id)
@@ -702,6 +702,10 @@ def achievements(con, uid: int, *, own: bool = True) -> list[dict]:
         have = lambda level: sum(n for (c, lv), n in at_level.items() if c == code and lv >= level) / total  # noqa: E731
         count = (reached[code]["level"] if code in reached else 0) if code == "sponsor" else mine[code]
         level = sum(n <= count for n in needs)
+        if code == "streak" and code in reached and reached[code]["level"] > level:
+            # an earned flame stays: the live count drops when a past week's public event is published or unpublished
+            level = min(reached[code]["level"], len(needs))
+            count = max(count, needs[level - 1])
         item = {"code": code, "emoji": emoji, "secret": secret, "count": count, "level": level,
                 "levels": [{"need": n, "reached": i < level, "rarity": have(i + 1)} for i, n in enumerate(needs)], "rarity": have(1),
                 "at": reached[code]["reached_at"] if code in reached else None,
@@ -766,7 +770,7 @@ def _stranger_view(con, v: Viewer, uid: int) -> None:
 
 
 def person(con, v: Viewer, uid: int) -> dict:
-    """A profile (§4.12). Friends and clubmates see it all; anyone else the card, the bio and achievements
+    """A profile. Friends and clubmates see the full profile except achievement dates; anyone else the card, the bio and achievements
     (the "team" medal says only "some club", accepted), but not the clubs, past roles, event badges or a club's badge
     that came by itself (where someone goes can say more than they chose to show: a
     support group, a faith club) and at most PROFILES_A_DAY of them, so the student body can't be scraped by id."""
@@ -777,19 +781,20 @@ def person(con, v: Viewer, uid: int) -> dict:
         raise ApiError("not_found")
     u = one(con, "SELECT bio, showcase, show_going, can_friend, card_no, is_founder, tg_username, skin_pick, skin_org, skin_look, city, city_hidden, frame FROM users WHERE id = ?", uid)
     link = one(con, "SELECT created_at FROM friendships WHERE a = ? AND b = ?", min(uid, v.id), max(uid, v.id))
-    # their @username, to their own club's team only (§3: the team sees it in its roster anyway): "Message on Telegram"
-    team = uid != v.id and one(con, "SELECT 1 FROM org_members a JOIN org_members b ON b.org_id = a.org_id WHERE a.user_id = ? AND b.user_id = ?",
-                               v.id, uid) is not None
+    # their @username, to their own club's team only (the team sees it in its roster anyway): "Message on Telegram"
+    team = uid != v.id and one(con, """SELECT 1 FROM org_members a JOIN org_members b ON b.org_id = a.org_id
+        JOIN orgs o ON o.id = a.org_id WHERE a.user_id = ? AND b.user_id = ? AND o.status = 'active'""", v.id, uid) is not None
     state = "none" if uid == v.id else friendship(con, v.id, uid)
     block = uid != v.id and blocked(con, v.id, uid)
     mine_block = block and bool(one(con, "SELECT 1 FROM blocks WHERE user_id = ? AND blocked_id = ?", v.id, uid))
+    team = team and not block
     close = uid == v.id or link is not None or team
     if not close:
         _stranger_view(con, v, uid)
     # when a level was reached is the second of a check-in: matched against the Afisha it names the event
     picked = list(dict.fromkeys(BADGE_OF.get(k, k) for k in u["showcase"].split(",")))  # a variant picked on its own ("init26f") shows as its badge
     # Fuel (PRIVATE): not even locked on my own (no nudge to pay); on someone else's only if they showcase it (minors, pressure)
-    ach = [a if close else {**a, "at": None} for a in achievements(con, uid, own=uid == v.id)
+    ach = [a if uid == v.id else {**a, "at": None} for a in achievements(con, uid, own=uid == v.id)
            if (a["code"] not in PRIVATE or a["level"] and (uid == v.id or a["code"] in picked or a["code"] == "sponsor")) and (a["code"] not in CATALOG_HIDDEN or a["level"])]
     for a in ach:  # the club a founder founded, to those who see someone's clubs
         if a["code"] == "streak" and uid != v.id and not link:
@@ -804,14 +809,16 @@ def person(con, v: Viewer, uid: int) -> dict:
     going = []
     if link and u["show_going"]:  # only events I may see myself: a friend's team-only meeting stays theirs
         roles, hidden = _roles(con, v), _hidden_orgs(con)  # read once for the list, not per event (_visible)
-        going = cards(con, v, [e for e in rows(con, """SELECT e.* FROM registrations r JOIN events e ON e.id = r.event_id
-            WHERE r.user_id = ? AND r.status = 'going' AND e.status = 'published' AND e.starts_at > ? ORDER BY e.starts_at""", uid, core.now())
+        going = cards(con, v, [e for e in rows(con, f"""SELECT e.* FROM registrations r JOIN events e ON e.id = r.event_id
+            WHERE r.user_id = ? AND r.status = 'going' AND e.status = 'published' AND e.starts_at > ? AND {core.GUESTS_SEEN.format(e='e.id')}
+            ORDER BY e.starts_at""", uid, core.now())
             if _visible(con, v, e, roles, hidden)])
     # "Bring a friend": the upcoming events I already invited them to, so the Invite sheet opens with them "Invited"
     invited = [r[0] for r in rows(con, """SELECT i.event_id FROM friend_invites i JOIN events e ON e.id = i.event_id
         WHERE i.from_id = ? AND i.to_id = ? AND e.starts_at > ?""", v.id, uid, core.now())] if link else []
-    earned = rows(con, """SELECT e.* FROM registrations r JOIN events e ON e.id = r.event_id
-        WHERE r.user_id = ? AND r.checked_in_at IS NOT NULL AND e.badge_name IS NOT NULL ORDER BY e.starts_at DESC""", uid) if close else []
+    earned = rows(con, f"""SELECT e.* FROM registrations r JOIN events e ON e.id = r.event_id
+        WHERE r.user_id = ? AND r.checked_in_at IS NOT NULL AND e.badge_name IS NOT NULL AND (r.user_id = ? OR {core.GUESTS_SEEN.format(e='e.id')})
+        ORDER BY e.starts_at DESC""", uid, v.id) if close else []
     # the role shows only to the club's own team: outside, just the club
     clubs = rows(con, f"""SELECT m.role, {core.TITLES}, EXISTS (SELECT 1 FROM org_members x WHERE x.org_id = m.org_id AND x.user_id = ?) AS mine, o.*
         FROM org_members m JOIN orgs o ON o.id = m.org_id LEFT JOIN org_roles t ON t.id = m.role_id
@@ -852,7 +859,7 @@ def person(con, v: Viewer, uid: int) -> dict:
 
 
 
-# ---------------------------------------------------------------- friends (§4.7)
+# ---------------------------------------------------------------- friends
 
 FRIEND_ASKS_A_DAY = 500  # no limit for a person (20 a day stops an initiation crowd); only a script hits it
 REASK_AFTER = 30 * 86400    # a declined request looks pending to the asker this long, then they may ask again
@@ -886,13 +893,13 @@ def _befriend(con, a: int, b: int) -> None:
 
 
 def _friend_row(p: sqlite3.Row, at: int, friend: bool = True) -> dict:
-    """Full names only between friends (§3); a request shows the short one, with course and school like any card."""
+    """Full names only between friends; a request shows the short one, with course and school like any card."""
     name = f"{p['first_name']} {p['last_name']}".strip() if friend else short_name(p)
     return {"person": person_ref(p), "fullName": name, "course": p["course"], "school": p["school"], "at": at}
 
 
 def friends(con, v: Viewer) -> dict:
-    """The Friends page: friends (full names, §3), requests both ways, and the coming events friends go to (only
+    """The Friends page: friends (full names), requests both ways, and the coming events friends go to (only
     those who let friends see it; the card lists them)."""
     need_student(v)
     cols = PERSON_COLS + ", s.course, s.school"
@@ -902,7 +909,8 @@ def friends(con, v: Viewer) -> dict:
         JOIN users u ON u.id = CASE WHEN f.a = ? THEN f.b ELSE f.a END JOIN students s ON s.user_id = u.id
         WHERE f.a = ? OR f.b = ?
         ORDER BY (SELECT COUNT(*) FROM registrations r1 JOIN registrations r2 ON r2.event_id = r1.event_id
-                  WHERE r1.user_id = ? AND r2.user_id = u.id AND r1.status = 'going' AND r2.status = 'going')
+                  WHERE r1.user_id = ? AND r2.user_id = u.id AND r1.status = 'going' AND r2.status = 'going'
+                  AND {core.GUESTS_SEEN.format(e='r1.event_id')})
                + 2 * (SELECT COUNT(*) FROM org_members a JOIN org_members b ON b.org_id = a.org_id WHERE a.user_id = ? AND b.user_id = u.id) DESC,
                f.created_at DESC, s.first_name""", v.id, v.id, v.id, v.id, v.id)]
     incoming = [_friend_row(p, p["at"], False) for p in rows(con, f"""SELECT {cols}, r.created_at AS at FROM friend_requests r
@@ -915,9 +923,10 @@ def friends(con, v: Viewer) -> dict:
     roles, hidden = _roles(con, v), _hidden_orgs(con)  # read once for the list, not per event (_visible)
     going = [e for e in rows(con, f"""SELECT DISTINCT e.* FROM registrations r JOIN events e ON e.id = r.event_id JOIN users u ON u.id = r.user_id
         WHERE r.status = 'going' AND u.show_going = 1 AND e.status = 'published' AND COALESCE(e.ends_at, e.starts_at + {NO_END}) > ?
+        AND {core.GUESTS_SEEN.format(e='e.id')}
         AND r.user_id IN (SELECT b FROM friendships WHERE a = ? UNION SELECT a FROM friendships WHERE b = ?)
         ORDER BY e.starts_at LIMIT 30""", core.now(), v.id, v.id) if _visible(con, v, e, roles, hidden)]
-    lit = streaks_now(con, [r["person"]["id"] for r in mine])  # friends only (§3): their flames by mine on Profile
+    lit = streaks_now(con, [r["person"]["id"] for r in mine])  # friends only: their flames by mine on Profile
     for r in mine:
         r["streak"] = lit.get(r["person"]["id"], 0)
     return {"friends": mine, "incoming": incoming, "outgoing": outgoing, "going": cards(con, v, going),
@@ -925,7 +934,7 @@ def friends(con, v: Viewer) -> dict:
 
 
 def find_student(con, v: Viewer, username: str) -> dict:
-    """A student by Telegram @username (public in Telegram anyway, §4.7), with where the two of us stand."""
+    """A student by Telegram @username (public in Telegram anyway), with where the two of us stand."""
     need_student(v)
     name = username.strip().lstrip("@")
     if not re.fullmatch(r"[A-Za-z0-9_]{4,32}", name):
@@ -936,7 +945,8 @@ def find_student(con, v: Viewer, username: str) -> dict:
     state = "none" if me else friendship(con, v.id, p["id"])
     # a stranger's real name counts as a profile opened, as in person(): @usernames from the chats can't be mapped to names in bulk
     if not me and state != "friends" and v.role not in ("admin", "moderator") and not one(
-            con, "SELECT 1 FROM org_members a JOIN org_members b ON b.org_id = a.org_id WHERE a.user_id = ? AND b.user_id = ?", v.id, p["id"]):
+            con, """SELECT 1 FROM org_members a JOIN org_members b ON b.org_id = a.org_id JOIN orgs o ON o.id = a.org_id
+                WHERE a.user_id = ? AND b.user_id = ? AND o.status = 'active'""", v.id, p["id"]):
         _stranger_view(con, v, p["id"])
     s = one(con, "SELECT course, school FROM students WHERE user_id = ?", p["id"])
     out = {"person": person_ref(p), "course": s["course"], "school": s["school"], "friendship": state, "me": me}
@@ -992,7 +1002,7 @@ def answer_friend(con, v: Viewer, uid: int, accept: bool) -> dict:
         if accept:
             _befriend(con, v.id, uid)
             notify(con, uid, "friend_new", f"fn:{v.id}:{core.now() // 86400}")
-        else:  # quietly: the asker keeps seeing "request sent" (§4.7)
+        else:  # quietly: the asker keeps seeing "request sent"
             con.execute("UPDATE friend_requests SET status = 'declined', decided_at = ? WHERE from_id = ? AND to_id = ?", (core.now(), uid, v.id))
     return friends(con, v)
 
@@ -1008,7 +1018,7 @@ def take_back_request(con, v: Viewer, uid: int) -> None:
 
 
 def unfriend(con, v: Viewer, uid: int) -> None:
-    """Quietly; either side, any time (§4.7)."""
+    """Quietly; either side, any time."""
     need_student(v)
     with tx(con):
         con.execute("DELETE FROM friendships WHERE a = ? AND b = ?", (min(uid, v.id), max(uid, v.id)))

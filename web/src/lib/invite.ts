@@ -1,4 +1,4 @@
-// The club's invite (§4.5): a fresh one-time link per share (one person, 48 h), so a page view makes none; or `many`, the
+// The club's invite: a fresh one-time link per share (one person, 48 h), so a page view makes none; or `many`, the
 // team's one link for everyone (7 days, plain Members; the live one is shared again). Sent as our bot's card in the chat
 // (a line and a button, no bare link), the plain link only on old Telegram. Team's header and Studio's actions share it.
 import { api } from './api';

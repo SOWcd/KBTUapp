@@ -1,4 +1,4 @@
-// Indoor routes (PLAN item 22): the graph the owner edits on the main map (corridor points, stairs and lifts that repeat
+// Indoor routes: the graph the owner edits on the main map (corridor points, stairs and lifts that repeat
 // on their floors under one id, exits with their hours) and the ways over it. Points are fractions of the plan's width
 // and height, as uniq-rooms.json has them; all floors share one frame, so a staircase sits at the same (u, v) on each.
 

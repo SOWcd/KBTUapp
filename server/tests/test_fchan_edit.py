@@ -7,6 +7,8 @@ from __future__ import annotations
 import json
 import time
 
+import httpx
+
 from kbtu import db
 from test_core import env, login, set_clock, tma  # noqa: F401  (env: the fixture)
 from test_fchannel import CH, setup, tick
@@ -114,6 +116,9 @@ def test_anonymous_edit_with_photos_waits_and_stays_anonymous(env, monkeypatch):
     tg = TG()
     a, b = upload(c, 1), upload(c, 1)
     p = c.post("/api/forum-posts", headers=tma(1), json={"body": "Guess where this is on campus", "anon": True, "photos": [a["id"], b["id"]]}).json()
+    wrote = con.execute("SELECT created_at FROM fchan_posts WHERE id = ?", (p["id"],)).fetchone()[0]
+    held = c.get("/api/forum-posts/mod", headers=tma(4)).json()["held"]
+    assert held[0]["at"] == wrote - wrote % 3600                                                # the author's moment: to the hour
     assert c.post(f"/api/forum-posts/{p['id']}/mod", headers=tma(4), json={"ok": True}).status_code == 204
     tick(cfg, tg, con)
     msgs = [r[0] for r in con.execute("SELECT msg FROM fchan_photos WHERE post_id = ? ORDER BY n", (p["id"],))]
@@ -131,7 +136,7 @@ def test_anonymous_edit_with_photos_waits_and_stays_anonymous(env, monkeypatch):
     assert row[0] is None and row[1] and row[2] is None                                         # no user id on it while it waits
     assert "user_id" not in [d[1] for d in con.execute("PRAGMA table_info(fchan_edits)")]
     q = c.get("/api/forum-posts/mod", headers=tma(4)).json()["edits"]
-    assert q[0]["author"] is None and q[0]["anon"] and len(q[0]["photos"]) == 2
+    assert q[0]["author"] is None and q[0]["anon"] and len(q[0]["photos"]) == 2 and q[0]["at"] % 3600 == 0
     assert c.post(f"/api/forum-edits/{q[0]['edit']['id']}/mod", headers=tma(4), json={"ok": True}).status_code == 204
     tick(cfg, tg, con)
     media = tg.of("editMessageMedia")
@@ -183,4 +188,63 @@ def test_photo_swap_on_a_reported_post_waits(env, monkeypatch):
     for uid in (2, 3):
         c.post("/api/reports", headers=tma(uid), json={"target": "fpost", "id": pid, "reason": "spam"})
     assert con.execute("SELECT status FROM fchan_posts WHERE id = ?", (pid,)).fetchone()[0] == "hidden"
+    con.close()
+
+
+def test_word_swap_on_a_reported_post_waits_and_the_reported_words_stay(env, monkeypatch):
+    """Under a report any edit goes to a moderator, words alone too (swapped to harmless words before the decision and
+    back after, it would pass nobody); the report keeps the words it was made on for the moderator, until its decision."""
+    c, cfg, said, _ = setup(env, monkeypatch)
+    login(c, 1, "ann"), login(c, 2, "bob")
+    con = db.connect(cfg.db_path)
+    mods(c, con)
+    tg = Telegram()
+    pid = _live(c, cfg, con, tg, 1, "Something rude about the dean office")
+    assert c.post("/api/reports", headers=tma(2), json={"target": "fpost", "id": pid, "reason": "insult"}).status_code in (200, 204)
+    set_clock(monkeypatch, lambda: int(time.time()) + 700)
+    r = c.post(f"/api/forum-posts/{pid}/edit", headers=tma(1), json={"body": "A kind word about the library"})
+    assert r.status_code == 200 and r.json()["state"] == "held"
+    q = c.get("/api/forum-posts/mod", headers=tma(4)).json()["edits"]
+    assert q[0]["why"] == "reported" and q[0]["edit"]["was"].startswith("Something rude")
+    rep = next(x for x in c.get("/api/admin/reports", headers=tma(4)).json() if x["target"] == "fpost")
+    assert rep["was"] is None                                                                   # not edited yet
+    assert c.post(f"/api/forum-edits/{q[0]['edit']['id']}/mod", headers=tma(4), json={"ok": True}).status_code == 204
+    rep = next(x for x in c.get("/api/admin/reports", headers=tma(4)).json() if x["target"] == "fpost")
+    assert rep["text"] == "A kind word about the library" and rep["was"] == "Something rude about the dean office"
+    assert c.post(f"/api/admin/reports/fpost/{pid}", headers=tma(4), json={"remove": False}).status_code == 204
+    assert con.execute("SELECT body FROM reports WHERE target = 'fpost' AND target_id = ?", (pid,)).fetchone()[0] is None  # gone at the decision
+    con.close()
+
+
+def test_refused_photo_edit_goes_to_a_moderator(env, monkeypatch):
+    """Telegram refuses an edited photo for good (400): the channel would keep a picture the post no longer has, so the
+    post leaves the channel and waits as a refused send; a release sends it anew."""
+    c, cfg, said, _ = setup(env, monkeypatch)
+    login(c, 1, "ann")
+    con = db.connect(cfg.db_path)
+    mods(c, con)
+
+    class No(TG):
+        def __call__(self, request):
+            if request.url.path.endswith("/editMessageMedia"):
+                return httpx.Response(400, json={"ok": False, "error_code": 400, "description": "wrong file"})
+            return super().__call__(request)
+    tg = No()
+    ph = upload(c, 1)
+    pid = _live(c, cfg, con, tg, 1, "Found this umbrella in the library", photos=[ph["id"]])
+    msgs = {con.execute("SELECT tg_msg FROM fchan_posts WHERE id = ?", (pid,)).fetchone()[0]} | {
+        r[0] for r in con.execute("SELECT msg FROM fchan_photos WHERE post_id = ?", (pid,))}
+    set_clock(monkeypatch, lambda: int(time.time()) + 700)
+    new = upload(c, 1)
+    r = c.post(f"/api/forum-posts/{pid}/edit", headers=tma(1), json={"body": "Found this umbrella in the library", "photos": [new["id"]]})
+    assert r.status_code == 200 and r.json()["state"] == "done", r.text
+    tick(cfg, tg, con)
+    assert tuple(con.execute("SELECT status, why, tg_msg, edit_sync FROM fchan_posts WHERE id = ?", (pid,)).fetchone()) == ("held", "tgno", None, None)
+    tick(cfg, tg, con)
+    assert {d["message_id"] for d in tg.of("deleteMessage") if d["chat_id"] == CH} >= msgs          # out of the channel
+    held = c.get("/api/forum-posts/mod", headers=tma(4)).json()["held"]
+    assert [p["why"] for p in held if p["id"] == pid] == ["tgno"]
+    assert c.post(f"/api/forum-posts/{pid}/mod", headers=tma(4), json={"ok": True}).status_code == 204
+    tick(cfg, tg, con)
+    assert con.execute("SELECT tg_msg FROM fchan_posts WHERE id = ?", (pid,)).fetchone()[0] not in (None, 0, *msgs)  # sent anew
     con.close()

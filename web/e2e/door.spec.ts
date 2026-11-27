@@ -16,10 +16,8 @@ const before = (k: string) => T(k).split('{')[0]; // a string's fixed start, bef
 async function calm(phone: Phone): Promise<Phone> {
   const p = phone.page;
   await p.addLocatorHandler(p.getByRole('button', { name: T('inst.later') }), (b) => b.click());
-  // the award's own card (its kicker and its x), never another overlay's x under it
-  const close = p.getByRole('button', { name: T('common.close') });
-  const award = p.locator('div').filter({ has: p.getByText(T('unlock.kicker'), { exact: true }) }).filter({ has: close }).last();
-  await p.addLocatorHandler(award, (a) => a.getByRole('button', { name: T('common.close') }).click());
+  // the award's own card (its kicker): Back closes it, as it closes every full-screen overlay
+  await p.addLocatorHandler(p.getByText(T('unlock.kicker'), { exact: true }).first(), () => phone.back.press());
   return phone;
 }
 
@@ -109,7 +107,7 @@ test('the door scans a ticket and the attendee sees it on their ticket', async (
 
 test('an 18+ door asks the age after the scan', async ({ open, qa }) => {
   // a guest-list event with the age check: only the creator makes one (admin event-new, then the list's import)
-  admin(qa, ['founder', '1003']); // Bota is the creator here; she isn't in this test
+  admin(qa, ['founder', '1003', '--yes']); // Bota is the creator here; she isn't in this test
   const at = new Date(Date.now() + 2 * 3600_000).toISOString();
   const made = admin(qa, ['event-new', 'openmic'], JSON.stringify({ title: 'Late show 18+', description: 'Stand-up after dark.', place: 'Atrium',
     starts_at: at, ends_at: new Date(Date.now() + 5 * 3600_000).toISOString(), guest_list: true, age_check: true }));

@@ -1,4 +1,4 @@
-"""DMP's Student Union sheet (PLAN 95) into the JSON `admin roster load` takes. The file holds real students: it and the
+"""DMP's Student Union sheet into the JSON `admin roster load` takes. The file holds real students: it and the
 JSON stay outside the repo, and this prints counts only, never a row.
 
     server/.venv/bin/python server/tools/roster_convert.py <sheet.xlsx> <out.json>

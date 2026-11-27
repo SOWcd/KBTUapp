@@ -70,7 +70,7 @@ def test_manual_sign_in(env, monkeypatch):
 
 
 def test_ms_sign_in(env, monkeypatch):
-    """The KBTU Microsoft sign-in (PLAN item 44): a link whose state only this server signs; the verifier for it; a
+    """The KBTU Microsoft sign-in: a link whose state only this server signs; the verifier for it; a
     token Graph accepts but issued elsewhere is refused; a typed-in student is confirmed; someone new types only the
     ID and year after; one Microsoft account never links to two Telegram users."""
     import base64

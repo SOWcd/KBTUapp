@@ -1,8 +1,9 @@
-"""An org's main Telegram channel in its news (PLAN 86 part 2): what the userbot (userbot.py) saw,
+"""An org's main Telegram channel in its news: what the userbot (userbot.py) saw,
 written as the org's posts. Here only the database: the Telegram side hands over messages (Msg), so the rules
 are tested without Telegram.
 
-The source is the org's MAIN public channel with its Studio switch on (chats.main, chats.mirror); the userbot joins it
+The source is the org's MAIN public channel with its Studio switch on (chats.main, chats.mirror) and our bot an admin
+there, which proves the channel is the org's (or an admin's say-so: chats.mirror = 2); the userbot joins it
 itself and leaves it when it stops being one. A post is a channel post (an album is one post): its text as typed (the
 first line the title), its photo copied, a video or a file only as a link to the post; edits follow, a deletion takes
 it down and wipes its text and photo; Telegram's views and reaction counts show instead of ours, and comments stay in Telegram. Nobody is notified
@@ -77,6 +78,9 @@ def tid(tg_chat_id: int | None) -> int | None:
 
 
 _GROUP_SRC = "{a}.news_topic IS NOT NULL AND {a}.kind = 'group' AND {a}.tg_chat_id IS NOT NULL"  # a chats row (alias a) as a group source
+# the switch on AND the channel proven the org's own: our bot an admin there (tg_chat_id), or an admin vouched (mirror = 2:
+# an office's channel, admin office); else any club could mirror a public channel it doesn't run (logic.chatlist.mirrored)
+_MIRRORED = "(c.mirror = 2 OR (c.mirror = 1 AND c.tg_chat_id IS NOT NULL))"
 
 
 def groups(con) -> dict[int, dict]:
@@ -90,11 +94,11 @@ def groups(con) -> dict[int, dict]:
 
 
 def wanted(con) -> dict[str, int]:
-    """The channels to mirror, by name: each active org's main public channel with the switch on, unless the org picked
-    a group's topic instead. name -> org id."""
+    """The channels to mirror, by name: each active org's main public channel with the switch on and proven its own
+    (_MIRRORED), unless the org picked a group's topic instead. name -> org id."""
     out = {}
     for c in rows(con, f"""SELECT c.url, c.org_id FROM chats c JOIN orgs o ON o.id = c.org_id
-            WHERE c.main = 1 AND c.mirror = 1 AND c.kind = 'channel' AND o.status = 'active'
+            WHERE c.main = 1 AND {_MIRRORED} AND c.kind = 'channel' AND o.status = 'active'
             AND NOT EXISTS (SELECT 1 FROM chats g WHERE g.org_id = o.id AND {_GROUP_SRC.format(a='g')}) ORDER BY c.id"""):
         if name := username(c["url"]):
             out.setdefault(name, c["org_id"])
@@ -150,8 +154,7 @@ def unpick(con, group: int) -> None:
 
 
 def seen(con, channel: int, msg_id: int) -> None:
-    """A source group's topic read up to here, its post taken or not (members' replies there are skipped, never kept):
-    the next sweep starts after it."""
+    """A source read up to here: its post taken or intentionally skipped. The next sweep starts after it."""
     con.execute("UPDATE tg_channels SET last_msg = MAX(last_msg, ?) WHERE id = ?", (msg_id, channel))
 
 
@@ -199,7 +202,7 @@ def _link(s: dict, channel: int, msg: int) -> str:
 
 
 def last(con, channel: int) -> int:
-    """The newest post taken from the channel; 0 on a first link (then FIRST_TAKE of the last FIRST_DAYS)."""
+    """The newest message handled from the source; 0 on a first link (then FIRST_TAKE of the last FIRST_DAYS)."""
     c = one(con, "SELECT last_msg FROM tg_channels WHERE id = ?", channel)
     return c["last_msg"] if c else 0
 
@@ -286,15 +289,17 @@ def legacy_album_siblings(con, channel: int, m: Msg) -> list[int] | None:
         AND grouped = ? AND lang IS NULL AND msg_id != ? ORDER BY msg_id DESC""", p[0], channel, m.grouped, m.id)] if p else None
 
 
-def take(con, channel: int, m: Msg, *, album_empty: bool = False) -> int | None:
+def take(con, channel: int, m: Msg, *, album_empty: bool = False, advance: bool = True) -> int | None:
     """A new channel post, an edit of one, or one more piece of an album: the org's post for it (a post without text
     is titled by the channel). The post's id; None when the channel is no mirror now, or (a group) the message is not
-    an admin's post opening in the picked topic."""
+    an admin's post opening in the picked topic. An individual refresh leaves the history cursor where it was."""
     s = _source(con, channel)
     if s is None or s["topic"] is not None and not (s["topic"] and m.topic == s["topic"] and m.own):
         return None
     oid, title = s["org"], s["title"]
     with tx(con):
+        if advance:
+            seen(con, channel, m.id)
         had = one(con, "SELECT post_id, lang FROM tg_post_msgs WHERE channel = ? AND msg_id = ?", channel, m.id)
         album = one(con, "SELECT post_id FROM tg_post_msgs WHERE channel = ? AND grouped = ?", channel, m.grouped) if m.grouped and not had else None
         pid = (had or album)["post_id"] if (had or album) else None
@@ -303,13 +308,13 @@ def take(con, channel: int, m: Msg, *, album_empty: bool = False) -> int | None:
             # taken down here (by its club or a moderator): an edit in Telegram brings back neither its text nor its photo
             if not had:
                 con.execute("INSERT INTO tg_post_msgs (channel, msg_id, post_id, grouped, lang) VALUES (?, ?, ?, ?, NULL)", (channel, m.id, pid, m.grouped))
-            _counted(con, channel, pid, m)
+            _counted(con, pid, m)
             return pid
         post = _split(m.text, title, m.entities)
         if had and had["lang"]:  # a translation folded into another post: its edit is that language's text
             if m.text.strip():
                 _set_tr(con, pid, had["lang"], post)
-            _counted(con, channel, pid, m)
+            _counted(con, pid, m)
             return pid
         if pid is None and lang and (into := _fold_target(con, channel, m.date, lang)):
             # the same announcement in another language: one post, this text as its translation
@@ -318,7 +323,7 @@ def take(con, channel: int, m: Msg, *, album_empty: bool = False) -> int | None:
             if m.photo and not one(con, "SELECT photo_file_id FROM posts WHERE id = ?", into)["photo_file_id"]:
                 con.execute("UPDATE posts SET photo_file_id = ? WHERE id = ?", (_photo(con, m.photo), into))
                 autoev.cover(con, into)  # the photo after the text: the draft found in it gets it too
-            _counted(con, channel, into, m)
+            _counted(con, into, m)
             return into
         if album and lang and not one(con, "SELECT 1 FROM posts WHERE id = ? AND body != ''", pid) and _untitled(con, pid, title) \
                 and (into := _fold_target(con, channel, m.date, lang, but=pid)):
@@ -331,7 +336,7 @@ def take(con, channel: int, m: Msg, *, album_empty: bool = False) -> int | None:
                 autoev.cover(con, into)
             con.execute("DELETE FROM posts WHERE id = ?", (pid,))  # made a moment ago, nobody saw it yet
             _set_tr(con, into, lang, post)
-            _counted(con, channel, into, m)
+            _counted(con, into, m)
             return into
         t, b = post["title"], post["body"]
         fmt = {k: post[k] for k in ("titleFmt", "fmt") if k in post}
@@ -339,7 +344,6 @@ def take(con, channel: int, m: Msg, *, album_empty: bool = False) -> int | None:
         tg_fmt = json.dumps({"msg": m.id, **fmt}, ensure_ascii=False) if fmt or m.grouped else None
         if pid is None:
             if not stories_open(con, one(con, "SELECT * FROM orgs WHERE id = ?", oid)):
-                con.execute("UPDATE tg_channels SET last_msg = MAX(last_msg, ?) WHERE id = ?", (m.id, channel))
                 return None  # a student initiative below the Ascent's collab step posts no stories, mirrored ones neither
             pid = con.execute("""INSERT INTO posts (org_id, author_id, audience, title, body, tg_fmt, photo_file_id, comments_on,
                     created_at, tg_channel, tg_url, tg_media) VALUES (?, NULL, 'public', ?, ?, ?, ?, 0, ?, ?, ?, ?)""",
@@ -367,16 +371,15 @@ def take(con, channel: int, m: Msg, *, album_empty: bool = False) -> int | None:
                     autoev.cover(con, pid)
         if not had:
             con.execute("INSERT INTO tg_post_msgs (channel, msg_id, post_id, grouped) VALUES (?, ?, ?, ?)", (channel, m.id, pid, m.grouped))
-        _counted(con, channel, pid, m)
+        _counted(con, pid, m)
     return pid
 
 
-def _counted(con, channel: int, pid: int, m: Msg) -> None:
+def _counted(con, pid: int, m: Msg) -> None:
     """Views and reactions from the post's first message (the one its link opens; Telegram keeps them per message: an
-    album's other pieces, a folded translation), and the channel's newest post taken."""
+    album's other pieces, a folded translation)."""
     if (c := _counts(m)) and not one(con, "SELECT 1 FROM tg_post_msgs WHERE post_id = ? AND msg_id < ?", pid, m.id):
         con.execute(f"UPDATE posts SET {', '.join(k + ' = ?' for k in c)} WHERE id = ?", (*c.values(), pid))  # keys from _counts
-    con.execute("UPDATE tg_channels SET last_msg = MAX(last_msg, ?) WHERE id = ?", (m.id, channel))
 
 
 def _untitled(con, pid: int, fallback: str) -> bool:

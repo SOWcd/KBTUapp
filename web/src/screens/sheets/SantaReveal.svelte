@@ -9,7 +9,6 @@
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
   import Avatar from '../../ui/Avatar.svelte';
-  import CloseX from '../../ui/CloseX.svelte';
   import SantaBack from './SantaBack.svelte';
 
   let { overlay, to, from }: { overlay: Overlay; to: { person: PersonRef; wish: string }; from: DOMRect | null } = $props();
@@ -22,7 +21,7 @@
   const SPARKS = Array.from({ length: 8 }, (_, i) => { const a = (i / 8) * Math.PI * 2 + 0.4, r = W * (0.74 + (i % 3) * 0.1); return { x: Math.cos(a) * r, y: Math.sin(a) * r * 1.2, s: 0.6 + (i % 4) * 0.25 }; });
 
   let scrim: HTMLDivElement, wrap: HTMLDivElement, stage: HTMLDivElement, card: HTMLDivElement, glow: HTMLSpanElement;
-  let shown = $state(still); // the face is out: the scrim's tap may close, the × is there
+  let shown = $state(still); // the face is out: the scrim's tap may close
   let gone = false;
   onMount(() => {
     const off = hideChrome();
@@ -80,7 +79,6 @@
     <p class="wcap t-cap up">{t('santa.wishOf')}</p>
     <p class="wish t-body up">{to.wish}</p>
   </div>
-  {#if shown}<span class="x"><CloseX onclick={() => close(overlay.id)} /></span>{/if}
 </div>
 
 <style>
@@ -88,8 +86,8 @@
     background: radial-gradient(70% 42% at 50% 40%, rgba(215, 38, 61, 0.34), transparent 72%), rgba(6, 4, 9, 0.92);
     -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); }
   :global(html.lowfx) .scrim { background: radial-gradient(70% 42% at 50% 40%, rgba(215, 38, 61, 0.3), transparent 72%), #08060B; } /* no blur there: nothing of the page shows through */
-  .wrap { position: absolute; inset: 0; z-index: var(--z-sheet); pointer-events: none; display: flex; flex-direction: column; padding-bottom: var(--close-room); color: #fff; text-align: center; }
-  /* as the award's moment: the content scrolls in a box that ends above the ×, a long wishlist fades out over it */
+  .wrap { position: absolute; inset: 0; z-index: var(--z-sheet); pointer-events: none; display: flex; flex-direction: column; padding-bottom: var(--safe-bottom); color: #fff; text-align: center; }
+  /* as the award's moment: the content scrolls in a box that ends above the home bar, a long wishlist fades out at its end */
   .page { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; scrollbar-width: none; pointer-events: none; display: flex; flex-direction: column; align-items: center;
     padding: calc(var(--top) + 8px) 28px 20px;
     -webkit-mask-image: linear-gradient(black calc(100% - 20px), transparent); mask-image: linear-gradient(black calc(100% - 20px), transparent); }
@@ -115,7 +113,4 @@
     clip-path: polygon(50% 0, 60% 40%, 100% 50%, 60% 60%, 50% 100%, 40% 60%, 0 50%, 40% 40%); }
   .wcap { margin: 30px 0 8px; color: rgba(255, 255, 255, 0.55); }
   .wish { max-width: 320px; margin: 0; color: rgba(255, 255, 255, 0.92); white-space: pre-wrap; overflow-wrap: anywhere; }
-  .x { animation: xin 300ms ease-out both; }
-  @keyframes xin { from { opacity: 0; } }
-  @media (prefers-reduced-motion: reduce) { .x { animation: none; } }
 </style>

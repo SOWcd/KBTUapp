@@ -192,7 +192,7 @@ def _sched_named(msg: dict) -> bool:
 
 
 async def _schedule(cfg: Config, http: httpx.AsyncClient, con, msg: dict) -> dict | None:
-    """A student's week from the portal's schedule page (portal.py; PLAN 26; Share -> Web Archive ->
+    """A student's week from the portal's schedule page (portal.py; Share -> Web Archive ->
     Telegram -> the bot): it replaces their classes when the page's name is theirs (the Microsoft one), each class
     keeping its names in the languages sent before (the portal switched to another language, the page sent again).
     The answer has counts and language names only. The file is read in memory and never kept; nothing of the page
@@ -277,7 +277,7 @@ def _reply(chat: int, text: str, button: str | None = None, start: str = "", cfg
 
 
 async def _receipt(cfg: Config, http: httpx.AsyncClient, con, msg: dict, eid: int | None = None, again: bool = False) -> dict | None:
-    """A receipt sent to the bot (§4.3; Kaspi → Share → Telegram → the bot): it goes to the sender's seat on hold, the
+    """A receipt sent to the bot (Kaspi → Share → Telegram → the bot): it goes to the sender's seat on hold, the
     only one, or the one they pick (the buttons answer the receipt's own message, so the pick finds the file in
     reply_to_message: nothing to keep in between). The answer to send, or None for a group chat."""
     chat = msg.get("chat") or {}

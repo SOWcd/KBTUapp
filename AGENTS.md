@@ -31,7 +31,7 @@ screen per PR, never slower than before, checked on a phone in both themes.
 
 | What | Where |
 | --- | --- |
-| API routes | `server/kbtu/app.py` |
+| API routes | `server/kbtu/app.py`; find one without reading it: `python3 server/tools/routes.py <text>` prints `METHOD path  app.py:line  handler → the rule calls` (no venv needed) |
 | Rules by area | `server/kbtu/logic/*.py` (`core` shared helpers; `seats` sign-up and tickets; `organizing` Studio, the door; `fchannel` the forum channel's posts; `tgcomments` its comments; `forum` find-people; `account` me, settings, deleting an account; `moderation` reports; `daily` the weekly DMP memo and `stats_day` (the nightly retention sweep: a new cleanup goes there; the scheduler is `chores.py::_chores`); `clubs` clubs and join requests (`join_requests`; not `club_applications` = a new club, nor `casting` = recruitment rounds); `stats` anonymous usage counters; `credits` the people of the app, its own consent; `helpus` to the creator from the app: an anonymous line (no author kept, by design) and a signed offer to help) |
 | Schema | read `server/kbtu/schema.current.sql` (generated: today's tables); change it only by appending to `MIGRATIONS` in `server/kbtu/migrations.py` (read that file with `tail`), then run `server/tools/schema_dump.py` |
 | Telegram bot | `server/kbtu/bot.py` (polling, the ears, the Telegram call `_tg`), `outbox.py` (the postman: `bot_outbox` rows into messages), `bot_dm.py` (private chats), `bot_groups.py` (group chats, `/all`, video links), `chores.py` (the postman's chores: backup, retention sweep, chat cards, userpics) |
@@ -40,7 +40,7 @@ screen per PR, never slower than before, checked on a phone in both themes.
 | QR check-in, `/show` | `server/kbtu/checkin.py`, `web/src/screens/Screen.svelte` |
 | Web entry, tabs, sheets | `web/src/App.svelte`, `web/src/lib/state/ui.svelte.ts`, `web/src/lib/state/sheets.ts` |
 | API contract | `web/src/lib/api/types.ts`, `index.ts` (the interface), `client.ts` |
-| UI strings | `web/src/lib/i18n/{ru,kk,en}.ts` (ru is the source; kk and en are typed against it). ~70k tokens each: never read them whole; add a string with `node tools/i18n.mjs add <key> --ru "…" --kk "…" --en "…" [--after <key>]` (from `web/`): the same spot in all three, which keep one key order (a test checks) |
+| UI strings | `web/src/lib/i18n/{ru,kk,en}.ts` (ru is the source; kk and en are typed against it). ~70k tokens each: never read them whole; add a string with `node tools/i18n.mjs add <key> --ru "…" --kk "…" --en "…" [--after <key>]` (from `web/`): the same spot in all three, which keep one key order (a test checks). Words only the Admin sheet's and Studio's screens show: `staff.{ru,kk,en}.ts` (add with `--staff`), read with `sw()` from `lib/i18n/staff`, out of the start bundle |
 | Shared UI | `web/src/ui/` (tokens.css, base.css, glass, Sheet, Button, ...) |
 | Test helpers | `env`, `login`, `tma`, `set_clock`, `delete_now` in `server/tests/helpers.py` (`from helpers import ...`; `test_core.py` re-exports them for the older tests) |
 | Android app (Play) | `android/` (a TWA from `twa-manifest.json`; README: release, demo login, Data safety), built only by `.github/workflows/android.yml` |
@@ -142,12 +142,14 @@ tab freezes animations and `requestAnimationFrame`: look with it visible.
   an admin, the creator. Staff get one extra thing, the Admin sheet; every staff and moderation control lives there
   and nowhere else (no "take down", "publish", "reveal" or role badges with actions in normal tabs). A club's own
   people managing their club in Studio is not staff. Destructive staff actions confirm first and can be undone.
-- **One Back**: Telegram's BackButton is the only Back. No "‹ Back" links, arrows or close buttons of our own that
-  duplicate it (a full-screen overlay's bottom x is the one exception: ui/CloseX.svelte).
+- **One Back**: Telegram's BackButton (the web/home-screen app's own Back pill outside Telegram) is the only way out,
+  full-screen overlays included; a full-screen photo viewer also closes with a swipe down. No "‹ Back" links, arrows,
+  x or close buttons of our own. Images are never draggable (base.css; `draggable="false"` on photos and thumbnails).
 - **Svelte**: runes only. `@keyframes` are scoped per component: define the ones you use. The official Svelte MCP (`.mcp.json`) has the docs and
   `svelte-autofixer`: run a new or changed component through it until it reports nothing.
 - **Style**: match the code around you; short comments that say why. Deliberate shortcuts are marked
-  `# ponytail:` / `// ponytail:` with their ceiling and the upgrade path.
+  `# ponytail:` / `// ponytail:` with their ceiling and the upgrade path. A comment states its rule itself: never
+  cite a document that isn't in this repo (no `SPEC §n`, `PLAN n`; the privacy policy's `policy §n` is fine).
 - **Security reviews**: features that touch money, check-in, anonymity or personal data get an adversarial review
   (a second agent trying to break them) before they ship.
 

@@ -1,6 +1,5 @@
 <script lang="ts">
-  import CloseX from '../../ui/CloseX.svelte';
-  // The unlock moment (SPEC §4.11): a new achievement level, celebrated once. The medal drops in and lands with a glow in
+  // The unlock moment: a new achievement level, celebrated once. The medal drops in and lands with a glow in
   // its tier's colour, the confetti flies from it; its name, tier, what it took and how rare it is. Share sends our bot's
   // card (aw_<code>), "Great!" closes; the next new level, if any, comes after.
   import { onMount } from 'svelte';
@@ -72,7 +71,6 @@
     <button class="pill glass glass-pill main" use:glass disabled={sharing} onclick={share}>{t('aw.share')}</button>
   </div>
   </div>
-  <CloseX onclick={() => close(overlay.id)} />
 </div>
 
 <style>
@@ -80,8 +78,8 @@
     background: radial-gradient(60% 40% at 50% 38%, color-mix(in srgb, var(--glow) 45%, transparent), transparent 70%), rgba(3, 4, 10, 0.86);
     -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); }
   :global(html.lowfx) .scrim { -webkit-backdrop-filter: none; backdrop-filter: none; background: radial-gradient(60% 40% at 50% 38%, color-mix(in srgb, var(--glow) 45%, transparent), transparent 70%), rgba(3, 4, 10, 0.95); }
-  .wrap { position: absolute; inset: 0; z-index: var(--z-sheet); pointer-events: none; display: flex; flex-direction: column; padding-bottom: var(--close-room); color: #fff; text-align: center; }
-  /* the content scrolls in a box that ends above the × (--close-room): a long text or a short phone never puts a
+  .wrap { position: absolute; inset: 0; z-index: var(--z-sheet); pointer-events: none; display: flex; flex-direction: column; padding-bottom: var(--safe-bottom); color: #fff; text-align: center; }
+  /* the content scrolls in a box that ends above the home bar: a long text or a short phone never puts a
      button under it; it fades out above it. Taps on its empty space still reach the scrim (closes) */
   .page { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; scrollbar-width: none; pointer-events: none; display: flex; flex-direction: column; align-items: center;
     gap: 8px; padding: calc(var(--top) + 8px) 28px 20px;

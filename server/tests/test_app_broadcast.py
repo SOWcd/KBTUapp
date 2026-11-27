@@ -116,12 +116,35 @@ def test_broadcast_to_one_platform(audience, capsys):
     admin.main(["broadcast", NAME, URL, "--platform", "ios"])
     assert capsys.readouterr().out.strip() == "queued 1"             # 12; 11 already has it
     assert [r[0] for r in con.execute("SELECT u.tg_id FROM bot_outbox b JOIN users u ON u.id = b.user_id ORDER BY u.tg_id")] == [10, 11, 12]
+    assert {json.loads(r[0]).get("p") for r in con.execute("SELECT payload FROM bot_outbox")} == {1}  # marked for the 90-day sweep
     for bad in (["--platform", "linux"], ["--platform"], ["--platform", "--dry"], ["--platform", "ios", "--platform", "web"]):
         with pytest.raises(SystemExit):
             admin.main(["broadcast", NAME, URL, *bad])
     with pytest.raises(SystemExit):
         admin.main(["broadcast", "--platform", "ios", NAME, URL])
     assert con.execute("SELECT COUNT(*) FROM bot_outbox").fetchone()[0] == 3
+
+
+def test_broadcast_android(audience, capsys):
+    """broadcast-android: people seen on Android who never opened the installed app, the button to android.html in
+    each one's language; a preview goes regardless."""
+    con, _ = audience
+    con.execute("INSERT INTO users (tg_id, lang, can_dm, role, is_founder, created_at, seen_at) VALUES (15, 'en', 1, 'user', 0, 0, 0)")
+    con.execute("INSERT INTO user_platforms (user_id, kind, seen_at) SELECT id, 'android', 0 FROM users WHERE tg_id IN (11, 12, 15)")
+    con.execute("INSERT INTO android_app (user_id, seen_at) SELECT id, 0 FROM users WHERE tg_id = 12")  # already has the app
+    cmd = ["broadcast-android", "android_test"]
+    admin.main([*cmd, "--dry"])
+    assert capsys.readouterr().out.strip() == "would queue 2"
+    assert con.execute("SELECT COUNT(*) FROM bot_outbox").fetchone()[0] == 0
+    admin.main([*cmd, "@reader"])
+    assert capsys.readouterr().out.strip() == "queued 1"
+    admin.main(cmd)
+    assert capsys.readouterr().out.strip() == "queued 2"
+    urls = {r[0]: json.loads(r[1])["url"] for r in con.execute("SELECT u.tg_id, b.payload FROM bot_outbox b JOIN users u ON u.id = b.user_id")}
+    assert urls == {10: "https://kbtu.sow.kz/android.html?lang=en", 11: "https://kbtu.sow.kz/android.html?lang=kk",
+                    15: "https://kbtu.sow.kz/android.html?lang=en"}
+    with pytest.raises(SystemExit):
+        admin.main(["broadcast-android", "no_such_template"])
 
 
 def test_a_failed_preview_can_go_again(audience, capsys):
