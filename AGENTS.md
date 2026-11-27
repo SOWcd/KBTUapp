@@ -147,7 +147,8 @@ tab freezes animations and `requestAnimationFrame`: look with it visible.
 - **Svelte**: runes only. `@keyframes` are scoped per component: define the ones you use. The official Svelte MCP (`.mcp.json`) has the docs and
   `svelte-autofixer`: run a new or changed component through it until it reports nothing.
 - **Style**: match the code around you; short comments that say why. Deliberate shortcuts are marked
-  `# ponytail:` / `// ponytail:` with their ceiling and the upgrade path.
+  `# ponytail:` / `// ponytail:` with their ceiling and the upgrade path. A comment states its rule itself: never
+  cite a document that isn't in this repo (no `SPEC §n`, `PLAN n`; the privacy policy's `policy §n` is fine).
 - **Security reviews**: features that touch money, check-in, anonymity or personal data get an adversarial review
   (a second agent trying to break them) before they ship.
 
