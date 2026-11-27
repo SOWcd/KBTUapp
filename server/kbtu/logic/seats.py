@@ -878,7 +878,8 @@ def add_receipt(con, v: Viewer, eid: int, saved: dict, read: dict | None = None,
             flags, clean = SPOT, False
         elif not clean and not flags:
             flags = PARTIAL
-        if not old and not clean and flags != SPOT and _unchecked(con, eid) >= UNCHECKED_CAP:
+        # OCR down (read None) is our outage, not a junk picture: every honest receipt would hit the cap then
+        if not old and read is not None and not clean and flags != SPOT and _unchecked(con, eid) >= UNCHECKED_CAP:
             raise ApiError("rate_limited", "unchecked")  # the hold stays (and runs out): the organizer catches up first
         reviewed_at = core.now() if clean else None
         fid = con.execute("""INSERT INTO files (sha256, kind, mime, bytes, width, height, path, owner_id, created_at)
