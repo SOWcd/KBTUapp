@@ -15,6 +15,7 @@
   import Bookmark from '@lucide/svelte/icons/bookmark';
   import { inner } from '../lib/perms';
   import { shortOf } from '../lib/short';
+  import { service } from '../lib/clubs';
 
   // wasThere: Afisha's "Past" of everyone's events marks mine (signed up or came), not only a check-in
   let { e, showDate = false, dateLine = '', wasThere = false, onopen }: { e: EventCard; showDate?: boolean; dateLine?: string; wasThere?: boolean; onopen?: () => void } = $props();
@@ -47,7 +48,8 @@
       {:else if e.guestHost}<Tag tone="neutral">{t('event.partner')}</Tag>
       {:else if e.visibility === 'members'}<Tag tone="accent">{t('event.teamOnly')}</Tag>
       {:else if e.school}<Tag tone="neutral">{t('event.schoolOnly', { school: shortOf(e.org) })}</Tag>
-      {:else if e.firstYear}<Tag tone="warning">{t('event.firstYear')}</Tag>{/if}
+      {:else if e.firstYear}<Tag tone="warning">{t('event.firstYear')}</Tag>
+      {:else if service(e.org)}<Tag tone="neutral">{t('clubs.office')}</Tag>{/if}
       {#if e.friends.length && !cancelled}
         <span class="fr">
           <span class="stack">{#each e.friends.slice(0, 3) as f (f.id)}<Avatar person={f} size={20} tappable={false} />{/each}</span>

@@ -9,6 +9,8 @@
   import OrgLogo from './OrgLogo.svelte';
   import FriendsLine from './FriendsLine.svelte';
   import GovMark from './GovMark.svelte';
+  import OfficeMark from './OfficeMark.svelte';
+  import { service } from '../lib/clubs';
 
   // social: my friends in it take the line, when there are any
   let { org: o, name, sub = '', hot = false, social = false, end }: { org: Org; name?: string; sub?: string; hot?: boolean; social?: boolean; end?: Snippet } = $props();
@@ -18,7 +20,7 @@
   <button class="open" onclick={() => sheets.club(o.id)} aria-label={o.name}></button>
   <OrgLogo org={o} size={40} />
   <span class="txt">
-    <span class="nm"><b class="ellipsis">{name ?? o.name}</b>{#if o.official && o.kind === 'club'}<OfficialMark size={15} />{/if}{#if o.gov}<GovMark size={14} />{/if}</span>
+    <span class="nm"><b class="ellipsis">{name ?? o.name}</b>{#if o.official && o.kind === 'club'}<OfficialMark size={15} />{/if}{#if o.gov}<GovMark size={14} />{/if}{#if service(o)}<OfficeMark size={14} />{/if}</span>
     {#if social && o.friends.length}<small><FriendsLine org={o} /></small>
     {:else if sub}<small class="ellipsis" class:hot>{#if hot}<i></i>{/if}{sub}</small>{/if}
   </span>

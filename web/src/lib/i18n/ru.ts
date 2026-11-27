@@ -2266,6 +2266,7 @@ const ru = {
   'clubs.awaitsDmp': "Ждёт проверки ДМП",
   'clubs.daysLeft': { one: "Ещё {n} день", few: "Ещё {n} дня", many: "Ещё {n} дней", other: "Ещё {n} дня" },
   'clubs.gov': "Студенческое правительство",
+  'clubs.office': "Официальная служба КБТУ",
   'clubs.open': "Открыть",
   'clubs.leave': "Выйти",
   'clubs.popular': "Популярные",

@@ -9,8 +9,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
  *  +100 for the layout numbers' lazy import (the measuring itself is its own chunk, layoutStats.ts); +250 for the
  *  Android tester offer (lib/androidTest.ts, the TWA check, Profile's row): a lazy import of it came out 500 B bigger; +200 for
  *  Studio's news-from-a-group-topic strings (PR 441: the ru dictionary ships with the start); +2,150 for library seats'
- *  strings (PR 449, the ru dictionary again; the screens themselves are lazy chunks). */
-const MAX_START_GZIP = 226_300;
+ *  strings (PR 449, the ru dictionary again; the screens themselves are lazy chunks); +300 for KBTU's official service
+ *  mark on Afisha's cards and rows (PR 452: OfficeMark, its icon and string, shown from the first frame). */
+const MAX_START_GZIP = 226_600;
 
 const gzipped = async (code: string) => (await new Response(new Blob([code]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer()).byteLength;
 

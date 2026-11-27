@@ -2244,6 +2244,7 @@ const kk: Dict = {
   'clubs.awaitsDmp': "ЖСД тексеруін күтуде",
   'clubs.daysLeft': { one: "Тағы {n} күн", other: "Тағы {n} күн" },
   'clubs.gov': "Студенттік үкімет",
+  'clubs.office': "ҚБТУ-дың ресми қызметі",
   'clubs.open': "Ашу",
   'clubs.leave': "Шығу",
   'clubs.popular': "Танымал",

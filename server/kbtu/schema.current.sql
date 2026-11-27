@@ -819,6 +819,11 @@ CREATE TABLE org_bans (
         created_at INTEGER NOT NULL,
         PRIMARY KEY (org_id, user_id)
     ) STRICT;
+CREATE TABLE org_flags (  -- IF NOT EXISTS: tests rewind user_version
+      org_id         INTEGER PRIMARY KEY REFERENCES orgs(id) ON DELETE CASCADE,
+      auto_publish   INTEGER NOT NULL DEFAULT 0 CHECK (auto_publish IN (0, 1)),
+      guests_private INTEGER NOT NULL DEFAULT 0 CHECK (guests_private IN (0, 1))
+    ) STRICT;
 CREATE TABLE org_history (
       id      INTEGER PRIMARY KEY,
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
