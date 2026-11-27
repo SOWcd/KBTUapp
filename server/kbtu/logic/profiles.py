@@ -213,7 +213,7 @@ def _celebrate(con, uid: int, before: dict[str, int], after: int | None = None) 
         if level > before[code]:
             con.execute("""INSERT INTO achievement_levels (user_id, code, level, reached_at) VALUES (?, ?, ?, ?)
                 ON CONFLICT (user_id, code) DO UPDATE SET level = excluded.level, reached_at = excluded.reached_at
-                WHERE excluded.code != 'activist' OR excluded.level > achievement_levels.level""", (uid, code, level, core.now()))
+                WHERE excluded.code NOT IN ('activist', 'streak') OR excluded.level > achievement_levels.level""", (uid, code, level, core.now()))
             if code not in PRIVATE and code not in QUIET:  # these unlocks are shown in the app only
                 notify(con, uid, "achievement", f"ach:{code}:{level}", after=after)
 
@@ -702,6 +702,10 @@ def achievements(con, uid: int, *, own: bool = True) -> list[dict]:
         have = lambda level: sum(n for (c, lv), n in at_level.items() if c == code and lv >= level) / total  # noqa: E731
         count = (reached[code]["level"] if code in reached else 0) if code == "sponsor" else mine[code]
         level = sum(n <= count for n in needs)
+        if code == "streak" and code in reached and reached[code]["level"] > level:
+            # an earned flame stays: the live count drops when a past week's public event is published or unpublished
+            level = min(reached[code]["level"], len(needs))
+            count = max(count, needs[level - 1])
         item = {"code": code, "emoji": emoji, "secret": secret, "count": count, "level": level,
                 "levels": [{"need": n, "reached": i < level, "rarity": have(i + 1)} for i, n in enumerate(needs)], "rarity": have(1),
                 "at": reached[code]["reached_at"] if code in reached else None,

@@ -208,6 +208,7 @@
     {@const r = it.data}
     <div class="card" class:hid={it.hidden} out:fold>
       {@render head(it, [], r.target === 'tgc' ? (e) => tgcMenu(e, it, r) : undefined)}
+      {#if r.was}<i class="meta">{t('fc.repWas')}</i><p class="quote selectable">{r.was}</p>{/if}
       <button class="body" onclick={() => look(r)}>
         {#if r.target === 'photo'}<img class="ph" src={r.text} alt={t('adm.rep.photo')} />{:else}<b class="clamp-3 selectable">{r.text}</b>{/if}
         <i>{r.target === 'tgc'
