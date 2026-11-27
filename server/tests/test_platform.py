@@ -81,7 +81,7 @@ def test_android_welcome_once_after_the_yes(env, monkeypatch, capsys):
     c, cfg = env
     monkeypatch.setattr(admin.config, "load", lambda: cfg)
     login(c, 90, "stu")
-    login(c, 91, "stu")
+    login(c, 91, "two")
     con = db.connect(cfg.db_path)
     uid = {tg: con.execute("SELECT id FROM users WHERE tg_id = ?", (tg,)).fetchone()[0] for tg in (90, 91)}
 
