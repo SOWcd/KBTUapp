@@ -694,7 +694,7 @@
   /* the lens's edge on every engine (WebKit can't bend a backdrop): the cover again, a little larger about the slab's
      foot, shown only through a thin band along the rim, so the picture steps outward there as it does through thick
      glass. The same decoded picture, drawn once */
-  .bend { position: absolute; inset: 0; z-index: -1; overflow: hidden; padding: 7px; border-radius: inherit; pointer-events: none; opacity: 0.85;
+  .bend { position: absolute; inset: 0; z-index: -1; overflow: hidden; padding: 5px; border-radius: inherit; pointer-events: none; opacity: 0.8;
     -webkit-mask: linear-gradient(black 0 0) content-box, linear-gradient(black 0 0); -webkit-mask-composite: xor;
     mask: linear-gradient(black 0 0) content-box, linear-gradient(black 0 0); mask-composite: exclude; }
   .bend > span { position: absolute; left: -6px; right: -6px; bottom: -6px; height: var(--hh); transform: scale(1.14); transform-origin: 50% 100%; filter: saturate(1.35) brightness(1.12); }
