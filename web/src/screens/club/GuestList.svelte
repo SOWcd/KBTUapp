@@ -52,6 +52,7 @@
       cols = header ? guessColumns(rows[0]) : { name: 0, sid: null, adult: null, username: null, team: null };
       haptic.ok();
       if (body.length > MAX_ROWS) { haptic.error(); say(t('gl.err.many'), 'warning_3d'); }
+      else void check(true); // the preview at once, no extra tap
     } catch (e) {
       haptic.error();
       const why = e instanceof SheetError ? e.message : '';
@@ -63,6 +64,7 @@
     haptic.tap();
     for (const g of FIELDS) if (i != null && g !== f && cols[g] === i) cols[g] = null; // a column means one thing
     cols[f] = i; result = null;
+    void check(true); // a fixed column: the preview again by itself
   }
   const colItems = (f: Field) => [
     { label: t('gl.noCol'), checked: cols[f] == null, onselect: () => setCol(f, null) },
@@ -75,17 +77,20 @@
     const m = e instanceof ApiErr ? e.message : '';
     say(t(m === 'too_many' || m === 'too_big' ? 'gl.err.many' : m === 'no_rows' ? 'gl.err.empty' : e instanceof ApiErr && e.code === 'closed' ? 'mk.closed' : 'common.error'), 'warning_3d');
   };
-  async function check() {
-    if (!ready) { haptic.error(); say(t('gl.needName'), 'warning_3d'); return; }
+  // auto: after a file or a column change, quiet while the name's column is missing; the latest check wins
+  let seq = 0;
+  async function check(auto = false) {
+    if (!ready) { if (!auto) { haptic.error(); say(t('gl.needName'), 'warning_3d'); } return; }
+    const n = ++seq;
     busy = true;
-    try { result = await api.guestList(id, pickRows(body, cols), false); haptic.ok(); }
-    catch (e) { fail(e); }
-    finally { busy = false; }
+    try { const r = await api.guestList(id, pickRows(body, cols), false); if (n === seq) { result = r; if (!auto) haptic.ok(); } }
+    catch (e) { if (n === seq) fail(e); }
+    finally { if (n === seq) busy = false; }
   }
   async function save() {
-    if (!result) return;
+    if (!result || busy) return;
     if (result.dropped && !(await sheets.ask({ title: t('gl.dropAsk'), text: t('gl.dropText', { n: result.dropped }), ok: t('common.save'), cancel: t('common.cancel'), danger: true }))) return;
-    busy = true;
+    busy = true; seq++; // a check still on its way must not land over the save
     try {
       result = await api.guestList(id, pickRows(body, cols), true);
       haptic.ok(); say(t('gl.saved'), 'party_popper_3d');
@@ -95,6 +100,7 @@
     finally { busy = false; }
   }
   async function exportList() {
+    if (sending) return;
     sending = true;
     try { await api.exportGuestList(id); haptic.ok(); say(t('att.sent'), 'party_popper_3d'); }
     catch (e) { haptic.error(); say(e instanceof ApiErr && e.message === 'no_dm' ? t('att.noDm') : t('common.error'), 'warning_3d'); }
@@ -113,7 +119,7 @@
       <Group>
         <Row icon={FileSpreadsheet} title={file} subtitle={t('gl.file', { n: body.length })}
           value={t('gl.other')} onclick={() => { haptic.tap(); input?.click(); }} />
-        <Row title={t('gl.header')} accessory="switch" checked={header} onchange={(on) => { header = on; result = null; if (on) cols = guessColumns(table[0]); }} />
+        <Row title={t('gl.header')} accessory="switch" checked={header} onchange={(on) => { header = on; result = null; if (on) cols = guessColumns(table[0]); void check(true); }} />
       </Group>
       <Group caption={t('gl.cols')}>
         {#each FIELDS as f (f)}
@@ -136,9 +142,9 @@
           </Group>
         {/if}
         <p class="t-foot hint">{t('gl.keep')}</p>
-        <Button kind="primary" size="l" full disabled={busy || !result.rows} onclick={save}>{t('gl.save')}</Button>
+        <Button kind="primary" size="l" full loading={busy} disabled={!result.rows} onclick={save}>{t('gl.save')}</Button>
       {:else}
-        <Button kind="primary" size="l" full disabled={busy} onclick={check}>{t('gl.check')}</Button>
+        <Button kind="primary" size="l" full loading={busy} onclick={() => check()}>{t('gl.check')}</Button>
       {/if}
     {/if}
     <Group>
