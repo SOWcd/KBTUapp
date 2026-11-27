@@ -7,6 +7,7 @@ export const OWNER = 'Sowers';
 export const CODE = 'https://github.com/SOWcd/KBTUapp';
 /** the app's topics group in Telegram (BUGS / IDEAS / QUESTIONS) */
 export const TALK = 'https://t.me/KBTUappTop';
+
 /** The same chat with a draft of the screen's own (e.g. DMP's list has me wrong, PLAN 95). */
 export function writeSupport(draft: string): void {
   openLink(`https://t.me/${OWNER}?text=${encodeURIComponent(draft)}`);
