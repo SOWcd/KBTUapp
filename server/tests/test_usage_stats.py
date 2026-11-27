@@ -226,10 +226,11 @@ def test_layout_buckets_by_platform(env):
     out = stats.layout(con, 1).split("\n")
     assert out == ["ios tg 9: fullscreen 0/0", "  env(safe-area-inset-bottom): 33-48 1",
                    "android tg 8: fullscreen 1/2", "  tg safeAreaInset.bottom: 0 1 · 49-64 1", "  nav bottom gap (10 by design): 49-64 1"]
-    src = (Path(__file__).parents[2] / "web/src/lib/stats.ts").read_text(encoding="utf-8")
-    assert len(re.search(r"LAY_EDGES = \[(.*?)\]", src).group(1).split(",")) + 1 == len(stats.LAY)
+    web = Path(__file__).parents[2] / "web/src/lib"
+    src, lay = ((web / f).read_text(encoding="utf-8") for f in ("stats.ts", "layoutStats.ts"))
+    assert len(re.search(r"LAY_EDGES = \[(.*?)\]", lay).group(1).split(",")) + 1 == len(stats.LAY)
     assert tuple(re.findall(r"'([a-z_]+)'", re.search(r"type LayMetric = (.*?);", src).group(1))) == tuple(stats.LAY_VALUES)
-    assert (*re.findall(r"'(\d+)'", re.search(r"TG_MAJORS = \[(.*?)\]", src).group(1)), "x") == stats.TG_MAJORS
+    assert (*re.findall(r"'(\d+)'", re.search(r"TG_MAJORS = \[(.*?)\]", lay).group(1)), "x") == stats.TG_MAJORS
 
 
 def test_hero_kinds_counted_without_an_item(env):
