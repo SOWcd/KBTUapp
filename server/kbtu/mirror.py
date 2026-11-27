@@ -2,7 +2,8 @@
 written as the org's posts. Here only the database: the Telegram side hands over messages (Msg), so the rules
 are tested without Telegram.
 
-The source is the org's MAIN public channel with its Studio switch on (chats.main, chats.mirror); the userbot joins it
+The source is the org's MAIN public channel with its Studio switch on (chats.main, chats.mirror) and our bot an admin
+there, which proves the channel is the org's (or an admin's say-so: chats.mirror = 2); the userbot joins it
 itself and leaves it when it stops being one. A post is a channel post (an album is one post): its text as typed (the
 first line the title), its photo copied, a video or a file only as a link to the post; edits follow, a deletion takes
 it down and wipes its text and photo; Telegram's views and reaction counts show instead of ours, and comments stay in Telegram. Nobody is notified
@@ -77,6 +78,9 @@ def tid(tg_chat_id: int | None) -> int | None:
 
 
 _GROUP_SRC = "{a}.news_topic IS NOT NULL AND {a}.kind = 'group' AND {a}.tg_chat_id IS NOT NULL"  # a chats row (alias a) as a group source
+# the switch on AND the channel proven the org's own: our bot an admin there (tg_chat_id), or an admin vouched (mirror = 2:
+# an office's channel, admin office); else any club could mirror a public channel it doesn't run (logic.chatlist.mirrored)
+_MIRRORED = "(c.mirror = 2 OR (c.mirror = 1 AND c.tg_chat_id IS NOT NULL))"
 
 
 def groups(con) -> dict[int, dict]:
@@ -90,11 +94,11 @@ def groups(con) -> dict[int, dict]:
 
 
 def wanted(con) -> dict[str, int]:
-    """The channels to mirror, by name: each active org's main public channel with the switch on, unless the org picked
-    a group's topic instead. name -> org id."""
+    """The channels to mirror, by name: each active org's main public channel with the switch on and proven its own
+    (_MIRRORED), unless the org picked a group's topic instead. name -> org id."""
     out = {}
     for c in rows(con, f"""SELECT c.url, c.org_id FROM chats c JOIN orgs o ON o.id = c.org_id
-            WHERE c.main = 1 AND c.mirror = 1 AND c.kind = 'channel' AND o.status = 'active'
+            WHERE c.main = 1 AND {_MIRRORED} AND c.kind = 'channel' AND o.status = 'active'
             AND NOT EXISTS (SELECT 1 FROM chats g WHERE g.org_id = o.id AND {_GROUP_SRC.format(a='g')}) ORDER BY c.id"""):
         if name := username(c["url"]):
             out.setdefault(name, c["org_id"])

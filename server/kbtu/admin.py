@@ -340,6 +340,7 @@ def _office(con, slug: str, short: str, emoji: str, ru: str, kk: str, en: str, c
     import httpx
     from . import media, mirror
     from .logic import add_org_chat, chat_link
+    from .logic.chatlist import MIRROR_VOUCHED
     names = [" ".join(x.split()) for x in (ru, kk, en)]
     if not re.fullmatch(r"[a-z0-9]{2,24}", slug) or not 1 <= len(short) <= 2 or not re.fullmatch(r"[a-z0-9_]{1,40}", emoji) \
             or not all(2 <= len(x) <= 80 for x in names):
@@ -370,7 +371,8 @@ def _office(con, slug: str, short: str, emoji: str, ru: str, kk: str, en: str, c
         c = one(con, "SELECT main, mirror FROM chats WHERE org_id = ? AND url = ?", oid, url)
         if not c or not c["main"]:
             sys.exit(f"{url}: not linked as the main channel")
-        con.execute("UPDATE chats SET mirror = 1 WHERE org_id = ? AND url = ?", (oid, url))
+        # on the admin's word (MIRROR_VOUCHED): an office runs its channel, but our bot isn't an admin there
+        con.execute("UPDATE chats SET mirror = ? WHERE org_id = ? AND url = ?", (MIRROR_VOUCHED, oid, url))
     print(f"created office {slug} (id {oid}): {url} mirrored; auto-publish off (admin auto-publish {slug} on)")
 
 

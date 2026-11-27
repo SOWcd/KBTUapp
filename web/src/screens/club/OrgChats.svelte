@@ -118,7 +118,7 @@
   }
   async function mirror(c: StudioChat, on: boolean) {
     try { chats = keep(await api.mirrorOrgChat(org, c.id, on)); haptic.select(); }
-    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
+    catch (e) { haptic.error(); say(t(e instanceof ApiErr && e.message === 'nobot' ? 'oc.why.nobot' : 'common.error'), 'warning_3d'); } // our bot an admin there proves the channel is the club's
   }
   // the news from a forum group's topic instead of the channel (0: the group picked, its topic not yet); the row moves at once
   const src = $derived(chats.find((c) => c.news != null));

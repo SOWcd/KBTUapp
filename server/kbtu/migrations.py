@@ -2730,4 +2730,8 @@ MIGRATIONS: list[tuple[int, str]] = [
         WHERE key >= 'prefill_list:' AND key < 'prefill_list;'), 0);
     UPDATE prefill_rest SET loaded_at = COALESCE((SELECT MIN(CAST(value AS INTEGER)) FROM meta
         WHERE key >= 'prefill_list:' AND key < 'prefill_list;'), 0);"""),
+    # A channel mirrors only once our bot is an admin there (its owners added it) or an admin vouched (chats.mirror = 2,
+    # mirror._MIRRORED). The main channels mirrored today without the bot keep going, as vouched.
+    (262, """UPDATE chats SET mirror = 2 WHERE mirror = 1 AND main = 1 AND kind = 'channel' AND tg_chat_id IS NULL
+        AND org_id IS NOT NULL;"""),
 ]

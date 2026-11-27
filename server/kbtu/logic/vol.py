@@ -354,8 +354,7 @@ def resolve(con, v: Viewer, hid: int, body: dict) -> dict:
         s, lead = _door(con, v, h["session_id"])
         if not _open(con, s):
             raise ApiError("closed")
-        if h["user_id"] == v.id or one(con, "SELECT 1 FROM vol_ties WHERE vol_id = ? AND user_id = ?", h["vol_id"], v.id):
-            raise ApiError("forbidden", "own")
+        _not_own(con, v, h["vol_id"])
         if h["out_at"] is not None and not (lead and one(con, "SELECT 1 FROM vol_edits WHERE vol_id = ? AND what = 'resolve' AND ref = ?", h["vol_id"], hid)):
             raise ApiError("conflict")  # checked out by a scan: nothing to answer for; answered already: the President's or Vice's to change
         end = _end(h["in_at"], s["ended_at"], s["id"], s["started_at"])
@@ -571,6 +570,13 @@ def person(con, v: Viewer, vid: int | None) -> dict:
 
 # ------------------------------------------------------------ the President's and Vice's edits (each with a reason, in vol_edits)
 
+def _not_own(con, v: Viewer, vid: int) -> None:
+    """Never one's own record: linked to one's account now or ever (vol_ties: an unlink doesn't make it someone else's)."""
+    if one(con, "SELECT 1 FROM vol_people WHERE id = ? AND user_id = ?", vid, v.id) \
+            or one(con, "SELECT 1 FROM vol_ties WHERE vol_id = ? AND user_id = ?", vid, v.id):
+        raise ApiError("forbidden", "own")
+
+
 def edit_shift(con, v: Viewer, hid: int, body: dict) -> dict:
     """A shift taken out (gone) or put back, never its times: hours come from scans alone. The shifts once made
     or changed by hand stay as recorded; the old values are in vol_edits."""
@@ -579,6 +585,7 @@ def edit_shift(con, v: Viewer, hid: int, body: dict) -> dict:
     h = one(con, "SELECT h.* FROM vol_shifts h JOIN vol_people p ON p.id = h.vol_id WHERE h.id = ? AND p.org_id = ?", hid, org)
     if not h:
         raise ApiError("not_found")
+    _not_own(con, v, h["vol_id"])
     if not isinstance(body.get("gone"), bool):
         raise ApiError("bad_input", "gone")
     gone = (h["gone_at"] or now()) if body["gone"] else None
@@ -592,6 +599,7 @@ def add_miss(con, v: Viewer, vid: int, body: dict) -> dict:
     """+1 a miss the app didn't see (a meeting without check-in), -1 one excused."""
     org = _need_pres(con, v)
     reason, _ = _reason(body), _person(con, org, vid)
+    _not_own(con, v, vid)
     n, sid = body.get("n"), body.get("session")
     if n not in (1, -1) or isinstance(n, bool) or sid is not None and not (isinstance(sid, int) and one(con, "SELECT 1 FROM vol_meets WHERE session_id = ? AND org_id = ?", sid, org)):
         raise ApiError("bad_input")
@@ -607,6 +615,7 @@ def drop_miss(con, v: Viewer, mid: int, body: dict) -> dict:
     m = one(con, "SELECT x.* FROM vol_misses x JOIN vol_people p ON p.id = x.vol_id WHERE x.id = ? AND p.org_id = ? AND x.gone_at IS NULL", mid, org)
     if not m:
         raise ApiError("not_found")
+    _not_own(con, v, m["vol_id"])
     with tx(con):
         con.execute("UPDATE vol_misses SET gone_at = ? WHERE id = ?", (now(), mid))
         _edit(con, v, m["vol_id"], "miss_gone", mid, {"n": m["n"]}, None, reason)

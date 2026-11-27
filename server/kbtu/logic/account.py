@@ -483,9 +483,9 @@ def id_clash(con, sid: str, new: int, old: int) -> None:
 
 
 def _channel(c) -> dict | None:
-    """An org's main chat for Studio's tile: its name, and whether its posts reach the news (a public channel, the switch on)."""
+    """An org's main chat for Studio's tile: its name, and whether its posts reach the news (a public channel, the switch on, proven its own)."""
     from .. import mirror  # it imports this package
-    return {"title": c["title"], "mirror": bool(c["mirror"] and c["kind"] == "channel" and mirror.username(c["url"]))} if c else None
+    return {"title": c["title"], "mirror": chatlist.mirrored(c) and c["kind"] == "channel" and bool(mirror.username(c["url"]))} if c else None
 
 
 def _membership(con, m, mains: dict, logos: dict) -> dict:
@@ -505,7 +505,7 @@ def lent_studio(con, v: Viewer, oid: int) -> dict:
     o = one(con, "SELECT * FROM orgs WHERE id = ?", oid)
     if not (v.lent_full and v.staff_org == oid and o):
         raise ApiError("forbidden", "staff")
-    main = one(con, "SELECT org_id, title, kind, url, mirror FROM chats WHERE main = 1 AND org_id = ?", oid)
+    main = one(con, "SELECT org_id, title, kind, url, mirror, tg_chat_id FROM chats WHERE main = 1 AND org_id = ?", oid)
     m = {**dict(o), "role": "president", "rights": None, "title": None, "title_kk": None, "title_en": None}
     out = _membership(con, m, {oid: main} if main else {}, core._by_id(con, "files", [o["logo_file_id"]]))
     lent = lambda lv, r: [x for x in _ordered(core.club_rights(lv, r, o)) if x != "reports"]  # noqa: E731
@@ -561,7 +561,7 @@ def me(con, v: Viewer) -> dict:
     members = rows(con, f"""SELECT m.role, {core.TITLES}, t.rights, o.* FROM org_members m JOIN orgs o ON o.id = m.org_id
         LEFT JOIN org_roles t ON t.id = m.role_id WHERE m.user_id = ? AND o.status = 'active'""", v.id) if s else []
     # Studio's "Channel → news" tile (Vice+, who link chats): each org's main chat, one read for all of them
-    mains = {c["org_id"]: c for c in rows(con, f"SELECT org_id, title, kind, url, mirror FROM chats WHERE main = 1 AND org_id IN ({','.join('?' * len(members))})",
+    mains = {c["org_id"]: c for c in rows(con, f"SELECT org_id, title, kind, url, mirror, tg_chat_id FROM chats WHERE main = 1 AND org_id IN ({','.join('?' * len(members))})",
                                           *(m["id"] for m in members))} if members else {}
     logos = core._by_id(con, "files", (m["logo_file_id"] for m in members))  # every club's logo in one read, not one per membership
     tickets = one(con, """SELECT COUNT(*) FROM registrations r JOIN events e ON e.id = r.event_id

@@ -1815,6 +1815,7 @@ const en: Dict = {
   'oc.allNote': "In the chat, /all calls everyone — for anyone with a role in the club and the group's admins.",
   'oc.why.taken': "This chat is linked to another organization. Write to the KBTU App team and we'll sort it out.",
   'oc.why.limit': "No more than 12 chats.",
+  'oc.why.nobot': "Add our bot to the channel as an admin first: that shows it's yours.",
   'tg.open': "Open in Telegram",
   'tg.video': "Play video",
   'tg.file': "File in Telegram",
