@@ -1,8 +1,8 @@
 """Anonymous usage counters: what students open, what nobody opens, how long the app and each screen take to open, where
 people drop out of the key flows, which errors they hit (by class only). One table of daily totals, (day, key, n), with
 no person in it (no user id, Telegram id, hash, IP or session); that is what keeps it out of the privacy policy. The app
-sends batches (web/src/lib/stats.ts). The owner reads the totals with `admin stats-usage` and the week's changes with
-`admin stats-week`."""
+sends batches (web/src/lib/stats.ts). The owner reads the totals with `admin stats-usage`, the week's changes with
+`admin stats-week` and the phones' layout numbers with `admin stats-layout`."""
 from __future__ import annotations
 
 import math
@@ -55,6 +55,16 @@ BUCKETS = ("≤1", "≤2", "≤3", "≤5", "≤8", "8+")  # seconds from navigat
 TTI = ("≤100ms", "≤250ms", "≤500ms", "≤1s", "≤2s", "2s+")  # a tab's or a sheet's tap to its first frame
 SESSIONS = ("≤30s", "≤1m", "≤3m", "≤5m", "≤10m", "≤20m", "20m+")  # one visit's visible time, ended by 30 s or more hidden
 DAY_TIMES = ("≤1m", "≤5m", "≤10m", "≤20m", "≤40m", "≤60m", "60m+")  # one device's visible time over a calendar day
+# the phone's layout, once a launch (web stats.ts layout()): Telegram's safe-area insets, env(safe-area-inset-bottom),
+# the window's height over Telegram's stable one, the tab bar's gap to the window bottom; by platform and Telegram's
+# major version ('x': another or none), each value by its bucket only, so no exact size can name a device
+LAY = ("0", "1-8", "9-16", "17-24", "25-32", "33-48", "49-64", "65+")  # px
+LAY_VALUES = {"safe_b": "tg safeAreaInset.bottom", "safe_t": "tg safeAreaInset.top", "content_b": "tg contentSafeAreaInset.bottom",
+              "content_t": "tg contentSafeAreaInset.top", "env_b": "env(safe-area-inset-bottom)",
+              "stable": "innerHeight - viewportStableHeight", "gap": "nav bottom gap (10 by design)"}
+TG_MAJORS = ("6", "7", "8", "9", "10", "11", "12", "x")
+LAY_KEYS = (*(f"lay.{p}.{v}.{m}.{b}" for p in PLATFORMS for v in TG_MAJORS for m in LAY_VALUES for b in range(len(LAY))),
+            *(f"lay.{p}.{v}.full.{b}" for p in PLATFORMS for v in TG_MAJORS for b in (0, 1)))
 USES = (*SCREENS, *ACTIONS)  # uniq.<key>: at most once a day per device (a flag kept on the device), for "N% of those active used it"
 FLOW_KEYS = tuple(k for steps, ends in FUNNELS.values() for k in (*steps, *ends))
 KEYS = frozenset((*SCREENS, *ACTIONS, *SOURCES, *APPEALS, *HERO, *ANDROID_APP, *STREAK,
@@ -63,8 +73,8 @@ KEYS = frozenset((*SCREENS, *ACTIONS, *SOURCES, *APPEALS, *HERO, *ANDROID_APP, *
                   *(f"js.{s}.{k}" for s in SCREENS for k in JS_KINDS), *(f"api.{s}.{k}" for s in SCREENS for k in API_KINDS),
                   *(f"tti.{s}.{p}.{b}" for s in SCREENS for p in PLATFORMS for b in range(len(TTI))),
                   *(f"open.{p}.{b}" for p in PLATFORMS for b in range(len(BUCKETS))),
-                  *(f"sess.{b}" for b in range(len(SESSIONS))), *(f"time.{b}" for b in range(len(DAY_TIMES)))))
-ONE_A_BATCH = ("open.", "uniq.", "sess.", "time.")  # samples, not taps
+                  *(f"sess.{b}" for b in range(len(SESSIONS))), *(f"time.{b}" for b in range(len(DAY_TIMES))), *LAY_KEYS))
+ONE_A_BATCH = ("open.", "uniq.", "sess.", "time.", "lay.")  # samples, not taps
 
 KEEP_DAYS = 180
 WINDOW = 30  # what `visits` keeps
@@ -176,6 +186,26 @@ def fields(con, days: int, upto: int | None = None) -> dict:
             "hero": "\n".join(f"{k} {got.get(f'hero.tap.{k}', 0)}/{got.get(f'hero.show.{k}', 0)}" for k in HERO_KINDS),
             "android": " → ".join(f"{k[5:]} {got.get(k, 0)}" for k in ANDROID),
             "opens": "\n".join(opens) or "—"}
+
+
+def layout(con, days: int) -> str:
+    """`admin stats-layout`: per platform and Telegram version, how many launches were fullscreen, then each layout
+    value's spread over the buckets (px), for `days` days up to and including today."""
+    upto = _today() + 1
+    got = {r[0]: r[1] for r in rows(con, """SELECT key, SUM(n) FROM usage_days WHERE day >= ? AND day < ?
+        AND key GLOB 'lay.*' GROUP BY key""", upto - days, upto)}
+    out = []
+    for p in PLATFORMS:
+        for v in TG_MAJORS:
+            full, rest = got.get(f"lay.{p}.{v}.full.1", 0), got.get(f"lay.{p}.{v}.full.0", 0)
+            lines = []
+            for m, name in LAY_VALUES.items():
+                bars = [(label, got.get(f"lay.{p}.{v}.{m}.{b}", 0)) for b, label in enumerate(LAY)]
+                if any(n for _, n in bars):
+                    lines.append(f"  {name}: " + " · ".join(f"{label} {n}" for label, n in bars if n))
+            if lines or full or rest:
+                out += [f"{p} tg {v}: fullscreen {full}/{full + rest}", *lines]
+    return "\n".join(out) or "—"
 
 
 # ---- the weekly digest (`admin stats-week`): the last 7 whole days against the 7 before ----

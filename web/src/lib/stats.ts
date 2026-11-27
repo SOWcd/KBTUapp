@@ -1,7 +1,7 @@
 // Anonymous usage counters (server logic/stats.py, which keeps the same names): today's totals of each key, no person
 // in them. Batched here, sent at most every 60 s and when the page hides; a failure is dropped. Never awaited: a tap
 // costs one Map write.
-import { inTelegram, on, onAndroid, onIos, tg } from './tg';
+import { inTelegram, on, onAndroid, onIos, tg, tgTry } from './tg';
 import type { Kind as HeroKind } from './hero'; // the Afisha hero's cards by kind (server stats.HERO)
 
 export type Screen = 'tab.afisha' | 'tab.forum' | 'tab.club' | 'tab.profile'
@@ -32,8 +32,11 @@ export type ApiKind = 'network' | 'server' | 'unauthorized' | 'need_student' | '
 type Platform = 'ios' | 'android' | 'desktop' | 'web';
 type Bucket = 0 | 1 | 2 | 3 | 4 | 5;
 type Long = Bucket | 6;
+// the phone's layout numbers, once a launch (server stats.LAY_*): by platform and Telegram's major version, each value by its bucket only
+type LayMetric = 'safe_b' | 'safe_t' | 'content_b' | 'content_t' | 'env_b' | 'stable' | 'gap';
+type Lay = `lay.${Platform}.${string}.${LayMetric}.${number}` | `lay.${Platform}.${string}.full.${0 | 1}`;
 type Key = Screen | Action | Appeal | Android | Source | Funnel | `hero.${'show' | 'tap'}.${HeroKind}` | `err.${Screen}` | `uniq.${Screen | Action}` | `sess.${Long}` | `time.${Long}`
-  | `open.${Platform}.${Bucket}` | `js.${Screen}.${JsKind}` | `api.${Screen}.${ApiKind}` | `tti.${Screen}.${Platform}.${Bucket}`;
+  | `open.${Platform}.${Bucket}` | `js.${Screen}.${JsKind}` | `api.${Screen}.${ApiKind}` | `tti.${Screen}.${Platform}.${Bucket}` | Lay;
 
 const EVERY = 60_000, GAP = 30_000; // GAP: hidden this long, the next showing is a new session
 const OPEN_EDGES = [1000, 2000, 3000, 5000, 8000];
@@ -106,6 +109,40 @@ const platform = !inTelegram ? 'web' : onIos ? 'ios' : onAndroid ? 'android' : '
 /** The first useful frame is on the screen: the app's open time, counted from navigation start. */
 export function painted(): void {
   if (!hid) count(`open.${platform}.${bucketOf(performance.now()) as Bucket}`);
+  setTimeout(() => { layoutDue = true; layout(); }, 2000); // Telegram's insets come in after the first frame
+}
+
+// 0, 1-8, 9-16, 17-24, 25-32, 33-48, 49-64, 65+ px (server stats.LAY)
+const LAY_EDGES = [1, 9, 17, 25, 33, 49, 65];
+const TG_MAJORS = ['6', '7', '8', '9', '10', '11', '12']; // server stats.TG_MAJORS; any other is 'x'
+let layoutDue = false, laidOut = false;
+
+/** Once a launch, on the screen: where the phone puts its edges and where the tab bar ends up, so the owner reads the
+ *  layout per platform without a screenshot (`admin stats-layout`). Buckets only: no exact size names a device. */
+function layout(): void {
+  if (!layoutDue || laidOut || document.hidden) return;
+  laidOut = true;
+  let major = 'x';
+  const at = (m: LayMetric, px: number | undefined) => {
+    if (typeof px === 'number' && isFinite(px)) count(`lay.${platform}.${major}.${m}.${bucketOf(Math.max(0, Math.round(px)), LAY_EDGES)}`);
+  };
+  tgTry((w) => {
+    const v = /^\d+/.exec(w.version)?.[0] ?? '';
+    major = TG_MAJORS.includes(v) ? v : 'x';
+    at('safe_b', w.safeAreaInset?.bottom); at('safe_t', w.safeAreaInset?.top);
+    at('content_b', w.contentSafeAreaInset?.bottom); at('content_t', w.contentSafeAreaInset?.top);
+    if (w.viewportStableHeight) at('stable', innerHeight - w.viewportStableHeight); // under 0 counts as 0
+    count(`lay.${platform}.${major}.full.${w.isFullscreen ? 1 : 0}`);
+  });
+  const probe = document.createElement('div');
+  probe.style.cssText = 'position:fixed;left:0;top:0;width:1px;height:env(safe-area-inset-bottom,0px);visibility:hidden;pointer-events:none';
+  document.body.append(probe);
+  at('env_b', probe.offsetHeight);
+  probe.remove();
+  // the tab bar's lower edge to the window's (10 px of it is by design, Nav .dock); not while it's slid away or native
+  const dock = document.querySelector('nav.nav')?.parentElement;
+  const root = document.documentElement;
+  if (dock && !('sheet' in root.dataset) && !('ntabs' in root.dataset)) at('gap', innerHeight - dock.getBoundingClientRect().bottom);
 }
 
 /** A tab or sheet asked for at `since` (performance.now()) is on the screen: counted at the frame after it drew. A page
@@ -138,6 +175,7 @@ function shown(): void {
   }
   kept.at = 0;
   shownAt = Date.now();
+  layout(); // hidden when it was due: measured now
 }
 
 function away(): void {
