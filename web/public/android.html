@@ -70,6 +70,15 @@ h2 { font-size: 24px; font-weight: 700; line-height: 1.15; letter-spacing: -.022
 .acct { display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 12px 14px; border-radius: 18px; background: var(--accent-soft); color: var(--text); font-size: 14px; line-height: 1.35; text-align: left; text-wrap: pretty; }
 .acct svg { flex: none; width: 20px; height: 20px; margin-top: 1px; fill: none; stroke: var(--accent-text); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
+/* the Play account line: a sketch of Play's top bar, the photo to tap pulsing; first on the card once the store was opened
+   (a phone with two accounts: Play on another one than this browser says "Item not found") */
+.pa { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 14px 10px 10px; border-radius: 18px; background: var(--accent-soft); color: var(--text); font-size: 14px; line-height: 1.35; text-align: left; text-wrap: pretty; }
+.pa i { flex: none; position: relative; display: flex; align-items: center; justify-content: flex-end; width: 56px; height: 30px; padding: 0 5px; border-radius: 999px; background: var(--fill); box-shadow: inset 0 0 0 .5px var(--line); }
+.pa i::before { content: ''; position: absolute; left: 10px; width: 20px; height: 5px; border-radius: 3px; background: var(--line); }
+.pa b { position: relative; width: 20px; height: 20px; border-radius: 50%; background: linear-gradient(135deg, #F9AB00, #E37400); }
+.pa b::after { content: ''; position: absolute; top: -4px; right: -4px; bottom: -4px; left: -4px; border-radius: 50%; border: 2px solid var(--accent-text); opacity: .7; animation: ping 2.2s ease-out infinite; }
+.stage.played .pa { order: -1; }
+
 .btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 56px; padding: 8px 20px; border: 0; border-radius: 999px; background: var(--accent); color: #fff; font: inherit; font-size: 17px; font-weight: 600; letter-spacing: -.01em; text-decoration: none; cursor: pointer;
   box-shadow: inset 0 1px 1px rgba(255,255,255,.22), inset 0 -8px 14px -8px rgba(0,0,0,.3), 0 10px 22px -12px rgba(59,107,255,.8); transition: transform .12s ease; }
 .btn:active { transform: scale(.965); }
@@ -103,7 +112,7 @@ h2 { font-size: 24px; font-weight: 700; line-height: 1.15; letter-spacing: -.022
 @media (prefers-reduced-motion: reduce) {
   main, .stage.in { animation: none; }
   .stage, .ring .ar { transition: none; }
-  .pill::after { animation: none; opacity: .6; }
+  .pill::after, .pa b::after { animation: none; opacity: .6; }
 }
 </style>
 </head>
@@ -155,6 +164,7 @@ h2 { font-size: 24px; font-weight: 700; line-height: 1.15; letter-spacing: -.022
       </div>
       <h2 data-t="w.h"></h2>
       <p class="how" data-t="w.p"></p>
+      <p class="pa"><i aria-hidden="true"><b></b></i><span data-t="pa"></span></p>
       <a class="btn sec" id="b-try" target="_blank" rel="noopener" data-t="w.b"></a>
     </section>
 
@@ -163,6 +173,7 @@ h2 { font-size: 24px; font-weight: 700; line-height: 1.15; letter-spacing: -.022
       <div class="mock" aria-hidden="true"><u></u><u></u><i class="pill g" data-t="i.k"></i></div>
       <h2 data-t="i.h"></h2>
       <p class="how" data-r="i.p"></p>
+      <p class="pa"><i aria-hidden="true"><b></b></i><span data-t="pa"></span></p>
       <a class="btn" id="b-play" target="_blank" rel="noopener"><span data-t="i.b"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 16l8-8M9 8h7v7"/></svg></a>
     </section>
 
@@ -171,6 +182,7 @@ h2 { font-size: 24px; font-weight: 700; line-height: 1.15; letter-spacing: -.022
       <div class="ok" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
       <h2 data-t="a.h"></h2>
       <p class="how" data-t="a.p"></p>
+      <p class="pa"><i aria-hidden="true"><b></b></i><span data-t="pa"></span></p>
       <div class="sep"></div>
       <p class="hint" data-t="a.q"></p>
       <button class="btn sec" id="b-retry" type="button" data-t="a.b"></button>
@@ -200,6 +212,7 @@ h2 { font-size: 24px; font-weight: 700; line-height: 1.15; letter-spacing: -.022
       'w.h': 'Google Play открывает доступ', 'w.p': 'Ему нужно около 10 минут, чтобы тебя впустить. Мы следим за временем: шаг 3 появится здесь сам. Страницу можно свернуть.', 'w.b': 'Попробовать сейчас', 'w.l': 'осталось',
       'i.h': 'Установи приложение', 'i.p': 'В Google Play нажми **Установить**.', 'i.k': 'Установить', 'i.b': 'Открыть Google Play',
       'a.h': 'Установилось?', 'a.p': 'Открой KBTU App с главного экрана.', 'a.q': 'Google Play пишет, что приложение не найдено? Он ещё не успел тебя впустить.', 'a.b': 'Подождать ещё 5 минут',
+      pa: 'Открой Google Play, нажми на своё фото вверху справа и выбери тот же аккаунт, что здесь.',
       reset: 'Начать заново',
       ios: 'Эта страница для Android. На iPhone KBTU App ставится по-другому, и ещё быстрее.', 'ios.go': 'Установить на iPhone',
       desk: 'Эта страница для Android. Открой kbtu.sow.kz/android на телефоне или пройди шаги здесь с тем же аккаунтом Google, что в Google Play на телефоне.'
@@ -213,6 +226,7 @@ h2 { font-size: 24px; font-weight: 700; line-height: 1.15; letter-spacing: -.022
       'w.h': 'Google Play рұқсат ашып жатыр', 'w.p': 'Сені кіргізу үшін оған шамамен 10 минут керек. Уақытты біз бақылап отырмыз: 3-қадам осында өзі шығады. Бетті жасырып қоюға болады.', 'w.b': 'Қазір байқап көру', 'w.l': 'қалды',
       'i.h': 'Қолданбаны орнат', 'i.p': 'Google Play-де **Орнату** батырмасын бас.', 'i.k': 'Орнату', 'i.b': 'Google Play-ді ашу',
       'a.h': 'Орнатылды ма?', 'a.p': 'KBTU App-ты негізгі экраннан аш.', 'a.q': 'Google Play қолданба табылмады дей ме? Ол сені әлі кіргізіп үлгермеді.', 'a.b': 'Тағы 5 минут күту',
+      pa: 'Google Play-ді аш, жоғарғы оң жақтағы фотоңды басып, осындағы аккаунтты таңда.',
       reset: 'Басынан бастау',
       ios: 'Бұл бет Android-қа арналған. iPhone-да KBTU App басқаша орнатылады, одан да тез.', 'ios.go': 'iPhone-ға орнату',
       desk: 'Бұл бет Android-қа арналған. kbtu.sow.kz/android бетін телефонда аш немесе қадамдарды осында телефондағы Google Play-дегі аккаунтпен өт.'
@@ -226,6 +240,7 @@ h2 { font-size: 24px; font-weight: 700; line-height: 1.15; letter-spacing: -.022
       'w.h': 'Google Play is letting you in', 'w.p': 'It needs about 10 minutes. We are keeping time: step 3 will show up here by itself. You can leave this page in the background.', 'w.b': 'Try now', 'w.l': 'left',
       'i.h': 'Install the app', 'i.p': 'Tap **Install** in Google Play.', 'i.k': 'Install', 'i.b': 'Open Google Play',
       'a.h': 'Installed?', 'a.p': 'Open KBTU App from your home screen.', 'a.q': 'Google Play says the item was not found? It is still catching up.', 'a.b': 'Wait 5 more minutes',
+      pa: 'Open Google Play, tap your photo at the top right and pick the same account as here.',
       reset: 'Start over',
       ios: 'This page is for Android. On iPhone KBTU App installs another way, and even faster.', 'ios.go': 'Install on iPhone',
       desk: 'This page is for Android. Open kbtu.sow.kz/android on your phone, or go through the steps here with the Google account that is in Google Play on your phone.'
@@ -267,7 +282,7 @@ h2 { font-size: 24px; font-weight: 700; line-height: 1.15; letter-spacing: -.022
   function get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
   function set(k, v) { try { localStorage.setItem(k, String(v)); } catch (e) {} }
   function del(k) { try { localStorage.removeItem(k); } catch (e) {} }
-  var done = Math.floor(+get('android.step') || 0), optinAt = +get('android.optinAt') || 0;
+  var done = Math.floor(+get('android.step') || 0), optinAt = +get('android.optinAt') || 0, played = !!get('android.played');
   if (done < 0) done = 0;
   if (done > 3) done = 3;
 
@@ -318,6 +333,7 @@ h2 { font-size: 24px; font-weight: 700; line-height: 1.15; letter-spacing: -.022
         sw = setTimeout(function () { paint(cur); stage.className = 'stage in'; }, 200);
       }
     } else if (v === 'wait') tick();
+    stage.classList.toggle('played', played);  // back from the store, still not in: the account line comes first
     clock();
   }
   // back from Google: move on by itself
@@ -335,15 +351,16 @@ h2 { font-size: 24px; font-weight: 700; line-height: 1.15; letter-spacing: -.022
     set('android.step', done); set('android.optinAt', optinAt);
     hit('optin'); left = true;
   });
-  $('b-try').addEventListener('click', function () { hit('play'); });  // an early look: the wait goes on
-  $('b-play').addEventListener('click', function () { done = 3; set('android.step', done); hit('play'); left = true; });
+  function store() { played = true; set('android.played', 1); hit('play'); left = true; }
+  $('b-try').addEventListener('click', store);  // an early look: the wait goes on
+  $('b-play').addEventListener('click', function () { done = 3; set('android.step', done); store(); });
   $('b-retry').addEventListener('click', function () {
     hit('retry');
     done = 2; optinAt = Date.now() - (WAIT - RETRY);  // five minutes left
     set('android.step', done); set('android.optinAt', optinAt);
     sync();
   });
-  function restart() { done = 0; optinAt = 0; left = false; del('android.step'); del('android.optinAt'); sync(); }
+  function restart() { done = 0; optinAt = 0; played = false; left = false; del('android.step'); del('android.optinAt'); del('android.played'); sync(); }
   reset.addEventListener('click', restart);
   $('b-back').addEventListener('click', restart);
 
