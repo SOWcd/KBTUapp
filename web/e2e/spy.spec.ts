@@ -28,7 +28,7 @@ test('a round of Spy: a room, three players, the role, the vote, the reveal', as
   // a player already in gets the room back: its version now, for the move
   const act = async (c: (typeof others)[number], m: (r: Room) => object | null) => {
     const r = await c('/join', { code }), move = m(r);
-    if (move) await c(`/${r.id}`, { id: Math.random().toString(36).slice(2), v: r.v, ...move });
+    if (move) await c(`/${r.id}`, { id: crypto.randomUUID(), v: r.v, ...move });
   };
   for (const c of others) await act(c, () => null);
 
@@ -53,7 +53,7 @@ test('a round of Spy: a room, three players, the role, the vote, the reveal', as
   for (const c of others) await act(c, (r) => ({ type: 'vote', target: r.players[0].id }));
   for (const c of others) await act(c, (r) => (r.phase === 'guess' && r.role === 'spy' ? { type: 'guess', location: 'library' } : null));
   const mine = await dana.api<Room>('/api/rooms/join', { code });
-  if (mine.phase === 'guess') await dana.api(`/api/rooms/${mine.id}`, { id: 'g1', v: mine.v, type: 'guess', location: 'library' });
+  if (mine.phase === 'guess') await dana.api(`/api/rooms/${mine.id}`, { id: crypto.randomUUID(), v: mine.v, type: 'guess', location: 'library' });
   await expect(sheet.locator('.end')).toBeVisible();
   await dana.look('spy reveal');
 });
