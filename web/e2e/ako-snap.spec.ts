@@ -3,6 +3,8 @@
 // the status page), a sent package's page, the website's start link; and the managers' desk in Studio with a package.
 // Pictures are compared only in the Linux browser (PW_WS); elsewhere the layout checks still run. Accepting: e2e/README.md.
 import type { Locator, Page } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { test, expect, openAko, type Phone } from './fixtures';
 import main from '../src/lib/i18n/ru';
 import ako from '../src/lib/i18n/ako.ru';
@@ -25,11 +27,11 @@ async function attach(page: Page, doc: string, n: number) {
   const card = page.locator('article').filter({ hasText: tr(`ako.doc.${doc}`) });
   const chooser = page.waitForEvent('filechooser');
   await card.getByRole('button', { name: tr('ako.file') }).click();
-  await (await chooser).setFiles({ name: `${doc}.png`, mimeType: 'image/png', buffer: PNG });
-  await expect(card.getByText(tr('ako.photoPage'))).toHaveCount(n);
+  await (await chooser).setFiles({ name: `${doc}.webp`, mimeType: 'image/webp', buffer: PAGE });
+  await expect(card.getByText(tr('ako.photoPage'), { exact: true })).toHaveCount(n);
 }
-// a small grey page (any picture the server can decode: it re-encodes it)
-const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAABAAAAAWCAIAAABL1vtsAAAAF0lEQVR4nGP4//8/AyWYYdSAUQOGiwEAa6wsLt0cKDAAAAAASUVORK5CYII=', 'base64');
+// a page to attach: any picture the server decodes (it re-encodes it); the app's own art will do
+const PAGE = readFileSync(resolve(import.meta.dirname, '../public/emoji/party_popper_3d.webp'));
 
 test('admissions: the applicant from a manager\'s link to the status page', async ({ page, qa, faults }, info) => {
   const p = await openAko(page, qa, qa.ako.link!, info, faults);
