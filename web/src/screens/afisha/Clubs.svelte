@@ -270,6 +270,9 @@
      in the paper instead of shaded dark, so the dark ink reads */
   .call.look { background: linear-gradient(155deg, var(--c1), var(--c2) 55%, var(--c3)); color: var(--ink); }
   .look .bot b { text-shadow: var(--tsh); }
+  /* lookVars' --ink shadows the app's: a dark look's white button takes the look's colour, and the time pill stays white */
+  .look:not(.paper) .go:not(.done) { color: var(--c2); }
+  .look .when:not(.soon) { color: var(--on-accent); }
   .paper .shade { background: linear-gradient(180deg, transparent 38%, var(--c2)); opacity: 0.82; }
   .paper .act small { color: var(--ink2); opacity: 1; }
   .paper .go { background: var(--ink); color: var(--c1); }
