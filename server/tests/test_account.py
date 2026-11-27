@@ -514,7 +514,7 @@ def test_app_team(env):
 def test_profile_privacy(env, monkeypatch):
     """Audit M2: a stranger sees the card, bio and achievements but not clubs, past roles, event badges or a club's
     badge that came by itself, and at most PROFILES_A_DAY profiles a day (the same one again is free); friends,
-    clubmates see it all and are never counted."""
+    clubmates see the full profile except achievement dates and are never counted."""
     c, cfg = env
     ann, bob, cat, dan, eve = (login(c, uid, n)["id"] for uid, n in ((10, "ann"), (11, "bob"), (12, "cat"), (13, "dan"), (14, "eve")))
     con = db.connect(cfg.db_path)
@@ -544,8 +544,16 @@ def test_profile_privacy(env, monkeypatch):
     con.execute("UPDATE users SET skin_pick = 'org', skin_org = 2 WHERE id = ?", (ann,))
     assert full(13)["skin"] == 2                                                                       # picked to be shown: shows
     con.execute("INSERT INTO achievement_levels (user_id, code, level, reached_at) VALUES (?, 'first_in', 1, 1000)", (ann,))
-    assert all(a["at"] is None for a in full(13)["awards"]["achievements"])                            # a level's date names a check-in
-    assert any(a["at"] for a in full(11)["awards"]["achievements"])
+    con.execute("INSERT INTO org_flags (org_id, guests_private) VALUES (1, 1)")
+    con.execute("UPDATE users SET showcase = 'first_in' WHERE id = ?", (ann,))
+    own = full(10)
+    assert next(a for a in own["awards"]["achievements"] if a["code"] == "first_in")["at"] == 1000
+    assert own["showcase"][0]["at"] == 1000 and [b["eventId"] for b in own["awards"]["badges"]] == [9]
+    for tg in (11, 12, 13, 14):  # even friends, clubmates and staff cannot date a private check-in
+        p = full(tg)
+        assert all(a["at"] is None for a in p["awards"]["achievements"])
+        assert [a["code"] for a in p["showcase"]] == ["first_in"] and p["showcase"][0]["at"] is None
+        assert p["awards"]["badges"] == []
     for role in ("moderator", "admin"):
         con.execute("UPDATE users SET role = ? WHERE id = ?", (role, eve))
         staff = full(14)
@@ -565,6 +573,70 @@ def test_profile_privacy(env, monkeypatch):
     c.get(f"/api/users/{dan}", headers=tma(10))                                                        # dan is someone's stranger too
     logic.account.delete_me(con, logic.Viewer(dan, "user", True))
     assert con.execute("SELECT COUNT(*) FROM profile_views WHERE ? IN (viewer_id, user_id)", (dan,)).fetchone()[0] == 0
+
+
+@pytest.mark.parametrize("blocker", (10, 11))
+def test_blocked_clubmate_profile(env, blocker):
+    """A block in either direction removes clubmate access, including the Telegram username."""
+    c, cfg = env
+    ann, bob = login(c, 10, "ann")["id"], login(c, 11, "bob")["id"]
+    con = db.connect(cfg.db_path)
+    con.execute("""INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at)
+        VALUES (1, 'studex', 'club', 'StudEx', 'SE', 'star_3d', 1, 0)""")
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'member', 0), (1, ?, 'member', 0)", (ann, bob))
+    con.execute("INSERT INTO org_history (user_id, org_id, role, since, until) VALUES (?, 1, 'head', 0, 86400)", (ann,))
+    con.execute("""INSERT INTO events (id, org_id, status, title, starts_at, badge_name, created_at, updated_at)
+        VALUES (1, 1, 'published', 'Talk', 1000, 'Guest', 0, 0)""")
+    con.execute("""INSERT INTO registrations (event_id, user_id, status, ticket_code, created_at, updated_at, checked_in_at)
+        VALUES (1, ?, 'going', 'T1', 0, 0, 1000)""", (ann,))
+    con.execute("UPDATE users SET tg_username = 'ann_tg', showcase = 'b1' WHERE id = ?", (ann,))
+    con.execute("INSERT INTO friendships (a, b, created_at) VALUES (?, ?, 0)", (min(ann, bob), max(ann, bob)))
+    headers = {10: {"Authorization": "tma " + auth.sign_init_data({"id": 10, "first_name": "Ann", "username": "ann_tg"}, BOT)}, 11: tma(11)}
+    profile = lambda tg=11: c.get(f"/api/users/{ann}", headers=headers[tg]).json()  # noqa: E731
+    before = profile()
+    assert "limited" not in before and before["username"] == "ann_tg"
+    assert before["clubs"] and before["past"] and before["awards"]["badges"] and before["shelf"] == ["b1"] and before["skin"] == 1
+    target = bob if blocker == 10 else ann
+    assert c.post("/api/forum/blocks", headers=headers[blocker], json={"user": target, "on": True}).status_code == 204
+    p = profile()
+    assert p["limited"] and p["closed"] and p["friendship"] == "none" and p["username"] is None
+    assert p["clubs"] == [] and p["past"] == [] and p["awards"]["badges"] == [] and p["shelf"] == [] and p["skin"] is None
+    assert p.get("blocked", False) == (blocker == 11)
+    assert "limited" not in profile(10) and profile(10)["clubs"]  # the owner's view stays full
+    assert [tuple(r) for r in con.execute("SELECT viewer_id, user_id FROM profile_views")] == [(bob, ann)]
+    assert c.post("/api/forum/blocks", headers=headers[blocker], json={"user": target, "on": False}).status_code == 204
+    assert "limited" not in profile() and profile()["username"] == "ann_tg"
+
+
+@pytest.mark.parametrize("status", ("hidden", "archived"))
+@pytest.mark.parametrize("lookup", (False, True), ids=("profile", "username"))
+def test_inactive_clubmates_profile_limit(env, monkeypatch, status, lookup):
+    """An inactive shared club grants neither private profile access nor an exemption from the lookup limit."""
+    c, cfg = env
+    ann, bob, cat = (login(c, tg, name)["id"] for tg, name in ((10, "ann"), (11, "bob"), (12, "cat")))
+    con = db.connect(cfg.db_path)
+    con.execute("""INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at)
+        VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)""")
+    for uid, name in ((ann, "ann_tg"), (bob, "bob_tg"), (cat, "cat_tg")):
+        con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'member', 0)", (uid,))
+        con.execute("UPDATE users SET tg_username = ? WHERE id = ?", (name, uid))
+    get = lambda uid, name: c.get(f"/api/friends/find?username={name}" if lookup else f"/api/users/{uid}", headers=tma(11))  # noqa: E731
+    assert get(ann, "ann_tg").status_code == 200
+    assert not con.execute("SELECT 1 FROM profile_views").fetchone()
+    if not lookup:
+        p = get(ann, "ann_tg").json()
+        assert "limited" not in p and p["username"] == "ann_tg" and p["clubs"]
+    con.execute("UPDATE orgs SET status = ? WHERE id = 1", (status,))
+    monkeypatch.setattr(logic.profiles, "PROFILES_A_DAY", 1)
+    r = get(ann, "ann_tg")
+    assert r.status_code == 200
+    if not lookup:
+        assert r.json()["limited"] and r.json()["username"] is None and r.json()["clubs"] == []
+    assert [tuple(r) for r in con.execute("SELECT viewer_id, user_id FROM profile_views")] == [(bob, ann)]
+    assert get(ann, "ann_tg").status_code == 200  # reopening the same profile is still free
+    assert get(cat, "cat_tg").json()["error"] == "rate_limited"
+    con.execute("UPDATE orgs SET status = 'active' WHERE id = 1")
+    assert get(cat, "cat_tg").status_code == 200  # active clubmates still bypass the cap
 
 
 def test_report_limit(env, monkeypatch):
