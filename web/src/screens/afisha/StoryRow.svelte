@@ -70,7 +70,7 @@
     </button>
   {/each}
   <button class="s more" aria-haspopup="menu" onclick={openMore}>
-    <span class="ring"><span class="in">{#if few}<Ellipsis size={18} />{:else}<span class="four">{#each more as m (m.label)}<m.icon size={15} strokeWidth={2} />{/each}</span>{/if}</span></span>
+    <span class="ring"><span class="in">{#if few}<Ellipsis size={18} />{:else}<span class="four" class:three={more.length === 3}>{#each more as m (m.label)}<m.icon size={15} strokeWidth={2} />{/each}</span>{/if}</span></span>
     <b class="ellipsis">{t('common.more')}</b>
   </button>
 </div>
@@ -95,5 +95,5 @@
   /* "More": the same circle, a quiet fill in place of a logo, what is inside it drawn small */
   .more .in { background: var(--fill); color: var(--text-2); }
   .four { display: grid; grid-template-columns: repeat(2, auto); gap: 5px; }
-  .four:has(> :nth-child(3):last-child) > :last-child { grid-column: span 2; justify-self: center; }
+  .three > :global(:last-child) { grid-column: span 2; justify-self: center; }
 </style>

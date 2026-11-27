@@ -356,10 +356,10 @@
     {@const e = c.e}
     {@const mine = e.my?.status === 'going'}
     <!-- an event: my ticket and the way there, else what it is and one tap to go -->
-    {@const pic = !!(e.cover || e.video?.poster)}
+    {@const art = coverFor(e.cover, 'card') ?? e.video?.poster ?? null}
+    {@const pic = !!art}
     <section class="hero theme-dark" class:tix={mine && i === 0} class:nopic={!pic} style:--c={e.cover?.color ?? e.video?.poster?.color ?? e.color ?? e.tint} onclickcapture={() => tap(c)}>
       <button class="hit" onpointerdown={(ev) => touchAhead(ev, () => prefetchEvent(e.id))} onclick={(ev) => sheets.event(e.id, ev.currentTarget.parentElement?.querySelector('.poster'))} aria-label={e.title}></button>
-      {@const art = coverFor(e.cover, 'card') ?? e.video?.poster ?? null}
       <span class="art"><HeroArt pic={art} emoji={e.emoji} color={e.color ?? e.tint} first={i === 0} /></span>
       <div class="shade"></div>
       <div class="slab" use:glass>
