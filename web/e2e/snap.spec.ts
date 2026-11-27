@@ -76,7 +76,11 @@ test('Clubs', async ({ open }) => {
   await nav(p.page).getByRole('button', { name: tr('page.clubs'), exact: true }).click();
   await expect(p.page.getByRole('button', { name: new RegExp(`^${tr('clubs.schoolsOffices')}`) })).toBeVisible();
   await shot(p, 'clubs');
-  // further down: every club, in its list
+});
+
+test('Clubs, every club in its list', async ({ open }) => {
+  const p = await ali(open);
+  await nav(p.page).getByRole('button', { name: tr('page.clubs'), exact: true }).click();
   await p.page.getByRole('heading', { name: new RegExp(`^${tr('clubs.allClubs')}`) }).evaluate((el) => el.scrollIntoView({ block: 'start' }));
   await shot(p, 'clubs-list');
 });

@@ -206,29 +206,36 @@ def big(path: str, n: int = 2000) -> None:
 def clubs(path: str) -> None:
     """--clubs: a Clubs tab worth looking at (the screen snapshots): KBTU's clubs by their real names, lanyard slugs and
     logos (the app's own assets), each over the registry's size bar, with open rounds, quiet ones, Dana in two of them
-    (Ali's friend, so her face is on their rows) and Open Mic over the bar too. The flows keep the plain seed."""
+    (Ali's friend, so her face is on their rows). Open Mic stays under the bar, as in the flows, which keep the plain seed."""
     con = db.connect(path)
     now, day = int(time.time()), 86400
     people = range(200, 250)
     con.executemany("INSERT INTO users (id, tg_id, tg_first_name, tg_last_name, created_at, seen_at) VALUES (?, ?, 'Guest', ?, ?, ?)",
                     [(i, 20000 + i, str(i), now - 40 * day, now) for i in people])
-    marks = SERVER.parent / "web" / "src" / "assets" / "lanyards"
-    # slug, name, its logo's file, category, official, members, recruiting any time, a round closing in N days, with Dana
-    for n, (slug, name, logo, cat, official, size, anytime, due, dana) in enumerate((
-            ("cybersportkbtu", "KBTU Cybersport", "cyber", "sport", 1, 46, 0, 2, 1),
-            ("enactuskbtu", "Enactus KBTU", "enactus", "business", 1, 38, 0, 9, 0),
-            ("tumarorchestrakbtu", "Tumar Orchestra", "tumar", "art", 1, 31, 0, 0, 1),
-            ("caseclubkbtu", "Case Club KBTU", "case", "business", 1, 27, 1, 0, 0),
-            ("diceanddestinykbtu", "Dice and Destiny", "dd", "art", 1, 22, 0, 0, 0),
-            ("shadekbtu", "Shade", "shade", "art", 1, 19, 0, 5, 0),
-            ("web", "Web3 Club", None, "it", 1, 16, 1, 0, 0),
-            ("literatureclub", "Literature Club", "literature", "art", 1, 14, 0, 0, 0),
-            ("qoloner", "Qoloner", "qoloner", "volunteer", 1, 12, 1, 0, 0),
-            ("knlknolimits", "K|NO LIMITS", "knl", "sport", 0, 9, 0, 0, 0),
-            ("kbtucinema", "Cinema Club", None, "art", 0, 7, 0, 0, 0))):
+    marks, root = SERVER.parent / "web" / "src" / "assets" / "lanyards", Path(path).resolve().parent / "media"
+    # slug, name, its mark (and the ground a see-through one stands on, as a club's own logo would), category, official,
+    # members, recruiting any time, a round closing in N days, with Dana
+    for n, (slug, name, logo, ground, cat, official, size, anytime, due, dana) in enumerate((
+            ("cybersportkbtu", "KBTU Cybersport", "cyber", None, "sport", 1, 46, 0, 2, 1),
+            ("enactuskbtu", "Enactus KBTU", "enactus", "#0A0F55", "business", 1, 38, 0, 9, 0),
+            ("tumarorchestrakbtu", "Tumar Orchestra", "tumar", "#0B2470", "art", 1, 31, 0, 0, 1),
+            ("caseclubkbtu", "Case Club KBTU", "case", "#111A4B", "business", 1, 27, 1, 0, 0),
+            ("diceanddestinykbtu", "Dice and Destiny", "dd", None, "art", 1, 22, 0, 0, 0),
+            ("shadekbtu", "Shade", "shade", "#F6EEE2", "art", 1, 19, 0, 5, 0),
+            ("web", "Web3 Club", None, None, "it", 1, 16, 1, 0, 0),
+            ("literatureclub", "Literature Club", "literature", "#EDE6DC", "art", 1, 14, 0, 0, 0),
+            ("qoloner", "Qoloner", "qoloner", None, "volunteer", 1, 12, 1, 0, 0),
+            ("knlknolimits", "K|NO LIMITS", "knl", "#071A4A", "sport", 0, 9, 0, 0, 0),
+            ("kbtucinema", "Cinema Club", None, None, "art", 0, 7, 0, 0, 0))):
         fid = None
         if logo:
-            f = media.save((marks / f"{logo}-logo.webp").read_bytes(), Path(path).resolve().parent / "media", f"qa-logo-{slug}".encode(), logo=True)
+            im = Image.open(marks / f"{logo}-logo.webp").convert("RGBA")
+            if ground:
+                im.thumbnail((340, 340))
+                sq = Image.new("RGBA", (512, 512), ground)
+                sq.alpha_composite(im, ((512 - im.width) // 2, (512 - im.height) // 2))
+                im = sq
+            f = media.store(im.convert("RGB"), f"qa-logo-{slug}".encode(), root)
             fid = con.execute("""INSERT INTO files (sha256, kind, mime, bytes, width, height, path, owner_id, created_at, color)
                 VALUES (?, 'org_logo', 'image/webp', ?, ?, ?, ?, 1, ?, ?)""", (f["sha256"], f["bytes"], f["width"], f["height"], f["path"], now, f["color"])).lastrowid
         oid = con.execute("""INSERT INTO orgs (slug, kind, name, short, emoji, cover, logo_file_id, official, recruiting, category, created_at)
@@ -240,8 +247,6 @@ def clubs(path: str) -> None:
                         [(oid, u, now - 30 * day) for u in [*people][:size - dana] + [1] * dana])
         if due:
             con.execute("INSERT INTO rounds (org_id, title, closes_at, created_by, created_at) VALUES (?, 'Winter recruitment', ?, 1, ?)", (oid, now + due * day - 3600, now - day))
-    con.executemany("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'member', ?)", [(u, now - 30 * day) for u in [*people][:11]])
-    con.execute("UPDATE orgs SET category = 'art' WHERE id = 1")
     con.execute("INSERT INTO subscriptions (user_id, org_id, created_at) VALUES (2, (SELECT id FROM orgs WHERE slug = 'enactuskbtu'), ?)", (now - day,))  # Ali follows Enactus
     con.commit()
     con.close()
