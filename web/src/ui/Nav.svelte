@@ -126,12 +126,11 @@
   .mapb > :global(svg) { position: relative; }
   .mapb:active { transform: scale(0.94); }
   /* an edge all the way round, but lit like glass, not drawn (the even bright outline looked fake): the shared rim's
-     bright arc and its reflection over a faint edge, the colour fringes (the owner keeps them: they make the glass) */
+     bright arc and its reflection over a faint edge */
   .nav::after, .mapb::after {
     background:
       radial-gradient(ellipse 46% 140% at var(--hx) 0%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.35) 40%, transparent 72%),
       radial-gradient(ellipse 36% 120% at var(--ox) 100%, rgba(255, 255, 255, 0.45), transparent 70%),
-      linear-gradient(90deg, rgba(255, 120, 200, 0.4), transparent 18%, transparent 82%, rgba(90, 190, 255, 0.45)),
       rgba(255, 255, 255, 0.16);
   }
   .nav > .tone-base, .mapb > .tone-base { background: var(--dock); }

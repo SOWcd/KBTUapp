@@ -316,7 +316,7 @@
   <!-- the tab's places, under the composer: research (the students' voice), the subjects' cards (SUBJECTS_FILE) and
        the other way to speak up (APPEALS: to the SG alone). Tiles, not pills: an app-icon square in its own colour,
        the name and a chevron, so they read as somewhere to go and never as a filter on the feed below -->
-  <nav class="doors" style:--n={doors.length} aria-label={t('fc.places')}>
+  <nav class="doors" class:wide={doors.length < 3} style:--n={doors.length} aria-label={t('fc.places')}>
     {#each doors as d (d.label)}
       <button class="door" onclick={() => { haptic.tap(); d.go(); }}>
         <span class="sq" style:--tone={d.tone} aria-hidden="true"><d.icon size={17} strokeWidth={2.2} /></span>
@@ -457,16 +457,12 @@
      ends: gone once the window has faded in over it (its 90 ms), back at once when the fold starts, for the window
      to thin out over */
   .compose.away { opacity: 0; pointer-events: none; transition: transform 450ms var(--ease-bounce), opacity 0s linear 90ms; }
-  /* the places: equal tiles in one row, Chip's light lens glass (spot, sheen, bevel, lift; no blur: nothing to
-     repaint on scroll), each an app-icon square in its colour over its name, a quiet chevron in the corner */
+  /* the places: equal tiles in one row, the app's card (surface and hair rim: the one glass here is the composer
+     above), each an app-icon square in its colour over its name, a quiet chevron in the corner */
   .doors { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: var(--s-2); margin-top: var(--s-3); }
   .door { position: relative; isolation: isolate; display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-2); min-height: 82px;
     padding: var(--s-3); border-radius: var(--r-m); text-align: left; color: var(--text);
-    background:
-      radial-gradient(ellipse 50% 60% at 24% 0%, var(--lg-spot), transparent 70%),
-      linear-gradient(180deg, var(--lg-sheen), transparent 60%),
-      linear-gradient(var(--fill), var(--fill)) var(--surface-solid);
-    box-shadow: var(--lg-bevel), var(--lg-lift);
+    background: var(--surface); box-shadow: var(--card-rim);
     transition: transform 450ms var(--ease-bounce); -webkit-tap-highlight-color: transparent; }
   .door:active { transform: scale(0.96); transition-duration: 80ms; }
   .sq { display: grid; place-items: center; width: 30px; height: 30px; border-radius: var(--r-xs); background: var(--tone); color: var(--on-accent);
@@ -474,6 +470,10 @@
   .dl { font: 600 var(--fs-sub)/1.2 var(--font-text); letter-spacing: -0.01em; overflow-wrap: break-word; hyphens: auto;
     display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .chev { position: absolute; top: var(--s-3); right: var(--s-2); color: var(--text-3); display: flex; }
+  /* one or two places: a row each (the square, the name, the chevron on one line), so the feed starts a line higher */
+  .wide .door { flex-direction: row; align-items: center; min-height: var(--ctl-l); padding: var(--s-2) var(--s-6) var(--s-2) var(--s-2); }
+  .wide .sq { flex: none; width: var(--ctl-s); height: var(--ctl-s); border-radius: var(--r-s); }
+  .wide .chev { top: 50%; right: var(--s-2); transform: translateY(-50%); }
   @media (max-width: 359px) { .dl { font-size: var(--fs-cap); } .door { padding: var(--s-3) var(--s-2) var(--s-3) var(--s-3); } }
   /* the "N new" pill: floats under the capsule, takes no room in the list */
   .pill { position: sticky; top: calc(var(--head-bottom) + var(--s-2) - var(--page-top)); z-index: var(--z-sticky); height: 0; display: flex; justify-content: center; }

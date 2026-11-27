@@ -74,7 +74,7 @@ img { max-width: 100%; -webkit-user-drag: none; user-drag: none; -webkit-touch-c
    Glass: ONLY for things that float above content (nav, capsule, sheets, toasts). Pages are solid.
    Liquid glass, the recipe approved in the prototype: a clear body (blur + saturation of what's
    behind); a sheen spot and a bright rim whose angle follow the phone's tilt (--gx/--gy from
-   glass.ts); a specular top edge; faint warm/cool fringes left and right; a soft inner bevel.
+   glass.ts); a specular top edge; a soft inner bevel (neutral: no colour fringes).
    Static paint: nothing repaints unless the phone moves. A glass element must be positioned.
    The rim (owner, Oct 24: an even hairline all round read as a drawn border, "not real"): bright only on the arc that
    faces the light (--hx, along the top), a dim reflection on the opposite bottom arc (--ox), barely there elsewhere,
@@ -100,8 +100,6 @@ img { max-width: 100%; -webkit-user-drag: none; user-drag: none; -webkit-touch-c
     radial-gradient(ellipse 34% 26% at var(--hx) 0%, rgba(255, 255, 255, 0.28), transparent 70%),
     radial-gradient(120% 90% at calc(30% + var(--gx, 0) * 70%) calc(-25% + var(--gy, 0) * 45%), var(--glass-sheen), transparent 55%);
   box-shadow:
-    inset 1.5px 0 1px -0.5px rgba(255, 120, 200, 0.22),
-    inset -1.5px 0 1px -0.5px rgba(90, 190, 255, 0.26),
     inset 0 -10px 18px -10px rgba(0, 0, 0, 0.2),
     inset 0 8px 16px -10px rgba(255, 255, 255, 0.22),
     inset 0 0 14px rgba(255, 255, 255, 0.07);
@@ -131,7 +129,7 @@ img { max-width: 100%; -webkit-user-drag: none; user-drag: none; -webkit-touch-c
 /* Light theme (the glass must still show): white rims vanish on a
    white page and a milky body over white cards reads as plastic, so here the glass is clearer (what scrolls under it
    shows through, a lighter blur, no brightening) and shows by its edge: a hairline bright at the lit top that turns to
-   a faint ink at the bottom, a deeper lower bevel, a white inner ring, the colour fringes stronger, an ink outline.
+   a faint ink at the bottom, a soft lower bevel, a white inner ring, a hair of ink outline.
    .theme-light / .theme-dark: a part of the page in a theme of its own (the map's switch), the same glass there. */
 .theme-light, .theme-dark { color: var(--text); }
 :root[data-theme='light'], .theme-light { --glass-clear: rgba(255, 255, 255, 0.14); }
@@ -146,19 +144,17 @@ img { max-width: 100%; -webkit-user-drag: none; user-drag: none; -webkit-touch-c
   box-shadow:
     inset calc(var(--gx, 0) * -2px) 1.5px 1px #fff,
     inset calc(var(--gx, 0) * 1.5px) -1px 1.5px rgba(11, 20, 51, 0.16),
-    inset 3px 0 3px -1px rgba(255, 110, 190, 0.6),
-    inset -3px 0 3px -1px rgba(70, 170, 255, 0.65),
-    inset 0 -12px 18px -10px rgba(11, 20, 51, 0.22);
+    inset 0 -12px 18px -10px rgba(11, 20, 51, 0.1);
 }
-:root[data-theme='light'] .glass-pill, .theme-light .glass-pill { box-shadow: 0 14px 30px -12px rgba(24, 36, 90, 0.45), 0 2px 5px rgba(24, 36, 90, 0.14); }
+:root[data-theme='light'] .glass-pill, .theme-light .glass-pill { box-shadow: 0 14px 30px -14px rgba(24, 36, 90, 0.3), 0 2px 5px rgba(24, 36, 90, 0.08); }
 /* a pill shows by its edge here (a white arc is lost on white): an ink rim the
    bright arc breaks like glare, an ink reflection at the bottom, a glare spot under the arc */
 :root[data-theme='light'] .glass-pill::after, .theme-light .glass-pill::after {
   padding: 1.4px;
   background:
     radial-gradient(ellipse 40% 150% at var(--hx) 0%, #fff, rgba(255, 255, 255, 0.85) 35%, transparent 70%),
-    radial-gradient(ellipse 55% 140% at var(--ox) 100%, rgba(11, 20, 51, 0.42), transparent 75%),
-    rgba(11, 20, 51, 0.2);
+    radial-gradient(ellipse 55% 140% at var(--ox) 100%, rgba(11, 20, 51, 0.2), transparent 75%),
+    rgba(11, 20, 51, 0.09);
 }
 :root[data-theme='light'] .glass-pill::before, .theme-light .glass-pill::before { background: radial-gradient(ellipse 30% 70% at var(--hx) 0%, rgba(255, 255, 255, 0.95), transparent 70%); }
 /* a dark part on a light page: the dark glass back */

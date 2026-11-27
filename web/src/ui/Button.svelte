@@ -1,6 +1,6 @@
 <script lang="ts" module>
   // One family, Liquid Glass (never next to plain old-iOS buttons): every kind has the glass
-  // rim (a bright arc facing the light, a dim reflection opposite), a top sheen and the bevel with its pink/blue fringes.
+  // rim (a bright arc facing the light, a dim reflection opposite), a top sheen and a neutral bevel.
   //   primary      the accent body with a sheen and a coloured lift: THE action (one in sight)
   //   secondary    clear glass on the --fill body (accent ink when called by an old accent-soft name)
   //   destructive  secondary with red ink
@@ -130,7 +130,7 @@
   }
 
   /* primary: the accent body (the label sits on the accent itself: contrast as before), a sheen in its top half, a
-     white rim in both themes, the fringes, a lift in its own colour */
+     white rim in both themes, a lift in its own colour */
   .k-primary {
     --body: var(--accent);
     --rim-hi: rgba(255, 255, 255, 0.85); --rim-lo: rgba(255, 255, 255, 0.3); --rim-base: rgba(255, 255, 255, 0.14);
@@ -140,11 +140,9 @@
       linear-gradient(180deg, rgba(255, 255, 255, 0.16), transparent 50%) var(--body); /* no color-mix: iOS < 16.2 drops it */
     box-shadow:
       inset 0 1px 1px rgba(255, 255, 255, 0.4), inset 0 -8px 14px -8px rgba(0, 0, 0, 0.22),
-      inset 1.5px 0 1px -0.5px rgba(255, 120, 200, 0.4), inset -1.5px 0 1px -0.5px rgba(120, 210, 255, 0.45),
       0 10px 22px -12px var(--body), 0 2px 5px -2px rgba(0, 0, 0, 0.18);
   }
-  .s.k-primary { box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.4), inset 0 -6px 10px -6px rgba(0, 0, 0, 0.2),
-    inset 1px 0 1px -0.5px rgba(255, 120, 200, 0.4), inset -1px 0 1px -0.5px rgba(120, 210, 255, 0.45), 0 6px 14px -8px var(--body); }
+  .s.k-primary { box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.4), inset 0 -6px 10px -6px rgba(0, 0, 0, 0.2), 0 6px 14px -8px var(--body); }
   .k-primary.done { --body: var(--success); }
   .k-primary.red { --body: var(--danger); }
   .k-primary.onmedia { --body: var(--on-accent); color: var(--ink); --rim-lo: rgba(11, 20, 51, 0.2); }

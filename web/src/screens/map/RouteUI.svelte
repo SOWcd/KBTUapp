@@ -271,8 +271,7 @@
   .step { left: 10px; right: 10px; bottom: calc(var(--safe-bottom) + 14px); padding: 12px 12px 12px 16px; border-radius: 28px; animation: rise 0.6s var(--ease-spring);
     -webkit-backdrop-filter: blur(20px) saturate(170%) brightness(1.05); backdrop-filter: var(--refract, blur(20px) saturate(170%) brightness(1.05));
     background: rgba(18, 22, 36, 0.38); box-shadow: 0 16px 40px -12px rgba(0, 0, 0, 0.6), 0 0 28px -8px rgba(90, 130, 255, 0.45); }
-  .step::after { background: linear-gradient(180deg, rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0.16) 40%, rgba(255, 255, 255, 0.3)),
-      linear-gradient(90deg, rgba(255, 120, 200, 0.45), transparent 22%, transparent 78%, rgba(90, 190, 255, 0.5)); }
+  .step::after { background: linear-gradient(180deg, rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0.16) 40%, rgba(255, 255, 255, 0.3)); }
   .step .top { margin: -2px -4px 0 0; }
   .bars { display: flex; gap: 4px; margin: 6px 4px 10px 0; }
   .bars i { flex: 1; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.18); transition: background 0.3s; }
