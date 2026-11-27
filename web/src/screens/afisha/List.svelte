@@ -26,7 +26,7 @@
   import { t, money, subjectOf, friendsLine } from '../../lib/i18n/index.svelte';
   import EventPlace from '../../ui/EventPlace.svelte';
   import { lessonKind } from '../../lib/i18n/subjects';
-  import { dayNo, nowTs, parts, weekday, weekdayShort, dayMonth, dayMonthShort, OFFSET, soon, time, dateInput, multiDay, daySpan } from '../../lib/time';
+  import { dayNo, nowTs, parts, weekday, dayMonth, dayMonthShort, OFFSET, soon, time, dateInput, multiDay, daySpan } from '../../lib/time';
   import { byStart, classesOn, classesLeft } from '../../lib/classes';
   import { noClasses } from '../../lib/academic';
   import { floorOf, atDorm, DORM_2GIS, atBldg2, bldg2Room, BLDG2_2GIS, awayOf } from '../../lib/map';
@@ -54,6 +54,8 @@
   import ActionCard from '../../ui/ActionCard.svelte';
   import StoryRow from './StoryRow.svelte';
   import PullSearch from '../../ui/PullSearch.svelte';
+  import HeroArt from './HeroArt.svelte';
+  import { coverFor, focusPos } from '../../lib/photo';
   import { glass } from '../../ui/glass';
   import Everything from './Everything.svelte';
   import GalleryCard from './GalleryCard.svelte';
@@ -208,6 +210,8 @@
     const keep = held.d === today ? held.keys.map((k) => cands.find((x) => x.key === k)).filter((x): x is Card => !!x && !taken(x)) : [];
     return [...lead, ...keep, ...rankHero(cands.filter((x) => !taken(x) && !keep.some((y) => y.key === x.key)), was, today)].slice(0, 3);
   });
+  // with no picture the lead is a field of one colour: the row is lower then (a tall empty card read as a blank screen)
+  const leadPic = $derived.by(() => { const c = cards[0]; return !!c && ('e' in c ? !!(c.e.cover || c.e.video?.poster) : 'p' in c ? !!c.p.photo : 'f' in c ? !!c.f.photos[0] : false); });
   let at = $state(0); // the card in view
   const atCard = $derived(Math.min(at, cards.length - 1));
   $effect(() => {
@@ -257,20 +261,6 @@
   // (the sheet's own rule is longer: a partner's link, a guest list, a club's own event keep the whole-card tap)
   const canGo = (e: EventCard) => e.status === 'published' && (!e.my || e.my.status === 'cancelled') && e.startsAt > now && !(e.regUntil && e.regUntil <= now)
     && !e.externalUrl && !e.guestHost && !e.guestList && !inner(e) && !e.santa && !(e.seats != null && e.taken >= e.seats) && !onTeam(e, session.me?.memberships);
-  // the week at a glance, in place of the lone counters: seven days from today, a dot where something is on (the accent:
-  // I'm going), a tap goes to that day's card. Built from the days above: nothing is read twice
-  const strip = $derived(Array.from({ length: 7 }, (_, i) => {
-    const d = today + i, ev = days.find((x) => x.d === d)?.items.filter((x) => 'e' in x) ?? [];
-    return { d, on: days.some((x) => x.d === d && (x.items.length || (showClasses && data.schedule.length))), n: ev.length, mine: ev.some((x) => 'e' in x && x.e.my?.status === 'going') };
-  }));
-  async function toDay(d: number) {
-    haptic.select();
-    // its rows drawn first, only as far as that day (the list draws a few days per idle moment)
-    upto = Math.max(upto, days.slice(0, days.findIndex((x) => x.d === d) + 1).reduce((n, x) => n + x.items.length, 0));
-    await tick();
-    document.querySelector(`.tab.on .day[data-d="${d}"]`)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
-  }
-
   // no timetable: the one card that asks for it (after the first load: a returning student never sees it flash)
   const askSched = $derived(data.scheduleReady && !!session.me?.student && !data.schedule.length);
   // opened without the network: my kept tickets first, their QR ready for the door (lib/offlineTickets)
@@ -354,6 +344,12 @@
   {/if}
 {/snippet}
 
+<!-- what the slab's glass shows of the cover: the picture again from its small thumb, larger, blurred and dimmed, cut to
+     the slab. A still layer drawn once: a live backdrop blur was redrawn on every frame the card moved (a swipe, the page) -->
+{#snippet lens(pic: { thumb: string; focus?: [number, number] | null } | null)}
+  {#if pic}<span class="lens" aria-hidden="true"><img src={pic.thumb} alt="" decoding="async" draggable="false" style:object-position={focusPos(pic)} /></span>{/if}
+{/snippet}
+
 <!-- one hero card, any kind: the lead's slot (i 0) and the swiped-to ones -->
 {#snippet heroCard(c: Card, i: number)}
   {#if 'e' in c}
@@ -363,11 +359,11 @@
     {@const pic = !!(e.cover || e.video?.poster)}
     <section class="hero theme-dark" class:tix={mine && i === 0} class:nopic={!pic} style:--c={e.cover?.color ?? e.video?.poster?.color ?? e.color ?? e.tint} onclickcapture={() => tap(c)}>
       <button class="hit" onpointerdown={(ev) => touchAhead(ev, () => prefetchEvent(e.id))} onclick={(ev) => sheets.event(e.id, ev.currentTarget.parentElement?.querySelector('.poster'))} aria-label={e.title}></button>
-      <span class="art"><Poster item={e} big radius={0} /></span>
+      {@const art = coverFor(e.cover, 'card') ?? e.video?.poster ?? null}
+      <span class="art"><HeroArt pic={art} emoji={e.emoji} color={e.color ?? e.tint} first={i === 0} /></span>
       <div class="shade"></div>
       <div class="slab" use:glass>
-        <!-- the glass bends the cover at its edge: the same picture, a little larger, seen through a thin band along the rim -->
-        {#if pic}<span class="bend" aria-hidden="true"><span><Poster item={e} big radius={0} /></span></span>{/if}
+        {@render lens(art)}
         <span class="hero-tx">
           <b class="clamp-2">{e.title}</b>
           <span class="where"><span class="ellipsis"><b class="num">{multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : time(e.startsAt)}</b> · {soon(e.startsAt, now)}</span><span class="by ellipsis">&nbsp;· {shortOf(e.org)}{#if e.coHost} × {shortOf(e.coHost)}{/if}</span></span>
@@ -377,7 +373,7 @@
         <span class="foot">
           <span class="hsub">{@render status(e)}</span>
           {#if mine}
-            <span class="acts"><Button kind="glass" size="m" onclick={() => sheets.ticket(e.id)}>{#snippet icon()}<QrCode size={17} />{/snippet}{t('event.ticket')}</Button></span>
+            <span class="acts"><Button onmedia size="m" onclick={() => sheets.ticket(e.id)}>{#snippet icon()}<QrCode size={17} />{/snippet}{t('event.ticket')}</Button></span>
           {:else if e.my?.status === 'hold'}
             <span class="acts"><Button onmedia size="m" onclick={() => sheets.pay(e.id)}>{t('event.pay', { price: money(e.price ?? 0) })}</Button></span>
           {:else if canGo(e)}
@@ -385,24 +381,22 @@
           {/if}
         </span>
       </div>
-      <span class="rim" aria-hidden="true"></span>
     </section>
   {:else}
     {@const v = look(c)}
     <!-- news, a forum post, my next class: the same card, its picture or a 3D mark, the title and one line -->
     <section class="hero theme-dark" class:nopic={!v.item.cover} style:--c={v.color} onclickcapture={() => tap(c)}>
       <button class="hit" onclick={v.open} aria-label={v.title}></button>
-      <span class="art"><Poster item={v.item} big radius={0} /></span>
+      <span class="art"><HeroArt pic={v.item.cover} emoji={v.item.emoji} color={v.color} first={i === 0} /></span>
       <div class="shade"></div>
       <div class="slab" use:glass>
-        {#if v.item.cover}<span class="bend" aria-hidden="true"><span><Poster item={v.item} big radius={0} /></span></span>{/if}
+        {@render lens(v.item.cover)}
         <span class="hero-tx">
           <b class="clamp-2">{v.title}</b>
           <span class="where"><span class="ellipsis">{#if v.lead}<b class="num">{v.lead}</b> · {/if}{v.line}</span>{#if v.by}<span class="by ellipsis">&nbsp;· {v.by}</span>{/if}</span>
         </span>
-        {#if v.room}{@const room = v.room}<span class="foot"><span class="acts"><Button kind="glass" size="m" onclick={() => sheets.map(room)}>{#snippet icon()}<MapPin size={17} />{/snippet}{room}</Button></span></span>{/if}
+        {#if v.room}{@const room = v.room}<span class="foot"><span class="acts"><Button onmedia size="m" onclick={() => sheets.map(room)}>{#snippet icon()}<MapPin size={17} />{/snippet}{room}</Button></span></span>{/if}
       </div>
-      <span class="rim" aria-hidden="true"></span>
     </section>
   {/if}
 {/snippet}
@@ -421,7 +415,7 @@
 
   {#if cards.length}
     <!-- the hero, personal: the first card, a swipe brings #2 and #3 (snapped); one markup for every kind -->
-    <div class="heroes" role="group" aria-label={t('list.heroPicks')} onscroll={slid}>
+    <div class="heroes" class:short={!leadPic} role="group" aria-label={t('list.heroPicks')} onscroll={slid}>
     {#each cards as c, i (i ? c.key : '')}
       {#if i}{@render heroCard(c, i)}
       {:else}
@@ -431,16 +425,6 @@
     {/each}
     </div>
     {#if cards.length > 1}<div class="dots" aria-hidden="true">{#each cards as c, i (c.key)}<i class={{ on: i === atCard }}></i>{/each}</div>{/if}
-  {/if}
-  {#if data.eventsReady && days.length}
-    <nav class="week" aria-label={t('list.title')}>
-      {#each strip as w (w.d)}
-        {@const ts = dayTs(w.d) + 12 * 3600}
-        <button class={['wd', { today: w.d === today, has: w.n }]} disabled={!w.on} aria-label={weekday(ts) + ', ' + dayMonth(ts) + (w.n ? ' · ' + w.n : '')} onclick={() => void toDay(w.d)}>
-          <span>{weekdayShort(ts)}</span><b class="num">{parts(ts).d}</b><i class={{ on: w.mine }}></i>
-        </button>
-      {/each}
-    </nav>
   {/if}
 
   {#if ratePrompt && !ratingBusy.has(ratePrompt.id)}
@@ -610,15 +594,16 @@
   /* (owner, Nov 27) the hero is the screen's one big card, most of the first screen: the cover tall and whole, and the words
      on a slab of Liquid Glass at its foot. The card is media, so it is dark in both themes (.theme-dark: white words, the
      dark tags and buttons): the glass is clear and takes its colour from the cover, not from the page */
-  .hero { --halo: 0.62; --hh: clamp(340px, 60vh, 540px); position: relative; isolation: isolate; display: flex; flex-direction: column; justify-content: flex-end; height: var(--hh); padding: 6px;
+  .hero { --halo: 0.62; position: relative; isolation: isolate; display: flex; flex-direction: column; justify-content: flex-end; height: var(--hh); padding: 6px;
     border-radius: var(--r-xl); background: var(--media); color: var(--text); transition: transform var(--t-fast) var(--ease); }
   .hero:has(> .hit:active) { transform: scale(0.985); }
   /* the hero's cards side by side, one in view, snapped; edge to edge so the next one waits just past the gutter. A
      scroller clips, so it leaves room around the cards for their light (the glow reaches 44px under a card) and takes it
      back with its margins */
-  .heroes { display: flex; gap: var(--s-3); overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; scrollbar-width: none;
+  .heroes { --hh: clamp(340px, 60vh, 540px); display: flex; gap: var(--s-3); overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; scrollbar-width: none;
     margin: calc(-1 * var(--s-4)) calc(-1 * var(--gutter)) -44px; padding: var(--s-4) 0 44px var(--gutter); }
   .heroes::-webkit-scrollbar { display: none; }
+  .heroes.short { --hh: clamp(320px, 52vh, 440px); }
   .heroes::after { content: ''; flex: 0 0 calc(var(--gutter) - var(--s-3)); } /* the end's gutter (a scroller's end padding is lost in older WebKit) */
   /* 100% here is the scroller's box minus its left padding: the page's width plus one gutter, so a card takes one gutter
      less and snaps to its start inside the gutter (centre snapping pushed it past both edges) */
@@ -641,48 +626,32 @@
      lifted on black and deepened on light, its colour strengthened in proportion (owner: a cream cover glowed yellow
      when a floor of colour was forced onto its near-grey). Where relative colour isn't known (older iOS) none of it
      applies and the cover's own colour stays */
-  :global(:root[data-theme='light']) .hero { --halo: 0.5; }
+  :global(:root[data-theme='light']) .hero { --halo: 0.26; }
   @supports (color: oklch(from red l c h)) {
     .hero::before { box-shadow: 0 0 14px 0 var(--cg), 0 16px 38px -10px var(--cg); }
     .hero { --cg: oklch(from var(--c, transparent) max(l, 0.66) min(calc(c * 2.5), 0.2) h); }
-    :global(:root[data-theme='light']) .hero { --halo: 0.62; --cg: oklch(from var(--c, transparent) min(l, 0.58) min(calc(c * 2.5), 0.2) h); }
+    :global(:root[data-theme='light']) .hero { --halo: 0.3; --cg: oklch(from var(--c, transparent) min(l, 0.58) min(calc(c * 2.5), 0.2) h); }
   }
   @keyframes bloom { from { opacity: 0; } 40% { opacity: calc(var(--halo) * 1.5); } }
-  .art, .shade, .rim { position: absolute; inset: 0; }
-  .art, .shade, .rim { border-radius: inherit; pointer-events: none; }
+  .art, .shade { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; }
   .art { overflow: hidden; }
   /* the cover clear at the top (it is the screen's one picture), deeper toward the slab: the glass has something calm to sit on */
   .shade { background: linear-gradient(rgba(0, 0, 0, 0.02) 40%, rgba(0, 0, 0, 0.42)); }
-  /* no cover: the club's colour lit from the top left and deep at the far corner, the event's 3D mark large and
-     tilted at the right, its foot behind the frost (the title's side stays clean) */
-  .nopic .shade { background: radial-gradient(90% 130% at 0% 0%, rgba(255, 255, 255, 0.2), transparent 60%), linear-gradient(155deg, transparent 35%, rgba(0, 0, 0, 0.5)); }
-  .nopic .art :global(.poster) { align-items: flex-start; justify-content: center; padding: 9% 0 0; }
-  .nopic .art :global(.poster > *) { transform: rotate(7deg) scale(1.5); transform-origin: 50% 0; filter: drop-shadow(0 14px 18px rgba(0, 0, 0, 0.32)); }
-  /* the rim: a hair of white lit at the top left in the cover's colour, as neon glass is. The light comes round once as the card arrives and rests
-     there: a big conic square turning under a ring mask, transform only (and no @property: Button owns --rim) */
-  .rim { z-index: 1; overflow: hidden; padding: 1px;
-    -webkit-mask: linear-gradient(black 0 0) content-box, linear-gradient(black 0 0); -webkit-mask-composite: xor;
-    mask: linear-gradient(black 0 0) content-box, linear-gradient(black 0 0); mask-composite: exclude; }
-  .rim::before { content: ''; position: absolute; left: 50%; top: 50%; width: 150%; aspect-ratio: 1; margin: -75% 0 0 -75%;
-    background: conic-gradient(rgba(255, 255, 255, 0.12) 0deg, rgba(255, 255, 255, 0.1) 95deg, var(--c, rgba(255, 255, 255, 0.22)) 125deg, rgba(255, 255, 255, 0.1) 155deg,
-      rgba(255, 255, 255, 0.1) 250deg, var(--c, rgba(255, 255, 255, 0.55)) 284deg, rgba(255, 255, 255, 0.7) 296deg, var(--c, rgba(255, 255, 255, 0.55)) 308deg, rgba(255, 255, 255, 0.12) 345deg);
-    animation: arrive 1.8s var(--ease-spring) 0.25s backwards; }
-  @keyframes arrive { from { transform: rotate(-200deg); } }
-  @media (prefers-reduced-motion: reduce) { .hero::before, .rim::before { animation: none; } }
-  /* the slab: Liquid Glass, its own recipe (the sheets' glass is a frosted body; this one is a clear lens over one still
-     picture). A light blur and more colour of what is behind; a clear, slightly dimmed body so white words read on any cover; depth from a shadow onto the
-     picture and a dark foot inside; light from a top sheen, a specular rim that is bright on the arc facing the light and
-     on the one opposite (it follows the phone's tilt, --gx), and the warm and cool fringes at the sides. All static
-     paint over a picture that doesn't move: nothing here repaints while the list scrolls */
+  /* (the card has no lit rim of its own: the glass is the one lit object on it; two rims 6px apart read as nested boxes) */
+  @media (prefers-reduced-motion: reduce) { .hero::before { animation: none; } }
+  /* the slab: Liquid Glass, its own recipe (the sheets' glass is a frosted body; this one is a lens over one still
+     picture). What it shows of the cover is the lens layer below, so nothing here blurs live. A dimmed body so white
+     words read on any cover, a white poster too; depth from a soft shadow onto the picture and a dark foot inside;
+     light from a top sheen, a specular rim bright on the arc facing the light and on the one opposite (it follows the
+     phone's tilt, --gx), and the warm and cool fringes at the sides */
   .slab { position: relative; z-index: 2; /* over the card's own tap */ isolation: isolate; display: flex; flex-direction: column; padding: 14px var(--s-4) var(--s-3);
     border-radius: var(--r-l); color: var(--text); pointer-events: none;
-    background: linear-gradient(rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0) 46%), rgba(14, 16, 26, 0.24);
-    -webkit-backdrop-filter: blur(16px) saturate(190%) brightness(1.04); backdrop-filter: blur(16px) saturate(190%) brightness(1.04);
-    box-shadow: 0 14px 30px -12px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.18); }
+    background: linear-gradient(rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0) 46%), rgba(10, 12, 20, 0.34);
+    box-shadow: 0 10px 24px -14px rgba(0, 0, 0, 0.5); }
   .slab::before, .slab::after { content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none; }
   .slab::before {
-    background: radial-gradient(70% 90% at calc(16% + var(--gx, 0) * 40%) -18%, rgba(255, 255, 255, 0.26), transparent 62%);
-    box-shadow: inset 0 1px 0.5px rgba(255, 255, 255, 0.5), inset 0 10px 18px -12px rgba(255, 255, 255, 0.4), inset 0 -18px 24px -16px rgba(0, 0, 0, 0.42),
+    background: radial-gradient(70% 90% at calc(16% + var(--gx, 0) * 40%) -18%, rgba(255, 255, 255, 0.24), transparent 62%);
+    box-shadow: inset 0 1px 0.5px rgba(255, 255, 255, 0.5), inset 0 10px 18px -12px rgba(255, 255, 255, 0.36), inset 0 -18px 24px -16px rgba(0, 0, 0, 0.42),
       inset 2px 0 2px -1px rgba(255, 120, 200, 0.3), inset -2px 0 2px -1px rgba(90, 190, 255, 0.34), inset 0 0 16px rgba(255, 255, 255, 0.06); }
   .slab::after { z-index: 0; padding: 1.2px;
     background:
@@ -691,16 +660,16 @@
       rgba(255, 255, 255, 0.13);
     -webkit-mask: linear-gradient(black 0 0) content-box, linear-gradient(black 0 0); -webkit-mask-composite: xor;
     mask: linear-gradient(black 0 0) content-box, linear-gradient(black 0 0); mask-composite: exclude; }
-  /* the lens's edge on every engine (WebKit can't bend a backdrop): the cover again, a little larger about the slab's
-     foot, shown only through a thin band along the rim, so the picture steps outward there as it does through thick
-     glass. The same decoded picture, drawn once */
-  .bend { position: absolute; inset: 0; z-index: -1; overflow: hidden; padding: 5px; border-radius: inherit; pointer-events: none; opacity: 0.8;
-    -webkit-mask: linear-gradient(black 0 0) content-box, linear-gradient(black 0 0); -webkit-mask-composite: xor;
-    mask: linear-gradient(black 0 0) content-box, linear-gradient(black 0 0); mask-composite: exclude; }
-  .bend > span { position: absolute; left: -6px; right: -6px; bottom: -6px; height: var(--hh); transform: scale(1.14); transform-origin: 50% 100%; filter: saturate(1.35) brightness(1.12); }
-  @media (prefers-reduced-transparency: reduce) { .slab { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--glass-solid); } .bend { display: none; } }
-  :global(:root.lowfx) .slab { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--glass-solid); }
-  :global(:root.lowfx) .bend { display: none; }
+  /* the lens: laid over the card's whole box from inside the slab (6px in on three sides), so it lines up with the
+     cover, then a step larger about the slab, as thick glass magnifies */
+  .lens { position: absolute; inset: 0; z-index: -2; overflow: hidden; border-radius: inherit; pointer-events: none; background: var(--media); }
+  .lens img { position: absolute; left: -6px; bottom: -6px; width: calc(100% + 12px); height: var(--hh); object-fit: cover;
+    transform: scale(1.14); transform-origin: 50% 86%; filter: blur(18px) saturate(1.8) brightness(0.58); }
+  /* over media the tags are white on a clear chip (the accent's blue on a blue cover was 2:1), the place has no underline
+     (the whole card opens the event; the pin says it is a place) */
+  .hsub :global(.chip) { background: rgba(255, 255, 255, 0.18); color: var(--on-accent); }
+  .hsub .fr { color: var(--text-2); }
+  .hero-place :global(.place) { text-decoration: none; }
   .foot { display: flex; align-items: center; gap: 10px; min-height: var(--ctl-m); margin-top: var(--s-2); }
   .foot:not(:has(.acts, .hsub *)) { display: none; }
   .acts { position: relative; z-index: 2; flex: none; display: flex; gap: 8px; max-width: 60%; margin-left: auto; pointer-events: auto; }
@@ -717,30 +686,6 @@
   .where b { font-weight: 600; color: var(--text); }
   .hsub { flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; }
   .hsub:not(:has(*)) { display: none; } /* nothing to say: no line (:empty misses it, the snippet leaves white space) */
-  /* the week: seven even columns on the bare ground (no card: the hero above and the days below are the cards); today
-     on the one selected pill (the tab bar's lens), a day with events bold with a dot under it, a quiet day dimmed and
-     not a button; the accent dot: I'm going */
-  .week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); margin: var(--s-4) 0 0; }
-  .wd { display: flex; flex-direction: column; align-items: center; gap: var(--s-1); min-height: var(--tap); padding: 2px 0; color: var(--text); }
-  .wd span { font: 600 var(--fs-micro)/1.2 var(--font-text); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); }
-  .wd b { position: relative; display: grid; place-items: center; width: var(--ctl-s); height: var(--ctl-s); border-radius: var(--r-full); font: 600 var(--fs-row)/1 var(--font-display); letter-spacing: -0.02em;
-    transition: transform 450ms var(--ease-bounce), background-color var(--t-base) var(--ease); }
-  .wd:active b { transform: scale(0.88); transition-duration: 80ms; background: var(--fill); }
-  .wd.has b { font-weight: 700; }
-  .wd.today b { background: linear-gradient(var(--lens-top), transparent 70%), var(--lens); box-shadow: var(--lens-shadow); }
-  .wd.today b::after { content: ''; position: absolute; inset: 0; padding: 1px; border-radius: inherit; pointer-events: none;
-    background:
-      radial-gradient(ellipse 60% 150% at 24% 0%, var(--lens-rim), transparent 72%),
-      radial-gradient(ellipse 50% 140% at 76% 100%, var(--lens-rim-low), transparent 72%);
-    -webkit-mask: linear-gradient(black 0 0) content-box, linear-gradient(black 0 0);
-    mask: linear-gradient(black 0 0) content-box, linear-gradient(black 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude; }
-  .wd:disabled:not(.today) { opacity: 0.6; }
-  .wd:disabled:not(.today) b { color: var(--text-3); font-weight: 450; }
-  .wd i { width: 5px; height: 5px; border-radius: var(--r-full); }
-  .wd.has i { background: var(--text-3); }
-  .wd i.on { background: var(--accent); }
 
   /* the featured post: its own card, the body folded to two lines */
   .pin { margin: var(--s-3) 0 0; }

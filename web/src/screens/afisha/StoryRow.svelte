@@ -10,6 +10,7 @@
   import { nowTs } from '../../lib/time';
   import { storyGroups, seenEv } from '../../lib/posts';
   import OrgLogo from '../../ui/OrgLogo.svelte';
+  import IconButton from '../../ui/IconButton.svelte';
   import MapIcon from '@lucide/svelte/icons/map';
   import Play from '@lucide/svelte/icons/play';
   import Images from '@lucide/svelte/icons/images';
@@ -57,6 +58,10 @@
   }
 </script>
 
+{#if !groups.length}
+  <!-- no circles: "More" is no chip alone in a row, it is one quiet round button at the right -->
+  <div class="solo"><span class="more"><IconButton icon={Ellipsis} size="s" label={t('common.more')} onclick={openMore} /></span></div>
+{:else}
 <div class={['row hscroll', { few }]}>
   {#each groups as g, i (g.org.id)}
     <button class="s" class:new={g.unread} onclick={() => sheets.stories(groups, i)}>
@@ -69,6 +74,7 @@
     <b class="ellipsis">{t('common.more')}</b>
   </button>
 </div>
+{/if}
 
 <style>
   .row { display: flex; gap: 12px; margin: 0 calc(-1 * var(--gutter)) 16px; padding: 2px var(--gutter); overflow-x: auto; scrollbar-width: none; }
@@ -84,6 +90,8 @@
   .few .ring { width: var(--ctl-s); height: var(--ctl-s); padding: 2px; }
   .few .in { border-width: 2px; }
   .few b { font-size: var(--fs-sub); }
+  .solo { display: flex; justify-content: flex-end; margin-bottom: var(--s-3); }
+  .solo .more { display: flex; }
   /* "More": the same circle, a quiet fill in place of a logo, what is inside it drawn small */
   .more .in { background: var(--fill); color: var(--text-2); }
   .four { display: grid; grid-template-columns: repeat(2, auto); gap: 5px; }
