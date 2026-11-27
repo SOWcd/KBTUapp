@@ -43,7 +43,7 @@
   --ease: cubic-bezier(.2, .9, .22, 1);          /* morphs, slides */
   --ease-spring: cubic-bezier(.32, .72, 0, 1);   /* sheets, iOS-like settle */
   --ease-in: cubic-bezier(.4, 0, 1, 1);
-  --ease-bounce: cubic-bezier(.34, 1.45, .5, 1); /* a press let go: a small overshoot */
+  --ease-bounce: cubic-bezier(.34, 1.3, .5, 1);  /* a press let go: a settle, barely past */
   /* a tab switch: the nav's lens and the pages' crossfade move on this one spring, so they read as one motion
      (Nav reads both for the lens's stretch: keep --t-tab in ms) */
   --t-tab: 340ms; --ease-tab: var(--ease-spring);
@@ -219,19 +219,19 @@
   --glass-solid: rgba(255, 255, 255, 0.97);
   --glass-bloom: rgba(255, 255, 255, 0.95);
   --glass-sheen: rgba(255, 255, 255, 0.32);
-  --glass-shadow: 0 22px 44px -14px rgba(24, 36, 90, 0.28), 0 3px 10px rgba(24, 36, 90, 0.08), 0 0 0 0.5px rgba(11, 20, 51, 0.06);
-  --shadow-card: 0 1px 2px rgba(24, 36, 90, 0.04), 0 6px 18px rgba(24, 36, 90, 0.05);
-  --shadow-thumb: 0 3px 8px rgba(24, 36, 90, 0.12), 0 0 0 0.5px rgba(11, 20, 51, 0.05);
+  --glass-shadow: 0 20px 40px -16px rgba(11, 20, 51, 0.22), 0 2px 8px rgba(11, 20, 51, 0.06), 0 0 0 0.5px rgba(11, 20, 51, 0.07);
+  --shadow-card: 0 1px 2px rgba(11, 20, 51, 0.04), 0 8px 20px -12px rgba(11, 20, 51, 0.1);
+  --shadow-thumb: 0 2px 6px rgba(11, 20, 51, 0.12), 0 0 0 0.5px rgba(11, 20, 51, 0.06);
   --scrim: rgba(11, 20, 51, 0.32);
   --card-rim: inset 0 0 0 0.5px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.03), 0 10px 24px -14px rgba(0, 0, 0, 0.12);
   --glow: none;
   /* white rims vanish on white cards: here the glass shows by its edge (base.css's light pill: an ink rim the bright arc
-     breaks like glare, stronger fringes, a navy lift) */
-  --lg-rim-hi: #fff; --lg-rim-lo: rgba(11, 20, 51, 0.3); --lg-rim-base: rgba(11, 20, 51, 0.12);
+     breaks like glare, the fringes a hairline of colour at the sides, never a glow, a short ink lift) */
+  --lg-rim-hi: #fff; --lg-rim-lo: rgba(11, 20, 51, 0.24); --lg-rim-base: rgba(11, 20, 51, 0.1);
   --lg-spot: rgba(255, 255, 255, 0.9); --lg-sheen: rgba(255, 255, 255, 0.7);
-  --lg-bevel: inset 0 1.5px 1px #fff, inset 0 -10px 16px -10px rgba(11, 20, 51, 0.14),
-    inset 3px 0 3px -1px rgba(255, 110, 190, 0.45), inset -3px 0 3px -1px rgba(70, 170, 255, 0.5);
-  --lg-lift: 0 6px 14px -8px rgba(24, 36, 90, 0.32), 0 1px 2px rgba(24, 36, 90, 0.08);
+  --lg-bevel: inset 0 1px 0.5px #fff, inset 0 -8px 14px -10px rgba(11, 20, 51, 0.1),
+    inset 1.5px 0 1.5px -0.5px rgba(255, 110, 190, 0.36), inset -1.5px 0 1.5px -0.5px rgba(70, 170, 255, 0.42);
+  --lg-lift: 0 4px 10px -6px rgba(11, 20, 51, 0.24), 0 1px 1.5px rgba(11, 20, 51, 0.07);
   /* the orb on the pale ground: a frosted pearl, its shadow under it */
   --orb-shell: radial-gradient(circle, rgba(255, 255, 255, 0) 40%, rgba(255, 255, 255, 0.7) 76%, #fff 97%), #E9ECFB;
   --orb-core-a: rgba(124, 77, 255, 0.78); --orb-core-b: rgba(59, 107, 255, 0.74); --orb-hot: rgba(255, 255, 255, 0.55);
