@@ -63,6 +63,20 @@ test('Afisha, the top', async ({ open }) => {
   await shot(await ali(open), 'afisha');
 });
 
+// qa.py's events have no cover: one put on them here, so the hero's glass is seen over a picture (the slab, the picture
+// bent along its edge), not only over a club's colour
+test('Afisha, the hero over a cover', async ({ open }) => {
+  const p = await open('Ali');
+  const cover = { url: 'pitch/event.webp', thumb: 'pitch/event.webp', w: 750, h: 1624, blur: '', color: '#28408c' };
+  await p.page.route((u) => u.pathname === '/api/events', async (route) => {
+    const r = await route.fetch();
+    await route.fulfill({ response: r, json: ((await r.json()) as object[]).map((e) => ({ ...e, cover })) });
+  });
+  await p.page.reload();
+  await settled(p);
+  await shot(p, 'afisha-cover', p.page.locator('.hero').first());
+});
+
 test('an event', async ({ open }) => {
   const p = await ali(open);
   await p.page.getByRole('button', { name: 'Open Mic: stand-up and music', exact: true }).first().click();

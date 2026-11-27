@@ -657,7 +657,7 @@
      tilted at the right, its foot behind the frost (the title's side stays clean) */
   .nopic .shade { background: radial-gradient(90% 130% at 0% 0%, rgba(255, 255, 255, 0.2), transparent 60%), linear-gradient(155deg, transparent 35%, rgba(0, 0, 0, 0.5)); }
   .nopic .art :global(.poster) { align-items: flex-start; justify-content: center; padding: 9% 0 0; }
-  .nopic .art :global(.poster > *) { transform: rotate(7deg) scale(1.75); transform-origin: 50% 0; filter: drop-shadow(0 14px 18px rgba(0, 0, 0, 0.32)); }
+  .nopic .art :global(.poster > *) { transform: rotate(7deg) scale(1.5); transform-origin: 50% 0; filter: drop-shadow(0 14px 18px rgba(0, 0, 0, 0.32)); }
   /* the rim: a hair of white lit at the top left in the cover's colour, as neon glass is. The light comes round once as the card arrives and rests
      there: a big conic square turning under a ring mask, transform only (and no @property: Button owns --rim) */
   .rim { z-index: 1; overflow: hidden; padding: 1px;
