@@ -1,7 +1,7 @@
 <script lang="ts">
   // The weeks-in-a-row flame (a student's idea, Nov 27): the current run of weeks with a check-in, the number big
   // by a flame; on my Profile my friends' flames beside mine (the Friends page's rows carry them: no request of its own).
-  // A tap opens the Streak medal. Nothing shows at zero: an empty flame reads as a reproach.
+  // The flame opens the Streak medal; my friends' faces open their list by weeks (StreakSheet). Nothing shows at zero: an empty flame reads as a reproach.
   import type { Achievement, FriendRow } from '../../lib/api';
   import { t, tn } from '../../lib/i18n/index.svelte';
   import { achItem } from '../../lib/awards';
@@ -23,9 +23,10 @@
 </script>
 
 {#if now > 0 || lit.length}
-  <button class="streak surface" data-away data-tier={tier} onclick={() => { haptic.tap(); if (mine) count('streak.tap'); sheets.award(achItem(a), mine); }}
-    aria-label={`${t('ach.streak.name')}: ${now} ${tn('streak.weeks', now)}${lit.length ? ` · ${t('streak.friends')}: ${lit.map((f) => f.streak).join(', ')}` : ''}`}>
-    <span class="me" class:off={!now}>
+  <!-- two taps: my flame opens the medal, my friends' faces their list (StreakSheet) -->
+  <div class="streak surface" data-away data-tier={tier}>
+    <button class="me" class:off={!now} onclick={() => { haptic.tap(); if (mine) count('streak.tap'); sheets.award(achItem(a), mine); }}
+      aria-label={`${t('ach.streak.name')}: ${now} ${tn('streak.weeks', now)}`}>
       <span class="fl" aria-hidden="true"><Emoji name="fire_3d" size={30} /></span>
       <b class="n num">{now}</b>
       <span class="tx">
@@ -33,21 +34,21 @@
         <!-- the medal's ladder (2, 4, 8, 16 weeks): the tier reads without relying on colour -->
         <span class="pips" aria-hidden="true">{#each a.levels as _, i (i)}<i class:on={i < tier}></i>{/each}</span>
       </span>
-    </span>
+    </button>
     {#if lit.length}
-      <span class="fr" aria-hidden="true">
+      <button class="fr" onclick={() => { haptic.tap(); sheets.streaks(); }} aria-label={`${t('streak.friends')}: ${lit.map((f) => f.streak).join(', ')}`}>
         {#each lit as f (f.person.id)}
           <span class="f"><Avatar person={f.person} size={28} tappable={false} /><i class="num">{f.streak}</i></span>
         {/each}
-      </span>
+      </button>
     {/if}
-  </button>
+  </div>
 {/if}
 
 <style>
   /* the tier's light: --tc its colour, --tc2 the halo's outer ring and the card's wash, --ta the halo's strength, --tr its reach */
   .streak { --tc: var(--warning); --tc2: var(--tc); --ta: 0.18; --tr: -3px; position: relative; isolation: isolate;
-    display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 12px 14px; border-radius: var(--r-l); text-align: left; white-space: nowrap;
+    display: flex; align-items: stretch; justify-content: space-between; width: 100%; border-radius: var(--r-l); text-align: left; white-space: nowrap;
     background: var(--surface); }
   /* the card's tier-tinted wash: opacity over a token, no colour mixing (iOS before 16.2 drops it) */
   .streak::before { content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit; opacity: 0.12; pointer-events: none;
@@ -56,9 +57,10 @@
   .streak[data-tier='2'] { --tc: var(--tile-gray); --ta: 0.36; --tr: -7px; }  /* steel */
   .streak[data-tier='3'] { --tc: var(--gold); --ta: 0.46; --tr: -9px; }
   .streak[data-tier='4'] { --tc: var(--gold); --tc2: var(--accent-2); --ta: 0.56; --tr: -12px; }                     /* legend: gold into violet */
-  .streak:active { transform: scale(0.98); }
+  /* each half answers its own tap; the padding is theirs, so every point of the card is one of the two */
+  .me:active, .fr:active { transform: scale(0.96); }
 
-  .me { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .me { flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; padding: 12px 6px 12px 14px; text-align: left; }
   .fl { position: relative; isolation: isolate; display: flex; flex: none; animation: sway 4.6s ease-in-out infinite; transform-origin: 50% 90%; }
   /* the halo: a static gradient, only its scale moves */
   .fl::before { content: ''; position: absolute; inset: var(--tr); z-index: -1; opacity: var(--ta);
@@ -73,7 +75,7 @@
   .pips i { width: 8px; height: 3px; border-radius: var(--r-full); background: var(--fill-2); }
   .pips i.on { background: var(--tc); }
 
-  .fr { display: flex; gap: 10px; flex-shrink: 0; }
+  .fr { display: flex; align-items: center; gap: 10px; flex-shrink: 0; padding: 12px 14px 12px 6px; }
   .f { position: relative; display: flex; }
   /* a neutral chip: the flame stays the only warm thing on the card */
   .f i { position: absolute; right: -6px; bottom: -4px; display: flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px;

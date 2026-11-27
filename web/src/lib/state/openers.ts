@@ -254,6 +254,8 @@ export const openers = {
   news: () => onePlace(lazy(chunks.news, {}, 'sheet.news')),
   feed: () => onePlace(lazy(chunks.feed, {}, 'sheet.feed')),
   friends: () => lazy(chunks.friends, {}, 'sheet.friends'),
+  /** my friends and me by current weeks in a row (the streak card's faces) */
+  streaks: () => lazy(() => import('../../screens/profile/StreakSheet.svelte'), {}),
   team: (at?: Id) => lazy(chunks.team, { at }, 'sheet.team'),  // at: that person's actions open (Studio's Roles and admins)
   /** a new post for a club (Head+), from Studio */
   composer: (org: Id, post?: Post, casting?: boolean) => lazy(() => import('../../screens/club/PostComposer.svelte'), { org, post, casting }),
