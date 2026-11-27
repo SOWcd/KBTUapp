@@ -10,6 +10,7 @@
   import { session } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t } from '../../lib/i18n/index.svelte';
+  import { sw } from '../../lib/i18n/staff';
   import { haptic, tgShare } from '../../lib/tg';
   import { dateInput, fromInputs, time } from '../../lib/time';
   import DoorOpen from '@lucide/svelte/icons/door-open';
@@ -51,7 +52,7 @@
     // the time alone: on the check-in's day, or past midnight when it reads earlier than the check-in
     let at = fromInputs(dateInput(x.inAt), hm);
     if (at < x.inAt - (x.inAt % 60)) at += 86400;
-    if (!hm || !Number.isFinite(at) || at > x.end) { haptic.error(); say(t('ledg.leftRange', { from: time(x.inAt), to: time(x.end) }), 'warning_3d'); return; }
+    if (!hm || !Number.isFinite(at) || at > x.end) { haptic.error(); say(sw('ledg.leftRange', { from: time(x.inAt), to: time(x.end) }), 'warning_3d'); return; }
     answer(x, at);
   }
 
@@ -65,9 +66,9 @@
   async function copy() {
     if (!(await copyText(link, t('sl.copied')))) say(t('common.error'), 'warning_3d');
   }
-  const share = () => { haptic.tap(); tgShare(link, t('ledg.handMsg', { title })); };
+  const share = () => { haptic.tap(); tgShare(link, sw('ledg.handMsg', { title })); };
   async function back() {
-    if (!d || !(await sheets.ask({ title: t('ledg.handBackAsk'), text: t('ledg.handBackText'), ok: t('ledg.handBack'), cancel: t('common.cancel'), danger: true }))) return;
+    if (!d || !(await sheets.ask({ title: sw('ledg.handBackAsk'), text: sw('ledg.handBackText'), ok: sw('ledg.handBack'), cancel: t('common.cancel'), danger: true }))) return;
     link = '';
     void write(() => api.volUnhand(sid), { ...d, hand: null });
   }
@@ -79,32 +80,32 @@
   {:else if d}
     <div class="body">
       {#if d.ended}
-        <Group caption={t('ledg.doorTitle')} footnote={todo.length ? t('ledg.doorNote') : undefined}>
+        <Group caption={sw('ledg.doorTitle')} footnote={todo.length ? sw('ledg.doorNote') : undefined}>
           {#each todo.slice(0, draw.n) as x (x.id)}
-            <Row dense title={x.name || '—'} subtitle={t('ledg.cameAt', { time: time(x.inAt) })}>
+            <Row dense title={x.name || '—'} subtitle={sw('ledg.cameAt', { time: time(x.inAt) })}>
               {#snippet lead()}{#if x.person}<Avatar person={x.person} size={32} tappable={false} />{:else}<span class="blank" aria-hidden="true"></span>{/if}{/snippet}
             </Row>
             {#if x.person?.id === session.me?.id}
-              <p class="t-foot own">{t('ledg.ownNo')}</p>
+              <p class="t-foot own">{sw('ledg.ownNo')}</p>
             {:else if pick === x.id}
               <form class="acts" onsubmit={(e) => { e.preventDefault(); leftAt(x); }}>
-                <input class="at" type="time" aria-label={t('ledg.leftAt')} min={time(x.inAt)} max={time(x.end)} bind:value={hm} required />
+                <input class="at" type="time" aria-label={sw('ledg.leftAt')} min={time(x.inAt)} max={time(x.end)} bind:value={hm} required />
                 <Button kind="primary" size="m" full type="submit" disabled={!hm}>{t('common.save')}</Button>
               </form>
             {:else}
               <div class="acts">
-                <Button kind="secondary" size="m" full onclick={() => answer(x, null)}>{t('ledg.tillEnd')}</Button>
-                <Button kind="secondary" size="m" full onclick={() => { haptic.tap(); hm = time(x.end); pick = x.id; }}>{t('ledg.leftAt')}</Button>
+                <Button kind="secondary" size="m" full onclick={() => answer(x, null)}>{sw('ledg.tillEnd')}</Button>
+                <Button kind="secondary" size="m" full onclick={() => { haptic.tap(); hm = time(x.end); pick = x.id; }}>{sw('ledg.leftAt')}</Button>
               </div>
             {/if}
           {:else}
-            <EmptyState inline text={t('ledg.allDone')} />
+            <EmptyState inline text={sw('ledg.allDone')} />
           {/each}
         </Group>
         {#if answered.length && draw.n > todo.length}
           <Group>
             {#each answered.slice(0, draw.n - todo.length) as x (x.id)}
-              {#snippet change()}<Button kind="secondary" size="s" onclick={() => { haptic.tap(); pick = 0; redo = x.id; }}>{t('ledg.change')}</Button>{/snippet}
+              {#snippet change()}<Button kind="secondary" size="s" onclick={() => { haptic.tap(); pick = 0; redo = x.id; }}>{sw('ledg.change')}</Button>{/snippet}
               <Row dense title={x.name || '—'} subtitle={time(x.inAt) + '–' + time(x.outAt ?? x.inAt)} trailing={d.lead && x.person?.id !== session.me?.id ? change : undefined} />
             {/each}
           </Group>
@@ -112,25 +113,25 @@
       {/if}
 
       {#if d.lead && (d.hand || !d.ended)}
-        <Group caption={t('ledg.hand')} footnote={link ? t('ledg.handOnce') : t('ledg.handNote')}>
+        <Group caption={sw('ledg.hand')} footnote={link ? sw('ledg.handOnce') : sw('ledg.handNote')}>
           {#if d.hand}
-            {#snippet off()}<Button kind="secondary" size="s" onclick={back}>{t('ledg.handBack')}</Button>{/snippet}
+            {#snippet off()}<Button kind="secondary" size="s" onclick={back}>{sw('ledg.handBack')}</Button>{/snippet}
             {#if d.hand.holder}
               {@const h = d.hand.holder}
-              <Row dense title={h.name} subtitle={t('ledg.handHolder')} trailing={off}>
+              <Row dense title={h.name} subtitle={sw('ledg.handHolder')} trailing={off}>
                 {#snippet lead()}<Avatar person={h} size={32} tappable={false} />{/snippet}
               </Row>
             {:else}
-              <Row dense title={t('ledg.handWaiting')} trailing={off} />
+              <Row dense title={sw('ledg.handWaiting')} trailing={off} />
             {/if}
             {#if link && !d.hand.holder}
               <div class="acts">
-                <Button kind="secondary" size="m" full onclick={copy}>{t('ledg.handCopy')}</Button>
-                <Button kind="primary" size="m" full onclick={share}>{t('ledg.handShare')}</Button>
+                <Button kind="secondary" size="m" full onclick={copy}>{sw('ledg.handCopy')}</Button>
+                <Button kind="primary" size="m" full onclick={share}>{sw('ledg.handShare')}</Button>
               </div>
             {/if}
           {/if}
-          {#if !d.ended && !link && !d.hand?.holder}<Row tone="add" title={t(d.hand ? 'ledg.handNew' : 'ledg.handMake')} onclick={make} />{/if}
+          {#if !d.ended && !link && !d.hand?.holder}<Row tone="add" title={sw(d.hand ? 'ledg.handNew' : 'ledg.handMake')} onclick={make} />{/if}
         </Group>
       {/if}
     </div>

@@ -33,6 +33,7 @@
   import { session } from '../../lib/state/session.svelte';
   import { open, type Overlay } from '../../lib/state/ui.svelte';
   import { fmtNum, i18n, t } from '../../lib/i18n/index.svelte';
+  import { sw } from '../../lib/i18n/staff';
   import { notificationSettings } from '../profile/notificationSettings';
   import { haptic } from '../../lib/tg';
   import Sheet from '../../ui/Sheet.svelte';
@@ -98,7 +99,7 @@
   });
   const recent = $derived(!admin ? [] : adminOrgs.recent.map((id) => all.find((o) => o.id === id)).filter((o) => !!o).slice(0, 3));
   const awards = $derived(s ? CATALOG.filter((a) => (!a.creator || owner) && match(s, [manualTitle(a)])) : []);
-  const line = (o: OrgRef) => ('team' in o ? [(o as AdminOrg).hidden ? t('adm.hiddenTag') : '', o.kind === 'school' ? t('adm.kindSchool') : '', orgLine(o as AdminOrg)].filter(Boolean).join(' · ') : undefined);
+  const line = (o: OrgRef) => ('team' in o ? [(o as AdminOrg).hidden ? sw('adm.hiddenTag') : '', o.kind === 'school' ? sw('adm.kindSchool') : '', orgLine(o as AdminOrg)].filter(Boolean).join(' · ') : undefined);
   const go = (f: () => unknown) => { haptic.tap(); f(); };
 </script>
 
@@ -114,15 +115,15 @@
 
 <!-- the title is the capsule's, with the shield (not twice) -->
 <Sheet {overlay} full title={t('me.admin')} icon={ShieldCheck}>
-  {#if admin}<div class="find"><SearchField bind:value={q} placeholder={t('adm.findAll')} /></div>{/if}
+  {#if admin}<div class="find"><SearchField bind:value={q} placeholder={sw('adm.findAll')} /></div>{/if}
 
   {#if s}
     <div class="page">
       {#if clubs.length}
-        <Group caption={t('adm.clubs')}>{#each clubs as o (o.id)}{@render orgRow(o)}{/each}</Group>
+        <Group caption={sw('adm.clubs')}>{#each clubs as o (o.id)}{@render orgRow(o)}{/each}</Group>
       {/if}
       {#if people?.length}
-        <Group caption={t('adm.people')}>
+        <Group caption={sw('adm.people')}>
           {#each people as p (p.person.id)}
             <Row dense title={p.person.name} subtitle={p.username ? '@' + p.username : undefined} value={p.owner ? t('staff.owner') : p.role !== 'user' ? t(`staff.role.${p.role}`) : undefined}
               accessory="chevron" onclick={() => go(() => open(PersonPane, { row: p }))}>
@@ -132,7 +133,7 @@
         </Group>
       {/if}
       {#if events?.length}
-        <Group caption={t('adm.events')}>
+        <Group caption={sw('adm.events')}>
           {#each events as e (e.id)}
             <Row dense title={e.title} subtitle={[e.org.name, relDay(e.startsAt), status(e)].filter(Boolean).join(' · ')} accessory="chevron" onclick={() => go(() => manage(e))}>
               {#snippet lead()}<Poster item={e} size={36} radius={10} dim={e.status !== 'published'} />{/snippet}
@@ -141,7 +142,7 @@
         </Group>
       {/if}
       {#if awards.length}
-        <Group caption={t('adm.awards')}>
+        <Group caption={sw('adm.awards')}>
           {#each awards as a (a.code)}
             <Row dense title={manualTitle(a)} accessory="chevron" onclick={() => go(() => open(AwardPane, { award: a }))}>
               {#snippet lead()}<Medal a={manualMedal(a.code, a.emoji)} size={36} />{/snippet}
@@ -149,7 +150,7 @@
           {/each}
         </Group>
       {/if}
-      {#if people && !people.length && !events?.length && !clubs.length && !awards.length}<EmptyState inline text={t('adm.nothingFound')} />{/if}
+      {#if people && !people.length && !events?.length && !clubs.length && !awards.length}<EmptyState inline text={sw('adm.nothingFound')} />{/if}
     </div>
   {/if}
 
@@ -158,7 +159,7 @@
     {#if admin}
       <AdminInbox limit={3} more={() => open(AdminQueue, {})} />
       {#if recent.length}
-        <Group caption={t('adm.recent')}>{#each recent as o (o.id)}{@render orgRow(o)}{/each}</Group>
+        <Group caption={sw('adm.recent')}>{#each recent as o (o.id)}{@render orgRow(o)}{/each}</Group>
       {/if}
       <AdminStats />
     {:else}
@@ -166,16 +167,16 @@
     {/if}
     <Group>
       {#if admin}
-        {@render place(Building, t('adm.clubs'), () => sheets.adminClubs())}
-        {@render place(MedalIcon, t('adm.awards'), () => open(AdminAwards, {}))}
+        {@render place(Building, sw('adm.clubs'), () => sheets.adminClubs())}
+        {@render place(MedalIcon, sw('adm.awards'), () => open(AdminAwards, {}))}
       {/if}
-      {@render place(TelegramMark, t('adm.chats'), () => sheets.adminChats())}
-      {@render place(MessagesSquare, t('adm.forumChannel'), () => sheets.adminForum())}
+      {@render place(TelegramMark, sw('adm.chats'), () => sheets.adminChats())}
+      {@render place(MessagesSquare, sw('adm.forumChannel'), () => sheets.adminForum())}
       {@render place(ChartNoAxesColumn, t('research.requests'), () => sheets.adminResearch(), data.researchRequests?.filter((r) => !r.approved).length ?? 0)}
-      {#if admin}{@render place(Users, t('adm.team'), () => open(AdminPeople, {}))}{/if}
+      {#if admin}{@render place(Users, sw('adm.team'), () => open(AdminPeople, {}))}{/if}
       {#if owner}{@render place(HandHeart, t('sp.queue'), () => sheets.adminDonations(), data.donations?.filter((d) => d.status === 'pending').length ?? 0)}{/if}
       {#if owner}{@render place(ScrollText, t('audit.title'), () => sheets.adminAudit())}{/if}
-      {@render place(Bell, t('adm.notify'), () => open(AdminNotify, {}))}
+      {@render place(Bell, sw('adm.notify'), () => open(AdminNotify, {}))}
       {#if data.inbox?.santa}{@render place(Gift, t('santa.repTitle'), () => sheets.santaReports(), data.inbox.santa)}{/if}
       <!-- what people told the creator from the app: anonymous lines and offers to help, the unread on the row -->
       {#if admin}{@render place(MessageSquareHeart, t('vo.title'), () => sheets.adminVoices(), data.inbox?.voices ?? 0)}{/if}
@@ -185,11 +186,11 @@
       {#if data.inbox?.flaws}{@render place(MapPinned, t('mf.title'), () => sheets.mapFlaws(), 0, String(data.inbox.flaws))}{/if}
     </Group>
     {#if admin && data.adminStats?.notificationCounts}
-      <Group caption={t('adm.notificationStats')} footnote={t('adm.notificationStats.period')}>
+      <Group caption={sw('adm.notificationStats')} footnote={sw('adm.notificationStats.period')}>
         {#each data.adminStats.notificationCounts as { category, sent, turnedOff } (category)}
           {@const label = notificationSettings.find(([key]) => key === category)?.[1]}
           {#if label}
-            <Row dense title={t(label)} subtitle={t('adm.notificationStats.counts', {
+            <Row dense title={t(label)} subtitle={sw('adm.notificationStats.counts', {
               sent: fmtNum(sent), off: fmtNum(turnedOff), offRate: rate(turnedOff, sent),
             })} />
           {/if}

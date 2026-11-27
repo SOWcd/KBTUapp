@@ -5,6 +5,7 @@
   import { data } from '../../lib/state/data.svelte';
   import { open } from '../../lib/state/ui.svelte';
   import { t } from '../../lib/i18n/index.svelte';
+  import { sw } from '../../lib/i18n/staff';
   import { haptic } from '../../lib/tg';
   import Skeleton from '../../ui/Skeleton.svelte';
   import StatsPane from './StatsPane.svelte';
@@ -12,7 +13,7 @@
   const st = $derived(data.adminStats);
 </script>
 
-<button class="card" onclick={() => { haptic.tap(); open(StatsPane, {}); }} aria-label={t('adm.stats')}>
+<button class="card" onclick={() => { haptic.tap(); open(StatsPane, {}); }} aria-label={sw('adm.stats')}>
   {#if st}
     <span class="n"><b class="num">{st.students}</b><i>{t('st.students')}</i></span>
     <span class="n"><b class={["num", { new: st.studentsToday > 0 }]}>+{st.studentsToday}</b><i>{t('st.newToday')}</i></span>
