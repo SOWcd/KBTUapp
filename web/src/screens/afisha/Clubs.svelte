@@ -282,7 +282,8 @@
   .chips { gap: var(--s-2); padding-block: var(--s-3) var(--s-1); }
   .chip { flex: none; display: flex; align-items: center; gap: 6px; height: var(--ctl-s); padding: 0 14px; border-radius: var(--r-full); background: var(--fill); font: 600 var(--fs-sub)/1 var(--font-text); color: var(--text-2); white-space: nowrap; scroll-snap-align: start; }
   .chip.on { background: var(--text); color: var(--bg); }
-  .chip i { font-style: normal; font-variant-numeric: tabular-nums; opacity: 0.6; }
+  .chip i { font-style: normal; font-variant-numeric: tabular-nums; color: var(--text-3); }
+  .chip.on i { color: inherit; opacity: 0.7; }
   .ic { display: flex; color: var(--c); }
   .on .ic { color: inherit; }
 
@@ -301,7 +302,10 @@
   .row:last-child { padding-bottom: var(--s-1); }
   .found .row:first-child { padding-top: var(--s-1); }
   .cap { margin-top: var(--s-2); padding: var(--s-3) var(--s-4) var(--s-1); border-top: 0.5px solid var(--separator); font: 600 var(--fs-sub)/1 var(--font-text); color: var(--text-3); }
-  .still .rt { opacity: 0.62; }
+  /* quiet: the mark fades and the name steps back; the words keep their contrast */
+  .still .lg { opacity: 0.55; }
+  .still .tx b { color: var(--text-2); }
+  .still .tx small { color: var(--text-3); }
   .none { padding: var(--s-10) 0; text-align: center; font: 450 var(--fs-body)/1.3 var(--font-text); color: var(--text-3); }
 
   /* the chats and a new club: two tiles, the Profile's pair under its badge */
