@@ -15,7 +15,8 @@ async function shot(p: Phone, name: string, part?: Locator) {
   await p.look(name);
   if (!process.env.PW_WS) return;
   await p.page.clock.fastForward(5000);
-  await p.page.evaluate(() => Promise.all([...document.images].map((i) => i.decode().catch(() => {}))));
+  // a lazy <img> out of view never decodes: each wait has its ceiling (as snap.spec.ts)
+  await p.page.evaluate(() => Promise.all([...document.images].map((i) => Promise.race([i.decode().catch(() => {}), new Promise((r) => setTimeout(r, 3000))]))));
   await expect(part ?? p.page).toHaveScreenshot(`${name}.png`, { style: '* { --gx: 0 !important; --gy: 0 !important; }' });
 }
 
@@ -32,14 +33,14 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAABAAAAAWCAIAAABL1vtsAAAAF0lEQVR
 
 test('admissions: the applicant from a manager\'s link to the status page', async ({ page, qa, faults }, info) => {
   const p = await openAko(page, qa, qa.ako.link!, info, faults);
-  await expect(page.getByRole('heading', { name: tr('ako.docsTitle') })).toBeVisible();
+  await expect(page.getByRole('heading', { name: tr('ako.docsTitle'), exact: true })).toBeVisible();
   await shot(p, 'ako-docs');
   await page.getByRole('button', { name: tr('ako.consentOk') }).click();
   await attach(page, 'cv', 1);
   await attach(page, 'diploma', 1);
   await shot(p, 'ako-docs-done');
   await page.getByRole('button', { name: tr('ako.next') }).click();
-  await expect(page.getByRole('heading', { name: tr('ako.slotTitle') })).toBeVisible();
+  await expect(page.getByRole('heading', { name: tr('ako.slotTitle'), exact: true })).toBeVisible();
   await page.getByRole('button', { name: /^1[05]:[03]0/ }).first().click();
   await expect(page.getByText(new RegExp(tr('ako.slotPicked').replace('{when}', '.+')))).toBeVisible();
   await shot(p, 'ako-slot');
