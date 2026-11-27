@@ -117,6 +117,12 @@ def _nick(p) -> list[int] | None:
     return [p["nick_a"], p["nick_n"]] if p["anon"] and p["nick_a"] is not None else None
 
 
+def _mod_at(anon: bool, at: int, posted: int | None = None) -> int:
+    """When, as moderators see it: an anonymous author's own moment (writing, editing) only to the hour, as the feed never
+    shows it; once out, when it went out (the channel shows that to everyone). Queues still sort by id."""
+    return at if not anon else posted or at - at % 3600  # Almaty is UTC+5: the UTC hour is its hour
+
+
 def _shape(p) -> dict:
     return {"id": p["id"], "body": p["body"], "anon": bool(p["anon"]), "nick": _nick(p), "status": p["status"], "at": p["created_at"]}
 
@@ -952,7 +958,7 @@ def edit_mod_queue(con, v: Viewer) -> list[dict]:
     ids = {e["user_id"] for e in es if not e["anon"]}
     people = {p["id"]: person_ref(p) for p in rows(con, f"{PERSON} WHERE u.id IN ({','.join('?' * len(ids))})", *ids)} if ids else {}
     me_owner = _owner(con, v) if es else False
-    return [{"id": e["post_id"], "body": e["body"], "anon": bool(e["anon"]), "nick": _nick(e), "status": "held", "at": e["created_at"],
+    return [{"id": e["post_id"], "body": e["body"], "anon": bool(e["anon"]), "nick": _nick(e), "status": "held", "at": _mod_at(e["anon"], e["created_at"]),
              "photos": _edit_pics(con, e), "own": e["user_id"] == v.id and not me_owner, "why": e["why"] or "check", "aiWhy": None,
              "author": None if e["anon"] else people.get(e["user_id"]), "edit": {"id": e["id"], "was": e["was"]}} for e in es]
 
@@ -1313,7 +1319,7 @@ def mod_queue(con, v: Viewer) -> dict:
     people = {p["id"]: person_ref(p) for p in rows(con, f"{PERSON} WHERE u.id IN ({','.join('?' * len(ids))})", *ids)} if ids else {}
     me_owner = _owner(con, v)
     pics = _photos(con, {p["id"] for p in held + live + removed})
-    shape = lambda p: _shape(p) | {"photos": pics.get(p["id"], []), "own": p["user_id"] == v.id and not me_owner, "why": p["why"], "aiWhy": p["ai_reason"], "author": None if p["anon"] else people.get(p["user_id"])}  # noqa: E731
+    shape = lambda p: _shape(p) | {"at": _mod_at(p["anon"], p["created_at"], p["posted_at"]), "photos": pics.get(p["id"], []), "own": p["user_id"] == v.id and not me_owner, "why": p["why"], "aiWhy": p["ai_reason"], "author": None if p["anon"] else people.get(p["user_id"])}  # noqa: E731
     return {"held": [shape(p) for p in held], "live": [shape(p) for p in live],
             "removed": [shape(p) | {"undo": _pending(con, p["tg_msg"])} for p in removed], "replies": reply_mod_queue(con),
             "edits": edit_mod_queue(con, v)}
@@ -1688,7 +1694,7 @@ def _reply_mod_shape(r) -> dict:
     signed = r["who"] is not None  # a signed comment: not an anonymous author's, whatever its post is
     return {"id": r["id"], "body": r["body"], "post": r["post_id"], "postBody": r["pbody"], "why": r["why"], "reports": r["reports"], "anon": bool(r["anon"]) and not signed,
             "nick": None if signed else _nick(r),
-            "aiWhy": r["ai_reason"], "at": r["created_at"], "undo": bool(r["tg_msg"]) and (r["drop_at"] or 0) > core.now()}
+            "aiWhy": r["ai_reason"], "at": _mod_at(r["anon"] and not signed, r["created_at"]), "undo": bool(r["tg_msg"]) and (r["drop_at"] or 0) > core.now()}
 
 
 def reply_mod_queue(con) -> dict:

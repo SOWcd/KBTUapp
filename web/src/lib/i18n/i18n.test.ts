@@ -4,13 +4,19 @@ import { expect, it } from 'vitest';
 import ru from './ru';
 import kk from './kk';
 import en from './en';
+import sru from './staff.ru';
+import skk from './staff.kk';
+import sen from './staff.en';
+
+// the start bundle's three and the staff screens' three (staff.ts) under the same rules
+const SETS = [['', ru, kk, en], ['staff.', sru, skk, sen]] as const;
 
 const holes = (v: unknown): string => [...new Set(JSON.stringify(v).match(/\{[a-zA-Z]+\}/g) ?? [])].sort().join(',');
 
 it('keeps the same holes in ru, kk and en', () => {
   const bad: string[] = [];
-  for (const [k, v] of Object.entries(ru)) for (const [name, d] of [['kk', kk], ['en', en]] as const) {
-    if (holes(v) !== holes((d as Record<string, unknown>)[k])) bad.push(`${name} ${k}`);
+  for (const [file, ru, kk, en] of SETS) for (const [k, v] of Object.entries(ru)) for (const [name, d] of [['kk', kk], ['en', en]] as const) {
+    if (holes(v) !== holes((d as Record<string, unknown>)[k])) bad.push(`${file}${name} ${k}`);
   }
   expect(bad).toEqual([]);
 });
@@ -18,12 +24,14 @@ it('keeps the same holes in ru, kk and en', () => {
 // kk.ts and en.ts list their keys in ru.ts's order, so one key sits at the same spot in all three and a new one goes
 // in at the same anchor (tools/i18n.mjs add). The first key out of place is named.
 it('keeps the keys of ru, kk and en in one order', () => {
-  const want = Object.keys(ru);
   const bad: string[] = [];
-  for (const [name, d] of [['kk', kk], ['en', en]] as const) {
-    const got = Object.keys(d);
-    const i = (got.length > want.length ? got : want).findIndex((_, j) => got[j] !== want[j]);
-    if (i >= 0) bad.push(`${name}.ts has ${got[i] ?? 'nothing'} where ru.ts has ${want[i] ?? 'nothing'} (after ${want[i - 1]})`);
+  for (const [file, ru, kk, en] of SETS) {
+    const want = Object.keys(ru);
+    for (const [name, d] of [['kk', kk], ['en', en]] as const) {
+      const got = Object.keys(d);
+      const i = (got.length > want.length ? got : want).findIndex((_, j) => got[j] !== want[j]);
+      if (i >= 0) bad.push(`${file}${name}.ts has ${got[i] ?? 'nothing'} where ${file}ru.ts has ${want[i] ?? 'nothing'} (after ${want[i - 1]})`);
+    }
   }
   expect(bad).toEqual([]);
 });
@@ -36,5 +44,5 @@ it('puts a soft hyphen in every long ru and kk word', () => {
     .flatMap((v) => (typeof v === 'string' ? [v] : Object.values(v as Record<string, string>)))
     .flatMap((s) => s.match(/[\p{L}­]{15,}/gu) ?? [])
     .filter((w) => w.replace(/­/g, '').length >= 15 && !w.includes('­'));
-  expect([...words(ru), ...words(kk)]).toEqual([]);
+  expect([...words(ru), ...words(kk), ...words(sru), ...words(skk)]).toEqual([]);
 });

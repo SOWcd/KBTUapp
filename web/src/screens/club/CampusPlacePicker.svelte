@@ -1,6 +1,7 @@
 <script lang="ts">
   import { CAMPUS_SIDES, campusPlace, campusSides, type CampusSide } from '../../lib/campusPlace';
   import { campusPlaceLabel, t } from '../../lib/i18n/index.svelte';
+  import { sw } from '../../lib/i18n/staff';
   import { haptic } from '../../lib/tg';
   import Chip from '../../ui/Chip.svelte';
   import Field from '../../ui/Field.svelte';
@@ -36,8 +37,8 @@
   {placeholder} {error} maxlength={400} enterkeyhint="done" />
 
 <div class="picker">
-  <div class="choices" role="group" aria-label={t('ed.campusSide')}>
-    <span class="label" aria-hidden="true">{t('ed.campusSide')}</span>
+  <div class="choices" role="group" aria-label={sw('ed.campusSide')}>
+    <span class="label" aria-hidden="true">{sw('ed.campusSide')}</span>
     <div class="chips">
       {#each campusSides as key (key)}
         <Chip full selected={side === key} onclick={() => { haptic.tap(); pending = key; }}>
@@ -48,8 +49,8 @@
   </div>
   {#if side}
     {@const selected = campus?.side === side ? campus : null}
-    <div class="choices" role="group" aria-label={`${sideName(side)} · ${t('ed.campusFloor')}`}>
-      <span class="label" aria-hidden="true">{t('ed.campusFloor')}</span>
+    <div class="choices" role="group" aria-label={`${sideName(side)} · ${sw('ed.campusFloor')}`}>
+      <span class="label" aria-hidden="true">{sw('ed.campusFloor')}</span>
       <div class="chips">
         {#each floors as floor (floor)}
           <Chip full selected={selected?.floor === floor} onclick={() => {
@@ -59,7 +60,7 @@
       </div>
     </div>
     {#if selected}
-      <Field label={t('ed.campusRoom')} maxlength={60} enterkeyhint="done"
+      <Field label={sw('ed.campusRoom')} maxlength={60} enterkeyhint="done"
         bind:value={() => roomInput ?? selected.room, (room) => { roomInput = room; pickPlace(side, selected.floor, room); }} />
     {/if}
   {/if}

@@ -4,7 +4,10 @@
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { test, expect, type Phone, type Qa, reload } from './fixtures';
-import ru from '../src/lib/i18n/ru';
+import main from '../src/lib/i18n/ru';
+import staff from '../src/lib/i18n/staff.ru';
+
+const ru = { ...main, ...staff };
 
 const tr = (k: keyof typeof ru) => ru[k] as string;
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

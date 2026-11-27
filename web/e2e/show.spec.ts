@@ -2,7 +2,10 @@
 // «Meetings» with Telegram's QR scanner and starts the club's meeting; a member (Ali) scans the rotating QR with his
 // phone (it opens the app on ci_<session>_<slot>_<sig>) and the screen counts him.
 import { test, expect, type Phone } from './fixtures';
-import ru from '../src/lib/i18n/ru';
+import main from '../src/lib/i18n/ru';
+import staff from '../src/lib/i18n/staff.ru';
+
+const ru = { ...main, ...staff };
 
 const T = (k: string, vars: Record<string, string | number> = {}) =>
   ((ru as Record<string, unknown>)[k] as string).replace(/\{(\w+)\}/g, (_, v) => String(vars[v] ?? ''));

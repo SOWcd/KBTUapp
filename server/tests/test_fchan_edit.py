@@ -116,6 +116,9 @@ def test_anonymous_edit_with_photos_waits_and_stays_anonymous(env, monkeypatch):
     tg = TG()
     a, b = upload(c, 1), upload(c, 1)
     p = c.post("/api/forum-posts", headers=tma(1), json={"body": "Guess where this is on campus", "anon": True, "photos": [a["id"], b["id"]]}).json()
+    wrote = con.execute("SELECT created_at FROM fchan_posts WHERE id = ?", (p["id"],)).fetchone()[0]
+    held = c.get("/api/forum-posts/mod", headers=tma(4)).json()["held"]
+    assert held[0]["at"] == wrote - wrote % 3600                                                # the author's moment: to the hour
     assert c.post(f"/api/forum-posts/{p['id']}/mod", headers=tma(4), json={"ok": True}).status_code == 204
     tick(cfg, tg, con)
     msgs = [r[0] for r in con.execute("SELECT msg FROM fchan_photos WHERE post_id = ? ORDER BY n", (p["id"],))]
@@ -133,7 +136,7 @@ def test_anonymous_edit_with_photos_waits_and_stays_anonymous(env, monkeypatch):
     assert row[0] is None and row[1] and row[2] is None                                         # no user id on it while it waits
     assert "user_id" not in [d[1] for d in con.execute("PRAGMA table_info(fchan_edits)")]
     q = c.get("/api/forum-posts/mod", headers=tma(4)).json()["edits"]
-    assert q[0]["author"] is None and q[0]["anon"] and len(q[0]["photos"]) == 2
+    assert q[0]["author"] is None and q[0]["anon"] and len(q[0]["photos"]) == 2 and q[0]["at"] % 3600 == 0
     assert c.post(f"/api/forum-edits/{q[0]['edit']['id']}/mod", headers=tma(4), json={"ok": True}).status_code == 204
     tick(cfg, tg, con)
     media = tg.of("editMessageMedia")

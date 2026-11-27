@@ -8,6 +8,7 @@
   import { sheets } from '../../lib/state/sheets';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { t } from '../../lib/i18n/index.svelte';
+  import { sw } from '../../lib/i18n/staff';
   import { ago } from '../../lib/time';
   import { haptic, openLink } from '../../lib/tg';
   import Sheet from '../../ui/Sheet.svelte';
@@ -50,7 +51,7 @@
           <dt>{t('research.organizer')}</dt><dd>{r.organizer}</dd>
         </dl>
         <div class="decision"><span class="t-foot">{t(r.approved ? 'research.approved' : 'research.pending')}</span>
-          {#if owner}<Button kind="gray" size="s" disabled={busy.includes(r.id)} onclick={() => approve(r)}>{t(r.approved ? 'adm.undo' : 'research.approve')}</Button>{/if}
+          {#if owner}<Button kind="gray" size="s" disabled={busy.includes(r.id)} onclick={() => approve(r)}>{sw(r.approved ? 'adm.undo' : 'research.approve')}</Button>{/if}
         </div>
       </article>
     {/each}

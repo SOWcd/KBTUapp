@@ -1,6 +1,7 @@
 export type ScreenState = { code: string; bot: string; session?: number; title?: string; ended?: number | null;
   done?: number; pending?: number; param?: string | null; phase?: 'in' | 'out'; departed?: number; expires: number };
 const KEEP = 'kb-show';
+const REPAIR_EARLY = 5; // seconds: longer than a poll (2 s) plus its round trip
 
 // One request at a time per pairing; a reset or unmount makes every older response inert.
 export function screenPoll(receive: (state: ScreenState | null) => void) {
@@ -28,7 +29,8 @@ export function screenPoll(receive: (state: ScreenState | null) => void) {
         if (pairing) { secret = pairedSecret; save(); }
         const seconds = state.session == null ? (state.left ?? state.ttl ?? 0) : (state.ttl ?? 0);
         receive({ ...state, expires: at + seconds * 1000 });
-        if (state.session == null && seconds <= 0) { secret = ''; save(); }
+        // re-pair a poll early: the current QR stays up until the new one arrives, never a "Reconnecting" gap
+        if (state.session == null && seconds <= REPAIR_EARLY) { secret = ''; save(); }
       }
     } catch { /* Keep the tab's secret through a network failure. */ }
     finally {

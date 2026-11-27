@@ -1,7 +1,7 @@
 """The postman: sends what logic.notify() queued in bot_outbox, as server templates (texts.py) in the user's
 language with a button into the app; only to users who let the bot write (can_dm). A user who blocked the bot loses
 can_dm until Telegram says otherwise. bot.py's _postman runs send_due every POLL seconds, in the worker that leads.
-Transport errors leave contact_ask and tgc_* lost: Telegram may already have accepted them. Other kinds use
+Transport errors after the request went out leave contact_ask and tgc_* lost: Telegram may already have accepted them. Other kinds use
 at-least-once delivery after the lease expires, so a lost response can mean a duplicate. A worker crash also
 leaves its leases available for retry."""
 from __future__ import annotations
@@ -23,6 +23,7 @@ from .bot_dm import MUTE_ROW, _feedback_buttons
 from .chores import _chores, _userpics, offsite_round, post_channel, refresh_chats
 from .config import Config
 from .logic import notifications, now, one, rows
+from .logic.core import evdel
 
 log = logging.getLogger("kbtu.bot")
 
@@ -407,8 +408,9 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         return None
     if kind == "memo_ready":  # memo:<org>:<monday>, to whoever has "memo"; gone if nothing asks DMP any more or it's sent
         o = one(con, "SELECT name FROM orgs WHERE id = ?", int(ref[1]))
-        n = one(con, """SELECT COUNT(*) FROM events WHERE org_id = ? AND status IN ('draft', 'published') AND memo IS NOT NULL
-            AND memo_sent_at IS NULL AND starts_at >= ? AND starts_at < ?""", int(ref[1]), int(ref[2]), int(ref[2]) + 7 * 86400)[0]
+        n = one(con, f"""SELECT COUNT(*) FROM events WHERE org_id = ? AND status IN ('draft', 'published') AND memo IS NOT NULL
+            AND memo_only = 0 AND NOT {evdel('events')} AND memo_sent_at IS NULL AND starts_at >= ? AND starts_at < ?""",
+                int(ref[1]), int(ref[2]), int(ref[2]) + 7 * 86400)[0]
         return (*texts.bot_message(lang, kind, org=o["name"], n=n), f"memo_{ref[1]}") if o and n else None
     if kind == "saved_tomorrow":  # sv:<day>: my saved events tomorrow I'm not going to (gone if I signed up meanwhile)
         day = int(ref[1])
@@ -418,7 +420,8 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
                    m["user_id"], (day + 1) * 86400 - 5 * 3600, (day + 2) * 86400 - 5 * 3600)
         return listed(evs) if evs else None
     if kind == "place_tba":  # tba:<day>, to an event's maker: all their coming events still without a place
-        evs = rows(con, "SELECT id, title, i18n, starts_at FROM events WHERE created_by = ? AND status = 'published' AND place = '' AND starts_at > ? ORDER BY starts_at",
+        evs = rows(con, """SELECT id, title, i18n, starts_at FROM events WHERE created_by = ? AND status = 'published'
+            AND place = '' AND online IS NULL AND starts_at > ? AND id NOT IN (SELECT event_id FROM santa_events) ORDER BY starts_at""",
                    m["user_id"], logic.now())
         return listed(evs) if evs else None
     if kind == "friend_new":  # fn:<the other one>:<day>; gone if they're no longer friends by then
@@ -764,7 +767,9 @@ async def _deliver(cfg: Config, http: httpx.AsyncClient, con, m, lock: asyncio.L
     except (httpx.HTTPError, ValueError) as exc:
         log.warning("postman: %s", type(exc).__name__)
         halt.set()  # the network is down: the rest stays queued for the next round
-        if m["kind"] == "contact_ask" or m["kind"].startswith("tgc_"):
+        # A refused or timed-out connection never reached Telegram: those stay queued like any other kind.
+        sent_maybe = not isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout))
+        if sent_maybe and (m["kind"] == "contact_ask" or m["kind"].startswith("tgc_")):
             async with lock:
                 await anyio.to_thread.run_sync(_mark, con, m, False, "lost")
         return

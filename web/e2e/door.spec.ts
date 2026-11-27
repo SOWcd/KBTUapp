@@ -107,7 +107,7 @@ test('the door scans a ticket and the attendee sees it on their ticket', async (
 
 test('an 18+ door asks the age after the scan', async ({ open, qa }) => {
   // a guest-list event with the age check: only the creator makes one (admin event-new, then the list's import)
-  admin(qa, ['founder', '1003']); // Bota is the creator here; she isn't in this test
+  admin(qa, ['founder', '1003', '--yes']); // Bota is the creator here; she isn't in this test
   const at = new Date(Date.now() + 2 * 3600_000).toISOString();
   const made = admin(qa, ['event-new', 'openmic'], JSON.stringify({ title: 'Late show 18+', description: 'Stand-up after dark.', place: 'Atrium',
     starts_at: at, ends_at: new Date(Date.now() + 5 * 3600_000).toISOString(), guest_list: true, age_check: true }));

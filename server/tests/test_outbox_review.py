@@ -128,6 +128,22 @@ def test_ambiguous_delivery_retries_only_ordinary_notices(notice, failure):
     assert state(con) == ((1, None) if ordinary else (0, "lost"))
 
 
+@pytest.mark.parametrize("notice", ["contact_ask", "tgc_back"], indirect=True)
+@pytest.mark.parametrize("failure", [httpx.ConnectError, httpx.ConnectTimeout])
+def test_unsent_connection_failure_retries_sensitive_notices(notice, failure):
+    con, cfg = notice
+
+    def refused(request):
+        raise failure("never reached Telegram")
+
+    assert not batch(con, cfg, refused)
+    assert state(con) == (0, None)
+    con.execute("UPDATE bot_outbox SET send_after = 0")
+    tg = Telegram()
+    assert batch(con, cfg, tg)
+    assert len(tg.of("sendMessage")) == 1 and state(con) == (1, None)
+
+
 @pytest.mark.parametrize("notice", ["contact_ask", "tgc_back", "tgc_report_ok"], indirect=True)
 def test_explicit_flood_wait_still_retries_sensitive_notices(notice):
     con, cfg = notice
@@ -198,7 +214,7 @@ def test_legacy_dm_migration_does_not_guess_the_chat():
     try:
         con.executescript("CREATE TABLE tgc_comments (id INTEGER PRIMARY KEY, dm_id INTEGER);"
                           "INSERT INTO tgc_comments VALUES (1, 77);")
-        con.executescript(dict(db.MIGRATIONS)[259])
+        con.executescript(dict(db.MIGRATIONS)[260])
         assert tuple(con.execute("SELECT dm_id, dm_chat_id FROM tgc_comments").fetchone()) == (77, None)
     finally:
         con.close()

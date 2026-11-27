@@ -167,6 +167,9 @@ def test_pending_scans_departure_only_and_stale_retry(env, monkeypatch):
     checkin.became_student(con, departure)
     assert con.execute('SELECT done_at FROM qr_marks WHERE session_id = ? AND user_id = ?', (sid, departure)).fetchone()[0] is None
     assert _rows(c, sid)[0]['phase'] == 'out'
+    # the leave-only scan is neither still joining nor a departure: departures never exceed arrivals
+    shown = c.get(f'/api/screens/{sid}', headers=tma(9)).json()
+    assert (shown['done'], shown['pending'], shown['departed']) == (0, 1, 0)
     c.post(f'/api/screens/{sid}/in', headers=tma(9))
     before = len(_rows(c, sid))
     old = int(p.split('_')[2]) * checkin.SLOT + checkin.SCAN_OK + 2 * checkin.SLOT
@@ -237,8 +240,8 @@ def test_departure_only_retry_never_becomes_arrival(env, monkeypatch):
         login(c, tg, f'late{tg}')
         checkin.became_student(con, uid)
         clock[0] += checkin.SCAN_OK + 2 * checkin.SLOT
-        # a leaving QR retried once the door is back to arriving is refused (bound to its phase); after Finish it completes
-        assert _scan(c, tg, p).status_code == (200 if action == 'finish' else 400)
+        # a leaving QR retried once the door is back to arriving only confirms (bound to its phase); after Finish it completes
+        assert _scan(c, tg, p).status_code == 200
         assert con.execute('SELECT done_at FROM qr_marks WHERE session_id = ? AND user_id = ?', (sid, uid)).fetchone()[0] is None
         assert [x['phase'] for x in _rows(c, sid)] == ['out']
     con.close()

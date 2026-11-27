@@ -105,7 +105,7 @@ def fresh_process_memory(monkeypatch):
     """A worker's in-memory state starts empty in every test, so a test passes the same in any order and on any
     worker: chatlist._unheld (a chat with no club, kept 10 min: an earlier test's chat -100 made
     test_live_list_union_order_and_cap's club chat count as unheld now and then), llm._rest (a provider resting after
-    another test's 502s) and the usage counters' per-day budget and uniques (logic.stats)."""
+    another test's 502s) and the usage counters' per-day budget, uniques, per-key caps and the page's counters (logic.stats)."""
     from kbtu import llm
     from kbtu.logic import chatlist, stats
     monkeypatch.setattr(chatlist, "_unheld", {})
@@ -113,6 +113,11 @@ def fresh_process_memory(monkeypatch):
     monkeypatch.setattr(stats, "_spent", {})
     monkeypatch.setattr(stats, "_spent_day", 0)
     monkeypatch.setattr(stats, "_uniq", set())
+    monkeypatch.setattr(stats, "_used", {})
+    monkeypatch.setattr(stats, "_page", {})
+    monkeypatch.setattr(stats, "_page_day", 0)
+    monkeypatch.setattr(stats, "_ips", {})
+    monkeypatch.setattr(stats, "_ips_minute", 0)
 
 
 @pytest.fixture

@@ -14,6 +14,7 @@
   import { data, studioChanged } from '../../lib/state/data.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t } from '../../lib/i18n/index.svelte';
+  import { sw } from '../../lib/i18n/staff';
   import { dateInput, fromInputs, nowTs, time } from '../../lib/time';
   import { haptic } from '../../lib/tg';
   import { TEAM_COLORS } from '../../lib/perms';
@@ -148,7 +149,7 @@
     <!-- engine: Field has no date/time type: by hand, in Field's look (.fl) -->
     <div class="two">
       <label class="fl" class:bad={tried && err === 'when'}><span>{t('cast.closes')}</span><input type="date" bind:value={closeDate} /></label>
-      <label class="fl" class:bad={tried && err === 'when'}><span>{t('ed.regTime')}</span><input type="time" bind:value={closeTime} /></label>
+      <label class="fl" class:bad={tried && err === 'when'}><span>{sw('ed.regTime')}</span><input type="time" bind:value={closeTime} /></label>
     </div>
     <label class="fl" class:bad={tried && err === 'results'}><span>{t('cast.resultsBy')}</span><input type="date" bind:value={resultsDate} /></label>
     <p class="hint">{t('cast.resultsHint')}</p>

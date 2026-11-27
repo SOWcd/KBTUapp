@@ -6,6 +6,7 @@
   import { api, type Staff, type StaffRow } from '../../lib/api';
   import { open, say, type Overlay } from '../../lib/state/ui.svelte';
   import { t } from '../../lib/i18n/index.svelte';
+  import { sw } from '../../lib/i18n/staff';
   import { haptic } from '../../lib/tg';
   import { session } from '../../lib/state/session.svelte';
   import SearchField from '../../ui/SearchField.svelte';
@@ -39,12 +40,12 @@
   </Row>
 {/snippet}
 
-<Pane {overlay} title={t('adm.team')}>
+<Pane {overlay} title={sw('adm.team')}>
   {#if staff}
     <div class="page stagger">
       {#if session.me?.founder}<SearchField bind:value={q} placeholder={t('staff.addPh')} />{/if}
       {#if found?.length}
-        <Group caption={t('adm.people')}>
+        <Group caption={sw('adm.people')}>
           {#each found as p (p.person.id)}{@render rowOf(p, p.username ? '@' + p.username : undefined, p.role !== 'user' ? t(`staff.role.${p.role}`) : undefined)}{/each}
         </Group>
       {/if}

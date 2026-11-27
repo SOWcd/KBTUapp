@@ -1149,6 +1149,11 @@ CREATE TABLE roster_pending (
         claimed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,  -- "Yes, it's me" on another name: for the club to confirm
         created_at INTEGER NOT NULL
     , door_key TEXT) STRICT;
+CREATE TABLE roster_rejections (
+      row_id  INTEGER NOT NULL REFERENCES roster_pending(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (row_id, user_id)
+    ) STRICT;
 CREATE TABLE roster_toasts (
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         org_id  INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
@@ -1796,6 +1801,7 @@ CREATE INDEX roster_by_email ON roster_pending(email);
 CREATE INDEX roster_by_org ON roster_pending(org_id);
 CREATE INDEX roster_by_tg ON roster_pending(tg);
 CREATE UNIQUE INDEX roster_pending_door_key ON roster_pending(door_key);
+CREATE INDEX roster_rejections_by_user ON roster_rejections(user_id);
 CREATE INDEX round_apps_by_user ON round_apps (user_id);
 CREATE INDEX slots_by_round ON round_slots(round_id, starts_at);
 CREATE UNIQUE INDEX one_live_round ON rounds(org_id) WHERE status != 'done';
