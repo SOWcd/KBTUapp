@@ -145,7 +145,7 @@ def test_receipt_reading(env, monkeypatch):
     mine = c.post(f"/api/events/{eid}/receipt", headers=tma(10), content=pdf(500)).json()["my"]
     assert mine["status"] == "going" and mine["receiptFlags"] == ["amount_short", "recipient_mismatch", "too_early"]  # the student sees it too
     assert pay(10) == ("Arman A.", "+77071234567") and pay(11) == (None, None)   # still his after the seat is taken
-    assert abs(seen[-1][0] - 500 * 300 / 72) < 2 and abs(seen[-1][1] - 700 * 300 / 72) < 2  # the page, read at ~300 dpi
+    assert seen[-1][:2] == (500 * 4, 700 * 4)  # the page, read at 288 dpi (pdfpages' 4x cap)
     got = {a["fullName"]: a["receipt"] for a in c.get(f"/api/events/{eid}/attendees", headers=tma(20)).json()}["Testov Ali"]
     assert got["flags"] == ["amount_short", "recipient_mismatch", "too_early"]
     assert (got["amount"], got["sender"], got["no"], got["paidAt"]) == (1500, "Ivanov I.I.", "123456789012345678", made - 86400)
