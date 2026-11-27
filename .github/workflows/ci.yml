@@ -1,6 +1,6 @@
 # Runs on every push to main and every PR: English outside the UI strings, the server tests, the web types and the web unit tests,
 # and the e2e suite (web/e2e: the flows and the screen snapshots).
-# A PR skips the server job when it changes only web/, *.md or issue templates, and the web job when only server/ (or docs);
+# A PR skips the server tests when it changes only web/, *.md or issue templates, and the web job when only server/ (or docs);
 # e2e runs when either does. A push to main runs everything.
 name: CI
 on:
@@ -41,25 +41,33 @@ jobs:
           echo "server=$(grep -qvE "^web/|$docs" <<< "$files" && echo true || echo false)" >> "$GITHUB_OUTPUT"
           echo "web=$(grep -qvE "^server/|$docs" <<< "$files" && echo true || echo false)" >> "$GITHUB_OUTPUT"
   server:
+    # always runs, its steps skip: a skipped matrix job reports as "server", never as the required "server (0)" and
+    # "server (1)", and a web-only PR could not merge
     needs: changes
-    if: needs.changes.outputs.server == 'true'
     runs-on: ubuntu-latest
     strategy:
       matrix:
         shard: [0, 1]  # half the tests each (conftest.py's SHARD), on its own 4 cores
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
+      - if: needs.changes.outputs.server != 'true'
+        run: echo "no server change"
+      - if: needs.changes.outputs.server == 'true'
+        uses: actions/checkout@v5
+      - if: needs.changes.outputs.server == 'true'
+        uses: actions/setup-python@v6
         with:
           python-version: "3.14"
           cache: pip
           cache-dependency-path: server/requirements.txt
       # cached .debs: the apt mirror sometimes takes minutes
-      - uses: awalsh128/cache-apt-pkgs-action@v1.6.3
+      - if: needs.changes.outputs.server == 'true'
+        uses: awalsh128/cache-apt-pkgs-action@v1.6.3
         with:
           packages: ffmpeg tesseract-ocr tesseract-ocr-rus tesseract-ocr-kaz
-      - run: pip install -r server/requirements.txt pytest==9.1.1 pytest-xdist==3.8.0
-      - run: python -m pytest -q -n auto
+      - if: needs.changes.outputs.server == 'true'
+        run: pip install -r server/requirements.txt pytest==9.1.1 pytest-xdist==3.8.0
+      - if: needs.changes.outputs.server == 'true'
+        run: python -m pytest -q -n auto
         working-directory: server
         env:
           SHARD: ${{ matrix.shard }}/2
