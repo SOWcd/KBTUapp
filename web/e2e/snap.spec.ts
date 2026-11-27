@@ -107,3 +107,75 @@ test('the assistant\'s welcome', async ({ open }) => {
   await expect(p.page.getByRole('dialog', { name: tr('as.title') })).toBeVisible();
   await shot(p, 'assistant');
 });
+
+// Spy (screens/games/Spy.svelte): each state from a made-up room the test answers the API with. A real room's code,
+// roles and place differ every run; its clock here is the page's own, stopped ten minutes in, so each picture has the
+// same seconds left. The whole round against the real server: spy.spec.ts.
+const SPY_PEOPLE = ['Ali N', 'Dana S', 'Bota A', 'Timur K', 'Aigerim B'].map((name, i) => ({ id: i + 1, name, avatar: null, founder: false }));
+const SPY_PAUSE = 1795582800 + 600; // playwright.config.ts SNAP_AT, ten minutes on
+type SpyRoom = { phase: string; span?: number } & Record<string, unknown>;
+
+async function spy(p: Phone, room?: SpyRoom) {
+  const { page } = p;
+  if (room) await page.route('**/api/rooms**', async (route) => {
+    if (route.request().method() === 'GET') return route.fulfill({ status: 204 }); // the poll: nothing moved
+    const { span, ...r } = room;
+    await route.fulfill({ json: { id: 7, game: 'spy', code: '0427', v: 3, me: 1, host: 1, live: false, players: SPY_PEOPLE, minutes: 5,
+      now: await page.evaluate(() => Date.now() / 1000), deadline: span ? SPY_PAUSE + 5 + span + 0.5 : null, ...r } });
+  });
+  await nav(page).getByRole('button', { name: tr('tab.profile'), exact: true }).click();
+  await page.getByRole('button', { name: tr('games.title'), exact: true }).click();
+  const sheet = page.getByRole('dialog').filter({ has: page.locator('.home, .phase') });
+  await expect(sheet.locator('.home')).toBeVisible();
+  if (room) {
+    await sheet.locator('.home .btn').click();
+    await expect(sheet.locator('.phase')).toBeVisible();
+    await page.clock.pauseAt(SPY_PAUSE * 1000);
+  }
+  return sheet;
+}
+
+test('Spy, no room yet', async ({ open }) => {
+  const p = await ali(open);
+  await spy(p);
+  await shot(p, 'spy-home');
+});
+
+test('Spy, the host\'s lobby', async ({ open }) => {
+  const p = await ali(open);
+  const sheet = await spy(p, { phase: 'lobby', players: SPY_PEOPLE.slice(0, 2) });
+  await expect(sheet.locator('.plate svg')).toBeVisible();
+  await shot(p, 'spy-lobby');
+});
+
+test('Spy, the role held open', async ({ open }) => {
+  const p = await ali(open);
+  const sheet = await spy(p, { phase: 'play', span: 272, role: 'local', location: 'library', first: 3 });
+  await p.look('spy-cover');
+  const box = (await sheet.locator('.secret').boundingBox())!;
+  await p.page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await p.page.mouse.down();
+  await expect(sheet.locator('.secret .big')).toBeVisible();
+  await shot(p, 'spy-role');
+  await p.page.mouse.up();
+  await expect(sheet.locator('.secret .big')).toHaveCount(0); // let go: the role is out of the page
+});
+
+test('Spy, the vote', async ({ open }) => {
+  const p = await ali(open);
+  await spy(p, { phase: 'vote', span: 41, role: 'local', location: 'library', voted: [1, 2, 4], myVote: 3 });
+  await shot(p, 'spy-vote');
+});
+
+test('Spy, the caught spy names the place', async ({ open }) => {
+  const p = await ali(open);
+  await spy(p, { phase: 'guess', span: 22, role: 'spy', accused: 1 });
+  await shot(p, 'spy-guess');
+});
+
+test('Spy, the reveal', async ({ open }) => {
+  const p = await ali(open);
+  await spy(p, { phase: 'reveal', role: 'local', location: 'library',
+    result: { spy: 3, accused: 3, guess: 'coworking', winner: 'locals', why: 'wrong_guess', votes: [{ from: 1, to: 3 }, { from: 2, to: 3 }, { from: 3, to: 4 }, { from: 4, to: 3 }, { from: 5, to: 2 }] } });
+  await shot(p, 'spy-reveal');
+});
