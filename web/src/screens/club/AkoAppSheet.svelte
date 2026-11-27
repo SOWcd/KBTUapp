@@ -25,6 +25,7 @@
   import CalendarClock from '@lucide/svelte/icons/calendar-clock';
   import CalendarX from '@lucide/svelte/icons/calendar-x';
   import Download from '@lucide/svelte/icons/download';
+  import Copy from '@lucide/svelte/icons/copy';
   import Link from '@lucide/svelte/icons/link';
   import Undo2 from '@lucide/svelte/icons/undo-2';
   import Trash2 from '@lucide/svelte/icons/trash-2';
@@ -157,10 +158,11 @@
   ], 'end');
 
   const sendWa = () => pkg && openLink(`https://wa.me/${digits(pkg.phone)}?text=${encodeURIComponent(aw('akd.waText', { name, program: info?.title ?? '', link }))}`);
-  async function copy() {
-    try { await navigator.clipboard.writeText(link); haptic.ok(); say(aw('akd.copied')); }
+  async function copyText(text: string) {
+    try { await navigator.clipboard.writeText(text); haptic.ok(); say(aw('akd.copied')); }
     catch { fail(); }
   }
+  const copy = () => copyText(link);
 </script>
 
 <Sheet {overlay} tall heading={link ? aw('akd.linkReady') : name}>
@@ -172,13 +174,13 @@
 
   {#if link}
     <div class="pack">
-      <p class="sub">{name}{#if info} · {info.title}{/if}</p>
+      <p class="sub">{[name, info?.title].filter(Boolean).join(' · ')}</p>
       <p class="link selectable">{link}</p>
       <p class="quiet">{aw('akd.linkOnce')}</p>
     </div>
   {:else}
     <div class="top">
-      {#if info}<p class="sub">{info.title}{#if info.sub} · {info.sub}{/if}</p>{/if}
+      {#if info}<p class="sub">{[info.title, info.sub].filter(Boolean).join(' · ')}</p>{/if}
       {#if pkg ?? row}{@const st = (pkg ?? row)!.status}<span class="chip {st}">{aw(`akd.status.${st}`)}</span>{/if}
     </div>
 
@@ -190,7 +192,7 @@
 
         <Group caption={aw('akd.contacts')}>
           {#if digits(pkg.phone)}
-            <Row icon={MessageCircle} title={aw('akd.whatsapp')} value={pkg.phone} accessory="external" onclick={() => openLink('https://wa.me/' + digits(pkg!.phone))} />
+            <Row icon={MessageCircle} title={aw('akd.whatsapp')} subtitle={pkg.phone} accessory="external" onclick={() => openLink('https://wa.me/' + digits(pkg!.phone))} />
           {/if}
           {#if pkg.email}
             <Row dense title={aw('akd.email')}>{#snippet detail()}<span class="val selectable">{pkg!.email}</span>{/snippet}</Row>
@@ -204,7 +206,9 @@
                 <Row dense title={whenLine(pkg.slot.at)} subtitle={[pkg.slot.who, aw('akd.minN', { n: pkg.slot.minutes })].filter(Boolean).join(' · ')}
                   menu={manage ? slotMenu : undefined} disabled={sending} />
                 {#if pkg.teams}
-                  <Row dense title={aw('akd.teamsRow')}>{#snippet detail()}<span class="val selectable">{pkg!.teams!.replace(/^https?:\/\//, '')}</span>{/snippet}</Row>
+                  <Row dense title={aw('akd.teamsRow')} subtitle={pkg.teams.replace(/^https?:\/\//, '')} onclick={() => void copyText(pkg!.teams!)}>
+                    {#snippet detail()}<span class="cp"><Copy size={18} /></span>{/snippet}
+                  </Row>
                 {/if}
               {:else if manage}
                 <Row dense tone="action" title={aw('akd.book')} disabled={sending} onclick={() => { mode = mode === 'move' ? null : 'move'; }} />
@@ -248,7 +252,7 @@
           {/snippet}
           {#each docs as d (d)}
             {@const fs = pages(d)}
-            <Row dense title={aw(`ako.doc.${d}`)} value={fs.length ? undefined : aw('akd.noFile')}>
+            <Row dense whole title={aw(`ako.doc.${d}`)} value={fs.length ? undefined : aw('akd.noFile')}>
               {#snippet detail()}
                 {#if fs.length}
                   <span class="pages">
@@ -270,7 +274,7 @@
           <div class="note"><p class="cap">{aw('akd.note')}</p><p class="nt">{pkg.note}</p></div>
         {/if}
 
-        <p class="quiet">{pkg.by ? aw('akd.madeBy', { name: pkg.by.name }) : aw('akd.fromSite')}{#if !manage} · {aw('akd.reviewOnly')}{/if}</p>
+        <p class="quiet">{pkg.by ? aw('akd.madeBy', { name: pkg.by.name }) : aw('akd.fromSite')}{manage ? '' : ` · ${aw('akd.reviewOnly')}`}</p>
       </div>
     {/if}
   {/if}
@@ -310,6 +314,9 @@
   @media (prefers-reduced-motion: reduce) { .pack, .ed { animation: none; } }
   .num { font-variant-numeric: tabular-nums; }
   .block :global(.tt) { font-variant-numeric: tabular-nums; }
+  /* the Teams link: one line, cut at its end; a tap copies it whole */
+  .block :global(.st) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cp { display: inline-flex; color: var(--text-3); }
 
   .val { max-width: 58vw; margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-3); font: 450 var(--fs-body)/1.3 var(--font-text); }
   .cap { margin: 0 var(--s-4); color: var(--text-3); font: 450 var(--fs-sub)/1.2 var(--font-text); }

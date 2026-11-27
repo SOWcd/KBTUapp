@@ -87,14 +87,14 @@
     label: `${aw(`akd.filter.${f}`)} · ${count(f)}`, checked: f === filter, onselect: () => { haptic.select(); filter = f; },
   })), 'start');
 
-  /** the grey line: the program, then the interview (only where the program has one) */
+  /** two short grey lines: the program's short name, under it the interview (only where the program has one) */
   function line(a: AkoRow): string {
-    const p = desk?.programs.find((x) => x.key === a.program), info = p?.info[i18n.lang];
-    return [info?.title, info?.sub, a.slot ? whenLine(a.slot.at) : p?.interview ? aw('akd.noSlot') : ''].filter(Boolean).join(' · ');
+    const p = desk?.programs.find((x) => x.key === a.program);
+    return [p?.info[i18n.lang]?.title, a.slot ? whenLine(a.slot.at) : p?.interview ? aw('akd.noSlot') : ''].filter(Boolean).join('\n');
   }
 
   // ---- interview days ----
-  type Day = { key: string; title: string; teams: string; free: number; slots: AkoSlot[] };
+  type Day = { key: string; title: string; teams: string; free: number; who: string; slots: AkoSlot[] }; // who: the one interviewer of the whole day ('' when they differ)
   const byId = $derived(new Map((desk?.apps ?? []).map((a) => [a.id, a])));
   const names = (s: AkoSlot) => s.apps.map((id) => byId.get(id)?.name).filter(Boolean).join(', ');
   const days = $derived.by(() => {
@@ -106,15 +106,16 @@
       let d = out.at(-1);
       if (!d || d.key !== key) {
         const wd = weekday(s.at);
-        out.push((d = { key, title: `${wd.charAt(0).toUpperCase()}${wd.slice(1)}, ${dayMonth(s.at)}`, teams: desk.days[key] ?? '', free: 0, slots: [] }));
+        out.push((d = { key, title: `${wd.charAt(0).toUpperCase()}${wd.slice(1)}, ${dayMonth(s.at)}`, teams: desk.days[key] ?? '', free: 0, who: '', slots: [] }));
       }
       d.slots.push(s);
       d.free += Math.max(0, s.cap - s.apps.length);
     }
+    for (const d of out) if (d.slots.every((s) => s.who === d.slots[0].who)) d.who = d.slots[0].who;
     return out;
   });
   const short = (url: string) => url.replace(/^https?:\/\//, '');
-  const under = (s: AkoSlot) => [s.who, s.teams ? aw('akd.slotTeams') : '', s.cap > 1 ? `${s.apps.length}/${s.cap}` : ''].filter(Boolean).join(' · ') || undefined;
+  const under = (s: AkoSlot, d: Day) => [d.who ? '' : s.who, s.teams ? aw('akd.slotTeams') : '', s.cap > 1 ? `${s.apps.length}/${s.cap}` : ''].filter(Boolean).join(' · ') || undefined;
 
   // one small editor under the day it belongs to: the day's link, a time's own link or interviewer, a booked time's reason
   type Ed = { mode: 'day' | 'teams' | 'who' | 'drop'; day: string; slot?: AkoSlot; text: string; error: string; busy: boolean };
@@ -224,12 +225,12 @@
         {:else}
           {#each days as d (d.key)}
             <div class="day">
-              <Group caption={d.title} note={awn('akd.freeN', d.free)}>
+              <Group caption={d.title} note={awn('akd.freeN', d.free)} footnote={d.who ? aw('akd.dayWho', { name: d.who }) : undefined}>
                 <Row dense title={aw('akd.teamsRow')} value={d.teams ? short(d.teams) : undefined} onclick={manage ? () => edit('day', d.key, undefined, d.teams) : undefined}>
                   {#snippet detail()}{#if !d.teams}<span class="warn"><TriangleAlert size={14} strokeWidth={2.2} />{aw('akd.teamsMissing')}</span>{/if}{/snippet}
                 </Row>
                 {#each d.slots as s (s.id)}
-                  <Row dense title={time(s.at)} subtitle={under(s)} value={s.apps.length ? undefined : aw('akd.free')} onclick={tapSlot(s)}>
+                  <Row dense title={time(s.at)} subtitle={under(s, d)} value={s.apps.length ? undefined : aw('akd.free')} onclick={tapSlot(s)}>
                     {#snippet detail()}{#if s.apps.length}<span class="who">{names(s)}</span>{/if}{/snippet}
                   </Row>
                 {/each}
@@ -263,6 +264,7 @@
   @keyframes part-in { from { opacity: 0; transform: translateY(6px); } }
   @media (prefers-reduced-motion: reduce) { .part { animation: none; } }
   .num { font-variant-numeric: tabular-nums; }
+  .part :global(.st) { white-space: pre-line; } /* an applicant's two grey lines: the program, the interview */
 
   /* search: the M control on --fill; 17 px text, so iOS doesn't zoom in */
   .find { display: flex; align-items: center; gap: var(--s-2); height: var(--ctl-m); padding: 0 var(--s-4); border-radius: var(--r-full); background: var(--fill); color: var(--text-3); }

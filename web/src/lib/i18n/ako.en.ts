@@ -19,7 +19,7 @@ const en: AkoDict = {
   'ako.interviewNo': "No interview",
   'ako.source': "More on the KBTU website",
   'ako.yourProgram': "Your program",
-  'ako.changeProgram': "Another program",
+  'ako.changeProgram': "Change",
   'ako.consentTitle': "Your documents are protected",
   'ako.consentText': "Only staff of the KBTU Academy of Corporate Education see your documents. They are stored on a server in Kazakhstan; traffic goes through Cloudflare. The data operator is KBTU (AKO); KBTU App processes it on their behalf. We delete the application a year after it is sent.",
   'ako.consentOk': "I agree, continue",
@@ -32,8 +32,8 @@ const en: AkoDict = {
   'ako.optionalGroup': "Optional",
   'ako.add': "Attach",
   'ako.addPage': "Another page",
-  'ako.camera': "Take a photo",
-  'ako.file': "Choose a file",
+  'ako.camera': "Camera",
+  'ako.file': "File",
   'ako.removePage': "Remove page",
   'ako.removeAsk': "Remove this page? You can upload it again.",
   'ako.pages': { one: "{n} page", other: "{n} pages" },
@@ -155,7 +155,7 @@ const en: AkoDict = {
   'akd.status.review': "In review",
   'akd.status.accepted': "Accepted",
   'akd.status.declined': "Declined",
-  'akd.pass': "Pass to Academic Programs",
+  'akd.pass': "To the academic department",
   'akd.accept': "Accept",
   'akd.decline': "Decline",
   'akd.undo': "Back to new",
@@ -227,6 +227,7 @@ const en: AkoDict = {
   'akd.teamsNone': "This time has no Teams link. Add it in the Interviews tab.",
   'akd.declineAsk': "Decline this applicant?",
   'akd.declineLead': "The applicant will see the decision on their page.",
+  'akd.dayWho': "Interviews by {name}",
 };
 
 export default en;

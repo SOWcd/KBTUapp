@@ -14,6 +14,7 @@
   import type { AkoStart, AkoView } from '../../lib/api/types';
   import { i18n, setLang, loadLang } from '../../lib/i18n/index.svelte';
   import { aw, type AkoKey } from '../../lib/i18n/ako';
+  import { time, weekday, dayMonth } from '../../lib/time';
   import AkoDocs, { errOf, errKey } from './AkoDocs.svelte';
   import AkoSlots from './AkoSlots.svelte';
   import AkoSend from './AkoSend.svelte';
@@ -171,8 +172,7 @@
             {:else if step === 'docs'}
               {@const info = program.info[i18n.lang] ?? program.info.ru}
               <div class="a-card mine">
-                <span class="a-sub">{aw('ako.yourProgram')}</span>
-                <b class="pt">{info.title}</b>
+                <span class="mtx"><span class="a-sub">{aw('ako.yourProgram')}</span><b>{info.title}</b></span>
                 <button type="button" class="a-quiet" onclick={() => go('program', -1)}>{aw('ako.changeProgram')}</button>
               </div>
               <AkoDocs {view} {token} onchange={changed} />
@@ -186,7 +186,10 @@
 
         {#if step !== 'send'}
           <div class="a-bar">
-            {#if note}<p class="a-note bad" role="alert">{note}</p>{/if}
+            {#if note}<p class="a-note bad" role="alert">{note}</p>
+            {:else if step === 'slot' && view?.slot}
+              <p class="got" role="status"><Check size={20} strokeWidth={2.6} />{aw('ako.slotPicked', { when: `${weekday(view.slot.at)}, ${dayMonth(view.slot.at)}, ${time(view.slot.at)}` })}</p>
+            {/if}
             <Button size="l" full loading={busy} onclick={next}>{aw('ako.next')}</Button>
           </div>
         {/if}
@@ -201,7 +204,7 @@
 </div>
 
 <style>
-  .ako { position: fixed; inset: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; background: var(--bg); color: var(--text);
+  .ako { position: fixed; inset: 0; overflow-x: hidden; overflow-y: auto; -webkit-overflow-scrolling: touch; background: var(--bg); color: var(--text);
     font: 450 var(--fs-row)/1.45 var(--font-text); letter-spacing: -0.011em; -webkit-text-size-adjust: 100%; }
   .col { display: flex; flex-direction: column; min-height: 100%; max-width: 560px; margin: 0 auto;
     padding: calc(var(--safe-top) + var(--s-2)) var(--s-5) 0; }
@@ -211,7 +214,7 @@
   .top { padding-bottom: var(--s-5); }
   .brand { display: flex; align-items: center; justify-content: space-between; min-height: 48px; }
   .mark { display: inline-flex; color: var(--text); }
-  .org { margin-top: var(--s-1); max-width: 22em; font: 600 var(--fs-body)/1.3 var(--font-text); color: var(--text-2); }
+  .org { margin-top: var(--s-1); max-width: 22em; text-wrap: balance; font: 600 var(--fs-body)/1.3 var(--font-text); color: var(--text-2); }
   .lang { display: flex; margin-right: calc(-1 * var(--s-3)); }
   .lang button { min-width: 52px; height: 48px; padding: 0 var(--s-3); font: 600 var(--fs-body)/1 var(--font-text); letter-spacing: 0.02em;
     color: var(--text-3); transition: color var(--t-base) var(--ease); -webkit-tap-highlight-color: transparent; }
@@ -240,7 +243,13 @@
   .on .radio { background: var(--accent); box-shadow: none; animation: pop var(--t-base) var(--ease-bounce); }
   @keyframes pop { from { transform: scale(0.6); } }
   .more { margin: calc(-1 * var(--s-3)) var(--s-5) var(--s-2); }
-  .mine { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-1); padding-bottom: var(--s-2); margin-bottom: var(--s-7); }
+  .mine { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); padding: var(--s-3) var(--s-5); margin-bottom: var(--s-7); }
+  .mine .a-quiet { flex: none; }
+  .mtx { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .mtx b { font: 600 var(--fs-row)/1.25 var(--font-text); letter-spacing: -0.012em; }
+  .got { display: flex; align-items: center; justify-content: center; gap: var(--s-2); text-align: center;
+    font: 600 var(--fs-body)/1.3 var(--font-text); color: var(--success-text); }
+  .got :global(svg) { flex: none; }
 
   .state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--s-6);
     padding: var(--s-10) 0; text-align: center; }
@@ -264,8 +273,9 @@
   :global(.ako .a-h2) { font: 700 var(--fs-sec)/1.22 var(--font-display); letter-spacing: -0.02em; text-wrap: balance; }
   :global(.ako .a-lead) { margin-top: var(--s-3); font: 450 var(--fs-row)/1.45 var(--font-text); color: var(--text-2); }
   :global(.ako .a-sec) { margin: var(--s-8) var(--s-1) var(--s-3); font: 600 var(--fs-body)/1.2 var(--font-text); color: var(--text-3); }
-  :global(.ako .a-sub) { font: 450 var(--fs-body)/1.4 var(--font-text); color: var(--text-2); }
-  :global(.ako .a-card) { padding: var(--s-5); border-radius: var(--r-l); background: var(--surface); box-shadow: var(--card-rim); }
+  /* :where: a component's own class must win over the shared look (padding: 0 on a card lost to it and doubled) */
+  :global(:where(.ako) .a-sub) { font: 450 var(--fs-body)/1.4 var(--font-text); color: var(--text-2); }
+  :global(:where(.ako) .a-card) { padding: var(--s-5); border-radius: var(--r-l); background: var(--surface); box-shadow: var(--card-rim); }
   :global(.ako .a-card + .a-card) { margin-top: var(--s-3); }
   :global(.ako .a-quiet) { display: inline-flex; align-items: center; gap: var(--s-1); min-height: 48px; font: 600 var(--fs-row)/1.2 var(--font-text);
     color: var(--accent-text); text-decoration: none; -webkit-tap-highlight-color: transparent; transition: opacity var(--t-fast); }
@@ -276,7 +286,7 @@
   :global(.ako .a-note.bad) { background: var(--danger-soft); color: var(--danger-text); }
   :global(.ako .a-note.warn) { background: var(--warning-soft); color: var(--warning-text); }
   :global(.ako .a-note.ok) { background: var(--success-soft); color: var(--success-text); }
-  :global(.ako .a-two) { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-3); }
+  :global(.ako .a-two) { display: grid; grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); gap: var(--s-3); } /* a narrow phone stacks them */
   :global(.ako .a-bar) { position: sticky; bottom: 0; z-index: var(--z-sticky); display: flex; flex-direction: column; gap: var(--s-3);
     margin: 0 calc(-1 * var(--s-5)); padding: var(--s-6) var(--s-5) calc(var(--safe-bottom) + var(--s-4));
     background: linear-gradient(transparent, var(--bg) var(--s-6)); }

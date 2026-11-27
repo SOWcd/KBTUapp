@@ -1,7 +1,6 @@
 <script lang="ts">
   // The interview time: days as a horizontal choice, times as a grid of big buttons. A tap selects at once and rolls
   // back with a message if the server refuses. compact: no title and lead (the status page's "Change time").
-  import Check from '@lucide/svelte/icons/check';
   import CalendarClock from '@lucide/svelte/icons/calendar-clock';
   import { ako } from '../../lib/api/ako';
   import type { AkoView } from '../../lib/api/types';
@@ -36,7 +35,20 @@
   const picked = $derived(all.find((s) => s.id === chosen) ?? null);
   const minutes = $derived(view.slot?.minutes ?? view.slots[0]?.minutes ?? 30);
   const decided = $derived(view.status === 'accepted' || view.status === 'declined');
-  const when = (s: { at: number }) => `${weekday(s.at)}, ${dayMonth(s.at)}, ${time(s.at)}`;
+>>>>>>>
+
+### EDIT web/src/screens/ako/AkoSlots.svelte
+<<<<<<<
+    {#if picked}
+      {#key picked.id}
+        <div class="a-note ok done gap" role="status">
+          <span class="ck"><Check size={18} strokeWidth={3} /></span>
+          <span class="dtx"><b>{aw('ako.slotPicked', { when: when(picked) })}</b><span>{aw('ako.almaty')}</span></span>
+        </div>
+      {/key}
+    {/if}
+=======
+    <!-- the picked time is confirmed in the wizard's sticky bar (Ako.svelte); on the status page, by the interview card -->
 
   async function book(s: Slot) {
     if (pending != null || s.id === view.slot?.id) return;
@@ -134,20 +146,22 @@
 
   .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s-2); animation: rise var(--t-base) var(--ease) both; }
   @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
-  .t { min-height: 60px; border-radius: var(--r-m); background: var(--surface); box-shadow: var(--card-rim); color: var(--text);
+  .t { display: flex; align-items: center; justify-content: center; min-height: 60px; padding: 0; text-align: center; border-radius: var(--r-m); background: var(--surface); box-shadow: var(--card-rim); color: var(--text);
     font: 600 var(--fs-t3)/1 var(--font-display); letter-spacing: -0.01em; font-variant-numeric: tabular-nums;
     -webkit-tap-highlight-color: transparent; transition: transform var(--t-base) var(--ease-bounce); }
   .t:active { transform: scale(0.95); }
-  .t.on { background: var(--accent); color: var(--on-accent); box-shadow: none; animation: pop var(--t-base) var(--ease-bounce); }
+  .t.on { display: flex; justify-content: center; background: var(--accent); color: var(--on-accent); box-shadow: none; animation: pop var(--t-base) var(--ease-bounce); }
   .t.wait { animation: pop var(--t-base) var(--ease-bounce), wait 0.9s ease-in-out var(--t-base) infinite alternate; }
   @keyframes pop { from { transform: scale(0.92); } }
   @keyframes wait { to { opacity: 0.6; } }
 
-  .done { display: flex; align-items: flex-start; gap: var(--s-3); animation: rise var(--t-base) var(--ease) both; }
-  .ck { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: var(--r-full); background: var(--success); color: var(--on-accent); }
-  .dtx { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-  .dtx b { font: 600 var(--fs-row)/1.3 var(--font-text); }
+>>>>>>>
 
+### EDIT web/src/screens/ako/AkoSlots.svelte
+<<<<<<<
+    .grid, .t.on, .t.wait, .done { animation: none; }
+=======
+    .grid, .t.on, .t.wait { animation: none; }
   @media (prefers-reduced-motion: reduce) {
     .grid, .t.on, .t.wait, .done { animation: none; }
     .day, .t { transition: none; }

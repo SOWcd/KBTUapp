@@ -238,6 +238,7 @@
   .ask { display: flex; flex-direction: column; gap: var(--s-3); padding: var(--s-2) 0 var(--s-3); animation: rise var(--t-base) var(--ease) both; }
   .fix { display: flex; gap: var(--s-6); padding: 0 var(--s-1); }
   .add { margin-top: var(--s-2); }
+  .add :global(.btn), .ask :global(.btn) { padding-inline: var(--s-3); }
 
   @media (prefers-reduced-motion: reduce) {
     .consent.nudge, .dot.ok, .body, .page, .ask { animation: none; }

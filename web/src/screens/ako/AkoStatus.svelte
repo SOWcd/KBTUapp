@@ -178,7 +178,7 @@
   .when { margin-top: var(--s-4); color: var(--text-3); }
 
   .iv { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-1); padding-bottom: var(--s-3); }
-  .day { margin-top: var(--s-1); font: 700 var(--fs-sec)/1.2 var(--font-display); letter-spacing: -0.02em; }
+  .day { margin-top: var(--s-1); font: 700 var(--fs-sec)/1.2 var(--font-display); letter-spacing: -0.01em; }
   .clock { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 var(--s-3); }
   .clock b { font: 800 var(--fs-title)/1.15 var(--font-display); letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
   .acts { display: flex; flex-direction: column; gap: var(--s-3); width: 100%; margin: var(--s-4) 0 var(--s-1); }

@@ -19,7 +19,7 @@ const kk: AkoDict = {
   'ako.interviewNo': "Сұхбатсыз",
   'ako.source': "ҚБТУ сайтында толығырақ",
   'ako.yourProgram': "Сіздің бағдарламаңыз",
-  'ako.changeProgram': "Басқа бағдарлама",
+  'ako.changeProgram': "Өзгерту",
   'ako.consentTitle': "Құжаттарыңыз қорғалған",
   'ako.consentText': "Құжаттарды тек ҚБТУ Корпоративтік білім беру академиясының қызметкерлері көреді. Олар Қазақстандағы серверде сақталады, трафик Cloudflare арқылы өтеді. Деректер операторы — ҚБТУ (КББА), KBTU App оларды оның тапсырмасы бойынша өңдейді. Өтінімді жіберілгеннен кейін бір жылдан соң жоямыз.",
   'ako.consentOk': "Келісемін, жалғастыру",
@@ -32,8 +32,8 @@ const kk: AkoDict = {
   'ako.optionalGroup': "Қалауыңыз бойынша",
   'ako.add': "Тіркеу",
   'ako.addPage': "Тағы бет",
-  'ako.camera': "Суретке түсіру",
-  'ako.file': "Файл таңдау",
+  'ako.camera': "Камера",
+  'ako.file': "Файл",
   'ako.removePage': "Бетті жою",
   'ako.removeAsk': "Бұл бетті жоясыз ба? Оны қайта жүктеуге болады.",
   'ako.pages': { one: "{n} бет", other: "{n} бет" },
@@ -155,7 +155,7 @@ const kk: AkoDict = {
   'akd.status.review': "Қаралуда",
   'akd.status.accepted': "Қабылданды",
   'akd.status.declined': "Бас тартылды",
-  'akd.pass': "Академиялық департаментке беру",
+  'akd.pass': "Академиялық департаментке",
   'akd.accept': "Қабылдау",
   'akd.decline': "Бас тарту",
   'akd.undo': "Жаңаларға қайтару",
@@ -227,6 +227,7 @@ const kk: AkoDict = {
   'akd.teamsNone': "Бұл уақытта Teams сілтемесі жоқ. Оны «Сұхбаттар» бөлімінде қосыңыз.",
   'akd.declineAsk': "Талапкерге бас тарту керек пе?",
   'akd.declineLead': "Талапкер шешімді өз бетінен көреді.",
+  'akd.dayWho': "Сұхбатты {name} жүргізеді",
 };
 
 export default kk;

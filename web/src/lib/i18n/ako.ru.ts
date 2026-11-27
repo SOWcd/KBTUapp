@@ -21,7 +21,7 @@ const ru = {
   'ako.interviewNo': "Без собеседования",
   'ako.source': "Подробнее на сайте КБТУ",
   'ako.yourProgram': "Ваша программа",
-  'ako.changeProgram': "Другая программа",
+  'ako.changeProgram': "Изменить",
   'ako.consentTitle': "Ваши документы под защитой",
   'ako.consentText': "Документы увидят только сотрудники Академии корпоративного образования КБТУ. Они хранятся на сервере в Казахстане, трафик идёт через Cloudflare. Оператор данных — КБТУ (АКО), KBTU App обрабатывает их по его поручению. Заявку удаляем через год после отправки.",
   'ako.consentOk': "Соглашаюсь и продолжаю",
@@ -34,8 +34,8 @@ const ru = {
   'ako.optionalGroup': "По желанию",
   'ako.add': "Приложить",
   'ako.addPage': "Ещё страница",
-  'ako.camera': "Сфотогра­фировать",
-  'ako.file': "Выбрать файл",
+  'ako.camera': "Камера",
+  'ako.file': "Файл",
   'ako.removePage': "Удалить страницу",
   'ako.removeAsk': "Удалить эту страницу? Её можно будет загрузить заново.",
   'ako.pages': { one: "{n} страница", few: "{n} страницы", many: "{n} страниц", other: "{n} страницы" },
@@ -159,7 +159,7 @@ const ru = {
   'akd.status.review': "На рассмотрении",
   'akd.status.accepted': "Принят",
   'akd.status.declined': "Отказ",
-  'akd.pass': "Передать в академический департамент",
+  'akd.pass': "В академический департамент",
   'akd.accept': "Принять",
   'akd.decline': "Отказать",
   'akd.undo': "Вернуть в новые",
@@ -231,6 +231,7 @@ const ru = {
   'akd.teamsNone': "У этого времени нет ссылки Teams. Добавьте её во вкладке «Собеседования».",
   'akd.declineAsk': "Отказать абитуриенту?",
   'akd.declineLead': "Абитуриент увидит решение на своей странице.",
+  'akd.dayWho': "Собеседования проводит {name}",
 } as const;
 
 type Shape<T> = { [K in keyof T]: T[K] extends string ? string : Plural };
