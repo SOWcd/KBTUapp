@@ -5,6 +5,7 @@ import type { ResearchAnswers, ResearchSurvey, ResearchInput, ResearchRequest, S
 import type { BracketMatch, BracketSeed, EventBracket, EventGroups, EventMatch, MatchScore } from './types';
 import type { Archived, ReportLogEntry, ReportMarkPatch, ReviewReason, SantaChats, SantaMsg, SantaReport } from './types';
 import type { LibAct, LibRoom, LibState, LibTable, LibWall } from './types';
+import type { Room, RoomMove } from './types';
 import type { Graph } from '../route';
 import { splitVariants } from '../awards';
 import { ApiErr } from './errors';
@@ -256,6 +257,13 @@ export const server = {
   adminOrgs: (): Promise<AdminOrg[]> => call('GET', '/admin/orgs'),
   adminOrgEvents: (org: Id): Promise<AdminEvent[]> => call('GET', `/admin/orgs/${org}/events`),
   setRegUntil: (id: Id, until: Ts | 'now' | null): Promise<EventFull> => call('PUT', `/events/${id}/reg-until`, { until }), // registration closes now / then / at the start
+  // game rooms (server logic/rooms.py): errors rate_limited rooms (a day's) / codes (wrong codes, an hour's), not_found
+  // code, closed started, full; a move made on another version comes back applied: false with the room as it is
+  roomCreate: (game: 'spy'): Promise<Room> => call('POST', '/rooms', { game }),
+  roomJoin: (code: string): Promise<Room> => call('POST', '/rooms/join', { code }),
+  room: (id: Id, v?: number): Promise<Room | undefined> => call('GET', `/rooms/${id}${v === undefined ? '' : `?v=${v}`}`), // undefined: still version v
+  roomMove: (id: Id, v: number, move: RoomMove, actionId: string = Math.random().toString(36).slice(2) + Date.now().toString(36)): Promise<{ applied: boolean; room: Room | null }> =>
+    call('POST', `/rooms/${id}`, { id: actionId, v, ...move }),
   santaStart: (org: Id, title: string, startsAt: Ts, budget: number, regUntil: Ts): Promise<EventFull> => call('POST', `/orgs/${org}/santa`, { title, startsAt, budget, regUntil }), // Studio's one button: the club's game made and published, or the running one (errors bad_input budget (none or out of bounds) / until)
   santaSettings: (id: Id, s: { budget?: number; regUntil?: Ts }): Promise<EventFull> => call('PUT', `/events/${id}/santa`, s), // the game's budget and deadline, until the draw
   santaWish: (id: Id, wish: string): Promise<{ wish: string }> => call('PUT', `/events/${id}/santa/wish`, { wish }), // my own wishlist changed while I'm in (errors bad_input wish, closed after the gifts day began)

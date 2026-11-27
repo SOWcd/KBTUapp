@@ -980,6 +980,21 @@ export interface SantaReport { id: Id; at: Ts; title: string; giver: PersonRef |
 /** to: where I write as my person's Santa; from: with my own Santa (null: no such pair) */
 export interface SantaChats { to: SantaThread | null; from: SantaThread | null }
 
+/** A game room as this player sees it (server logic/rooms.py; the game's own fields: logic/spy.py). v: its version (a
+ *  poll sends it back and gets 204 until it moves); now: the server's clock (deadline - now = the time left, whatever
+ *  the phone's clock says); live: a phase with a clock (poll every second, else every five); host: the host's id */
+export interface Room {
+  id: Id; game: 'spy'; code: string; v: number; now: Ts; me: Id; host: Id; live: boolean; players: PersonRef[];
+  phase: 'lobby' | 'play' | 'vote' | 'guess' | 'reveal'; minutes: number; deadline: Ts | null;
+  role?: 'spy' | 'local'; first?: Id;   // from the start: mine, and who asks the first question
+  location?: string;                    // a local's place (never the spy's before the reveal); everyone's at the reveal
+  voted?: Id[]; myVote?: Id | null;     // the vote: who has voted, and for whom I did
+  accused?: Id;                         // the caught spy, naming the place
+  result?: { spy: Id; accused: Id | null; guess: string | null; winner: 'spy' | 'locals'; why: 'guessed' | 'wrong_guess' | 'missed' | 'no_guess'; votes: { from: Id; to: Id }[] };
+}
+/** a move: start {minutes}, vote_now (the host), vote {target}, guess {location} (the spy), leave (the lobby only) */
+export type RoomMove = { type: 'start'; minutes: number } | { type: 'vote_now' } | { type: 'vote'; target: Id } | { type: 'guess'; location: string } | { type: 'leave' };
+
 /** Native surveys; answer content and identities are never returned to the student list. */
 export interface ResearchQuestion {
   id: string; type: 'text' | 'long' | 'choice' | 'multi' | 'scale'; label: string;
