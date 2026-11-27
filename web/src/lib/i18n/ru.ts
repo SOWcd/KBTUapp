@@ -1754,6 +1754,8 @@ const ru = {
   'andr.account': "Везде один аккаунт Google: тот, что в Google Play на телефоне",
   'andr.go': "Начать",
   'andr.later': "Не сейчас",
+  'andr.row': "KBTU App в Google Play",
+  'andr.rowSub': "Стать тестером",
   'web.verify': 'Подтверди, что ты студент, один раз в приложении Telegram.',
   'web.back': 'Назад',
   'web.search': 'Поиск',

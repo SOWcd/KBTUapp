@@ -31,10 +31,13 @@ APPEALS = ("apl.open", "apl.typed", "apl.ai", "apl.sent", "apl.drop", "apl.del")
 HERO_KINDS = ("ticket", "friends", "club", "news", "forum", "class", "next", "today", "week")
 HERO = tuple(f"hero.{a}.{k}" for a in ("show", "tap") for k in HERO_KINDS)
 # the Android tester's funnel: the sheet in the app (shown, tapped), then kbtu.sow.kz/android.html in the phone's
-# browser (opened, each Google step's button, the "Item not found" retry); the page has no sign-in, so `page_hit`
-ANDROID_APP = ("andr.sheet", "andr.go")
+# browser (opened, each Google step's button, the "Item not found" retry); the page has no sign-in, so `page_hit`.
+# Beside the chain: andr.again, the sheet's one second showing (3 days on, dismissed); andr.row / andr.rowgo, Profile's
+# lasting row drawn (once a launch) and tapped
+ANDROID_MORE = ("andr.again", "andr.row", "andr.rowgo")
+ANDROID_APP = ("andr.sheet", "andr.go", *ANDROID_MORE)
 ANDROID_PAGE = ("page", "join", "optin", "play", "retry")
-ANDROID = (*ANDROID_APP, *(f"andr.{k}" for k in ANDROID_PAGE))
+ANDROID = ("andr.sheet", "andr.go", *(f"andr.{k}" for k in ANDROID_PAGE))
 PAGE_CAP = 5000  # a key's day ceiling for the signed-out page: far above real use, so a script can't run it up
 # the key flows, step by step (each step's key in order), then what ends one short: where people drop, counts only
 FUNNELS = {
@@ -184,7 +187,7 @@ def fields(con, days: int, upto: int | None = None) -> dict:
             "sources": lines(sorted(SOURCES, key=lambda k: -got.get(k, 0)), 5),
             "errors": lines(sorted((f"err.{s}" for s in SCREENS if got.get(f"err.{s}")), key=lambda k: -got[k]), 4),
             "hero": "\n".join(f"{k} {got.get(f'hero.tap.{k}', 0)}/{got.get(f'hero.show.{k}', 0)}" for k in HERO_KINDS),
-            "android": " → ".join(f"{k[5:]} {got.get(k, 0)}" for k in ANDROID),
+            "android": " → ".join(f"{k[5:]} {got.get(k, 0)}" for k in ANDROID) + "".join(f" · {k[5:]} {got.get(k, 0)}" for k in ANDROID_MORE),
             "opens": "\n".join(opens) or "—"}
 
 

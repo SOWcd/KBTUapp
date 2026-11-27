@@ -15,7 +15,8 @@ type Action = 'do.signup' | 'do.follow' | 'do.forum' | 'do.casting' | 'do.qr' | 
   | 'do.calendar' | 'do.photo' | 'do.helpus' | 'do.anon' | 'do.chatlink' | 'do.kri';
 // the appeals composer's funnel (server stats.APPEALS): counts only, never a word
 type Appeal = 'apl.open' | 'apl.typed' | 'apl.ai' | 'apl.sent' | 'apl.drop' | 'apl.del';
-type Android = 'andr.sheet' | 'andr.go'; // the Android tester sheet, shown and tapped (server stats.ANDROID_APP)
+// the Android tester sheet: shown, shown the second time, tapped; Profile's Google Play row: drawn, tapped (server stats.ANDROID_APP)
+type Android = 'andr.sheet' | 'andr.again' | 'andr.go' | 'andr.row' | 'andr.rowgo';
 type Source = 'from.none' | 'from.event' | 'from.club' | 'from.friend' | 'from.qr' | 'from.other';
 // the key flows' steps (a flow may start at a sheet's own count), then what ends one short (server stats.FUNNELS): counts only
 type Funnel = 'signup.tap' | 'signup.done' | 'signup.fail'

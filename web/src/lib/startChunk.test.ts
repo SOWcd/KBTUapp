@@ -6,8 +6,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 /** Bytes of gzip (CompressionStream's level): 220,076 after issue 339 (227,870 before it), plus ~1.3% room; +600 on
  *  purpose for the usage counters' funnels, error classes and screen times (PR 431: they must count from the start);
- *  +100 for the layout numbers' lazy import (the measuring itself is its own chunk, layoutStats.ts). */
-const MAX_START_GZIP = 223_700;
+ *  +100 for the layout numbers' lazy import (the measuring itself is its own chunk, layoutStats.ts); +250 for the
+ *  Android tester offer (lib/androidTest.ts, the TWA check, Profile's row): a lazy import of it came out 500 B bigger. */
+const MAX_START_GZIP = 223_950;
 
 const gzipped = async (code: string) => (await new Response(new Blob([code]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer()).byteLength;
 

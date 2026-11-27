@@ -2620,4 +2620,11 @@ MIGRATIONS: list[tuple[int, str]] = [
     # A club's open round by its club (issue #363): clubs.listed asks it for every club on each Clubs list, and the
     # partial one_live_round (status != 'done') can't answer status = 'open', so each club walked every round.
     (253, "CREATE INDEX IF NOT EXISTS rounds_by_org ON rounds(org_id, status);"),
+    # who opened the installed Android app (the Google Play TWA reports itself on /api/me): Profile's "KBTU App in
+    # Google Play" row and the tester sheet stop for them. The device kind the policy already names, kept 90 days
+    # like user_platforms (whose CHECK can't take a fifth kind)
+    (254, """CREATE TABLE IF NOT EXISTS android_app (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      seen_at INTEGER NOT NULL
+    ) STRICT;"""),
 ]
