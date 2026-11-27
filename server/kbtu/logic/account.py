@@ -187,6 +187,7 @@ def latin_names(con, apply: bool = False) -> Counter:
 
 
 PREFILL_COLS = ("email", "student_id", "last", "first", "middle", "school", "phone", "came")
+PREFILL_KEEP = 180 * 86400  # one intake period, from the main list's load
 _text = lambda x, k: " ".join(str(x or "").split())[:k] or None  # noqa: E731
 
 
@@ -229,7 +230,7 @@ def prefill_rest_import(con, got: list[dict], name: str) -> dict[str, int]:
     come back), nothing stored. Otherwise the row waits in
     prefill_rest for ms_link: a KBTU mail only (else NULL), the ID only when it is valid and the list's one person's,
     the phone only well-formed; the ID as typed stays for the owner (never shown, never matched). A row with neither
-    mail nor ID just sits (the owner keeps everything). Rows still in prefill, or kept once and gone since (used, or an
+    mail nor ID waits for the same intake period. Rows still in prefill, or kept once and gone since (used, or an
     account deleted: no student has its mail, and its ID wasn't held when the main import ran), are skipped. Each
     `name` once, after prefill-import ran it. Counts only. ValueError: ran already, or the main import never did."""
     _, good, rest = _prefill_sort(got)
@@ -241,7 +242,7 @@ def prefill_rest_import(con, got: list[dict], name: str) -> dict[str, int]:
     shared = {sid for e, sid, *_ in same if per_sid[sid] > 1 or e and per_mail[e] > 1}
     with tx(con):
         main = one(con, "SELECT value FROM meta WHERE key = ?", f"prefill_list:{name}")
-        if not main or one(con, "SELECT 1 FROM meta WHERE key = ?", f"prefill_rest:{name}"):
+        if not main or int(main[0]) <= core.now() - PREFILL_KEEP or one(con, "SELECT 1 FROM meta WHERE key = ?", f"prefill_rest:{name}"):
             raise ValueError(name)  # a typo'd name would count every kept row gone, or store it again
         con.execute("INSERT INTO meta (key, value) VALUES (?, ?)", (f"prefill_rest:{name}", str(core.now())))
         for x in [*good.values(), *rest]:
@@ -263,9 +264,9 @@ def prefill_rest_import(con, got: list[dict], name: str) -> dict[str, int]:
                         UNION ALL SELECT 1 FROM prefill WHERE student_id = ? AND email != ?""", x["student_id"], int(main[0]), x["student_id"], x["email"]):
                 n["gone"] += 1  # kept by the main import (its ID free then), used or deleted since: never back
             else:
-                con.execute("""INSERT INTO prefill_rest (email, student_id, raw_id, last_name, first_name, middle_name, school, phone, came)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""", (kbtu, sid, _text(x.get("raw_id"), 40), p["last_name"], p["first_name"],
-                                                         p["middle_name"], p["school"], p["phone"], p["came"]))
+                con.execute("""INSERT INTO prefill_rest (email, student_id, raw_id, last_name, first_name, middle_name, school, phone, came, loaded_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", (kbtu, sid, _text(x.get("raw_id"), 40), p["last_name"], p["first_name"],
+                                                         p["middle_name"], p["school"], p["phone"], p["came"], int(main[0])))
                 n["stored"] += 1
                 n["sits"] += not kbtu and not sid
     return dict(n)
@@ -296,12 +297,13 @@ def prefill_import(con, got: list[dict], name: str) -> dict[str, int]:
             else:
                 phone = kz_phone(r.get("phone"))
                 n["bad_phone"] += bool(_text(r.get("phone"), 40) and not phone)  # kept without it: a bad export shows here
-                con.execute("""INSERT INTO prefill (email, student_id, last_name, first_name, middle_name, school, phone, came)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (email) DO UPDATE SET student_id = excluded.student_id,
+                # Correcting a pending row does not renew its original intake window.
+                con.execute("""INSERT INTO prefill (email, student_id, last_name, first_name, middle_name, school, phone, came, loaded_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (email) DO UPDATE SET student_id = excluded.student_id,
                     last_name = excluded.last_name, first_name = excluded.first_name, middle_name = excluded.middle_name,
                     school = excluded.school, phone = excluded.phone, came = excluded.came""",
                             (r["email"], r["student_id"], _text(r.get("last"), 40), _text(r.get("first"), 40), _text(r.get("middle"), 40),
-                             _text(r.get("school"), 120), phone, r["came"]))
+                             _text(r.get("school"), 120), phone, r["came"], core.now()))
                 n["kept"] += 1
     return dict(n)
 
@@ -1533,16 +1535,23 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         uploads = [r[0] for r in rows(con, "SELECT id FROM files WHERE kind != 'receipt' AND owner_id = ?", v.id)]
         tgpic = one(con, "SELECT tg_photo_path FROM users WHERE id = ?", v.id)[0]  # our copy of the Telegram photo
         con.execute(f"DELETE FROM dmp_list WHERE id IN (SELECT d.id {_DMP_MINE})", (v.id,))  # off DMP's list: its own row, by id
+        # Username-only guests have no student ID to match. Read it before clearing the account.
+        con.execute("""DELETE FROM event_guests WHERE lower(username) =
+            (SELECT lower(NULLIF(tg_username, '')) FROM users WHERE id = ?)""", (v.id,))
+        # A verified name protects against reused usernames and typo'd emails; an email claim is kept as before.
+        for (key,) in rows(con, """DELETE FROM roster_pending WHERE
+                (lower(email) = (SELECT lower(email) FROM students WHERE user_id = ?)
+                 AND (claimed_by = ? OR EXISTS (SELECT 1 FROM students s WHERE s.user_id = ?
+                   AND expected_name(full_name, s.ms_oid, s.ms_profile, s.manual, s.first_name, s.last_name))))
+                OR (lower(tg) = (SELECT lower(NULLIF(tg_username, '')) FROM users WHERE id = ?)
+                    AND EXISTS (SELECT 1 FROM students s WHERE s.user_id = ?
+                      AND expected_name(full_name, s.ms_oid, s.ms_profile, s.manual, s.first_name, s.last_name)))
+                RETURNING key""", v.id, v.id, v.id, v.id, v.id):
+            con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, ?)", (f"roster_done:{key}", str(core.now())))
         con.execute("""UPDATE users SET bio = '', showcase = '', qr_code = NULL, link_code = NULL, cal_token = NULL, nick = NULL, avatar_tg = 1,
             avatar_file_id = NULL, tg_username = NULL, tg_first_name = '', tg_last_name = '', tg_photo_url = NULL, tg_photo_path = NULL, tg_photo_src = NULL, tg_photo_at = NULL, mark = NULL,
             skin_org = NULL, skin_pick = NULL, skin_look = NULL, frame = NULL, card_no = NULL, delete_at = NULL, city = NULL, city_hidden = 0, referred_by = NULL, announce_ok = NULL,
             role = 'user', is_founder = 0, forum_seen_msg = 0, notification_undo = '{}' WHERE id = ?""", (v.id,))  # a burnt number isn't given again
-        # A claimed row with my email or a verified email and name match goes, and a reimport skips it.
-        for (key,) in rows(con, """DELETE FROM roster_pending WHERE email = (SELECT lower(email) FROM students WHERE user_id = ?)
-                AND (claimed_by = ? OR EXISTS (SELECT 1 FROM students s WHERE s.user_id = ?
-                AND expected_name(full_name, s.ms_oid, s.ms_profile, s.manual, s.first_name, s.last_name)))
-                RETURNING key""", v.id, v.id, v.id):
-            con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, ?)", (f"roster_done:{key}", str(core.now())))
         con.execute("UPDATE roster_pending SET claimed_by = NULL WHERE claimed_by = ?", (v.id,))
         con.execute("UPDATE roster_pending SET rejected_by = NULL WHERE rejected_by = ?", (v.id,))
         # what a moderator took down of mine, kept for an undo: gone now with its files, no 30 days
@@ -1603,6 +1612,7 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         con.execute("""DELETE FROM meta WHERE key >= 'share:' AND key < 'share;'
             AND json_extract(value, '$.uid') = ?""", (v.id,))  # cards waiting for the bot (core.share_hold)
         con.execute("DELETE FROM meta WHERE key LIKE ?", (f"fsearch:{v.id}:%",))  # this hour's count of my searches for people
+        con.execute("DELETE FROM meta WHERE key >= ? AND key < ?", (f"gsearch:{v.id}:", f"gsearch:{v.id};"))
         con.execute("DELETE FROM meta WHERE key LIKE ?", (f"flook:{v.id}:%",))
         con.execute("DELETE FROM meta WHERE key = ?", (f"pymk_live:{v.id}",))  # today's own People you may know (pymk.switch)
         con.execute("DELETE FROM meta WHERE key LIKE ?", (f"subj:{v.id}:%",))  # this hour's count of my subject listings (logic/subjects)

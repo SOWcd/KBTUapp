@@ -2700,4 +2700,12 @@ MIGRATIONS: list[tuple[int, str]] = [
       auto_publish   INTEGER NOT NULL DEFAULT 0 CHECK (auto_publish IN (0, 1)),
       guests_private INTEGER NOT NULL DEFAULT 0 CHECK (guests_private IN (0, 1))
     ) STRICT;"""),
+    # Intake lists expire from their original load, including rows that cannot be matched to an account.
+    # Old rows have no per-list link: use the earliest known main load, or 0 to expire an undated import.
+    (258, """ALTER TABLE prefill ADD COLUMN loaded_at INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE prefill_rest ADD COLUMN loaded_at INTEGER NOT NULL DEFAULT 0;
+    UPDATE prefill SET loaded_at = COALESCE((SELECT MIN(CAST(value AS INTEGER)) FROM meta
+        WHERE key >= 'prefill_list:' AND key < 'prefill_list;'), 0);
+    UPDATE prefill_rest SET loaded_at = COALESCE((SELECT MIN(CAST(value AS INTEGER)) FROM meta
+        WHERE key >= 'prefill_list:' AND key < 'prefill_list;'), 0);"""),
 ]

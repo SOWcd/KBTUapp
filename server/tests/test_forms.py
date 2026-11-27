@@ -155,12 +155,38 @@ def test_closed_answers_expire_from_exports_and_nightly_storage(form, monkeypatc
     forms.submit(con, "recent", {"age": "23"})
     clock[0] = deadline - 1
     forms.close(con, "recent")
+    forms.submit(con, "open", {"age": "24"})  # an active form keeps its earlier answers too
     assert "Example private answer" in forms.export(con, "abroad")
     clock[0] = deadline
     assert len(list(csv.reader(io.StringIO(forms.export(con, "abroad"))))) == 1
-    assert len(_answers(con)) == 3  # export is safe even before the scheduled sweep
+    assert len(_answers(con)) == 4  # export is safe even before the scheduled sweep
     logic.stats_day(con)
-    assert _answers(con) == [{"age": "22"}, {"age": "23"}]
+    assert _answers(con) == [{"age": "22"}, {"age": "23"}, {"age": "24"}]
+
+
+@pytest.mark.parametrize("action", ["night", "answer", "close"])
+def test_open_form_expires_one_year_after_last_answer(form, monkeypatch, action):
+    _, con = form
+    deadline = (logic.now() // 86400 + 366) * 86400 - 5 * 3600 + 600
+    clock = [deadline - forms.KEEP - 86400]
+    set_clock(monkeypatch, lambda: clock[0])
+    forms.submit(con, "abroad", {"age": "21"})
+    clock[0] += 86400
+    forms.submit(con, "abroad", {"age": "22"})
+    clock[0] = deadline - 1
+    forms.forget(con)
+    assert len(_answers(con)) == 2
+    assert len(list(csv.reader(io.StringIO(forms.export(con, "abroad"))))) == 3
+    clock[0] = deadline
+    assert len(list(csv.reader(io.StringIO(forms.export(con, "abroad"))))) == 1
+    assert len(_answers(con)) == 2  # hidden at the deadline before the next night
+    if action == "night":
+        logic.stats_day(con)
+    elif action == "answer":
+        forms.submit(con, "abroad", {"age": "23"})
+    else:
+        forms.close(con, "abroad")
+    assert _answers(con) == ([{"age": "23"}] if action == "answer" else [])
 
 
 def test_csp_hashes(form):  # the inline script and style run by their hashes; an injected tag wouldn't
