@@ -10,8 +10,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
  *  Android tester offer (lib/androidTest.ts, the TWA check, Profile's row): a lazy import of it came out 500 B bigger; +200 for
  *  Studio's news-from-a-group-topic strings (PR 441: the ru dictionary ships with the start); +2,150 for library seats'
  *  strings (PR 449, the ru dictionary again; the screens themselves are lazy chunks); +300 for KBTU's official service
- *  mark on Afisha's cards and rows (PR 452: OfficeMark, its icon and string, shown from the first frame). */
-const MAX_START_GZIP = 226_600;
+ *  mark on Afisha's cards and rows (PR 452: OfficeMark, its icon and string, shown from the first frame); +200 for the
+ *  tab switch's crossfade and the lens's stretch on one spring (PR 456: the shell and Nav are the start). */
+const MAX_START_GZIP = 226_800;
 
 const gzipped = async (code: string) => (await new Response(new Blob([code]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer()).byteLength;
 

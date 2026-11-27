@@ -1,6 +1,7 @@
 <script lang="ts">
   // Bottom nav (liquid glass, floats): icons only, the capsule above says the tab's name (a label under
-  // each icon only repeated it); the active one in the accent on a raised lighter pill that slides to it with a jelly squash. Equal tabs
+  // each icon only repeated it); the active one in the accent on a raised lighter pill that glides to it on the tab
+  // spring, a slight stretch on the way. Equal tabs
   // that stay put, so nothing jumps while a drag previews them. Press and drag along the bar previews tabs; the tab
   // switches on release. Always the slim size; hides under a sheet (and the Feed). The corner: its own round glass
   // button beside it, KRI (the assistant leads anywhere, the map is its first row); the map for a guest
@@ -12,7 +13,7 @@
   import { ui, goTab, type Tab } from '../lib/state/ui.svelte';
   import { haptic } from '../lib/tg';
   import { t } from '../lib/i18n/index.svelte';
-  import { glass, refract, jelly } from './glass';
+  import { glass, refract } from './glass';
   import { TAB_ICON } from './icons';
 
   // the tabs shown (the forum only where the server opened it), each with its label and dot
@@ -24,9 +25,19 @@
 
   let bar: HTMLElement;
   let lens: HTMLSpanElement;
-  // the squash leans the way the pill travels and grows with the distance; none on the first paint
-  let was = -1;
-  $effect(() => { const i = shown; if (was >= 0 && i !== was) jelly(lens, i - was); was = i; });
+  // one motion: the pill glides on the tab spring (`translate`, .lens below) and stretches a little on the same clock
+  // and curve (the tokens, read once), so the stretch peaks half-way there and is gone as it lands; it grows with the
+  // distance. `transform` alone, the origin never moves: compositor only. None on the first paint or under reduced motion
+  let was = -1, spring: KeyframeAnimationOptions | undefined;
+  $effect(() => {
+    const i = shown, d = Math.min(Math.abs(i - was), 3);
+    if (was >= 0 && d && lens.animate && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      if (!spring) { const cs = getComputedStyle(lens); spring = { duration: parseFloat(cs.getPropertyValue('--t-tab')), easing: cs.getPropertyValue('--ease-tab').trim() }; }
+      const s = 0.03 + 0.03 * d;
+      lens.animate({ transform: ['scale(1)', `scale(${1 + s}, ${1 - s * 0.4})`, 'scale(1)'], easing: ['ease-out', 'ease-in-out'] }, spring);
+    }
+    was = i;
+  });
   // lifted: the pill grows into a clear drop while a finger holds it (the active tab pressed, or a drag along the bar),
   // as iOS 26's selection does; it settles back flat on release
   let lift = $state(false);
@@ -124,14 +135,15 @@
       rgba(255, 255, 255, 0.16);
   }
   .nav > .tone-base, .mapb > .tone-base { background: var(--dock); }
-  /* the lens: a raised glass pill behind the active tab (lighter than the bar in both themes, a soft shadow under it),
-     moved by `translate` so the jelly's `transform` squashes it on the way */
+  /* the lens: a raised glass pill behind the active tab (lighter than the bar in both themes, a soft shadow under it).
+     Three properties, one each, so they compose on the compositor: `translate` slides it on the tab spring (the pages
+     crossfade on the same tokens, App's .tab), `scale` is the lift, `transform` the stretch on the way (the script) */
   .lens {
     position: absolute; top: 4px; bottom: 4px; left: 4px; width: calc((100% - 8px) / var(--n)); border-radius: var(--r-full);
     /* a convex body: lighter at the top, like the bar itself */
     background: linear-gradient(var(--lens-top), transparent 70%), var(--lens);
     box-shadow: var(--lens-shadow);
-    transition: translate 380ms var(--ease-spring), scale 420ms var(--ease-bounce), background-color var(--t-base) var(--ease), box-shadow var(--t-base) var(--ease);
+    transition: translate var(--t-tab) var(--ease-tab), scale 420ms var(--ease-bounce), background-color var(--t-base) var(--ease), box-shadow var(--t-base) var(--ease);
   }
   /* its own rim, lit from the same side as the bar's (the bar's --hx/--ox follow the tilt) */
   .lens::after {
@@ -145,7 +157,7 @@
     mask-composite: exclude;
   }
   /* held: a clear drop that rises off the bar; the icon under it magnified */
-  .nav.lift .lens { scale: 1.07 1.1; background-color: var(--lens-lift); box-shadow: var(--lens-lift-shadow); transition-duration: 380ms, 260ms, var(--t-base), var(--t-base); }
+  .nav.lift .lens { scale: 1.07 1.1; background-color: var(--lens-lift); box-shadow: var(--lens-lift-shadow); transition-duration: var(--t-tab), 260ms, var(--t-base), var(--t-base); }
   .nav.lift .tab.on .ic { scale: 1.12; }
   .tab {
     position: relative; flex: 1 1 0; min-width: 0; padding: 0 2px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;

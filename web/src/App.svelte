@@ -180,6 +180,17 @@
   // at 4x CPU). So each one, once built, is drawn once in a later idle moment, unseen (.drawing), then skipped again with
   // its layout kept; the tap only shows it.
   let drawing = $state<string | null>(null);
+  // the tab just left stays drawn under the new one while they crossfade (.tab.out), then is skipped again. Set before
+  // the DOM changes (pre), so it never goes hidden in between; one at a time (a third tab cuts the first off).
+  // Reduced motion: no fade, it goes at once
+  let leaving = $state<Tab | null>(null);
+  let lastTab = ui.tab;
+  $effect.pre(() => {
+    const k = ui.tab;
+    if (k === lastTab) return;
+    leaving = matchMedia('(prefers-reduced-motion: reduce)').matches ? null : lastTab;
+    lastTab = k;
+  });
   const idle = (fn: () => void) => { if ('requestIdleCallback' in window) requestIdleCallback(fn, { timeout: 4000 }); else setTimeout(fn, 500); };
   function prebuild() {
     const k = tabs.find((x) => !built[x] && (x !== 'club' || session.ready));
@@ -734,7 +745,8 @@
     <div class="banned" role="alert"><p>{t('common.error')}</p></div>
   {:else if !session.banned}
     {#each tabs as tab (tab)}
-      <section class="tab" class:on={ui.tab === tab} class:drawing={drawing === tab && ui.tab !== tab} aria-hidden={ui.tab !== tab} inert={gated}>
+      <section class="tab" class:on={ui.tab === tab} class:out={leaving === tab} class:drawing={drawing === tab && ui.tab !== tab} aria-hidden={ui.tab !== tab} inert={gated}
+               onanimationend={(e) => { if (e.target === e.currentTarget && leaving === tab) leaving = null; }}>
         {#if tab === 'afisha'}
           {#if built.afisha}<ListPage />{/if}
         {:else}
@@ -817,8 +829,13 @@
   /* where the engine has it, a tab away is skipped whole (no style, layout or paint while it waits; its scroll and
      layout kept): flipping `visibility` restyled every node of the tab on each switch (5k on a full Afisha: 65 ms) */
   @supports (content-visibility: hidden) { .tab { visibility: visible; content-visibility: hidden; } .tab.drawing { content-visibility: visible; opacity: 0; } }
-  /* opacity only, backwards fill: a lingering transform fill would pin the pages (prototype bug) */
-  .tab.on { visibility: visible; content-visibility: visible; z-index: auto; animation: tabIn 200ms var(--ease) backwards; }
+  /* a crossfade on the nav lens's spring (tokens: --t-tab), one motion with it: the new tab fades in on top, taking
+     taps from its first frame; the one left (.out, App's `leaving`) stays drawn under it and fades out, then is
+     skipped again. Opacity only, no forwards fill: a lingering transform fill would pin the pages (prototype bug),
+     and .out rests at 0 by itself until its class goes */
+  .tab.on { visibility: visible; content-visibility: visible; z-index: auto; animation: tabIn var(--t-tab) var(--ease-tab) backwards; }
+  .tab.out { visibility: visible; content-visibility: visible; opacity: 0; animation: tabOut var(--t-tab) var(--ease-tab); }
   .view.off { display: none; }
   @keyframes tabIn { from { opacity: 0; } }
+  @keyframes tabOut { from { opacity: 1; } }
 </style>
