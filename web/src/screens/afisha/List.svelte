@@ -48,7 +48,6 @@
   import EventRow from '../../ui/EventRow.svelte';
   import { largeTitle } from '../../ui/title';
   import Button from '../../ui/Button.svelte';
-  import IconButton from '../../ui/IconButton.svelte';
   import Card from '../../ui/Card.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
   import ActionCard from '../../ui/ActionCard.svelte';
@@ -429,18 +428,16 @@
 
   {#if ratePrompt && !ratingBusy.has(ratePrompt.id)}
     {@const e = ratePrompt}
-    <div class="rate-prompt">
-      <Card>
-        <div class="rate-head">
-          <div><h2 class="t-body">{t('rate.ask')}</h2><p class="t-foot clamp-2">{e.title}</p></div>
-          <IconButton icon={X} label={t('rate.dismiss')} kind="plain" onclick={() => void dismissEventRating(e.id)} />
-        </div>
-        <div class="rate-stars" role="group" aria-label={t('rate.ask')}>
-          {#each [1, 2, 3, 4, 5] as score (score)}
-            <button type="button" aria-label={t('rate.score', { n: score })} onclick={() => void rateFromPrompt(e.id, score)}><Star size={23} /></button>
-          {/each}
-        </div>
-      </Card>
+    <!-- one quiet line under the hero (owner, Nov 27: a card of five grey tiles read as another app): what it asks and of
+         which event, the five stars bare at its end, one tap rates; the x leaves it -->
+    <div class="rate">
+      <span class="rate-tx"><b>{t('rate.ask')}</b><span class="ellipsis">{e.title}</span></span>
+      <span class="rate-stars" role="group" aria-label={t('rate.ask')}>
+        {#each [1, 2, 3, 4, 5] as score (score)}
+          <button type="button" aria-label={t('rate.score', { n: score })} onclick={() => void rateFromPrompt(e.id, score)}><Star size={22} strokeWidth={1.75} /></button>
+        {/each}
+      </span>
+      <button type="button" class="rate-x" aria-label={t('rate.dismiss')} onclick={() => void dismissEventRating(e.id)}><X size={16} /></button>
     </div>
   {/if}
   {#if rest.length}
@@ -554,14 +551,18 @@
   .page { position: absolute; inset: 0; padding: var(--page-top) var(--gutter) 0; background: var(--bg); color: var(--text); }
   .ttl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .offline { margin-bottom: var(--s-6); }
-  .rate-prompt { margin-top: var(--s-5); }
-  .rate-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); }
-  .rate-head > div { min-width: 0; }
-  .rate-head h2 { font-weight: 600; }
-  .rate-head p { margin-top: 2px; color: var(--text-2); overflow-wrap: anywhere; }
-  .rate-stars { display: grid; grid-template-columns: repeat(5, 1fr); gap: var(--s-1); margin-top: var(--s-2); }
-  .rate-stars button { display: grid; place-items: center; min-height: var(--tap); border-radius: var(--r-m); background: var(--fill); color: var(--warning-text); }
-  .rate-stars button:active { transform: scale(0.94); }
+  /* the rating: the app's card surface as one capsule row, no tiles inside it; the stars are bare gold outlines, each a
+     44 px tall target, and a pressed one fills */
+  .rate { display: flex; align-items: center; gap: var(--s-1); min-height: var(--row-h2); margin-top: var(--s-5); padding: 0 var(--s-1) 0 var(--s-4);
+    border-radius: var(--r-l); background: var(--surface); box-shadow: var(--card-rim); }
+  .rate-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; font: 450 var(--fs-cap)/1.3 var(--font-text); color: var(--text-3); }
+  .rate-tx b { font: 600 var(--fs-body)/1.25 var(--font-text); color: var(--text); white-space: nowrap; }
+  .rate-stars { flex: none; display: flex; }
+  .rate-stars button { display: grid; place-items: center; width: 34px; height: var(--tap); color: var(--warning-text); transition: transform var(--t-fast) var(--ease); }
+  .rate-stars button:active { transform: scale(1.18); }
+  .rate-stars button:active :global(svg) { fill: currentColor; }
+  .rate-x { flex: none; display: grid; place-items: center; width: 34px; height: var(--tap); color: var(--text-3); }
+  .rate-x:active { opacity: 0.6; }
   .off { margin: var(--s-3) var(--s-1) 0; color: var(--text-2); }
   .pastrow { margin-top: var(--s-4); }
   .pastrow + .past { margin-top: 8px; }
