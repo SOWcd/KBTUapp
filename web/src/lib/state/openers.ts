@@ -165,7 +165,7 @@ export const openers = {
   volLedger: () => lazy(() => import('../../screens/club/VolLedger.svelte'), { vol: true }),
   volDoor: (sid: Id, title: string) => lazy(() => import('../../screens/club/VolDoor.svelte'), { sid, title }), // a session's door: who left without checking out, the hand-over link
   volPerson: (id: Id, mine?: boolean) => lazy(() => import('../../screens/club/VolPerson.svelte'), { id, mine, vol: true }, undefined, mine ? `mine:${id}` : id), // an event's door helpers (a running club's President or Vice)
-  attendees: (id: Id) => lazy(() => import('../../screens/club/Attendees.svelte'), { id }, 'sheet.attendees'),
+  attendees: (id: Id, only?: 'check' | 'hold' | 'waitlist') => lazy(() => import('../../screens/club/Attendees.svelte'), { id, only }, 'sheet.attendees'), // only: EventManage's row's people first
   /** the Mark screen's «People»: the team by department and the guests, came / not came, marked by hand; onchange after a mark */
   doorPeople: (id: Id, onchange?: () => void, guestsOnly?: boolean) => lazy(() => import('../../screens/club/People.svelte'), { id, onchange, guestsOnly }, 'sheet.doorpeople', `${id}:${!!guestsOnly}`),
   /** Studio's «Guest list»: the organizers' file, its preview and save, the door's list as a CSV */

@@ -5,11 +5,13 @@
   // come to the club's Kaspi, and each receipt a tap away; flagged ones (⚠) on top.
   // Cancelled paid seats wait folded at the end, their receipts there for refunds even after signing up again.
   // ⋯ "Write in Telegram": one person's @username, asked for on the tap (never in the list; server attendee_contact).
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import FileDown from '@lucide/svelte/icons/file-down';
   import ReceiptIcon from '@lucide/svelte/icons/receipt';
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
   import Ellipsis from '@lucide/svelte/icons/ellipsis';
+  import X from '@lucide/svelte/icons/x';
+  import Chip from '../../ui/Chip.svelte';
   import { menu } from '../../ui/menu';
   import { api, ApiErr, staffEvents, type Attendee, type Id } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
@@ -39,7 +41,11 @@
   import { sorted, byName, newest, usual, type Order } from '../../lib/sort.svelte';
   import { screenful } from '../../lib/screenful.svelte';
 
-  let { overlay, id }: { overlay: Overlay; id: Id } = $props();
+  let { overlay, id, only: from }: { overlay: Overlay; id: Id; only?: 'check' | 'hold' | 'waitlist' } = $props();
+  // opened from one of EventManage's rows (receipts to check, holds, the waitlist): just those, a chip away from everyone
+  let only = $state(untrack(() => from));
+  const ONLY = { check: 'mg.check', hold: 'mg.holds', waitlist: 'mg.waitlist' } as const;
+  const inOnly = (a: Attendee) => !only || (only === 'check' ? a.status === 'going' && !!a.receipt?.flags.length && !a.receipt.reviewed : a.status === only);
 
   const { state: roster, load } = readState(() => api.attendees(id));
   const list = $derived(roster.value);
@@ -50,7 +56,7 @@
   const found = $derived(sorted('attendees', ORDERS, (list ?? []).filter((a) => !q.trim() || hit(q, [a.fullName, a.person.nick]))));
   // cancelled after paying (server attendees): folded at the end, their receipt there for the refund;
   // outside every total
-  const shown = $derived(found.filter((a) => a.status !== 'cancelled'));
+  const shown = $derived(found.filter((a) => a.status !== 'cancelled' && inOnly(a)));
   const removed = $derived(found.filter((a) => a.status === 'cancelled'));
   const draw = screenful(() => shown.length); // a big event's guests: a screenful with the sheet, the rest after it paints
   let removedOpen = $state(false);
@@ -74,12 +80,16 @@
   const doorOpen = $derived(!plain && !!ev && Date.now() / 1000 >= (ev.doorAt ?? ev.startsAt - 1800) && Date.now() / 1000 <= (ev.endsAt ?? ev.startsAt + 6 * 3600));
   let undoFor = $state<number | null>(null);
   let undoTimer: ReturnType<typeof setTimeout> | undefined;
+  let marking = $state<Id[]>([]); // one check-in per row at a time: a second tap waits for the first
   async function mark(a: Attendee, admit = false) {
+    if (marking.includes(a.person.id)) return;
+    marking = [...marking, a.person.id];
+    let again = false; // admitted past a flagged receipt: once this one has let go of the row
     try {
       const r = await api.checkinPerson(id, a.person.id, admit);
       if (r.result === 'ask_org') { haptic.error(); say(t('mk.askOrg'), 'warning_3d'); return; }
       if (r.result === 'flagged') { // nothing recorded yet: a look at the receipt first (server organizing._held)
-        if (!admit && await sheets.ask({ title: t('mk.admitAsk'), ok: t('mk.admit'), cancel: t('common.cancel') })) void mark(a, true);
+        again = !admit && await sheets.ask({ title: t('mk.admitAsk'), ok: t('mk.admit'), cancel: t('common.cancel') });
         return;
       }
       if (!('at' in r)) { haptic.error(); say(t(checkinMessages[r.result]), 'pleading_face_3d'); return; }
@@ -87,7 +97,16 @@
       haptic.ok();
       undoFor = a.person.id; clearTimeout(undoTimer); undoTimer = setTimeout(() => (undoFor = null), 8000);
     } catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
+    finally { marking = marking.filter((x) => x !== a.person.id); if (again) void mark(a, true); }
   }
+  // a receipt looked at: the next flagged one opens by itself (the list re-read first; never the same one again)
+  const openReceipt = (a: Attendee) => {
+    const r = a.receipt!, was = flagged(a);
+    sheets.receipt(r, a.fullName, () => void load().then(() => {
+      const next = was && (roster.value ?? []).find((x) => x.status !== 'cancelled' && flagged(x) && x.receipt!.id !== r.id);
+      if (next) openReceipt(next);
+    }));
+  };
   async function undo(a: Attendee) {
     try { await api.undoCheckin(id, a.person.id); a.checkedInAt = null; a.manual = false; undoFor = null; haptic.soft(); say(t('door.undone'), 'waving_hand_3d_default'); }
     catch { say(t('common.error'), 'warning_3d'); }
@@ -149,11 +168,11 @@
     </Row>
     {#snippet end()}
       {#if a.receipt && !staff}<IconButton size="s" icon={flagged(a) ? TriangleAlert : ReceiptIcon} kind={flagged(a) ? 'destructive' : a.receipt.reviewed ? 'gray' : 'tinted'} label={t('rc.title')}
-        onclick={() => sheets.receipt(a.receipt!, a.fullName, load)} />{/if}
+        onclick={() => openReceipt(a)} />{/if}
       {#if a.checkedInAt}
         {#if undoFor === a.person.id}<Button kind="secondary" size="s" onclick={() => undo(a)}>{t('door.undo')}</Button>{/if}
         <Tag tone="success">{t('att.in', { time: time(a.checkedInAt) })}</Tag>
-      {:else if a.status === 'going' && doorOpen}<Button kind="secondary" size="s" onclick={() => mark(a)}>{t('door.mark')}</Button>
+      {:else if a.status === 'going' && doorOpen}<Button kind="secondary" size="s" loading={marking.includes(a.person.id)} onclick={() => mark(a)}>{t('door.mark')}</Button>
       {:else if a.status === 'going'}<Tag tone="accent">{t('att.going')}</Tag>
       {:else if a.status === 'hold'}<Tag tone="warning">{t('att.hold')}</Tag>
       {:else if a.status === 'waitlist'}<Tag>{t('att.waitlist')}</Tag>{/if}
@@ -180,12 +199,13 @@
         {#if read}<p class="by">{t('att.byReceipts', { sum: money(read) })}</p>{/if}
       </Notice>
     {/if}
+    {#if only}<span class="only"><Chip selected icon={X} onclick={() => { haptic.tap(); only = undefined; }}>{t(ONLY[only])}</Chip></span>{/if}
     {#if list.length > 8}<SearchField bind:value={q} placeholder={t('att.search')} />{/if}
     {#if shown.length}
       {#if shown.length > 1}<SortChip list="attendees" orders={ORDERS} />{/if}
       <Group>{@render people(shown.slice(0, draw.n))}</Group>
     {:else if roster.status === 'ready'}
-      <EmptyState inline text={q.trim() ? t('clubs.nothing') : t('att.none')} />
+      <EmptyState inline text={q.trim() || only ? t('clubs.nothing') : t('att.none')} />
     {/if}
     {#if removed.length && !staff}
       <Group>
@@ -198,6 +218,7 @@
 
 <style>
   .ev { margin-top: 2px; }
+  .only { display: flex; }
   .bar { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); }
   .stats { font: 600 var(--fs-row)/1.3 var(--font-text); }
   .by { font: 450 var(--fs-body)/1.35 var(--font-text); color: var(--text-2); }

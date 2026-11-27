@@ -265,12 +265,16 @@
   // works it (the creator as its President does); a co-host's event team works it as from the event's sheet
   const ends = $derived(e ? e.endsAt ?? e.startsAt + 6 * 3600 : 0);
   const doorDay = $derived(!!e && live && !e.guestHost && !plain && (co ? coCrew : true) && (started || dayNo(e.startsAt) === dayNo(tick)) && ends > tick);
+  let qrBusy = false; // one door per tap: a second tap would ask twice or open the screen twice
   async function showQr() {
-    if (!e) return;
+    if (!e || qrBusy) return;
     haptic.tap();
-    // shut yet: today's confirm first (it tells the guests), and «Cancel» cancels; a team-only door asks nothing (no guest to tell)
-    if (!doorOpen && opener && aud !== 'team' && e.startsAt - 4 * 3600 <= tick && !(await openDoor())) return;
-    registration(e, co || head, session.me?.vol?.org);
+    qrBusy = true;
+    try {
+      // shut yet: today's confirm first (it tells the guests), and «Cancel» cancels; a team-only door asks nothing (no guest to tell)
+      if (!doorOpen && opener && aud !== 'team' && e.startsAt - 4 * 3600 <= tick && !(await openDoor())) return;
+      registration(e, co || head, session.me?.vol?.org);
+    } finally { qrBusy = false; }
   }
   let more = $state(false);
   // the rows under «More», the same conditions as below: three or fewer show plainly, no fold (a fold of two is pointless)
@@ -296,6 +300,7 @@
   let asks = $state<TeamAsk[]>([]);
   $effect(() => { void data.rev; if (opener) api.teamAsks(id).then((l) => (asks = l)).catch(() => {}); });
   async function decide(x: TeamAsk, yes: boolean) {
+    if (!asks.includes(x)) return; // answered already (a second tap)
     haptic.tap();
     asks = asks.filter((y) => y !== x); // at once; back if the server says no
     try { await api.teamDecide(id, x.person.id, yes); haptic.ok(); say(t(yes ? 'ta.saidYes' : 'ta.saidNo'), yes ? 'party_popper_3d' : 'waving_hand_3d_default'); studioChanged(); }
@@ -373,9 +378,9 @@
             {#if started || doorDay}<Row icon={UsersRound} title={t('mg.cameOf', { n: came, m: going.length })} subtitle={teamLine} accessory="chevron" onclick={() => sheets.attendees(id)} />
             {:else}<Row icon={UsersRound} title={t('mg.going')} value="{going.length}{e.seats ? ' / ' + e.seats : ''}" accessory="chevron" onclick={() => sheets.attendees(id)} />{/if}
           {/if}
-          {#if toCheck}<Row icon={TriangleAlert} title={t('mg.check')} count={toCheck} accessory="chevron" onclick={() => sheets.attendees(id)} />{/if}
-          {#if price && of('hold').length}<Row title={t('mg.holds')} value={String(of('hold').length)} accessory="chevron" onclick={() => sheets.attendees(id)} />{/if}
-          {#if of('waitlist').length}<Row title={t('mg.waitlist')} value={String(of('waitlist').length)} accessory="chevron" onclick={() => sheets.attendees(id)} />{/if}
+          {#if toCheck}<Row icon={TriangleAlert} title={t('mg.check')} count={toCheck} accessory="chevron" onclick={() => sheets.attendees(id, 'check')} />{/if}
+          {#if price && of('hold').length}<Row title={t('mg.holds')} value={String(of('hold').length)} accessory="chevron" onclick={() => sheets.attendees(id, 'hold')} />{/if}
+          {#if of('waitlist').length}<Row title={t('mg.waitlist')} value={String(of('waitlist').length)} accessory="chevron" onclick={() => sheets.attendees(id, 'waitlist')} />{/if}
           {#if e.needsVolunteers && e.volunteersAsked}<Row icon={HandHeart} title={t('vol.list')} count={e.volunteersAsked} accessory="chevron" onclick={() => sheets.volunteers(id, e.needsVolunteers!)} />{/if}
         </Group>
         {/if}
