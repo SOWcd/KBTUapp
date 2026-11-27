@@ -158,7 +158,8 @@ def test_one_seat_one_person(env, monkeypatch):
     # a program without an interview has no times
     assert c.post("/api/ako/a/slot", headers={"X-Ako": _new(c, oid, program="mini-mba")}, json={"slot": s1}).status_code == 400
     # the cutoff: inside it, neither booking nor giving back by hand
-    set_clock(monkeypatch, lambda: t0 + 3 * 86400 - ako.CUTOFF + 3600)
+    first = min(x["at"] for x in c.get(f"/api/orgs/{oid}/ako", headers=tma(HEAD)).json()["slots"])
+    set_clock(monkeypatch, lambda: first - ako.CUTOFF + 60)
     late = _new(c, oid, name="Late")
     for slot in (s1, s2):
         assert c.post("/api/ako/a/slot", headers={"X-Ako": late}, json={"slot": slot}).status_code in (409,)

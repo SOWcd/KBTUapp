@@ -27,7 +27,7 @@ from PIL import Image
 from .. import media, pdfpages, texts
 from ..db import tx
 from . import core
-from .core import ApiError, Viewer, at_least, now, one, role_in, rows
+from .core import ApiError, Viewer, at_least, one, role_in, rows
 from .organizing import kz_phone
 from .seats import _calendar, _ics_text
 
@@ -147,10 +147,10 @@ def start(con, slug: str, body: dict, ip: str, key: bytes) -> dict:
     who = hmac.new(key, f"ako-ip:{ip}".encode(), hashlib.sha256).hexdigest()[:24]
     token, digest = new_token()
     with tx(con):
-        if one(con, "SELECT COUNT(*) FROM ako_apps WHERE ip = ? AND created_at > ?", who, now() - 86400)[0] >= STARTS_A_DAY:
+        if one(con, "SELECT COUNT(*) FROM ako_apps WHERE ip = ? AND created_at > ?", who, core.now() - 86400)[0] >= STARTS_A_DAY:
             raise ApiError("rate_limited", "ako_starts")
         con.execute("""INSERT INTO ako_apps (org_id, token, program_id, lang, ip, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)""", (o["id"], digest, p["id"], lang, who, now(), now()))
+            VALUES (?, ?, ?, ?, ?, ?, ?)""", (o["id"], digest, p["id"], lang, who, core.now(), core.now()))
     return {"token": token}
 
 
@@ -173,7 +173,7 @@ def view(con, token: str) -> dict:
 def _free(con, a) -> list[dict]:
     """The times one may book: from CUTOFF on, with a seat left (my own time stays in the list, full or not)."""
     ss = rows(con, "SELECT id, starts_at, minutes, cap FROM ako_slots WHERE org_id = ? AND starts_at > ? ORDER BY starts_at, id LIMIT 400",
-              a["org_id"], now() + CUTOFF)
+              a["org_id"], core.now() + CUTOFF)
     taken = _booked(con, [s["id"] for s in ss])
     out: dict[int, dict] = {}
     for s in ss:
@@ -217,10 +217,10 @@ def patch(con, token: str, body: dict) -> None:
         if body.get("lang") in LANGS:
             sets["lang"] = body["lang"]
         if body.get("consent") is True and a["consent"] != CONSENT:
-            sets["consent"], sets["consent_at"] = CONSENT, now()
+            sets["consent"], sets["consent_at"] = CONSENT, core.now()
         if sets:
             con.execute(f"UPDATE ako_apps SET {', '.join(f'{k} = ?' for k in sets)}, updated_at = ? WHERE id = ?",
-                        (*sets.values(), now(), a["id"]))
+                        (*sets.values(), core.now(), a["id"]))
 
 
 def _picture(data: bytes) -> tuple[bytes, str]:
@@ -262,12 +262,12 @@ def add_file(con, token: str, doc: str, data: bytes) -> dict:
             if one(con, "SELECT COUNT(*) FROM ako_files WHERE app_id = ?", a["id"])[0] >= MAX_FILES:
                 raise ApiError("rate_limited", "ako_files")
             fid = con.execute("INSERT INTO ako_files (app_id, doc, path, mime, bytes, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-                              (a["id"], doc, rel, mime, len(body), now())).lastrowid
-            con.execute("UPDATE ako_apps SET updated_at = ? WHERE id = ?", (now(), a["id"]))
+                              (a["id"], doc, rel, mime, len(body), core.now())).lastrowid
+            con.execute("UPDATE ako_apps SET updated_at = ? WHERE id = ?", (core.now(), a["id"]))
     except BaseException:
         _unlink(root, [rel])
         raise
-    return {"id": fid, "doc": doc, "mime": mime, "bytes": len(body), "at": now()}
+    return {"id": fid, "doc": doc, "mime": mime, "bytes": len(body), "at": core.now()}
 
 
 def drop_file(con, token: str, fid: int) -> None:
@@ -279,7 +279,7 @@ def drop_file(con, token: str, fid: int) -> None:
         if not f:
             raise ApiError("not_found")
         con.execute("DELETE FROM ako_files WHERE id = ?", (fid,))
-        con.execute("UPDATE ako_apps SET updated_at = ? WHERE id = ?", (now(), a["id"]))
+        con.execute("UPDATE ako_apps SET updated_at = ? WHERE id = ?", (core.now(), a["id"]))
     _unlink(root_of(con), [f["path"]])
 
 
@@ -291,11 +291,11 @@ def _take(con, a, slot: object) -> None:
         raise ApiError("not_found", "ako_slot")
     if s["id"] == a["slot_id"]:
         return
-    if s["starts_at"] <= now() + CUTOFF:
+    if s["starts_at"] <= core.now() + CUTOFF:
         raise ApiError("closed", "ako_slot_late")
     if one(con, "SELECT COUNT(*) FROM ako_apps WHERE slot_id = ?", s["id"])[0] >= s["cap"]:
         raise ApiError("full", "ako_slot_taken")
-    con.execute("UPDATE ako_apps SET slot_id = ?, rebook = NULL, updated_at = ? WHERE id = ?", (s["id"], now(), a["id"]))
+    con.execute("UPDATE ako_apps SET slot_id = ?, rebook = NULL, updated_at = ? WHERE id = ?", (s["id"], core.now(), a["id"]))
 
 
 def book(con, token: str, slot: object) -> dict:
@@ -308,13 +308,13 @@ def book(con, token: str, slot: object) -> dict:
             raise ApiError("bad_input", "ako_no_interview")
         if slot is None:
             cur = one(con, "SELECT starts_at FROM ako_slots WHERE id = ?", a["slot_id"]) if a["slot_id"] else None
-            if cur and cur["starts_at"] <= now() + CUTOFF:
+            if cur and cur["starts_at"] <= core.now() + CUTOFF:
                 raise ApiError("closed", "ako_slot_late")  # too close to give back by hand: the managers move it
-            con.execute("UPDATE ako_apps SET slot_id = NULL, updated_at = ? WHERE id = ?", (now(), a["id"]))
+            con.execute("UPDATE ako_apps SET slot_id = NULL, updated_at = ? WHERE id = ?", (core.now(), a["id"]))
         else:
             if a["slot_id"]:
                 cur = one(con, "SELECT starts_at FROM ako_slots WHERE id = ?", a["slot_id"])
-                if cur and cur["starts_at"] <= now() + CUTOFF:
+                if cur and cur["starts_at"] <= core.now() + CUTOFF:
                     raise ApiError("closed", "ako_slot_late")
             _take(con, a, slot)
     return view(con, token)
@@ -334,7 +334,7 @@ def submit(con, token: str) -> dict:
             raise ApiError("bad_input", "ako_incomplete", {"missing": missing})
         if interview and not a["slot_id"] and _free(con, a):
             raise ApiError("bad_input", "ako_slot_needed")
-        con.execute("UPDATE ako_apps SET status = 'sent', sent_at = ?, updated_at = ?, ip = NULL WHERE id = ?", (now(), now(), a["id"]))
+        con.execute("UPDATE ako_apps SET status = 'sent', sent_at = ?, updated_at = ?, ip = NULL WHERE id = ?", (core.now(), core.now(), a["id"]))
     return view(con, token)
 
 
@@ -352,7 +352,7 @@ def ics(con, token: str) -> str:
     teams = _teams(con, a["org_id"], s)
     utc = lambda ts: time.strftime("%Y%m%dT%H%M%SZ", time.gmtime(ts))  # noqa: E731
     title = words["title"].format(program=" ".join(filter(None, (info.get("title"), info.get("sub")))), org=org["name"].get(lang) or org["name"]["ru"])
-    lines = ["BEGIN:VEVENT", f"UID:ako{a['id']}-{s['id']}@kbtu-app", f"DTSTAMP:{utc(now())}", f"DTSTART:{utc(s['starts_at'])}",
+    lines = ["BEGIN:VEVENT", f"UID:ako{a['id']}-{s['id']}@kbtu-app", f"DTSTAMP:{utc(core.now())}", f"DTSTART:{utc(s['starts_at'])}",
              f"DTEND:{utc(s['starts_at'] + s['minutes'] * 60)}", "SUMMARY:" + _ics_text(title), "LOCATION:" + _ics_text(teams or "Microsoft Teams"),
              "DESCRIPTION:" + _ics_text(words["body"] + (f"\n{teams}" if teams else "")), *([f"URL:{teams}"] if teams else [])]
     for before in ("-P1D", "-PT1H"):
@@ -393,7 +393,7 @@ def desk(con, v: Viewer, oid: int) -> dict:
     have: dict[int, set[str]] = {}
     for r in rows(con, f"SELECT DISTINCT app_id, doc FROM ako_files WHERE app_id IN ({core._qs(ids)})", *ids) if ids else []:
         have.setdefault(r[0], set()).add(r[1])
-    slots = rows(con, "SELECT * FROM ako_slots WHERE org_id = ? AND starts_at > ? ORDER BY starts_at, id LIMIT 600", oid, now() - 86400)
+    slots = rows(con, "SELECT * FROM ako_slots WHERE org_id = ? AND starts_at > ? ORDER BY starts_at, id LIMIT 600", oid, core.now() - 86400)
     by_id = {s["id"]: s for s in slots}
     for s in rows(con, f"""SELECT * FROM ako_slots WHERE id IN (SELECT slot_id FROM ako_apps WHERE org_id = ? AND slot_id IS NOT NULL)""", oid):
         by_id.setdefault(s["id"], s)
@@ -452,14 +452,14 @@ def link(con, v: Viewer, oid: int, what: str, xid: int, key: bytes) -> dict:
         else one(con, "SELECT 1 FROM ako_apps WHERE id = ? AND org_id = ?", xid, oid)
     if not ok:
         raise ApiError("not_found")
-    exp = now() + LINK_TTL
+    exp = core.now() + LINK_TTL
     core.log_action(con, v.id, "ako_download", f"ako:{what}{xid}")
     return {"url": f"/api/ako/{what}/{xid}?e={exp}&s={_sig(key, f'{what}{xid}', exp)}"}
 
 
 def signed(what: str, xid: int, e: object, s: object, key: bytes) -> None:
     if not (isinstance(e, str) and e.isdigit() and len(e) < 12 and isinstance(s, str)
-            and hmac.compare_digest(s, _sig(key, f"{what}{xid}", int(e))) and int(e) >= now()):
+            and hmac.compare_digest(s, _sig(key, f"{what}{xid}", int(e))) and int(e) >= core.now()):
         raise ApiError("not_found")
 
 
@@ -505,7 +505,7 @@ def new_app(con, v: Viewer, oid: int, body: dict) -> dict:
     with tx(con):
         aid = con.execute("""INSERT INTO ako_apps (org_id, token, program_id, name, phone, lang, created_by, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""", (oid, digest, p["id"], name, ph, body.get("lang") if body.get("lang") in LANGS else "ru",
-                                                    v.id, now(), now())).lastrowid
+                                                    v.id, core.now(), core.now())).lastrowid
         core.log_action(con, v.id, "ako_new", f"ako:{aid}")
     return {"id": aid, "token": token}
 
@@ -521,7 +521,7 @@ def update_app(con, v: Viewer, oid: int, aid: int, body: dict) -> dict:
             s = body["status"]
             if s not in STATUSES or s == "draft" or a["status"] == "draft":
                 raise ApiError("bad_input", "status")  # a draft becomes a package only when its applicant sends it
-            con.execute("UPDATE ako_apps SET status = ?, updated_at = ? WHERE id = ?", (s, now(), aid))
+            con.execute("UPDATE ako_apps SET status = ?, updated_at = ? WHERE id = ?", (s, core.now(), aid))
         if "note" in body:
             con.execute("UPDATE ako_apps SET note = ? WHERE id = ?", (str(body["note"] or "")[:2000].replace("\r", ""), aid))
         if "program" in body:
@@ -529,14 +529,14 @@ def update_app(con, v: Viewer, oid: int, aid: int, body: dict) -> dict:
             if not p:
                 raise ApiError("bad_input", "program")
             con.execute("UPDATE ako_apps SET program_id = ?, slot_id = CASE WHEN ? THEN slot_id END, updated_at = ? WHERE id = ?",
-                        (p["id"], p["interview"], now(), aid))
+                        (p["id"], p["interview"], core.now(), aid))
         if "slot" in body:
             if body["slot"] is None:
                 reason = _line(body.get("reason"), 200)
                 if a["slot_id"] and not reason:
                     raise ApiError("bad_input", "reason")
                 con.execute("UPDATE ako_apps SET slot_id = NULL, rebook = ?, updated_at = ? WHERE id = ?",
-                            (reason or None if a["slot_id"] else a["rebook"], now(), aid))
+                            (reason or None if a["slot_id"] else a["rebook"], core.now(), aid))
             else:
                 s = one(con, "SELECT id, cap FROM ako_slots WHERE id = ? AND org_id = ?", body["slot"], oid) \
                     if isinstance(body["slot"], int) and not isinstance(body["slot"], bool) else None
@@ -544,7 +544,7 @@ def update_app(con, v: Viewer, oid: int, aid: int, body: dict) -> dict:
                     raise ApiError("not_found", "ako_slot")
                 if s["id"] != a["slot_id"] and one(con, "SELECT COUNT(*) FROM ako_apps WHERE slot_id = ?", s["id"])[0] >= s["cap"]:
                     raise ApiError("full", "ako_slot_taken")  # the team may book inside the cutoff, never over a seat
-                con.execute("UPDATE ako_apps SET slot_id = ?, rebook = NULL, updated_at = ? WHERE id = ?", (s["id"], now(), aid))
+                con.execute("UPDATE ako_apps SET slot_id = ?, rebook = NULL, updated_at = ? WHERE id = ?", (s["id"], core.now(), aid))
         if body.get("newLink") is True:
             token, digest = new_token()
             con.execute("UPDATE ako_apps SET token = ? WHERE id = ?", (digest, aid))
@@ -580,12 +580,12 @@ def add_slots(con, v: Viewer, oid: int, body: dict) -> None:
         starts = sorted({core.at(day, t) for t in times})
     except ValueError:
         raise ApiError("bad_input") from None
-    if starts[0] <= now():
+    if starts[0] <= core.now():
         raise ApiError("bad_input", "past")
     with tx(con):
         for t in starts:
             con.execute("""INSERT OR IGNORE INTO ako_slots (org_id, starts_at, minutes, cap, who, created_by, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)""", (oid, t, minutes, cap, who, v.id, now()))
+                VALUES (?, ?, ?, ?, ?, ?, ?)""", (oid, t, minutes, cap, who, v.id, core.now()))
         if teams:
             con.execute("""INSERT INTO ako_days (org_id, day, teams) VALUES (?, ?, ?)
                 ON CONFLICT (org_id, day) DO UPDATE SET teams = excluded.teams""", (oid, day, teams))
@@ -646,7 +646,7 @@ def drop_slot(con, v: Viewer, oid: int, sid: int, force: bool = False, reason: o
         n = one(con, "SELECT COUNT(*) FROM ako_apps WHERE slot_id = ?", sid)[0]
         if n and not force:
             raise ApiError("conflict", "ako_slot_booked", {"booked": n})
-        con.execute("UPDATE ako_apps SET rebook = ?, updated_at = ? WHERE slot_id = ?", (_line(reason, 200) or "-", now(), sid))
+        con.execute("UPDATE ako_apps SET rebook = ?, updated_at = ? WHERE slot_id = ?", (_line(reason, 200) or "-", core.now(), sid))
         con.execute("DELETE FROM ako_slots WHERE id = ?", (sid,))
         core.log_action(con, v.id, "ako_slot_drop", f"org:{oid}", json.dumps({"booked": n}))
     return n
@@ -676,7 +676,7 @@ def seed(con, oid: int) -> int:
 def sweep(con) -> None:
     """Nightly (daily.stats_day): drafts never sent go DRAFT_KEEP after their last change, sent packages KEEP after
     sending, with their files; a starter's address hash after a day; past slots nobody holds."""
-    t = now()
+    t = core.now()
     with tx(con):
         gone = rows(con, """SELECT id FROM ako_apps WHERE (status = 'draft' AND updated_at < ?) OR (sent_at IS NOT NULL AND sent_at < ?)""",
                     t - DRAFT_KEEP, t - KEEP)

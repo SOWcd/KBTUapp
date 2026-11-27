@@ -158,6 +158,21 @@ async function openPhone(page: Page, qa: Qa, who: Who, info: TestInfo, faults: F
   };
 }
 
+/** An admissions page (qa.py --ako: qa.ako's paths) the way an applicant opens it: a plain browser, no Telegram, the
+ *  theme the phone asks for, on the project's clock. Its faults are checked like a phone's. */
+export async function openAko(page: Page, qa: Qa, path: string, info: TestInfo, faults: Faults): Promise<Phone> {
+  await page.emulateMedia({ colorScheme: theme(info) });
+  if (clock(info)) await page.clock.install({ time: clock(info)! * 1000 });
+  page.on('console', (m) => { if (m.type() === 'error') faults.errors.push(`console: ${m.text()}`); });
+  page.on('pageerror', (e) => faults.errors.push(`page: ${e.message}`));
+  page.on('response', (r) => { if (r.status() >= 400) faults.failed.push(`${r.request().method()} ${r.url()} ${r.status()}`); });
+  await page.goto(qa.url + path);
+  await expect(page.locator('html'), 'the theme the phone asks for').toHaveAttribute('data-theme', theme(info));
+  const no = () => Promise.reject(new Error('no Telegram on an admissions page'));
+  return { page, who: 'Ali', back: { shown: () => Promise.resolve(false), press: no }, allow: (re) => faults.allow.push(re),
+           look: (step) => look(page, info, `ako ${step}`), api: no };
+}
+
 /** Checks on the screen as it is and its screenshot: no sideways scroll, no text out of its button; small tap targets
  *  are reported (an annotation and a JSON attachment), not failed. */
 export async function look(page: Page, info: TestInfo, step: string): Promise<void> {
