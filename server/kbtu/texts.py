@@ -66,6 +66,11 @@ SHARE_ROUND = {  # a club's open recruitment round (casting.py)
     "kk": ("Клубқа қабылдау", "📣 <b>{club}</b> адам қабылдайды\n⚡ Өтінім бір минутта\n\n⏳ {until} дейін", "📝 Өтінім беру"),
     "en": ("Club recruiting", "📣 <b>{club}</b> is recruiting\n⚡ Applying takes a minute\n\n⏳ Until {until}", "📝 Apply"),
 }
+SHARE_ROOM = {  # a game room's join card (logic/rooms.py): its game and its four digits, the button straight into it
+    "ru": ("Играем в Шпиона", "🕵️ <b>{name}</b> зовёт в «Шпиона»\n\n🔢 Комната {code}", "🎲 Войти в игру"),
+    "kk": ("Тыңшы ойнаймыз", "🕵️ <b>{name}</b> «Тыңшы» ойынына шақырады\n\n🔢 Бөлме {code}", "🎲 Ойынға кіру"),
+    "en": ("Let's play Spy", "🕵️ <b>{name}</b> invites you to play Spy\n\n🔢 Room {code}", "🎲 Join the game"),
+}
 SHARE_JOIN_MANY = {  # Studio → Team, the link for the whole team (logic.team_link): one card for the club's chat
     "ru": ("Вступай в команду", "🎉 <b>Команда {club}</b>\nОткрой и вступай в KBTU App\n\n⏳ До {until}", "Вступить в команду"),
     "kk": ("Командаға қосыл", "🎉 <b>{club} командасы</b>\nKBTU App-та аш та, қосыл\n\n⏳ {until} дейін", "Командаға қосылу"),
@@ -155,7 +160,7 @@ def share_award(lang: str, code: str, level: int, tiers: int, rarity: float) -> 
 
 def share_invite(kind: str, lang: str, **fields: str) -> tuple[str, str, str]:
     """(title, HTML text, button) for my invite ('rf'), a club ('join') or a President ('pres') invite card."""
-    title, text, button = {"rf": SHARE_REFER, "join": SHARE_JOIN, "jm": SHARE_JOIN_MANY, "pres": SHARE_PRES, "rc": SHARE_ROUND, "gl": SHARE_GRANT, "gb": SHARE_BADGE, "gm": SHARE_BADGE_MANY}[kind][lang if lang in SHARE_REFER else "ru"]
+    title, text, button = {"rf": SHARE_REFER, "join": SHARE_JOIN, "jm": SHARE_JOIN_MANY, "pres": SHARE_PRES, "rc": SHARE_ROUND, "gr": SHARE_ROOM, "gl": SHARE_GRANT, "gb": SHARE_BADGE, "gm": SHARE_BADGE_MANY}[kind][lang if lang in SHARE_REFER else "ru"]
     return title, text.format(**{k: html.escape(v) for k, v in fields.items()}), button
 
 

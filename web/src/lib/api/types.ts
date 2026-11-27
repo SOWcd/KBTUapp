@@ -1023,6 +1023,31 @@ export interface LibState {
   mine: LibMine | null; report: LibReport | null; blockedUntil: Ts | null;
 }
 export interface LibAct { table: LibTable; state: LibState }
+/** A game room (server logic/rooms.py), as this person may see it: `v` its version (the poll's ?v=), `now` the server's
+ *  clock (deadlines are its absolute times: the countdown is `deadline - now` from when the answer came), `me` my seat,
+ *  `host` the host's seat (the lowest one in the room). The rest is the game's own (Spy: logic/spy.py view). */
+export interface RoomBase { id: Id; game: 'spy'; code: string; v: number; now: Ts; me: number; host: number; players: (PersonRef & { seat: number })[] }
+export type SpyPhase = 'lobby' | 'talk' | 'vote' | 'guess' | 'over';
+/** what only the spy may not know: `loc` (a place's id; its name is t('spy.loc.<id>')) on the others' cards alone */
+export type SpyRole = { spy: true } | { spy: false; loc: string };
+export interface SpyResult {
+  winner: 'spy' | 'town' | 'none';
+  /** guessed / missed: the spy named a place; tie / wrong: the vote missed the spy; silent: the caught spy didn't name one
+   *  in time; fled: the spy left; few: too few stayed */
+  why: 'guessed' | 'missed' | 'tie' | 'wrong' | 'silent' | 'fled' | 'few';
+  spy: number; loc: string; guess: string | null; accused: number | null; votes: Record<number, number>;
+}
+export interface SpyRoom extends RoomBase {
+  phase: SpyPhase; minutes: number; deadline: Ts | null;
+  round?: number[];       // the seats playing this round
+  role?: SpyRole;         // mine, while a round runs
+  voted?: number[];       // vote: who has voted (not for whom)
+  myVote?: number | null;
+  accused?: number;       // guess: the caught spy's seat
+  result?: SpyResult;     // over
+}
+export type SpyAct = { act: 'minutes'; minutes: number } | { act: 'start' } | { act: 'vote_now' } | { act: 'vote'; seat: number }
+  | { act: 'guess'; loc: string } | { act: 'again' };
 /** the admin's rooms: their tables with the stickers' codes and the seats' live states, the big screen's key */
 export interface LibRoom {
   id: Id; name: string; screen: string; free: number; total: number;

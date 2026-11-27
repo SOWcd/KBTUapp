@@ -2611,6 +2611,33 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             board_writer(request, board_viewer(request, v), con)
         logic.mapflaws.report(con, v, body, student)
 
+    # games friends play together (logic/rooms.py): open a room, join by its code, poll it by version, act in it, leave
+    @app.post("/api/rooms")
+    def room_new(con: Con, v: Me, body: dict = Body(...)):
+        return logic.rooms.create(con, v, body.get("game"))
+
+    @app.get("/api/rooms")
+    def room_mine(con: Con, v: Me):
+        return {"room": logic.rooms.mine(con, v)}
+
+    @app.post("/api/rooms/join")
+    def room_join(con: Con, v: Me, body: dict = Body(...)):
+        return logic.rooms.join(con, v, body.get("code"))
+
+    @app.get("/api/rooms/{rid}")
+    def room_state(rid: int, con: Con, v: Me, response: Response, since: str | None = Query(None, alias="v")):
+        response.headers["Cache-Control"] = "private, no-store"
+        room = logic.rooms.state(con, v, rid, since)
+        return Response(status_code=204, headers={"Cache-Control": "private, no-store"}) if room is None else room
+
+    @app.post("/api/rooms/{rid}")
+    def room_act(rid: int, con: Con, v: Me, body: dict = Body(...)):
+        return logic.rooms.act(con, v, rid, body)
+
+    @app.delete("/api/rooms/{rid}/me", status_code=204)
+    def room_leave(rid: int, con: Con, v: Me):
+        logic.rooms.leave(con, v, rid)
+
     # library seats (logic/library.py, LIBRARY): the sheet, a scanned table, a seat, "nobody here" and its answers;
     # the room's big screen by its key (seat states only); the admin's rooms, tables and sticker sheet
     @app.get("/api/library")
@@ -3174,8 +3201,11 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             start = f"ev_{ref}_{logic.seats.ev_ref(v.id)}" if body.get("mine") and logic.role_in(con, v, e["org"]["id"]) else f"ev_{ref}"
             result = {"type": "photo", "id": f"ev-{ref}-{stamp}", "photo_url": photo, "thumbnail_url": photo, "caption": caption, "parse_mode": "HTML",
                       "reply_markup": {"inline_keyboard": [[{"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp={start}"}]]}}
-        elif kind in ("rf", "join", "pres", "rc", "gl"):
-            if kind == "gl":  # the admin's award link (logic.grant_link): up to `uses` people (null: no cap) for `days`
+        elif kind in ("rf", "join", "pres", "rc", "gl", "gr"):
+            if kind == "gr":  # a game room I'm in, while it's open: its four digits (logic/rooms.py), the button joins it
+                start, fields = logic.rooms.share(con, v, body.get("code"))
+                fields["name"] = logic.shown_name(logic.one(con, logic.PERSON + " WHERE u.id = ?", v.id))
+            elif kind == "gl":  # the admin's award link (logic.grant_link): up to `uses` people (null: no cap) for `days`
                 code = body.get("code")
                 uses, days = body.get("uses", 1), body.get("days", 7)
                 token = logic.grant_link(con, v, code, uses, days)

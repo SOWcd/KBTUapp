@@ -8,7 +8,7 @@ export type Screen = 'tab.afisha' | 'tab.forum' | 'tab.club' | 'tab.profile'
   | 'sheet.event' | 'sheet.club' | 'sheet.ticket' | 'sheet.person' | 'sheet.friends' | 'sheet.compose' | 'sheet.comments'
   | 'sheet.map' | 'sheet.week' | 'sheet.awards' | 'sheet.studio' | 'sheet.news' | 'sheet.feed' | 'sheet.assistant'
   | 'sheet.scanner' | 'sheet.doorpeople' | 'sheet.attendees' | 'sheet.manage' | 'sheet.editor' | 'sheet.team' | 'sheet.member' | 'sheet.joininbox'
-  | 'sheet.pay' | 'sheet.people' | 'sheet.sponsors' | 'sheet.teams';
+  | 'sheet.pay' | 'sheet.people' | 'sheet.sponsors' | 'sheet.teams' | 'sheet.games';
 // the second line: what shipped since Nov 20, each counted where it's used
 type Action = 'do.signup' | 'do.follow' | 'do.forum' | 'do.casting' | 'do.qr' | 'do.donate'
   | 'do.coming' | 'do.heart' | 'do.comment' | 'do.research' | 'do.pymk' | 'do.pymkon' | 'do.share' | 'do.filter' | 'do.past'

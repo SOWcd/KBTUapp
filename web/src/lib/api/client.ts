@@ -5,6 +5,7 @@ import type { ResearchAnswers, ResearchSurvey, ResearchInput, ResearchRequest, S
 import type { BracketMatch, BracketSeed, EventBracket, EventGroups, EventMatch, MatchScore } from './types';
 import type { Archived, ReportLogEntry, ReportMarkPatch, ReviewReason, SantaChats, SantaMsg, SantaReport } from './types';
 import type { LibAct, LibRoom, LibState, LibTable, LibWall } from './types';
+import type { SpyAct, SpyRoom } from './types';
 import type { Graph } from '../route';
 import { splitVariants } from '../awards';
 import { ApiErr } from './errors';
@@ -597,6 +598,13 @@ export const server = {
     const r = await fetch(`/api/library/screen/${encodeURIComponent(key)}`).catch(() => null);
     return r?.ok ? r.json() : null;
   },
+  // game rooms (server logic/rooms.py): the poll answers undefined (204) while the room is still at version `v`
+  roomNew: (game: 'spy'): Promise<SpyRoom> => call('POST', '/rooms', { game }),
+  roomMine: (): Promise<{ room: SpyRoom | null }> => call('GET', '/rooms'),
+  roomJoin: (code: string): Promise<SpyRoom> => call('POST', '/rooms/join', { code }),
+  room: (id: Id, v?: number): Promise<SpyRoom | undefined> => call('GET', `/rooms/${id}${v === undefined ? '' : `?v=${v}`}`),
+  roomAct: (id: Id, v: number, actionId: string, a: SpyAct): Promise<{ applied: boolean; room: SpyRoom }> => call('POST', `/rooms/${id}`, { id: actionId, v, ...a }),
+  roomLeave: (id: Id): Promise<void> => call('DELETE', `/rooms/${id}/me`),
   mapFlawsMine: (): Promise<{ id: Id; ver: string; floor: number; u: number; v: number; px: number | null; py: number | null; body: string }[]> => call('GET', '/map/flaws/mine'), // my own open ones, pins on the map
   mapFlawDone: (id: Id, done: boolean): Promise<void> => call('POST', `/map/flaws/${id}/done`, { done }),
   research: (): Promise<ResearchSurvey[]> => call('GET', '/research'),

@@ -18,7 +18,7 @@ SCREENS = ("tab.afisha", "tab.forum", "tab.club", "tab.profile",
            "sheet.event", "sheet.club", "sheet.ticket", "sheet.person", "sheet.friends", "sheet.compose", "sheet.comments",
            "sheet.map", "sheet.week", "sheet.awards", "sheet.studio", "sheet.news", "sheet.feed", "sheet.assistant",
            "sheet.scanner", "sheet.doorpeople", "sheet.attendees", "sheet.manage", "sheet.editor", "sheet.team", "sheet.member", "sheet.joininbox",
-           "sheet.pay", "sheet.people", "sheet.sponsors", "sheet.teams")
+           "sheet.pay", "sheet.people", "sheet.sponsors", "sheet.teams", "sheet.games")
 # screens only a club's organizers open (the door, the guests, the editor, the team, join requests): a day's open time
 # by platform could be one club head's, so they have no tti.* keys (their open counts, by class only, stay)
 STAFF_SCREENS = ("sheet.scanner", "sheet.doorpeople", "sheet.attendees", "sheet.manage", "sheet.editor", "sheet.team",

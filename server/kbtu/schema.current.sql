@@ -664,6 +664,26 @@ CREATE TABLE gallery_photos (
       user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       event_id   INTEGER REFERENCES events(id) ON DELETE SET NULL,  -- its event gone: still the student's, a plain KBTU photo
       created_at INTEGER NOT NULL, topic TEXT CHECK (topic IN ('campus', 'study', 'life', 'other')), place TEXT CHECK (place IN ('main', 'b2', 'dorm', 'away'))) STRICT;
+CREATE TABLE game_players (
+      room_id INTEGER NOT NULL REFERENCES game_rooms(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      seat    INTEGER NOT NULL,
+      seen_at INTEGER NOT NULL,
+      PRIMARY KEY (room_id, user_id),
+      UNIQUE (room_id, seat)
+    ) STRICT;
+CREATE TABLE game_rooms (
+      id         INTEGER PRIMARY KEY,
+      game       TEXT NOT NULL,
+      code       TEXT UNIQUE,
+      created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      state      TEXT NOT NULL DEFAULT '{}',
+      version    INTEGER NOT NULL DEFAULT 1,
+      deadline   INTEGER,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      ended_at   INTEGER
+    ) STRICT;
 CREATE TABLE grant_link_uses (
       id      INTEGER PRIMARY KEY,
       token   TEXT NOT NULL REFERENCES grant_links(token) ON DELETE CASCADE,
@@ -1737,6 +1757,9 @@ CREATE INDEX form_answers_by_form ON form_answers(form_id, created_at);
 CREATE INDEX friend_requests_to ON friend_requests(to_id, status);
 CREATE INDEX friendships_b ON friendships(b);
 CREATE INDEX gallery_by_user ON gallery_photos(user_id, created_at);
+CREATE INDEX game_players_by_user ON game_players(user_id);
+CREATE INDEX game_rooms_by_creator ON game_rooms(created_by, created_at);
+CREATE INDEX game_rooms_by_update ON game_rooms(updated_at);
 CREATE INDEX grant_link_uses_by_user ON grant_link_uses(user_id);
 CREATE INDEX helper_offers_by_user ON helper_offers(user_id, created_at);
 CREATE INDEX ig_media_by_org ON ig_media(org_id, handle);

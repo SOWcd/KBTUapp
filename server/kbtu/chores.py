@@ -325,3 +325,5 @@ def _chores(cfg: Config, con) -> None:
     logic.close_gone(con)  # reports of what went by itself (the queue, a GET, never writes)
     logic.tgcomments.sweep(con)  # the policy's retention even with the forum switched off (its old rows still go)
     logic.fchannel.sweep(con)
+    if logic._once(con, "rooms_hour", str(logic.now() // 3600)):
+        logic.rooms.sweep(con)  # hourly, not in stats_day: a game room's state and players go within hours (rooms.KEEP)

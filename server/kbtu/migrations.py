@@ -2734,4 +2734,30 @@ MIGRATIONS: list[tuple[int, str]] = [
     # mirror._MIRRORED). The main channels mirrored today without the bot keep going, as vouched.
     (262, """UPDATE chats SET mirror = 2 WHERE mirror = 1 AND main = 1 AND kind = 'channel' AND tg_chat_id IS NULL
         AND org_id IS NOT NULL;"""),
+    # party games' rooms (logic/rooms.py): one row per room, its whole state as JSON under a version every change bumps;
+    # its players and their seats beside it. A room's state and players go within hours (rooms.sweep); the bare row
+    # (who opened a room, when) stays a day for the daily cap, then goes too
+    (263, """CREATE TABLE IF NOT EXISTS game_rooms (
+      id         INTEGER PRIMARY KEY,
+      game       TEXT NOT NULL,
+      code       TEXT UNIQUE,
+      created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      state      TEXT NOT NULL DEFAULT '{}',
+      version    INTEGER NOT NULL DEFAULT 1,
+      deadline   INTEGER,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      ended_at   INTEGER
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS game_rooms_by_creator ON game_rooms(created_by, created_at);
+    CREATE INDEX IF NOT EXISTS game_rooms_by_update ON game_rooms(updated_at);
+    CREATE TABLE IF NOT EXISTS game_players (
+      room_id INTEGER NOT NULL REFERENCES game_rooms(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      seat    INTEGER NOT NULL,
+      seen_at INTEGER NOT NULL,
+      PRIMARY KEY (room_id, user_id),
+      UNIQUE (room_id, seat)
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS game_players_by_user ON game_players(user_id);"""),
 ]

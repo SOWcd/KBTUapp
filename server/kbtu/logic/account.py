@@ -1430,6 +1430,7 @@ _DEL_GONE = {
     ("kri_consents", "user_id"),  # my yes to Google answering the assistant first (assistant.GOOGLE_YES)
     ("appeal_ai_consents", "user_id"),  # my last opt-in to send an appeal draft abroad
     ("pymk_consents", "user_id"), ("pymk", "user_id"), ("pymk", "other_id"), ("pymk_dismissed", "user_id"), ("pymk_dismissed", "other_id"),  # People you may know: my switch, suggestions to me and of me, dismissals both ways
+    ("game_players", "user_id"), ("game_rooms", "created_by"),  # my seats in game rooms, the rooms I opened (rooms.py)
     ("swear_hits", "user_id"),  # the bot's swear warnings to me in clubs' groups (chatmod.py; by my Telegram id too, below)
     ("org_history", "user_id"),  # last: org_members' trigger writes it
 }
