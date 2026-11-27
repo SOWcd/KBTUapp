@@ -9,7 +9,9 @@ colours) or Play asks for a newer target SDK.
 
 - Package id: `kz.sow.kbtu` (reverse-domain, from kbtu.sow.kz; the same as the iPhone app's bundle ID), fixed for good
   after the first upload. It must match `ANDROID_PACKAGE` in `server/kbtu/app.py` (assetlinks.json).
-- Icon: `web/public/icon-512.png`, also as the maskable (adaptive) icon (the launcher's only; never on the splash).
+- Icon: `web/public/icon-512.png`. The launcher's adaptive icon (never on the splash) is `web/public/icon-maskable-512.png`
+  (and `-192`), rendered from [`icon-maskable.svg`](icon-maskable.svg): the same art with the glyph shrunk into the
+  visible 72 of 108 dp and the ground to every edge, so it looks like the old Chrome shortcut, not a zoomed-in crop.
 - Colours: each theme's ground, the `#boot` colours in `web/index.html` (`#F2F2F7` light, `#000000` dark; change them
   together). The splash is that bare ground, no logo (owner, Nov 25): the workflow swaps Bubblewrap's icon picture for
   an empty one and gives `backgroundColor` its dark twin (`values-night`, which the manifest has no field for), so the
