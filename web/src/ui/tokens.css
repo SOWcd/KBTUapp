@@ -83,6 +83,8 @@
   --close-room: calc(var(--safe-bottom) + 80px);
 }
 
+:root[data-android] { --safe-bottom: env(safe-area-inset-bottom, 0px); }
+
 :root[data-web] {
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
