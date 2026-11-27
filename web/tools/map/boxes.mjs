@@ -62,7 +62,8 @@ const out = { kbtu: {}, old: {}, main: {} }, labels = allLabels(read);
 for (let f = 1; f <= 5; f++) {
   // ours far off: no small things (the tiles' first level), so a room's furniture never fences its name in
   const k = labels.kbtu[f].map(([u, v, , , , turn]) => [u * PX, v * PX, turn, 1]);
-  out.kbtu[f] = await runs(p, svgPic(read(`kbtu-${f}.svg`), tier(0)), PX, PX, k, PX / 1000, null);
+  // a closed wing's hatch over its rooms is no wall to their names
+  out.kbtu[f] = await runs(p, svgPic(read(`kbtu-${f}.svg`), `${tier(0)}<style>.closed{display:none}</style>`), PX, PX, k, PX / 1000, null);
   const o = labels.old[f].map(([u, v, , , , turn]) => [u * PX, v * PX, turn, 0]);
   out.old[f] = await runs(p, svgPic(shafts(read(`floor-${f}.svg`)), OLD), PX, PX, o, PX / 1000, null);
   console.log('floor', f);

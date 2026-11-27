@@ -217,7 +217,8 @@
   const ZS = [-1, 0, 1, 2, 3, 4].map((n) => Z0 + n);
   // a number never leaves its room's walls and never swells into a giant: the plan's own size (fitted to
   // the room, lib/mapgl.ts) up to a reading size and no further; one too small to read yet waits for the pinch
-  const px = (z: number) => ['min', ['case', ['<=', ['get', 'rank'], 1], 17, 14], ['*', ['get', 's'], widthAt(fr, z) / 1000]];
+  // (an area's name, tier 3, is the one that grows with the plan unbounded: it spans its wing)
+  const px = (z: number) => ['min', ['case', ['==', ['get', 'tier'], 3], 999, ['<=', ['get', 'rank'], 1], 17, 14], ['*', ['get', 's'], widthAt(fr, z) / 1000]];
   // the size by two stops round every zoom the map goes to: MapLibre sizes a label between the stops round its tile's
   // zoom and holds it past them, so stops a zoom apart froze labels of a tile kept from another zoom at a wrong size
   function wordSize() { return ['interpolate', ['exponential', 2], ['zoom'], ZS[0], px(ZS[0]), ZS[5], px(ZS[5])]; }
@@ -229,11 +230,16 @@
     const by = (top: number) => ['interpolate', ['linear'], ['zoom'], ...zs.flatMap((z) => [z, z >= b ? 0 : ['*', top, seen(z)]])];
     return { 'text-opacity': by(1), 'icon-opacity': by(0.92) };
   }
+  /** an area's name: seen whole while the plan is about the screen's size, gone once one zooms in to its rooms */
+  const areaFade = () => ({ 'text-opacity': ['interpolate', ['linear'], ['zoom'], ...ZS.flatMap((z) => [z, widthAt(fr, z) <= 1100 ? ['get', 'alpha'] : 0])], 'icon-opacity': 0 });
+  const fadeOf = (tier: number) => (tier === 3 ? areaFade() : wordFade());
+  const TIERS = [3, 0, 1, 2]; // an area's name under the rest, in no one's way
   function wordLayers(): LayerSpecification[] {
     const f = FRAMES.old;
-    return [0, 1, 2].map((tier) => ({
-      id: `words${tier}`, type: 'symbol', source: 'words', filter: ['==', ['get', 'tier'], tier], minzoom: tier ? zoomFor(f, tier === 1 ? 700 : 1100) : 0,
+    return TIERS.map((tier) => ({
+      id: `words${tier}`, type: 'symbol', source: 'words', filter: ['==', ['get', 'tier'], tier], minzoom: tier === 1 ? zoomFor(f, 700) : tier === 2 ? zoomFor(f, 1100) : 0,
       layout: {
+        ...(tier === 3 ? { 'text-allow-overlap': true, 'text-ignore-placement': true } : {}),
         'text-field': ['get', 't'], 'text-font': ['Inter Variable Semibold', 'Inter Variable'], 'text-size': wordSize(), // the first names the weight, the second the family: the glyphs are drawn from the page's own fonts
         'text-rotate': ['get', 'turn'], 'text-anchor': ['case', ['get', 'left'], 'left', 'center'], 'text-line-height': 1.1,
         'text-letter-spacing': ['get', 'space'], 'text-max-width': 60, 'text-padding': 1, 'symbol-sort-key': ['get', 'rank'],
@@ -241,7 +247,7 @@
       },
       paint: {
         'text-color': ['get', 'color'], 'text-halo-color': ['case', ['==', ['get', 'halo'], ''], 'rgba(0,0,0,0)', ['to-color', ['get', 'halo']]], 'text-halo-width': 1.3,
-        'icon-color': ['get', 'halo'], ...wordFade(),
+        'icon-color': ['get', 'halo'], ...fadeOf(tier),
       },
     }) as unknown as LayerSpecification);
   }
@@ -258,9 +264,9 @@
     if (!ready) return;
     const dark = look === 'dark', pk = `${ver}|${cur}|${ver === 'kbtu' && dark}`, ik = `${ver}|${dark}`, wk = wordsNow(), sc = ver === 'old' && orig ? cur : 0;
     untrack(() => {
-      if (pk !== planKey) { planKey = pk; inkKey = ik; map.removeLayer('plan'); map.removeSource('plan'); map.addSource('plan', planSource()); map.addLayer(planLayer(), map.getLayer('scan') ? 'scan' : 'words0'); }
+      if (pk !== planKey) { planKey = pk; inkKey = ik; map.removeLayer('plan'); map.removeSource('plan'); map.addSource('plan', planSource()); map.addLayer(planLayer(), map.getLayer('scan') ? 'scan' : 'words3'); }
       else if (ik !== inkKey) { inkKey = ik; inked('plan'); }
-      if (ver !== fadeVer) { fadeVer = ver; for (const tier of [0, 1, 2]) { for (const [k, v] of Object.entries(wordFade())) map.setPaintProperty(`words${tier}`, k as 'text-opacity', v as number); map.setLayoutProperty(`words${tier}`, 'text-size', wordSize() as unknown as number); } }
+      if (ver !== fadeVer) { fadeVer = ver; for (const tier of TIERS) { for (const [k, v] of Object.entries(fadeOf(tier))) map.setPaintProperty(`words${tier}`, k as 'text-opacity', v as number); map.setLayoutProperty(`words${tier}`, 'text-size', wordSize() as unknown as number); } }
       if (wk !== wordsKey) { wordsKey = wk; (map.getSource('words') as GeoJSONSource).setData(words()); }
       if (sc !== scanOn) {
         clearTimeout(scanT);
@@ -271,7 +277,7 @@
         else if (src) { src.updateImage(at); map.setPaintProperty('scan', 'raster-opacity', 1); }
         else {
           map.addSource('scan', { type: 'image', ...at });
-          map.addLayer({ id: 'scan', type: 'raster', source: 'scan', paint: { ...ink(), 'raster-opacity': 0, 'raster-opacity-transition': { duration: 300, delay: 0 }, 'raster-fade-duration': 0 } }, 'words0');
+          map.addLayer({ id: 'scan', type: 'raster', source: 'scan', paint: { ...ink(), 'raster-opacity': 0, 'raster-opacity-transition': { duration: 300, delay: 0 }, 'raster-fade-duration': 0 } }, 'words3');
           requestAnimationFrame(() => { if (!gone && map.getLayer('scan') && scanOn) map.setPaintProperty('scan', 'raster-opacity', 1); });
         }
         scanOn = sc;

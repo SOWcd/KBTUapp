@@ -3,10 +3,11 @@
 // f<floor>/<z>/<x>_<y>.webp under public/map/<cut>/ (the server caches map/ for a year: a new cut gets a new folder).
 //   u2   Uni-Q's plans, from their own finest tiles (PREV: the cut before, public/map/u1 in git until Nov 15: f<n>/2/<c>_<r>.webp of 6613 x 5930)
 //   o2   the 2023 redraw (src/assets/map/floor-N.svg) without its words, every wall one ink
-//   k2, k2d  our map, light and dark (kbtu-N.svg), without its words; details come in with the levels
+//   k3, k3d  our map, light and dark (kbtu-N.svg), without its words; details come in with the levels (k2 until
+//            Nov 27: the map flaws fixed on floors 1 and 2, the DIT wing closed)
 //   p1   the 2023 plan as it was given to us, a picture a floor (SCAN: the folder with floor-00N.jpg), by ImageMagick
 // By hand, with a Chromium to draw (Q: WebP quality, the cuts in the app are 0.85; 1 is lossless, four times the size):
-//   Q=0.85 PW=<path to playwright-core> CHROME=<chrome binary> node tools/map/tiles.mjs u2|o2|k2|p1 ...
+//   Q=0.85 PW=<path to playwright-core> CHROME=<chrome binary> node tools/map/tiles.mjs u2|o2|k3|p1 ...
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -104,9 +105,9 @@ if (cuts.some((c) => c !== 'p1')) {
   const { b, p } = await chrome();
   if (cuts.includes('u2')) await uniq(p, process.env.PREV);
   if (cuts.includes('o2')) await drawn(p, 'o2', (f) => `floor-${f}.svg`, { pre: shafts, at: () => OLD }, +(process.env.Q ?? 1), '#fff');
-  if (cuts.includes('k2')) {
-    await drawn(p, 'k2', (f) => `kbtu-${f}.svg`, { at: tier }, +(process.env.Q ?? 1), '#DCE0EA');
-    await drawn(p, 'k2d', (f) => `kbtu-${f}-dark.svg`, { at: tier }, +(process.env.Q ?? 1), '#0A0B10');
+  if (cuts.includes('k3')) {
+    await drawn(p, 'k3', (f) => `kbtu-${f}.svg`, { at: tier }, +(process.env.Q ?? 1), '#DCE0EA');
+    await drawn(p, 'k3d', (f) => `kbtu-${f}-dark.svg`, { at: tier }, +(process.env.Q ?? 1), '#0A0B10');
   }
   await b.close();
 }
