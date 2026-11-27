@@ -1,4 +1,4 @@
-"""A student's week of classes from the portal's own schedule page, saved on the phone and sent to the bot (PLAN 26): Safari's "Web Archive" (a binary plist, the page in WebMainResource) or Chrome's "Download page" (an
+"""A student's week of classes from the portal's own schedule page, saved on the phone and sent to the bot: Safari's "Web Archive" (a binary plist, the page in WebMainResource) or Chrome's "Download page" (an
 .mht, MIME multipart, the page's HTML part UTF-8 with no charset). The page (uninet.kbtu.kz/student/schedule) holds the
 whole week in its computer layout, hidden on a phone: a column per day, each class a block placed by its top and height
 in pixels (an hour a fixed height from the first hour's label), with its kind as an icon's title, the course, the

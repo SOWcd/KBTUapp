@@ -42,7 +42,7 @@ def _setup(env):
     con.execute("UPDATE users SET role = 'moderator' WHERE tg_id = 61")
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (1, 'mic', 'club', 'Open Mic', 'OM', 'laptop_3d', 1, 0)")
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'president', 0), (1, ?, 'member', 0)", (ids["pres"], ids["mem"]))
-    con.execute("INSERT INTO chats (title, kind, url, created_at, status, org_id, main) VALUES ('Open Mic', 'channel', 'https://t.me/mic_news', 0, 'org', 1, 1)")
+    con.execute("INSERT INTO chats (title, kind, url, created_at, status, org_id, main, tg_chat_id) VALUES ('Open Mic', 'channel', 'https://t.me/mic_news', 0, 'org', 1, 1, -100500)")
     mirror.joined(con, 500, "mic_news")
     return c, cfg, con, ids
 
@@ -338,3 +338,101 @@ def test_a_meeting_link_makes_it_online(env, monkeypatch):
     eid = _look(con, cfg, _post(con, 1, text), text)
     e = con.execute("SELECT place, online FROM events WHERE id = ?", (eid,)).fetchone()
     assert tuple(e) == ("", "https://meet.google.com/abc-defg-hij")
+
+
+def _dm(days: int) -> str:
+    return time.strftime("%d.%m", time.gmtime(time.time() + autoev.TZ + days * 86400))
+
+
+@pytest.mark.parametrize("text, start, ok", [
+    (TEXT, "19:00", True),                                                                   # tomorrow at 19:00
+    (f"The talk is on {_dm(1)} at 19.00 in hall 305, everyone is welcome to come", "19:00", True),
+    (TEXT, "20:00", False),                                                                  # the model's time isn't in the post
+    (f"The talk is on {_dm(2)} at 19:00 in hall 305, everyone is welcome to come", "19:00", False),  # another day
+    ("Open mic night at 19:00 in hall 305, bring your guitar and your best songs", "19:00", False),  # no day said
+])
+def test_clear(text, start, ok):
+    assert autoev.clear(text, autoev.at(_day(1), start), logic.now()) is ok
+    assert autoev.clear(text, autoev.at(_day(1), start), logic.now() - 86400 * 9) is (ok and "tomorrow" not in text)  # a word counts from the post's day
+
+
+def _status(con, eid) -> str:
+    return con.execute("SELECT status FROM events WHERE id = ?", (eid,)).fetchone()[0]
+
+
+def test_trusted_org_publishes(env, monkeypatch):
+    """An org with auto_publish: a clear future date and time is published at once, its followers told, nobody asked to
+    check it, an audit line; anything less clear, or past the day's cap, a draft as for everyone; Admin takes it down."""
+    c, cfg, con, ids = _setup(env)
+    con.execute("INSERT INTO org_flags (org_id, auto_publish) VALUES (1, 1)")
+    con.execute("INSERT INTO subscriptions (user_id, org_id, created_at) VALUES (?, 1, 0)", (ids["out"],))
+    monkeypatch.setattr(autoev, "PUBLISH_MAX", 2)
+    _model(monkeypatch, [_form(), _form(title="Quiz", start="20:00"), _form(title="Chess", day=2), _form(title="Talk", day=3)])
+    eid = _look(con, cfg, _post(con, 1, TEXT), TEXT)
+    e = con.execute("SELECT * FROM events WHERE id = ?", (eid,)).fetchone()
+    assert e["status"] == "published" and e["published_at"] and e["created_by"] is None
+    assert c.get(f"/api/events/{eid}", headers=tma(40)).status_code == 200  # in Afisha at once
+    assert [tuple(r) for r in con.execute("SELECT user_id FROM bot_outbox WHERE kind = 'new_event'")] == [(ids["out"],)]
+    assert not con.execute("SELECT 1 FROM bot_outbox WHERE kind = 'auto_event'").fetchone()
+    assert [tuple(r) for r in con.execute("SELECT target FROM audit_log WHERE action = 'event_autopublish'")] == [(f"event:{eid}",)]
+    assert not [x for x in c.get("/api/admin/inbox", headers=tma(60)).json()["items"] if x["kind"] == "autoev"]
+    t2 = "Quiz " + TEXT  # the model's 20:00 is not what the post says
+    e2 = _look(con, cfg, _post(con, 2, t2), t2)
+    t3 = f"Chess night on {_dm(2)} at 19:00 in hall 305, everyone is welcome to come"
+    e3 = _look(con, cfg, _post(con, 3, t3), t3)
+    t4 = f"Talk on {_dm(3)} at 19:00 in hall 305, everyone is welcome to come along"  # past the day's cap of 2
+    e4 = _look(con, cfg, _post(con, 4, t4), t4)
+    assert [_status(con, x) for x in (e2, e3, e4)] == ["draft", "published", "draft"]
+    assert [tuple(r) for r in con.execute("SELECT ref FROM bot_outbox WHERE kind = 'auto_event' ORDER BY id")] == [(f"ae:{e2}",), (f"ae:{e4}",)]
+    # Admin takes one down: it still counts toward the day's cap
+    assert c.delete(f"/api/admin/events/{eid}", headers=tma(60)).status_code == 204
+    assert c.get(f"/api/events/{eid}", headers=tma(40)).status_code == 404
+
+
+def test_trusted_org_reminders_and_old_posts(env, monkeypatch):
+    """A reminder of a published event, worded otherwise: no second event; a post older than a day (a first link takes
+    the last month's): a draft."""
+    c, cfg, con, _ = _setup(env)
+    con.execute("INSERT INTO org_flags (org_id, auto_publish) VALUES (1, 1)")
+    _model(monkeypatch, [_form(), _form(title="Reminder: the mic", start="19:15"), _form(title="Talk", day=3)])
+    assert _status(con, _look(con, cfg, _post(con, 1, TEXT), TEXT)) == "published"
+    t2 = "Reminder: tomorrow at 19:15 the open mic in hall 305, do not forget your guitar"
+    assert _look(con, cfg, _post(con, 2, t2), t2) is None
+    t3 = f"Talk on {_dm(3)} at 19:00 in hall 305, everyone is welcome to come along"
+    pid = _post(con, 3, t3)
+    eid = asyncio.run(autoev.propose(con, cfg, None, pid, t3, logic.now() - 2 * 86400))
+    assert _status(con, eid) == "draft"
+
+
+def test_untrusted_org_keeps_drafts(env, monkeypatch):
+    c, cfg, con, _ = _setup(env)
+    _model(monkeypatch, [_form()])
+    assert _status(con, _look(con, cfg, _post(con, 1, TEXT), TEXT)) == "draft"
+
+
+def test_private_guests_never_shown(env, monkeypatch):
+    """An org with guests_private (a psychological service): a friend who shows where they go is on no card, profile or
+    Friends page for its events and looks invitable; another org's event shows them as before."""
+    c, cfg, con, ids = _setup(env)
+    con.execute("""INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at)
+        VALUES (2, 'psy', 'office', 'Psy', 'PS', 'blue_heart_3d', 1, 0)""")
+    con.execute("INSERT INTO org_flags (org_id, guests_private) VALUES (2, 1)")
+    a, b = sorted((ids["mem"], ids["out"]))
+    con.execute("INSERT INTO friendships (a, b, created_at) VALUES (?, ?, 0)", (a, b))
+    evs = {}
+    for oid in (1, 2):
+        evs[oid] = con.execute("""INSERT INTO events (org_id, status, title, starts_at, emoji, color, published_at, created_at, updated_at)
+            VALUES (?, 'published', 'Talk', ?, 'laptop_3d', '#3B6BFF', 0, 0, 0)""", (oid, logic.now() + 86400)).lastrowid
+        con.execute("""INSERT INTO registrations (event_id, user_id, status, ticket_code, created_at, updated_at)
+            VALUES (?, ?, 'going', ?, 0, 0)""", (evs[oid], ids["mem"], f"t-{oid}"))
+    def friends(eid):
+        return [f["id"] for f in c.get(f"/api/events/{eid}", headers=tma(40)).json()["friends"]]
+    assert friends(evs[1]) == [ids["mem"]] and friends(evs[2]) == []
+    going = [e["id"] for e in c.get("/api/friends", headers=tma(40)).json()["going"]]
+    assert evs[1] in going and evs[2] not in going
+    prof = c.get(f"/api/users/{ids['mem']}", headers=tma(40)).json()
+    assert evs[1] in [e["id"] for e in prof["going"]] and evs[2] not in [e["id"] for e in prof["going"]]
+    inv = {x["person"]["id"]: x["state"] for x in c.get(f"/api/events/{evs[2]}/invites", headers=tma(40)).json()}
+    assert inv[ids["mem"]] == "none"
+    inv = {x["person"]["id"]: x["state"] for x in c.get(f"/api/events/{evs[1]}/invites", headers=tma(40)).json()}
+    assert inv[ids["mem"]] == "going"

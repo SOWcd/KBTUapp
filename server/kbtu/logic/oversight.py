@@ -13,7 +13,7 @@ from .core import (STAFF_KINDS, ApiError, PERSON, PERSON_COLS, RANK, Viewer, _by
     rows, short_name, shown_name)
 
 
-# ---------------------------------------------------------------- the clubs registry for DMP (§4.13)
+# ---------------------------------------------------------------- the clubs registry for DMP
 
 QUIET_FOR = 60 * 86400  # "hasn't come in a while": no check-in at the club's events for this long
 DMP_COLS = PERSON_COLS + ", u.tg_username, s.student_id, s.course, s.school, s.email, s.phone, s.middle_name, s.middle_lat"
@@ -33,7 +33,7 @@ def _month(back: int = 0) -> tuple[int, int]:
 
 
 def _dmp_person(p: sqlite3.Row, role: str | None = None) -> dict:
-    """What DMP sees of a club member (§3): full name, student ID, course, school; contacts only of Presidents and Vices."""
+    """What DMP sees of a club member: full name, student ID, course, school; contacts only of Presidents and Vices."""
     lead = role in ("president", "vice")
     return {"person": person_ref(p), "fullName": f"{p['last_name']} {p['first_name']}".strip(), "studentId": p["student_id"],
             "course": p["course"], "school": p["school"], "username": p["tg_username"] if lead else None,
@@ -91,8 +91,8 @@ def registry(con, v: Viewer, back: int = 0) -> list[dict]:
 
 
 def registry_roster(con, v: Viewer, oid: int) -> list[dict]:
-    """A club's roster for DMP, leaders first; who hasn't come to the club's events in 60 days is marked (§4.13). A look at
-    personal data: audit-logged (§9)."""
+    """A club's roster for DMP, leaders first; who hasn't come to the club's events in 60 days is marked. A look at
+    personal data: audit-logged."""
     _overseer_only(con, v)
     if not _org(con, oid):
         raise ApiError("not_found")
@@ -116,7 +116,7 @@ def registry_search(con, v: Viewer, q: str) -> list[dict]:
     matcher = search._Search(q)
     found = [p for p in rows(con, f"""SELECT DISTINCT {DMP_COLS} FROM org_members m JOIN users u ON u.id = m.user_id JOIN students s ON s.user_id = u.id""")
              if search.fold(p["student_id"]).startswith(k) or matcher.person_score(p)][:30]
-    log_action(con, v.id, "registry_search", "registry", json.dumps({"found": len(found)}))  # a look at personal data (§9)
+    log_action(con, v.id, "registry_search", "registry", json.dumps({"found": len(found)}))  # a look at personal data
     ids = [p["id"] for p in found]
     of: dict[int, list] = {}
     for c in rows(con, f"""SELECT o.*, m.role, m.user_id AS member FROM org_members m JOIN orgs o ON o.id = m.org_id
@@ -132,7 +132,7 @@ def registry_search(con, v: Viewer, q: str) -> list[dict]:
 
 
 def set_official(con, v: Viewer, oid: int, on: object) -> dict:
-    """DMP marks a club official ✓ or takes it back (DMP Head+ and the admin, §2) — the growth path's last step (§4.6):
+    """DMP marks a club official ✓ or takes it back (DMP Head+ and the admin) — the growth path's last step:
     a student initiative becomes an official club. Its President hears it from the bot (once); the audit log keeps who."""
     _overseer_only(con, v)
     o = one(con, "SELECT * FROM orgs WHERE id = ? AND kind = 'club' AND status != 'archived'", oid)
@@ -151,7 +151,7 @@ def set_official(con, v: Viewer, oid: int, on: object) -> dict:
 
 def registry_export(con, v: Viewer) -> list[sqlite3.Row]:
     """Every roster at once for the CSV the bot sends (contacts of Presidents and Vices only, as on screen). Personal
-    data leaving the app: every export goes to the audit log (§2)."""
+    data leaving the app: every export goes to the audit log."""
     _overseer_only(con, v)
     out = rows(con, f"""SELECT o.name AS club, m.role, m.joined_at, {DMP_COLS} FROM org_members m JOIN orgs o ON o.id = m.org_id
         JOIN users u ON u.id = m.user_id JOIN students s ON s.user_id = u.id
@@ -207,16 +207,18 @@ STAFF_ROLES = ("user", "moderator", "admin")
 _STAFF = f"SELECT {PERSON_COLS}, u.tg_username, u.role, u.ban_reason FROM users u LEFT JOIN students s ON s.user_id = u.id"
 
 
-def reconcile_erased_admins(con, admins: frozenset[int]) -> None:
-    """Old erasures anonymized appointments but kept the role. Preserve configured and documented grants."""
+def drop_stale_admins(con, admins: frozenset[int]) -> None:
+    """At startup: sign-in only ever raises the role, so an id taken out of ADMIN_TG_IDS would stay admin forever.
+    An admin is the owner, in ADMIN_TG_IDS, or given the role by hand (the latest staff_role line says admin)."""
     with tx(con):
-        if not core._once(con, "erased_admins_reconciled", "1"):
-            return
-        con.execute(f"""UPDATE users SET role = 'user' WHERE role = 'admin' AND is_founder = 0
+        stale = rows(con, f"""SELECT id, tg_id FROM users WHERE role = 'admin' AND is_founder = 0
             AND tg_id NOT IN ({_qs(admins)})
-            AND EXISTS (SELECT 1 FROM audit_log WHERE target = 'user' AND action = 'delete_my_data')
             AND (SELECT json_extract(data, '$.to') FROM audit_log WHERE target = 'user:' || users.id
-                AND action = 'staff_role' ORDER BY id DESC LIMIT 1) IS NOT 'admin'""", tuple(admins))
+                AND action = 'staff_role' ORDER BY id DESC LIMIT 1) IS NOT 'admin'""", *admins)
+        for u in stale:
+            con.execute("UPDATE users SET role = 'user' WHERE id = ?", (u["id"],))
+            log_action(con, None, "staff_role", f"user:{u['id']}", json.dumps({"from": "admin", "to": "user", "by": "env"}))
+            core.log.warning("admin role dropped: user %s (tg %s) is no longer in ADMIN_TG_IDS", u["id"], u["tg_id"])
 
 
 def _owner(con, v: Viewer) -> bool:
@@ -338,7 +340,7 @@ def audit(con, v: Viewer) -> list[dict]:
 
 def set_role(con, actor: int | None, uid: int, oid: int, role: str, by: str) -> None:
     """One person's role in a club, by the admin (the app or the CLI). One president per club: the old one steps down
-    to vice. A role counts once the person has signed in with KBTU (only students act, SPEC §2)."""
+    to vice. A role counts once the person has signed in with KBTU (only students act)."""
     if role not in (*RANK, "none"):
         raise ApiError("bad_input")
     with tx(con):
@@ -355,11 +357,17 @@ def set_role(con, actor: int | None, uid: int, oid: int, role: str, by: str) -> 
 
 
 def find_user(con, who: str) -> sqlite3.Row | None:
-    """A Telegram account by @username or Telegram ID: the person must have opened the app once."""
+    """An account by Telegram ID or unique @username. Refuse usernames shared by multiple rows."""
     who = who.strip()
     if who.isdigit():
-        return one(con, "SELECT * FROM users WHERE tg_id = ?", int(who))
-    return one(con, "SELECT * FROM users WHERE lower(tg_username) = lower(?)", who.lstrip("@")) if who.lstrip("@") else None
+        return one(con, "SELECT * FROM users WHERE tg_id = ?", int(who)) if re.fullmatch(r"[0-9]{1,18}", who) else None
+    username = who.lstrip("@")
+    if not username:
+        return None
+    matches = rows(con, "SELECT * FROM users WHERE lower(tg_username) = lower(?) LIMIT 2", username)
+    if len(matches) > 1:
+        raise ApiError("bad_input", "ambiguous username; use the Telegram ID")
+    return matches[0] if matches else None
 
 
 def _admin_org(con, o: sqlite3.Row) -> dict:

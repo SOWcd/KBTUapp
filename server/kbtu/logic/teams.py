@@ -15,7 +15,7 @@ from .core import (ApiError, LEVEL_RIGHTS, PERSON, PERSON_COLS, RANK, RIGHTS, Vi
     log_action, need_student, one, person_ref, role_in, rows, short_name)
 
 
-# ---------------------------------------------------------------- the club's own team (SPEC §2: the rank rule)
+# ---------------------------------------------------------------- the club's own team (the rank rule)
 
 def probation_field(v: Viewer, mine: str | None, people: bool, p) -> dict:
     if p["id"] == v.id or people and mine and RANK[mine] > RANK[p["role"]]:
@@ -24,9 +24,9 @@ def probation_field(v: Viewer, mine: str | None, people: bool, p) -> dict:
 
 
 def team(con, v: Viewer, oid: int) -> list[dict]:
-    """The full roster for the club's own team (§3): full names and @usernames, highest role first, with the club's own
-    role name and the tags (§2b). Probation: for the club's Head+ and the person. Vice+ also see who
-    hasn't been checked in at the club's events for 60 days, to keep the roster real (§4.13)."""
+    """The full roster for the club's own team: full names and @usernames, highest role first, with the club's own
+    role name and the tags. Probation: for the club's Head+ and the person. Vice+ also see who
+    hasn't been checked in at the club's events for 60 days, to keep the roster real."""
     mine = role_in(con, v, oid)
     if not mine:
         raise ApiError("forbidden")
@@ -68,7 +68,7 @@ def members_export(con, v: Viewer, oid: int) -> tuple[sqlite3.Row, list[sqlite3.
 
 
 def _below(con, v: Viewer, oid: int, uid: int, right: str) -> str:
-    """My role, if I may act on them: the right, and strictly above them by the rank rule (§2)."""
+    """My role, if I may act on them: the right, and strictly above them by the rank rule."""
     mine = role_in(con, v, oid)
     theirs = one(con, "SELECT role FROM org_members WHERE org_id = ? AND user_id = ?", oid, uid)
     if not theirs:
@@ -99,7 +99,7 @@ def _manage(con, v: Viewer, oid: int, uid: int) -> str:
 
 def _remove(con, actor: int | None, oid: int, uid: int, ban: bool, by: str, extra: dict | None = None) -> None:
     """Someone is out of the club: their tags and open removal requests there go too; banned, they can't come
-    back by an application or the link until a Vice+ lifts it (§2b)."""
+    back by an application or the link until a Vice+ lifts it."""
     con.execute("DELETE FROM org_members WHERE org_id = ? AND user_id = ?", (oid, uid))
     santa.drop(con, uid, oid)  # out of the club's Secret Santa too: its page no longer opens for them
     con.execute("DELETE FROM member_tags WHERE user_id = ? AND tag_id IN (SELECT id FROM org_tags WHERE org_id = ?)", (uid, oid))
@@ -127,7 +127,7 @@ def remove_member(con, v: Viewer, oid: int, uid: int) -> None:
 
 
 def transfer(con, v: Viewer, oid: int, uid: int) -> list[dict]:
-    """Only the President hands the club over, to someone already in it; they become Vice (§2)."""
+    """Only the President hands the club over, to someone already in it; they become Vice."""
     if role_in(con, v, oid) != "president":
         raise ApiError("forbidden")
     if uid == v.id or not one(con, "SELECT 1 FROM org_members m JOIN students s ON s.user_id = m.user_id WHERE m.org_id = ? AND m.user_id = ?", oid, uid):
@@ -143,7 +143,7 @@ def transfer(con, v: Viewer, oid: int, uid: int) -> list[dict]:
     return team(con, v, oid)
 
 
-# ---------------------------------------------------------------- Team 2.0 (SPEC §2b)
+# ---------------------------------------------------------------- Team 2.0
 # A club's own roles are a name and colour on one of the levels, so every rights check stays on the level. Tags are
 # groups of people. Probation: Head+ put someone below them on it, a label until the President or Vice take it off.
 # A Head asks to remove someone; a Vice+ removes at once; either may ban from coming back.
@@ -238,7 +238,7 @@ def _ordered(rights) -> list[str]:
 
 
 def save_role(con, v: Viewer, oid: int, body: dict, rid: int | None = None) -> dict:
-    """Whoever runs the team ("team") makes the club's own roles: a name, a colour and toggles of rights (SPEC §2), only
+    """Whoever runs the team ("team") makes the club's own roles: a name, a colour and toggles of rights, only
     rights they have themselves and below their own level (the rights' highest level is the role's); a changed level
     moves everyone holding the role (they are all below the editor).
     The official Vice and Head (`fixed`) keep their name and level. The name is typed once in any language; the AI
@@ -320,8 +320,8 @@ def delete_role(con, v: Viewer, oid: int, rid: int) -> dict:
 
 
 def save_tag(con, v: Viewer, oid: int, body: dict, tid: int | None = None) -> dict:
-    """Head+ make the club's tags (SMM, Design, ...): a name and a colour; `department` marks it a department (PLAN 47:
-    one per person, Team groups by it). Unmarking leaves the people tagged."""
+    """Head+ make the club's tags (SMM, Design, ...): a name and a colour; `department` marks it a department
+    (one per person, Team groups by it). Unmarking leaves the people tagged."""
     _may(con, v, oid, "people")
     name, color = _named(body)
     dept = body.get("department")
@@ -411,7 +411,7 @@ def assign_role(con, v: Viewer, oid: int, rid: int, body: dict) -> dict:
 
 
 def update_member(con, v: Viewer, oid: int, uid: int, body: dict) -> list[dict]:
-    """One person in Team (§2b), only what is sent: `role` (a level) or `roleId` (one of the club's roles; null: just the
+    """One person in Team, only what is sent: `role` (a level) or `roleId` (one of the club's roles; null: just the
     level) — Vice+ by the rank rule, and on myself one of the club's roles at my own level (a name, no more rights);
     `tags` — Head+ on themselves or anyone below them, Vice+ on anyone (labels, no power, the
     President and the Vice tag each other; departments in it are left as they are); `addDept` / `dropDept` — one
@@ -472,7 +472,7 @@ def may_dept(con, v: Viewer, oid: int, uid: int, d: int) -> bool:
 
 
 def depts_scope(con, oid: int, uid: int) -> list[int] | None:
-    """A Head's meeting scope (PLAN 35): the departments given them by hand, maybe none, while they are in any department
+    """A Head's meeting scope: the departments given them by hand, maybe none, while they are in any department
     or the chat sync took their last one (losing it never widens the scope). None, the whole club: in no department and
     never taken out of one by the sync (none ever, or a Vice+ took the last one by hand)."""
     if depts_of(con, oid, uid):
@@ -518,7 +518,7 @@ def _ask_removal(con, oid: int, uid: int, by: int | None, ban: bool, note: str) 
 
 
 def remove(con, v: Viewer, oid: int, uid: int, body: dict) -> dict:
-    """Removing someone below me (§2b): a Vice+ does it at once, banned too if asked; a Head's tap is a request the
+    """Removing someone below me: a Vice+ does it at once, banned too if asked; a Head's tap is a request the
     President or Vice decide. {done}: whether they are out already."""
     ban, note = body.get("ban", False), " ".join(str(body.get("note") or "").split())
     if not isinstance(ban, bool) or len(note) > 140:
@@ -559,7 +559,7 @@ def banned(con, oid: int, uid: int) -> bool:
     return one(con, "SELECT 1 FROM org_bans WHERE org_id = ? AND user_id = ?", oid, uid) is not None
 
 
-# ---------------------------------------------------------------- invite links (§4.5: Vice+, one person, 48 h → instant Member)
+# ---------------------------------------------------------------- invite links (Vice+, one person, 48 h → instant Member)
 
 INVITE_TTL = 2 * 86400
 
@@ -617,11 +617,27 @@ def team_link_off(con, v: Viewer, oid: int) -> None:
             log_action(con, v.id, "team_link_off", f"org:{oid}")
 
 
+TEAM_LINK_UNDO = 120  # the toast's Undo, with room for a slow network
+
+
+def team_link_back(con, v: Viewer, oid: int) -> dict:
+    """Undo of team_link_off: the same link (the token already in chats) opens again, if it was turned off moments ago,
+    hasn't run out and no new one was made since."""
+    _may(con, v, oid, "team")
+    with tx(con):
+        r = one(con, "SELECT token, expires_at, revoked_at FROM org_invites WHERE org_id = ? AND multi = 1 ORDER BY created_at DESC, rowid DESC LIMIT 1", oid)
+        if not r or r["revoked_at"] is None or r["revoked_at"] < core.now() - TEAM_LINK_UNDO or r["expires_at"] <= core.now():
+            raise ApiError("not_found", "team_link")
+        con.execute("UPDATE org_invites SET revoked_at = NULL WHERE token = ?", (r["token"],))
+        log_action(con, v.id, "team_link_back", f"org:{oid}")
+    return {"expiresAt": r["expires_at"]}
+
+
 PRESIDENT_LINK_TTL = 7 * 86400
 
 
 def president_link(con, v: Viewer, oid: int) -> dict:
-    """The admin makes a new club's President with a link (§2): one person, once, within 7 days — no need for them to
+    """The admin makes a new club's President with a link: one person, once, within 7 days — no need for them to
     have opened the app before. A new link ends the unused old one."""
     _admin(v)
     o = one(con, "SELECT * FROM orgs WHERE id = ? AND kind IN ('club', 'school', 'council') AND status = 'active'", oid)

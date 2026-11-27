@@ -1,4 +1,4 @@
-"""The rules of SPEC §2–§4 over SQLite, answering in the shapes of web/src/lib/api/types.ts (camelCase).
+"""The app's rules over SQLite, answering in the shapes of web/src/lib/api/types.ts (camelCase).
 
 The only copy of the rules. Every function takes the connection and the caller (`Viewer`) and either returns
 JSON-ready data or raises ApiError. Writes that check and then change (seats, check-in) run in db.tx.
@@ -34,7 +34,7 @@ from .newsfeed import (cancel_casting, castings, create_post, feature, hide_post
     update_post, wipe_post)  # noqa: F401
 from .chatlist import (add_chat, add_org_chat, approve_chat, bot_added, bot_admin, bot_unwait, my_waits, wait_target,
     claim_wait, tag_all, chat_pick, pick_claim, bot_left, chat_card, chat_input, chat_link, chat_opened,
-    chat_refreshed, chats, chats_gone, delete_chat, drop_org_chat, main_org_chat, may_chats, mirror_org_chat,
+    chat_refreshed, chats, chats_gone, delete_chat, drop_org_chat, main_org_chat, may_chats, mirror_org_chat, news_org_chat,
     org_chats, photo_free, set_chat_org, suggest_chat, suggest_check, chat_links, known_chat, set_chat_section,
     sort_next, sort_save, chat_asked_too)  # noqa: F401
 from .oversight import (_owner, admin_create_org, admin_hide_org, admin_set_award, admin_org_events, admin_orgs,
@@ -58,11 +58,11 @@ from .organizing import DOC_BYTES, doc_check, drop_doc, put_doc, render_doc  # n
 from .daily import (_next_week, admin_ai, admin_day, admin_stats, ai_retry, day_of, memo, memo_again, memo_item,
     memo_opened, memo_sent, memo_sign, memo_week, saved_day, stats_day, tba_day, visit, wipe_hidden_posts)  # noqa: F401
 from .teams import (accept_invite, banned, decide_removal, delete_role, delete_tag, invite, map_graph, map_rooms,
-    members_export, president_link, remove, remove_member, save_role, save_tag, team, team_link, team_link_off,
+    members_export, president_link, remove, remove_member, save_role, save_tag, team, team_link, team_link_back, team_link_off,
     assign_role, team_setup, transfer, unban, update_member)  # noqa: F401
 from .forum import (add_skill, ask_people, asks, block, close_ask, contact, contacts, create_ask, decide_contact,
     hide_ask, mod_hide_ask, mod_queue, my_forum, release_ask, reported_enough, search_people, set_my_forum, skill_mod,
     skills, telegram_of)  # noqa: F401
 from .cohosts import co_runs  # noqa: F401
-from . import apple, appchats, appeals, assistant, autoev, chatmod, chatroles, chatsync, chattree, cohosts, crew, credits, evreports, evteams, fchannel, forms, gallery, helpus, inbox, mapflaws, pymk, research, santa, search, stars, subjects, tgcomments, tournament, vol  # noqa: F401  (logic.fchannel.*: its names overlap the find-people forum's)
+from . import apple, appchats, appeals, assistant, autoev, chatmod, chatroles, chatsync, chattree, cohosts, crew, credits, evreports, evteams, fchannel, forms, gallery, helpus, inbox, library, mapflaws, pymk, research, santa, search, stars, subjects, tgcomments, tournament, vol  # noqa: F401  (logic.fchannel.*: its names overlap the find-people forum's)
 from ..db import tx  # noqa: F401  (callers take these from kbtu.logic)

@@ -1,11 +1,11 @@
 <script lang="ts">
-  // My club → Team, a sheet from its row (SPEC §2, §2b): the club's roster for its own team, highest role first (full names inside the team, §3),
+  // My club → Team, a sheet from its row: the club's roster for its own team, highest role first (full names inside the team),
   // each with the club's own role name and its tags. A tap opens the person's card; for someone below me it opens their
   // own sheet instead (MemberSheet, the card is its first row): Vice+ give a role (a level or one of the club's own) and remove;
   // Head+ put on probation and ask the President and Vice to remove someone. On top for Vice+: the
   // removal requests. Tags (and probation) filter the list; "Roles and tags" makes the club's own. The club is the one
-  // picked in My club (ui.club). Vice+ also get the club's invite link (§4.5): the link icon opens a small choice, the
-  // team's link for everyone (7 days, one per club, shared again until turned off) or a one-time one. Anyone but the
+  // picked in My club (ui.club). Vice+ also get the club's invite link: the link icon opens two cards, the
+  // team's link for everyone (7 days, one per club, shared again until turned off) and a one-time one. Anyone but the
   // President can leave.
   import { api, ApiErr, type RemovalRequest, type TeamMember, type TeamSetup } from '../../lib/api';
   import Sheet from '../../ui/Sheet.svelte';
@@ -23,12 +23,14 @@
   import { fold } from '../../ui/fold';
   import { dayMonth } from '../../lib/time';
   import LinkIcon from '@lucide/svelte/icons/link';
+  import UserPlus from '@lucide/svelte/icons/user-plus';
   import Tags from '@lucide/svelte/icons/tags';
   import Crown from '@lucide/svelte/icons/crown';
   import ChevronDown from '@lucide/svelte/icons/chevron-down';
   import FileDown from '@lucide/svelte/icons/file-down';
   import Avatar from '../../ui/Avatar.svelte';
   import Button from '../../ui/Button.svelte';
+  import Card from '../../ui/Card.svelte';
   import IconButton from '../../ui/IconButton.svelte';
   import OrgLogo from '../../ui/OrgLogo.svelte';
   import Group from '../../ui/Group.svelte';
@@ -50,20 +52,35 @@
   let setup = $state<TeamSetup | null>(null);
   const loadSetup = (org: number) => api.teamSetup(org).then((x) => { if (m?.org.id === org) setup = x; }).catch(() => {});
   const orgId = $derived(m?.org.id); // the same club with a fresh membership (a return refresh) keeps the filter
-  $effect(() => { const org = orgId; untrack(() => { filter = null; setup = null; if (org) { void loadTeam(org); void loadSetup(org); if (first != null) sheets.member(org, first, () => setup, deptChoices, refresh); } first = undefined; }); });
-  let linkOpen = $state(false); // the link icon's choice
+  $effect(() => { const org = orgId; untrack(() => { filter = null; setup = null; off = false; if (org) { void loadTeam(org); void loadSetup(org); if (first != null) sheets.member(org, first, () => setup, deptChoices, refresh); } first = undefined; }); });
+  let linkOpen = $state(false); // the link icon's two cards
+  let off = $state(false); // the open link turned off here, ahead of the server (and of a setup fetched before it)
+  const link = $derived(off ? null : (setup?.teamLink ?? null));
   async function shareLink(many: boolean) {
     if (!m) return;
     const org = m.org.id;
-    // the open link shows at once, its day on the row and "turn off" under it: set when it is made, not after the
-    // picker (Android's may never answer), and the choice stays open to show it
-    const ok = await shareInvite(m.org, undefined, many, (until) => { if (setup && m?.org.id === org) setup.teamLink = { expiresAt: until }; });
+    // the open link shows at once, "On" and its day on the card: set when it is made, not after the
+    // picker (Android's may never answer), and the cards stay open to show it
+    const ok = await shareInvite(m.org, undefined, many, (until) => { if (setup && m?.org.id === org) { setup.teamLink = { expiresAt: until }; off = false; } });
     if (ok && !many) linkOpen = false;
     if (many) void loadSetup(org);
   }
+  // off at once after the confirm; the toast's Undo brings the link back (it waits for the "off" to land first)
   async function linkOff() {
-    if (!m || !(await sheets.ask({ title: t('team.linkOffAsk'), text: t('team.linkOffText'), ok: t('team.linkOff'), cancel: t('common.cancel'), danger: true }))) return;
-    if (await run(() => api.teamLinkOff(m.org.id), t('team.linkOffDone'), 'raising_hands_3d_default')) linkOpen = false;
+    if (!m || !link) return;
+    const org = m.org.id;
+    if (!(await sheets.ask({ title: t('team.linkOffAsk'), text: t('team.linkOffText'), ok: t('team.linkOff'), cancel: t('common.cancel'), danger: true }))) return;
+    off = true; haptic.ok();
+    const gone = api.teamLinkOff(org).then(() => true, () => false);
+    say(t('team.linkOffDone'), 'raising_hands_3d_default', async () => {
+      if (m?.org.id === org) off = false;
+      if (!(await gone)) return; // it never went off: the link is as it was
+      try {
+        const { expiresAt } = await api.teamLinkBack(org);
+        if (setup && m?.org.id === org) setup.teamLink = { expiresAt };
+      } catch { if (m?.org.id === org) off = true; haptic.error(); say(t('common.error'), 'warning_3d'); }
+    });
+    if (!(await gone)) { if (m?.org.id === org) off = false; haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   let busy = $state(false);
   let filter = $state<number | 'probation' | null>(null); // a tag's id, or those on probation
@@ -138,7 +155,6 @@
   }
   async function leave() {
     if (!m) return;
-    if (m.role === 'president') { haptic.error(); say(t('team.presLeave'), 'pleading_face_3d'); return; }
     if (!(await sheets.ask({ title: t('team.leaveAsk', { club: m.org.name }), text: t('team.leaveText'), ok: t('team.leave'), cancel: t('common.cancel'), danger: true }))) return;
     if (!(await run(() => api.removeMember(m.org.id, me!), t('team.left'), 'waving_hand_3d_default'))) return;
     close(overlay.id); // not my team any more: the sheet would show the next club's
@@ -173,17 +189,41 @@
       </span>
     </header>
     {#if vice && linkOpen}
-      <div class="linkpick" transition:fold>
-        <Group footnote={t('team.linkHint')}>
-          <Row tone="action" title={setup?.teamLink ? t('team.linkAllUntil', { date: dayMonth(setup.teamLink.expiresAt) }) : t('team.linkAll')} onclick={() => shareLink(true)} />
-          <Row tone="action" title={t('team.linkOnce')} onclick={() => shareLink(false)} />
-        </Group>
-        {#if setup?.teamLink}<Group><Row tone="destructive" title={t('team.linkOff')} disabled={busy} onclick={linkOff} /></Group>{/if}
+      <!-- two cards, one action each: the team's open link (its state, "turn off" only while it is on) and a one-time one -->
+      <div class="links" transition:fold>
+        <Card>
+          <div class="lk">
+            <div class="top">
+              <span class="ic"><Users size={20} strokeWidth={1.8} /></span>
+              <span class="tx"><b>{t('team.linkAll')}</b>
+                <span class="sb">{link ? t('team.linkAllSubOn', { date: dayMonth(link.expiresAt) }) : t('team.linkAllSub')}</span></span>
+            </div>
+            <div class="ft">
+              <span class="state" class:live={!!link}><i class="pip"></i>{link ? t('team.linkOnState') : t('team.linkOffState')}</span>
+              <span class="acts">
+                {#if link}<Button kind="plain" size="s" onclick={linkOff}>{t('team.linkOff')}</Button>{/if}
+                <Button size="s" onclick={() => shareLink(true)}>{t('team.linkShare')}</Button>
+              </span>
+            </div>
+          </div>
+        </Card>
+        <Card>
+          <div class="lk">
+            <div class="top">
+              <span class="ic"><UserPlus size={20} strokeWidth={1.8} /></span>
+              <span class="tx"><b>{t('team.linkOnce')}</b><span class="sb">{t('team.linkOnceSub')}</span></span>
+            </div>
+            <div class="ft">
+              <span class="state">{t('team.linkFresh')}</span>
+              <span class="acts"><Button kind="tinted" size="s" onclick={() => shareLink(false)}>{t('team.linkShare')}</Button></span>
+            </div>
+          </div>
+        </Card>
       </div>
     {/if}
 
     {#if setup?.removals?.length}
-      <!-- §2b: a Head's request; the President or a Vice above them decides -->
+      <!-- a Head's request; the President or a Vice above them decides -->
       <Group caption={t('team.removals')}>
         {#each setup.removals as q (q.id)}
           <Row dense title={withNick(q.fullName, q.person)}
@@ -234,7 +274,8 @@
         {/each}
         {#if !shown.length}<EmptyState inline text={t('clubs.nothing')} />{/if}
       </Group>
-      <Group><Row tone="destructive" title={t('team.leave')} onclick={leave} /></Group>
+      <!-- the President hands the club over first: no Leave that only says no -->
+      {#if m.role !== 'president'}<Group><Row tone="destructive" title={t('team.leave')} onclick={leave} /></Group>{/if}
     {:else}
       <Skeleton n={4} />
     {/if}
@@ -249,7 +290,21 @@
   .org { display: flex; align-items: center; gap: 10px; min-width: 0; }
   .nm { min-width: 0; font: 600 var(--fs-body)/1.2 var(--font-text); }
   .icons { display: flex; gap: var(--s-2); flex: none; }
-  .linkpick { display: flex; flex-direction: column; gap: var(--s-4); }
+  /* the invite links: two cards (ActionCard's tile and padding), the words on top, the state and the action under them */
+  .links { --card-pad: var(--s-3); display: flex; flex-direction: column; gap: var(--s-3); }
+  .lk { display: flex; flex-direction: column; gap: var(--s-3); }
+  .top { display: flex; align-items: center; gap: var(--s-3); }
+  .ic { flex: none; display: grid; place-items: center; width: var(--ctl-s); height: var(--ctl-s); border-radius: var(--r-s); background: var(--fill); color: var(--text-2); }
+  .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .tx b { font: 600 var(--fs-body)/1.25 var(--font-text); letter-spacing: -0.01em; overflow-wrap: break-word; }
+  .sb { font: 450 var(--fs-sub)/1.3 var(--font-text); color: var(--text-3); overflow-wrap: break-word; }
+  /* wraps instead of cutting a label, should a language run long at 320 */
+  .ft { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-2); }
+  .state { display: inline-flex; align-items: center; gap: 6px; padding-left: var(--s-1); font: 600 var(--fs-cap)/1.2 var(--font-text); color: var(--text-3); }
+  .state.live { color: var(--success-text); }
+  .pip { flex: none; width: var(--s-2); height: var(--s-2); border-radius: var(--r-full); background: var(--fill-2); }
+  .live .pip { background: var(--success); box-shadow: 0 0 0 3px var(--success-soft); }
+  .acts { --plain-ink: var(--text-3); display: flex; align-items: center; gap: var(--s-1); margin-left: auto; }
   /* the club's President: a crown on the avatar */
   .av { position: relative; display: inline-flex; }
   .crown { position: absolute; right: -4px; top: -4px; width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center;

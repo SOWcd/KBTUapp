@@ -4,10 +4,11 @@
   // Loaded with the app (data.vol), refreshed as it opens.
   import { api, type Id, type VolLedger } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
-  import { data, loadVol } from '../../lib/state/data.svelte';
+  import { data, loadTeam, loadVol } from '../../lib/state/data.svelte';
   import { session } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
-  import { t, tn } from '../../lib/i18n/index.svelte';
+  import { t } from '../../lib/i18n/index.svelte';
+  import { sw, swn } from '../../lib/i18n/staff';
   import { hit } from '../../lib/search';
   import { haptic } from '../../lib/tg';
   import { dayMonth, duration } from '../../lib/time';
@@ -19,9 +20,13 @@
   import Row from '../../ui/Row.svelte';
   import SearchField from '../../ui/SearchField.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
+  import Skeleton from '../../ui/Skeleton.svelte';
 
   let { overlay }: { overlay: Overlay; vol?: boolean /* App: closes with the ledger */ } = $props();
-  $effect(() => { void loadVol(); }); // no longer mine: it closes (volGone)
+  // no longer mine: it closes (volGone); nothing kept and the read failed: Retry
+  let failed = $state(false);
+  const read = () => { failed = false; void loadVol().then((ok) => (failed = !ok)); };
+  $effect(read);
   const v = $derived(data.vol);
   let q = $state('');
   const people = $derived((v?.people ?? []).filter((p) => !q.trim() || hit(q, [p.name, p.tg ?? '', p.person?.name ?? ''])));
@@ -49,51 +54,55 @@
   };
 </script>
 
-<Sheet {overlay} icon={HandHeart} full title={t('ledg.title')}>
+<Sheet {overlay} icon={HandHeart} full title={sw('ledg.title')}>
   {#if v}
     <div class="list">
       {#if v.people.length > 8 || q}<SearchField bind:value={q} placeholder={t('door.search')} />{/if}
-      <Group caption={tn('ledg.count', v.people.length)}>
+      <Group caption={swn('ledg.count', v.people.length)}>
         {#each people as p (p.id)}
-          <Row dense title={p.name || (p.tg ? '@' + p.tg : '—')} subtitle={[p.person ? null : t('ledg.noAccount'), p.misses ? tn('ledg.misses', p.misses) : null, p.unmarked ? t('ledg.unmarkedN', { n: p.unmarked }) : null].filter(Boolean).join(' · ') || undefined}
+          <Row dense title={p.name || (p.tg ? '@' + p.tg : '—')} subtitle={[p.person ? null : sw('ledg.noAccount'), p.misses ? swn('ledg.misses', p.misses) : null, p.unmarked ? sw('ledg.unmarkedN', { n: p.unmarked }) : null].filter(Boolean).join(' · ') || undefined}
             value={duration(p.minutes * 60)} whole accessory="chevron" onclick={() => sheets.volPerson(p.id)}>
             {#snippet lead()}{#if p.person}<Avatar person={p.person} size={32} tappable={false} />{:else}<span class="blank" aria-hidden="true"></span>{/if}{/snippet}
           </Row>
         {:else}
-          <EmptyState inline text={t('ledg.empty')} />
+          <EmptyState inline text={sw('ledg.empty')} />
         {/each}
       </Group>
 
       {#if v.meets.length}
-        <Group caption={t('ledg.meets')} footnote={v.edit ? t('ledg.teamNote') : undefined}>
+        <Group caption={sw('ledg.meets')} footnote={v.edit ? sw('ledg.teamNote') : undefined}>
           {#each v.meets as m (m.session)}
-            <Row dense title={m.title} subtitle={[dayMonth(m.at), t('ledg.marked', { m: m.marked, n: m.expected }), m.team ? t('ledg.team') : null, m.held ? t('ledg.held') : null].filter(Boolean).join(' · ')}
+            <Row dense title={m.title} subtitle={[dayMonth(m.at), sw('ledg.marked', { m: m.marked, n: m.expected }), m.team ? sw('ledg.team') : null, m.held ? sw('ledg.held') : null].filter(Boolean).join(' · ')}
               accessory={v.edit ? 'switch' : 'none'} checked={m.team} onchange={(on) => team(m.session, on)} />
             <!-- who left without checking out waits for the President's or Vice's answer: the session's door -->
-            {#if v.edit && m.unresolved}<Row dense tone="action" title={t('ledg.unresolvedN', { n: m.unresolved })} accessory="chevron" onclick={() => sheets.volDoor(m.session, m.title)} />{/if}
+            {#if v.edit && m.unresolved}<Row dense tone="action" title={sw('ledg.unresolvedN', { n: m.unresolved })} accessory="chevron" onclick={() => sheets.volDoor(m.session, m.title)} />{/if}
           {/each}
         </Group>
       {/if}
 
       {#if v.edit}
-        <Group caption={t('ledg.access')} footnote={t('ledg.accessNote')}>
+        <Group caption={sw('ledg.access')} footnote={sw('ledg.accessNote')}>
           {#each v.access as p (p.id)}
             {#snippet off()}<Button kind="secondary" size="s" onclick={() => access(p.id, false)}>{t('crew.remove')}</Button>{/snippet}
             <Row dense title={p.name} trailing={off}>
               {#snippet lead()}<Avatar person={p} size={32} tappable={false} />{/snippet}
             </Row>
           {/each}
-          <Row tone="add" title={t('ledg.grant')} accessory="disclosure" open={granting} onclick={() => (granting = !granting)} />
+          <Row tone="add" title={sw('ledg.grant')} accessory="disclosure" open={granting} onclick={() => { granting = !granting; if (granting && !data.team[org]) void loadTeam(org); }} />
           {#if granting}
             {#each grantable as p (p.id)}
               <Row dense title={p.name} onclick={() => access(p.id, true)}>
                 {#snippet lead()}<Avatar person={p} size={32} tappable={false} />{/snippet}
               </Row>
+            {:else}
+              {#if data.team[org]}<EmptyState inline text={sw('ledg.nobody')} />{:else}<Skeleton n={2} />{/if}
             {/each}
           {/if}
         </Group>
       {/if}
     </div>
+  {:else if failed}<EmptyState onretry={read} />
+  {:else}<Skeleton n={6} />
   {/if}
 </Sheet>
 

@@ -15,6 +15,7 @@ interface WebApp {
   platform: string;
   colorScheme: 'light' | 'dark';
   isFullscreen?: boolean;
+  viewportStableHeight?: number;
   safeAreaInset?: Inset;
   contentSafeAreaInset?: Inset;
   isVersionAtLeast(v: string): boolean;
@@ -64,6 +65,15 @@ export const onComputer = inTelegram ? !/^(ios|android)/.test(W!.platform)
   : typeof matchMedia === 'function' && matchMedia('(hover: hover) and (pointer: fine)').matches; // a plain browser: a mouse, not a finger
 /** An Android phone (Telegram's android / android_x, or a plain browser saying so): its own steps come first. */
 export const onAndroid = inTelegram ? /^android/.test(W!.platform) : typeof navigator !== 'undefined' && /Android/.test(navigator.userAgent);
+/** Inside the installed Android app (the Google Play TWA, android/). Its launcher opens the page with the referrer
+ *  android-app://<package>, the one mark only that app sets: display-mode standalone is also any home-screen shortcut
+ *  Chrome made. The referrer is there on the launch's first load only, so the TWA's own storage remembers it. */
+export const inPlayApp = !inTelegram && onAndroid && (() => {
+  try {
+    if (document.referrer.startsWith('android-app://kz.sow.kbtu')) localStorage.setItem('twa', '1');
+    return !!localStorage.getItem('twa');
+  } catch { return document.referrer.startsWith('android-app://kz.sow.kbtu'); }
+})();
 
 /** An iPhone or iPad (Telegram's ios, or a plain browser saying so). */
 export const onIos = inTelegram ? W!.platform === 'ios' : typeof navigator !== 'undefined' && /iPhone|iPad|iPod/.test(navigator.userAgent);
@@ -86,6 +96,8 @@ export const tg = {
   platform: W?.platform ?? 'unknown',
   /** the coarse device kind the server keeps (a Telegram computer client is desktop; its web clients and a plain browser, web) */
   kind: onAndroid ? 'android' : onIos ? 'ios' : inTelegram && !/^web/.test(W!.platform) ? 'desktop' : 'web',
+  /** the installed Android app (inPlayApp): /api/me says so, and the account stops offering it */
+  playApp: inPlayApp,
   // outside Telegram its script says 'light' whatever the phone uses: the system's own scheme there
   colorScheme: (): 'light' | 'dark' => (inTelegram ? W?.colorScheme : null) ?? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'),
   can,

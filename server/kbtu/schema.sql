@@ -1,5 +1,5 @@
--- KBTU App schema: SPEC §5, the source of truth. Applied once to an empty database (PRAGMA user_version 0 → 1);
--- later changes go into kbtu/db.py as numbered migrations, and SPEC §5 is updated with them.
+-- KBTU App schema: the frozen base. Applied once to an empty database (PRAGMA user_version 0 → 1);
+-- later changes go into kbtu/migrations.py as numbered migrations; today's tables: schema.current.sql.
 
 -- Telegram account; exists for guests too (created on the first API call).
 CREATE TABLE users (

@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Removing someone from the club (Team 2.0, SPEC §2b): a Vice+ above them removes at once; a Head's tap goes to the
+  // Removing someone from the club (Team 2.0): a Vice+ above them removes at once; a Head's tap goes to the
   // President and Vice as a request with a line why. "Ban" keeps them from joining again (an application, the link)
   // until a Vice+ lifts it.
   import { api, type Id } from '../../lib/api';

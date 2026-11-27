@@ -1,4 +1,4 @@
-// KBTU's academic calendar for 2026-2027, bachelor's (SPEC §4.11): the owner's PDF, approved by the Academic
+// KBTU's academic calendar for 2026-2027, bachelor's: the owner's PDF, approved by the Academic
 // Council on 23 April 2026. `at`: Almaty days, 'from/to', one day, or '/to' for "until". `who`: whom a row is for when
 // it isn't everyone (the PDF's ISE cells, a year of study, SITE). Names: i18n 'acad.<key>'. A new year: a new PDF, new rows.
 import { t } from './i18n/index.svelte';

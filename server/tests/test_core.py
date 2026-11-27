@@ -99,12 +99,12 @@ def test_sign_in_rules(env, monkeypatch, capsys):
     # a changed student ID: the admin unlinks it by hand, then the next sign-in links afresh
     from kbtu import admin
     monkeypatch.setattr(config, "load", lambda: cfg)
-    admin.main(["unlink", "10"])
+    admin.main(["unlink", "10", "--yes"])
     assert c.get("/api/me", headers=tma(10)).json()["student"] is None
     assert login(c, 10, "bek")["student"]["studentId"] == "24Bbek"
     # staff (DMP, KBTU's IT testing the app) aren't students: verified by hand, they act, take no card number, aren't counted
     assert c.get("/api/friends", headers=tma(13)).status_code == 401
-    admin.main(["staff", "13", "Test", "Tester", "IT"])
+    admin.main(["staff", "13", "Test", "Tester", "IT", "--yes"])
     me = c.get("/api/me", headers=tma(13)).json()
     assert me["student"]["school"] == "IT" and me["no"] is None and c.get("/api/friends", headers=tma(13)).status_code == 200
     admin.main(["mark", "13", "idea"])  # the idea author's blue seal: one person, by name everywhere
@@ -119,11 +119,15 @@ def test_sign_in_rules(env, monkeypatch, capsys):
     assert out.startswith("1 students, 0 came") and "regular" in out and "first50" not in out
     # a tester who signed in as a student turns staff: the number is retired (a gap: moving the later ones down would
     # reuse a deleted account's burnt number), and signing in again brings no number back
-    login(c, 14, "it"), login(c, 15, "zhan")
+    it = login(c, 14, "it")
+    login(c, 15, "zhan")
     nos = lambda: [c.get("/api/me", headers=tma(u)).json()["no"] for u in (10, 14, 15)]
     assert nos() == [1, 2, 3]
-    admin.main(["staff", "14"])
+    admin.main(["staff", "14", "--yes"])
     assert nos() == [1, None, 3]
+    con = db.connect(cfg.db_path)
+    assert con.execute("SELECT target FROM audit_log WHERE action = 'staff_convert'").fetchone()[0] == f"user:{it['id']}"
+    con.close()
     login(c, 14, "it")
     assert nos() == [1, None, 3]
     # signed in from a wrong Telegram (10): the whole account moves to the real one (12), which only opened the app
@@ -131,12 +135,12 @@ def test_sign_in_rules(env, monkeypatch, capsys):
     before = c.get("/api/me", headers=tma(10)).json()
     login(c, 16, "dan")
     with pytest.raises(SystemExit):
-        admin.main(["move", "10", "16"])  # the target holds its own KBTU account: refused
-    admin.main(["move", "10", "12"])
+        admin.main(["move", "10", "16", "--yes"])  # the target holds its own KBTU account: refused
+    admin.main(["move", "10", "12", "--yes"])
     moved = c.get("/api/me", headers=tma(12)).json()
     assert moved["id"] == before["id"] and moved["no"] == before["no"] and moved["student"]["studentId"] == "24Bbek"
     assert c.get("/api/me", headers=tma(10)).json()["student"] is None
-    admin.main(["move", "12", "10"])  # and back
+    admin.main(["move", "12", "10", "--yes"])  # and back
     assert c.get("/api/me", headers=tma(10)).json()["id"] == before["id"]
 
 
@@ -272,7 +276,7 @@ def test_bad_numbers_are_bad_input(env):
 
 def test_every_api_route_needs_telegram(env):
     """No /api route answers with data to a request without Telegram's initData — a new route that forgot its viewer
-    fails here. The calendar file carries its own signature (§4.2); /show's pairing code is the laptop's, no Telegram
+    fails here. The calendar file carries its own signature; /show's pairing code is the laptop's, no Telegram
     there (it opens nothing until an organizer binds it: test_screen_pairing); android.html's step counts answer nothing
     and hold no person (test_android_page_counts_signed_out)."""
     import re as _re

@@ -2,7 +2,10 @@
 // «Meetings» with Telegram's QR scanner and starts the club's meeting; a member (Ali) scans the rotating QR with his
 // phone (it opens the app on ci_<session>_<slot>_<sig>) and the screen counts him.
 import { test, expect, type Phone } from './fixtures';
-import ru from '../src/lib/i18n/ru';
+import main from '../src/lib/i18n/ru';
+import staff from '../src/lib/i18n/staff.ru';
+
+const ru = { ...main, ...staff };
 
 const T = (k: string, vars: Record<string, string | number> = {}) =>
   ((ru as Record<string, unknown>)[k] as string).replace(/\{(\w+)\}/g, (_, v) => String(vars[v] ?? ''));
@@ -14,10 +17,8 @@ type ScreenState = { code: string; session?: number; param?: string | null; done
 async function calm(phone: Phone): Promise<Phone> {
   const p = phone.page;
   await p.addLocatorHandler(p.getByRole('button', { name: T('inst.later') }), (b) => b.click());
-  // the award's own card (its kicker and its x), never another overlay's x under it
-  const close = p.getByRole('button', { name: T('common.close') });
-  const award = p.locator('div').filter({ has: p.getByText(T('unlock.kicker'), { exact: true }) }).filter({ has: close }).last();
-  await p.addLocatorHandler(award, (a) => a.getByRole('button', { name: T('common.close') }).click());
+  // the award's own card (its kicker): Back closes it, as it closes every full-screen overlay
+  await p.addLocatorHandler(p.getByText(T('unlock.kicker'), { exact: true }).first(), () => phone.back.press());
   return phone;
 }
 

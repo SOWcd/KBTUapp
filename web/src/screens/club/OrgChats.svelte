@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The org's Telegram chats on its page (PLAN 86): its Vice+ add them by @name, a link or an
+  // The org's Telegram chats on its page: its Vice+ add them by @name, a link or an
   // invite link, pick the main channel (the page's Subscribe button) and add our bot, which keeps each card current.
   // Saved here at once, not with the profile's Save, like the short links.
   import Ellipsis from '@lucide/svelte/icons/ellipsis';
@@ -118,7 +118,16 @@
   }
   async function mirror(c: StudioChat, on: boolean) {
     try { chats = keep(await api.mirrorOrgChat(org, c.id, on)); haptic.select(); }
-    catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
+    catch (e) { haptic.error(); say(t(e instanceof ApiErr && e.message === 'nobot' ? 'oc.why.nobot' : 'common.error'), 'warning_3d'); } // our bot an admin there proves the channel is the club's
+  }
+  // the news from a forum group's topic instead of the channel (0: the group picked, its topic not yet); the row moves at once
+  const src = $derived(chats.find((c) => c.news != null));
+  async function news(c: StudioChat, topic: number | null) {
+    const was = chats;
+    chats = chats.map((x) => ({ ...x, news: x.id === c.id ? topic : topic === null ? x.news : null }));
+    haptic.select();
+    try { chats = keep(await api.newsOrgChat(org, c.id, topic)); }
+    catch { chats = was; haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   // a group's swear filter (its President or Vice; the bot must be able to delete and restrict there) and 30 days of it
   let report = $state<SwearRow[]>([]);
@@ -193,10 +202,23 @@
     <Row tone="add" title={t('oc.pickChannel')} disabled={!!picking} onclick={() => pick('channel')} />
     {#if !byLink}<Row tone="add" title={t('oc.byLink')} onclick={() => (byLink = true)} />{/if}
   </Group>
-  {#if mainOne}
-    <!-- the main channel's posts in the club's news (PLAN 86 part 2): on by linking it, off here -->
-    <Group footnote={t('oc.mirrorNote')}>
-      <Row title={t('oc.mirror')} accessory="switch" checked={mainOne.mirror} onchange={(on) => mirror(mainOne, on)} />
+  {#if mainOne || groups.length}
+    <!-- the club's news: the main channel's posts (on by linking it, off here), or a forum group's
+         announcements topic instead (server mirror.py), for clubs that have no channel -->
+    <Group footnote={!src ? t('oc.mirrorNote') : src.topics.length ? t('oc.topicNote') : t('oc.topicWait')}>
+      {#if groups.length}
+        <Row title={t('oc.newsFrom')} value={src?.title ?? mainOne?.title} menu={[
+          ...(mainOne ? [{ label: t('oc.newsChannel', { title: mainOne.title }), checked: !src, onselect: () => { if (src) void news(src, null); } }] : []),
+          ...groups.map((g) => ({ label: t('oc.newsGroup', { title: g.title }), checked: g === src, onselect: () => { if (g !== src) void news(g, 0); } })),
+        ]} />
+      {/if}
+      {#if src}
+        {@const s = src}
+        <Row title={t('oc.topic')} value={s.topics.find((x) => x.id === s.news)?.title ?? t('oc.topicPick')} disabled={!s.topics.length}
+          menu={s.topics.map((x) => ({ label: x.title, checked: x.id === s.news, onselect: () => news(s, x.id) }))} />
+      {:else if mainOne}
+        <Row title={t('oc.mirror')} accessory="switch" checked={mainOne.mirror} onchange={(on) => mirror(mainOne, on)} />
+      {/if}
     </Group>
   {/if}
   {#if groups.length}

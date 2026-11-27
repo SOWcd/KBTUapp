@@ -1,13 +1,13 @@
 <script lang="ts">
-  // "Become a tester": the Android app's closed test on Google Play. Opened once on entry on Android (App.svelte)
-  // and by the link ?startapp=android. Honest about the effort (3 steps, about 10 minutes, most of it Google's
+  // "Become a tester": the Android app's closed test on Google Play. Opened on entry on Android (App.svelte; at most
+  // twice, lib/androidTest.ts; Profile's Google Play row goes straight to the page) and by the link ?startapp=android. Honest about the effort (3 steps, about 10 minutes, most of it Google's
   // waiting), then the button opens /android.html in the phone's own browser, where the Google account lives:
   // that page leads through the steps one at a time.
   import { untrack } from 'svelte';
   import { close, type Overlay } from '../../lib/state/ui.svelte';
-  import { t, i18n } from '../../lib/i18n/index.svelte';
-  import { openLink } from '../../lib/tg';
+  import { t } from '../../lib/i18n/index.svelte';
   import { count } from '../../lib/stats';
+  import { openPlayPage } from '../../lib/androidTest';
   import Sheet from '../../ui/Sheet.svelte';
   import Button from '../../ui/Button.svelte';
   import Bot from '@lucide/svelte/icons/bot';
@@ -24,8 +24,7 @@
   });
 
   function go() {
-    count('andr.go');
-    openLink('https://kbtu.sow.kz/android.html?lang=' + i18n.lang, true);
+    openPlayPage('andr.go');
     close(overlay.id);
   }
 </script>

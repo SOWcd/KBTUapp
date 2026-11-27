@@ -59,7 +59,7 @@
       <span class="who"><b class="ellipsis">{anon ? t('fc.nickSoon') : signOf()}</b><span class="sub">{t('fc.toChannel')}</span></span>
     </div>
     <p class="words"><Marked text={body} quote={ex?.quote} /></p>
-    {#if photos.length}<div class="pics">{#each photos as p (p.url)}<img src={p.thumb} alt="" />{/each}</div>{/if}
+    {#if photos.length}<div class="pics">{#each photos as p (p.url)}<img draggable="false" src={p.thumb} alt="" />{/each}</div>{/if}
     {#if ex?.fix}<p class="fix"><Lightbulb size={16} strokeWidth={2} aria-hidden="true" /><span>{ex.fix}</span></p>{/if}
   </div>
   {#snippet footer()}

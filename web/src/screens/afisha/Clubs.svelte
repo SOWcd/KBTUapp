@@ -12,7 +12,7 @@
   import Trophy from '@lucide/svelte/icons/trophy';
   import type { Membership, Org, OrgCategory, OrgRef, Post } from '../../lib/api';
   import { clubLook, lookVars, skinOf } from '../../lib/awards';
-  import { byWeight, clubSub, daysLeft, friendsIn, hit, nextByOrg, roundDue, waitsDmp } from '../../lib/clubs';
+  import { byWeight, clubSub, daysLeft, friendsIn, hit, nextByOrg, roundDue, service, waitsDmp } from '../../lib/clubs';
   import { artOf, coverOf } from '../../lib/covers';
   import { t, tn } from '../../lib/i18n/index.svelte';
   import { byRank, canLeave, roleLabel } from '../../lib/perms';
@@ -26,6 +26,7 @@
   import Button from '../../ui/Button.svelte';
   import ChatAvatar from '../../ui/ChatAvatar.svelte';
   import GovMark from '../../ui/GovMark.svelte';
+  import OfficeMark from '../../ui/OfficeMark.svelte';
   import { longPress } from '../../ui/longpress';
   import { menu } from '../../ui/menu';
   import OfficialMark from '../../ui/OfficialMark.svelte';
@@ -112,7 +113,7 @@
     <button class="rt" onclick={() => sheets.club(o.id)}>
       <span class="lg"><OrgLogo org={o} size={52} />{#if l.hot}<i class="dot"></i>{/if}</span>
       <span class="tx">
-        <b><span class="ellipsis">{nameOf(o)}</span>{#if o.official && o.kind === 'club'}<OfficialMark size={15} />{/if}{#if o.gov}<GovMark size={14} />{/if}</b>
+        <b><span class="ellipsis">{nameOf(o)}</span>{#if o.official && o.kind === 'club'}<OfficialMark size={15} />{/if}{#if o.gov}<GovMark size={14} />{/if}{#if service(o)}<OfficeMark size={14} />{/if}</b>
         {#if l.text}<small class={['ellipsis', { hot: l.hot }]}>{l.text}</small>{/if}
       </span>
       {#if o.friends.length && !cta}<span class="faces">{#each o.friends as p (p.id)}<Avatar person={p} size={24} tappable={false} />{/each}</span>{/if}

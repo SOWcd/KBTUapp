@@ -17,13 +17,16 @@
   import Group from '../../ui/Group.svelte';
   import Row from '../../ui/Row.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
+  import Skeleton from '../../ui/Skeleton.svelte';
+  import { readState } from '../../lib/state/readState.svelte';
   import { schoolShort } from '../../lib/short';
   import SortChip from '../../ui/SortChip.svelte';
   import { sorted, byName, newest, usual, type Order } from '../../lib/sort.svelte';
 
   let { overlay, id, need }: { overlay: Overlay; id: Id; need: number } = $props();
-  let list = $state<VolunteerApp[] | null>(null);
-  $effect(() => { api.volunteers(id).then((l) => (list = l)).catch(() => (list = [])); });
+  const { state: rs, load } = readState(() => api.volunteers(id));
+  $effect(() => { void load(); });
+  const list = $derived(rs.value);
   // the server's: those waiting for an answer first
   const ORDERS: Order<VolunteerApp>[] = [usual(), newest((x) => x.at), byName((x) => x.fullName), { id: 'course', label: 'sort.course', by: (x) => x.course }];
   const rows = $derived(sorted('volunteers', ORDERS, list ?? []));
@@ -31,7 +34,7 @@
 
   async function decide(x: VolunteerApp, ok: boolean) {
     try {
-      list = await api.volunteerDecide(id, x.person.id, ok);
+      rs.value = await api.volunteerDecide(id, x.person.id, ok);
       ok ? haptic.ok() : haptic.warn();
       say(ok ? phrase('say.volYes') : t('say.volNo'), ok ? 'raising_hands_3d_default' : 'waving_hand_3d_default');
       studioChanged();
@@ -44,7 +47,9 @@
 
 <Sheet {overlay} icon={HandHeart} full title={t('vol.list')}>
   <p class="t-foot sub">{t('vol.taken', { n: yes, of: need })}</p>
-  {#if list}
+  {#if rs.status === 'error' && !list}<EmptyState onretry={load} />
+  {:else if !list}<div class="list"><Skeleton n={2} /></div>
+  {:else}
     <div class="list">
       {#if rows.length > 1}<SortChip list="volunteers" orders={ORDERS} />{/if}
       {#each rows as x (x.person.id)}

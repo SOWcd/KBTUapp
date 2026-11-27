@@ -44,6 +44,56 @@ def test_android_page_counts_signed_out(env, monkeypatch):
     assert "sheet 1 → go 1 → page 1 → join 2 → optin 3 → play 0" in stats.fields(con, 7)["android"]
 
 
+def test_android_page_flood_writes_nothing_past_the_cap(env, monkeypatch):
+    """A loop on the signed-out page: at the day's cap it returns before the database, so it takes no write lock."""
+    c, _ = env
+    con = db.connect(DB[0])
+    writes = []
+    real = stats.maybe
+    monkeypatch.setattr(stats, "maybe", lambda *a, **kw: (writes.append(a), real(*a, **kw))[1])
+    monkeypatch.setattr(stats, "PAGE_CAP", 3)
+    for i in range(10):
+        assert c.post("/api/stats/andr?k=play", headers={"cf-connecting-ip": f"10.0.0.{i}"}).status_code == 204
+    assert len(writes) == 3 and totals(con)["andr.play"] == 3
+
+
+def test_android_page_throttled_per_address(env, monkeypatch):
+    c, _ = env
+    con = db.connect(DB[0])
+    monkeypatch.setattr(stats, "PAGE_PER_IP", 2)
+    for _ in range(5):
+        c.post("/api/stats/andr?k=page", headers={"cf-connecting-ip": "10.0.0.7"})
+    assert totals(con)["andr.page"] == 2                                   # this address, this minute
+    c.post("/api/stats/andr?k=page", headers={"cf-connecting-ip": "10.0.0.8"})
+    assert totals(con)["andr.page"] == 3                                   # another address still counts
+    later = logic.core.now() + 60
+    set_clock(monkeypatch, lambda: later)
+    c.post("/api/stats/andr?k=page", headers={"cf-connecting-ip": "10.0.0.7"})
+    assert totals(con)["andr.page"] == 4                                   # and the next minute
+
+
+def test_one_person_caps_each_key_a_day(env):
+    """MAX_IN_BATCH is per batch: batch after batch, one account still can't run a rare key or a funnel's step up."""
+    c, _ = env
+    con = db.connect(DB[0])
+    for _ in range(5):
+        post(c, 6, {"signup.done": 20, "do.share": 1})
+    got = totals(con)
+    assert got["signup.done"] == stats.KEY_DAY_CAP and got["do.share"] == 5
+    post(c, 7, {"signup.done": 2})                                         # someone else still counts
+    assert totals(con)["signup.done"] == stats.KEY_DAY_CAP + 2
+
+
+def test_staff_screens_have_no_platform_timings(env):
+    """A screen only a club's organizers open, timed by platform, could name one club head: no tti.* for those."""
+    c, _ = env
+    con = db.connect(DB[0])
+    assert set(stats.STAFF_SCREENS) <= set(stats.SCREENS)
+    assert not [k for k in stats.KEYS if k.startswith(tuple(f"tti.{s}." for s in stats.STAFF_SCREENS))]
+    post(c, 8, {**{f"tti.{s}.ios.1": 1 for s in stats.STAFF_SCREENS}, "sheet.scanner": 1, "tti.sheet.event.ios.1": 1})
+    assert totals(con) == {"sheet.scanner": 1, "tti.sheet.event.ios.1": 1}
+
+
 def test_allowlist_clamp_and_upsert(env):
     c, _ = env
     stats._spent.clear()
@@ -211,6 +261,26 @@ def test_drops_repeated_uniques_and_admin_counters(env):
     for _ in range(5):
         post(c, 7, {"uniq.sheet.map": 1})
     assert totals(con) == {"uniq.sheet.map": 1}                            # a repeat is dropped; the admin sheet isn't counted at all
+
+
+def test_layout_buckets_by_platform(env):
+    c, _ = env
+    stats._spent.clear()
+    con = db.connect(DB[0])
+    con.execute("DELETE FROM usage_days")
+    post(c, 13, {"lay.android.8.safe_b.6": 3, "lay.android.8.gap.6": 1, "lay.android.8.full.1": 1, "lay.ios.9.env_b.5": 1,
+                 "lay.android.8.safe_b.8": 1, "lay.android.8.safe_b.48": 1, "lay.android.13.gap.0": 1})
+    post(c, 14, {"lay.android.8.safe_b.0": 1, "lay.android.8.full.0": 1})
+    assert totals(con) == {"lay.android.8.safe_b.6": 1, "lay.android.8.gap.6": 1, "lay.android.8.full.1": 1, "lay.ios.9.env_b.5": 1,
+                           "lay.android.8.safe_b.0": 1, "lay.android.8.full.0": 1}  # one a launch; a bucket or version off the list: dropped
+    out = stats.layout(con, 1).split("\n")
+    assert out == ["ios tg 9: fullscreen 0/0", "  env(safe-area-inset-bottom): 33-48 1",
+                   "android tg 8: fullscreen 1/2", "  tg safeAreaInset.bottom: 0 1 · 49-64 1", "  nav bottom gap (10 by design): 49-64 1"]
+    web = Path(__file__).parents[2] / "web/src/lib"
+    src, lay = ((web / f).read_text(encoding="utf-8") for f in ("stats.ts", "layoutStats.ts"))
+    assert len(re.search(r"LAY_EDGES = \[(.*?)\]", lay).group(1).split(",")) + 1 == len(stats.LAY)
+    assert tuple(re.findall(r"'([a-z_]+)'", re.search(r"type LayMetric = (.*?);", src).group(1))) == tuple(stats.LAY_VALUES)
+    assert (*re.findall(r"'(\d+)'", re.search(r"TG_MAJORS = \[(.*?)\]", lay).group(1)), "x") == stats.TG_MAJORS
 
 
 def test_hero_kinds_counted_without_an_item(env):

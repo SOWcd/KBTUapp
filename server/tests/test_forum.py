@@ -14,7 +14,7 @@ from test_core import delete_now, env, login, tma  # noqa: F401  (env: the fixtu
 
 
 def test_forum_find_people(env, monkeypatch):
-    """F1 find people (PLAN "F1 spec" + "Forum adversarial review"): the gate; the skills catalog; who is matched (open to
+    """F1 find people: the gate; the skills catalog; who is matched (open to
     projects, never the author, staff, DMP's people or guests); pings (top 5, 1 a day, 2 a week, project only, never
     twice); nobody's Telegram before Accept; blocks; expiry; a report hides only with 3 old accounts and the AI;
     deleting an account takes all of it."""

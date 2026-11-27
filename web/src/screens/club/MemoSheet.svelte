@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The week's memo to DMP (PLAN stage 2, their rules: Wednesdays 9:00-18:00, one email for the week, from the KBTU
+  // The week's memo to DMP (their rules: Wednesdays 9:00-18:00, one email for the week, from the KBTU
   // address to youth_policy@kbtu.kz). The server writes one memo from the events' requests in DMP's form, signed by me in kk, ru,
   // en; here it can be fixed by hand, then the Outlook app opens with it through public/outlook.html (a Mini App can't open
   // mailto: or ms-outlook: itself, Telegram's openLink takes http/https only), or it's copied. Back in the app it asks "Sent it?": the events sent
@@ -24,6 +24,8 @@
   import Row from '../../ui/Row.svelte';
   import Field from '../../ui/Field.svelte';
   import Notice from '../../ui/Notice.svelte';
+  import EmptyState from '../../ui/EmptyState.svelte';
+  import Skeleton from '../../ui/Skeleton.svelte';
 
   let { overlay, org }: { overlay: Overlay; org: Id } = $props();
 
@@ -34,7 +36,14 @@
   let signing = $state<MemoSign | null>(null);
   let opened = false; // I opened Outlook or copied: back in the app, ask whether it went
   const oops = () => { haptic.error(); say(t('common.error'), 'warning_3d'); };
-  const load = () => api.memo(org, later).then((d) => { draft = d; text = d.text; printText = d.print?.text ?? ''; }).catch(oops);
+  // the latest read wins (the "later" switch flipped twice must not land the older answer); a failed first read: Retry
+  let failed = $state(false);
+  let seq = 0;
+  const load = () => {
+    const n = ++seq; failed = false;
+    return api.memo(org, later).then((d) => { if (n !== seq) return; draft = d; text = d.text; printText = d.print?.text ?? ''; })
+      .catch(() => { if (n !== seq) return; if (draft) oops(); else failed = true; });
+  };
   $effect(() => { load(); });
 
   onMount(() => {
@@ -151,6 +160,8 @@
         </Group>
       {/if}
     </div>
+  {:else if failed}<EmptyState onretry={load} />
+  {:else}<Skeleton kind="lines" n={6} />
   {/if}
 
   {#snippet footer()}

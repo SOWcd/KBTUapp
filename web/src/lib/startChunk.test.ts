@@ -5,8 +5,16 @@ import { build, type Rollup } from 'vite';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 /** Bytes of gzip (CompressionStream's level): 220,076 after issue 339 (227,870 before it), plus ~1.3% room; +600 on
- *  purpose for the usage counters' funnels, error classes and screen times (PR 431: they must count from the start). */
-const MAX_START_GZIP = 223_600;
+ *  purpose for the usage counters' funnels, error classes and screen times (PR 431: they must count from the start);
+ *  +100 for the layout numbers' lazy import (the measuring itself is its own chunk, layoutStats.ts); +250 for the
+ *  Android tester offer (lib/androidTest.ts, the TWA check, Profile's row): a lazy import of it came out 500 B bigger; +200 for
+ *  Studio's news-from-a-group-topic strings (PR 441: the ru dictionary ships with the start); +2,150 for library seats'
+ *  strings (PR 449, the ru dictionary again; the screens themselves are lazy chunks); +300 for KBTU's official service
+ *  mark on Afisha's cards and rows (PR 452: OfficeMark, its icon and string, shown from the first frame); +200 for the
+ *  tab switch's crossfade and the lens's stretch on one spring (PR 456: the shell and Nav are the start); +100 for the
+ *  receipt fixes' strings (PR 465: Match with Kaspi, a resent receipt, the unchecked cap; the ru dictionary again). Then down to 219,500 (PR 479: the staff and organizer screens' words,
+ *  ~500 entries, left ru.ts for their own chunk, lib/i18n/staff: 226,871 -> 218,711, the rest is room). */
+const MAX_START_GZIP = 219_500;
 
 const gzipped = async (code: string) => (await new Response(new Blob([code]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer()).byteLength;
 

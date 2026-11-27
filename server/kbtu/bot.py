@@ -1,4 +1,4 @@
-"""The bot (SPEC §7), inside the web app's event loop (app.py lifespan): the Telegram call (_tg, _call), the
+"""The bot, inside the web app's event loop (app.py lifespan): the Telegram call (_tg, _call), the
 polling, the ears and the postman's loop. The areas live beside it and import this module's plumbing:
 
 - outbox.py, the postman: sends what logic.notify() queued in bot_outbox (_postman runs its send_due).
@@ -6,7 +6,7 @@ polling, the ears and the postman's loop. The areas live beside it and import th
   app is and a button into it; a receipt (Kaspi's PDF or a picture) goes to the sender's seat on hold.
 - bot_groups.py, group chats: the cards, the swear filter, /all, the video replies.
 - chores.py, the postman's chores: the backup, the retention sweep, the chats' cards, the userpics.
-No KBTU session outlives a request (SPEC §4.1), so the bot keeps none to refresh schedules with."""
+No KBTU session outlives a request, so the bot keeps none to refresh schedules with."""
 from __future__ import annotations
 
 import asyncio
@@ -196,8 +196,8 @@ def inline_answer(cfg: Config, con, q: dict) -> dict:
         # post here would tell whose it is
         for p in rows(con, """SELECT id, body FROM fchan_posts WHERE user_id = ? AND anon = 0 AND status = 'live' AND tg_msg > 0
                 ORDER BY id DESC LIMIT ?""", me["id"], INLINE_POSTS):
-            title, text, button, words = texts.share_post(lang, p["body"])
-            out.append(article(f"fp-{p['id']}", title, text, button, f"fp_{p['id']}", **({"description": words} if words else {})))
+            title, text, button, desc = texts.share_post(lang, p["body"])
+            out.append(article(f"fp-{p['id']}", title, text, button, f"fp_{p['id']}", **({"description": desc} if desc else {})))
     # the afisha as a nobody sees it: published, public, on the general afisha (never drafts, hidden or members-only)
     evs = [e for e in logic.seats.events(con, logic.Viewer(0, "user", False)) if e["status"] == "published"
            and (not words or logic.search.hit(words, [e["title"], *((x or {}).get("title") for x in (e.get("i18n") or {}).values())]))]
@@ -404,6 +404,14 @@ async def _checkout_watch(cfg: Config, http: httpx.AsyncClient, offset: int, don
             log.warning("checkouts: %s", type(exc).__name__)
 
 
+def _locked(exc: sqlite3.Error) -> bool:
+    if not isinstance(exc, sqlite3.OperationalError):
+        return False
+    if (code := getattr(exc, "sqlite_errorcode", None)) is not None:
+        return (code & 0xff) in (sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED)
+    return str(exc) in ("database is busy", "database is locked", "database table is locked", "database schema is locked")
+
+
 async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
     """One long poll: answers what came and returns the next offset (the same one when the round failed). Each update
     handled is stored (_save) before the next starts; after stop() the poll ends at once and a batch at its next update."""
@@ -479,8 +487,9 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
                         logic.chatsync.member_update(con, cm, upd["update_id"])
                     except sqlite3.Error as exc:
                         log.warning("chat sync: %s", type(exc).__name__)
-                        await asyncio.sleep(1)
-                        return upd["update_id"]
+                        if _locked(exc):
+                            await asyncio.sleep(1)
+                            return upd["update_id"]
                     continue
                 if rc := upd.get("message_reaction_count"):
                     if (rc.get("chat") or {}).get("id") == cfg.forum_channel:
@@ -490,10 +499,11 @@ async def hear(cfg: Config, http: httpx.AsyncClient, offset: int) -> int:
                 if payment := msg.get("successful_payment"):  # before the ban skip: the Stars have arrived; no answer but Telegram's own receipt
                     try:
                         await asyncio.to_thread(logic.stars.paid, con, payment, (msg.get("from") or {}).get("id"), cfg.bot_token)
-                    except sqlite3.Error as exc:  # paid but unrecorded: this update again next round (paid is idempotent by the charge id)
+                    except sqlite3.Error as exc:  # a busy database retries next round (paid is idempotent by the charge id)
                         log.warning("stars paid: %s", type(exc).__name__)
-                        await asyncio.sleep(1)
-                        return upd["update_id"]
+                        if _locked(exc):
+                            await asyncio.sleep(1)
+                            return upd["update_id"]
                     continue
                 if (msg.get("chat") or {}).get("type") == "private" and str(msg.get("text") or "").split("@")[0].split()[:1] == ["/paysupport"]:  # before the ban skip: Telegram's rules want it for every payer
                     await _send(cfg, http, _reply(msg["chat"]["id"], *texts.bot_message(_lang(con, msg), "paysupport", tg_id=msg["chat"]["id"])))

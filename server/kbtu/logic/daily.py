@@ -13,6 +13,8 @@ from .core import TZ, ApiError, PERSON, Viewer, _may, _once, _org, _rights_from,
 
 log = logging.getLogger(__name__)
 
+# a bot_outbox row of a broadcast sent by device kind (admin _broadcast --platform marks its payload); CASE guards json_extract
+_DEVICE = "CASE WHEN kind = 'app_broadcast' THEN json_extract(payload, '$.p') END IS 1"
 MEMO_ASKS = ("room", "guests", "provide", "promo", "gear", "print", "film")
 
 
@@ -61,7 +63,7 @@ def _memo_sender(con, v: Viewer, oid: int) -> dict:
 
 
 def memo(con, v: Viewer, oid: int, later: bool = False) -> dict:
-    """The week's memo for DMP (PLAN stage 2): one memo of next week's events that ask DMP for something (drafts too:
+    """The week's memo for DMP: one memo of next week's events that ask DMP for something (drafts too:
     rooms are booked before the poster), with `later` the later ones too, signed once by the caller; events already
     sent are left out (listed in `sent`). The app opens it in Outlook to youth_policy@kbtu.kz or copies it. `without`: next
     week's events that ask for nothing, to check."""
@@ -151,8 +153,8 @@ def memo_week(con) -> None:
     monday = _next_week()
     if not _once(con, "memo_week", str(monday)):
         return
-    for (oid,) in rows(con, """SELECT DISTINCT org_id FROM events WHERE status IN ('draft', 'published') AND memo IS NOT NULL
-            AND memo_sent_at IS NULL AND starts_at >= ? AND starts_at < ?
+    for (oid,) in rows(con, f"""SELECT DISTINCT org_id FROM events WHERE status IN ('draft', 'published') AND memo IS NOT NULL
+            AND memo_only = 0 AND NOT {evdel('events')} AND memo_sent_at IS NULL AND starts_at >= ? AND starts_at < ?
             AND org_id IN (SELECT id FROM orgs WHERE official = 1 OR top_at IS NOT NULL)""", monday, monday + 7 * 86400):
         for m in rows(con, "SELECT m.user_id, m.role, t.rights FROM org_members m LEFT JOIN org_roles t ON t.id = m.role_id WHERE m.org_id = ?", oid):
             if "memo" in _rights_from(m["role"], m["rights"]):
@@ -183,8 +185,9 @@ def tba_day(con) -> None:
     day = local // 86400
     if local % 86400 < 10 * 3600 or not _once(con, "tba_day", str(day)):
         return
-    for e in rows(con, """SELECT created_by, starts_at FROM events WHERE status = 'published' AND place = '' AND created_by IS NOT NULL AND starts_at > ?
-            AND id NOT IN (SELECT event_id FROM santa_events)""", core.now()):  # a Santa game (santa.start) has no room to confirm
+    for e in rows(con, """SELECT created_by, starts_at FROM events WHERE status = 'published' AND place = '' AND online IS NULL
+            AND created_by IS NOT NULL AND starts_at > ? AND id NOT IN (SELECT event_id FROM santa_events)""",
+                  core.now()):  # a Santa game (santa.start) has no room to confirm
         if day_of(e["starts_at"]) - day in (7, 3, 1, 0):
             notify(con, e["created_by"], "place_tba", f"tba:{day}")
 
@@ -225,13 +228,22 @@ def stats_day(con) -> None:
                  one(con, f"SELECT COUNT(*) FROM students s WHERE verified_at < ? AND NOT {core.staff_sql()}", hi)[0]))
     con.execute("DELETE FROM visits WHERE day < ?", (day - 30,))  # 30 days, as the privacy policy says
     con.execute("DELETE FROM user_platforms WHERE seen_at < ?", (core.now() - 90 * 86400,))  # 90 days, as the policy says
+    con.execute("DELETE FROM android_app WHERE seen_at < ?", (core.now() - 90 * 86400,))  # the same device kind, the same 90
+    con.execute("DELETE FROM roster_pending WHERE created_at <= ?", (core.now() - 90 * 86400,))
+    from .account import PREFILL_KEEP
+    for table in ("prefill", "prefill_rest"):
+        con.execute(f"DELETE FROM {table} WHERE loaded_at <= ?", (core.now() - PREFILL_KEEP,))
     con.execute("DELETE FROM profile_views WHERE day < ?", (day,))  # strangers' profile counts: today's and yesterday's stay
     con.execute("DELETE FROM fchan_feed_pages WHERE expires_at <= ?", (core.now(),))
     from .organizing import GUEST_DAYS
     con.execute("DELETE FROM door_guests WHERE user_id IS NULL AND created_at <= ?", (core.now() - GUEST_DAYS,))
-    # the bot's copy of a message older than 30 days loses its words; the row stays, its key keeps it from going twice
-    con.execute("UPDATE bot_outbox SET payload = '{}' WHERE send_after < ? AND payload != '{}' AND (sent_at IS NOT NULL OR error IS NOT NULL)",
-                (core.now() - 30 * 86400,))  # one still waiting keeps its words
+    # the bot's copy of a message older than 30 days loses its words; the row stays, its key keeps it from going twice.
+    # A device-kind broadcast keeps its mark 'p' (admin _broadcast --platform) for the 90-day delete below
+    con.execute(f"""UPDATE bot_outbox SET payload = CASE WHEN {_DEVICE} THEN '{{"p":1}}' ELSE '{{}}' END WHERE send_after < ?
+        AND payload NOT IN ('{{}}', '{{"p":1}}') AND (sent_at IS NOT NULL OR error IS NOT NULL)""", (core.now() - 30 * 86400,))  # one still waiting keeps its words
+    # a row that says someone used Android (the Play app's thanks, a --platform broadcast) goes with user_platforms at 90 days;
+    # the thanks may then come again if they reinstall, a fair price for the policy's 90 days
+    con.execute(f"DELETE FROM bot_outbox WHERE send_after < ? AND (kind = 'android_welcome' OR {_DEVICE})", (core.now() - 90 * 86400,))
     con.execute("UPDATE audit_log SET data = '{}' WHERE action = 'registry_search' AND at < ? AND data != '{}'", (core.now() - 30 * 86400,))
     con.execute("DELETE FROM bot_outbox WHERE kind = 'id_clash' AND send_after < ?", (core.now() - 30 * 86400,))  # the ref names a student ID
     con.execute("DELETE FROM chat_seen WHERE seen_at < ?", (core.now() - chatlist.SEEN_KEEP,))  # /all's memory: 180 days
@@ -251,10 +263,11 @@ def stats_day(con) -> None:
                   stats.forget,      # the anonymous usage counters: 180 days
                   appeals.forget,    # appeals to SG: 90 days after closing, 180 at most
                   mapflaws.sweep,
+                  library.sweep,     # library seats: sits and reports a week
                   research.sweep,    # proposals: 180 days; survey answers: a year after closure
                   donations.sweep,
                   helpus.sweep,      # anonymous lines to the creator: 90 days; offers to help: 180
-                  forms.forget,      # public-form answers: one year after closure
+                  forms.forget,      # public-form answers: one year after closure, or the last answer while open
                   chatmod.sweep,     # swear warnings in clubs' groups: 90 days
                   assistant.sweep,
                   santa.forget,      # its chat: 3 days after the gifts day
@@ -271,8 +284,8 @@ def stats_day(con) -> None:
 
 
 def admin_stats(con, v: Viewer) -> dict:
-    """The admin panel's numbers (PLAN "Admin stats"): online now (opened in the last 10 minutes: seen_at is refreshed
-    at most every 10), active in a day / week / month, students (DMP staff aside, §1), new today; the last 30 days from the nightly rows."""
+    """The admin panel's numbers: online now (opened in the last 10 minutes: seen_at is refreshed
+    at most every 10), active in a day / week / month, students (DMP staff aside), new today; the last 30 days from the nightly rows."""
     _admin(v)
     t = core.now()
     since = lambda s: one(con, "SELECT COUNT(*) FROM users WHERE seen_at >= ?", t - s)[0]  # noqa: E731
@@ -355,7 +368,7 @@ from .account import _prune_deletion_log, me  # noqa: E402
 from .forum import asks, forum_sweep  # noqa: E402
 from .moderation import TAKEDOWN_KEEP  # noqa: E402
 from .newsfeed import wipe_post  # noqa: E402
-from . import appeals, assistant, chatlist, chatmod, chatsync, donations, forms, helpus, mapflaws, research, santa, stats, web_auth  # noqa: E402
+from . import appeals, assistant, chatlist, chatmod, chatsync, donations, forms, helpus, library, mapflaws, research, santa, stats, web_auth  # noqa: E402
 from .oversight import _admin, _owner  # noqa: E402
 from .queues import AI_TRIES, ai_state  # noqa: E402
 from .seats import notify  # noqa: E402

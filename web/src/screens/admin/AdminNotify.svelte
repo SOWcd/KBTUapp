@@ -10,6 +10,7 @@
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { session } from '../../lib/state/session.svelte';
   import { t } from '../../lib/i18n/index.svelte';
+  import { sw } from '../../lib/i18n/staff';
   import { haptic } from '../../lib/tg';
   import Pane from '../../ui/Pane.svelte';
   import Group from '../../ui/Group.svelte';
@@ -36,11 +37,11 @@
   };
 </script>
 
-<Pane {overlay} title={t('adm.notify')}>
+<Pane {overlay} title={sw('adm.notify')}>
   {#if data.staffMutes}
-    <Group footnote={t('adm.notify.note')}>
+    <Group footnote={sw('adm.notify.note')}>
       {#each shown as m (m.kind)}
-        <Row title={t(`adm.notify.${m.kind}` as 'adm.notify')} accessory="switch" checked={m.on} onchange={(on) => flip(m, on)} />
+        <Row title={sw(`adm.notify.${m.kind}` as 'adm.notify')} accessory="switch" checked={m.on} onchange={(on) => flip(m, on)} />
       {/each}
     </Group>
   {:else if data.staffMutesFailed}<EmptyState inline text={t('common.error')} onretry={loadStaffMutes} />

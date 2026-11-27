@@ -1,4 +1,4 @@
-"""Kaspi receipts (SPEC §4.3): whatever a student sends (Kaspi's PDF, a screenshot) becomes one picture, and what the
+"""Kaspi receipts: whatever a student sends (Kaspi's PDF, a screenshot) becomes one picture, and what the
 receipt says is read off that picture. Kaspi's iPhone PDF has no text in it (iOS draws the glyphs; checked on the
 owner's receipts), so everything goes through OCR: Tesseract with the rus and kaz "fast" models (Debian's
 tesseract-ocr-rus/-kaz), about half a second a receipt. Fields are found by their shape, not by the labels next to
@@ -12,41 +12,38 @@ import logging
 import os
 import re
 import subprocess
+import tempfile
 import threading
 import unicodedata
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-import pypdfium2 as pdfium
 from PIL import Image, ImageOps, ImageStat
 
-from . import media
+from . import media, pdfpages
 
 log = logging.getLogger("kbtu.receipt")
 
 ASTANA = timezone(timedelta(hours=5))   # Kaspi prints "date and time in Astana"
-SIDE = 3000                             # a PDF page is rendered at ~300 dpi, at most this many pixels long
+SIDE = 3000                             # a PDF page is rendered at ~290 dpi, at most this many pixels long
+PDF_SECONDS = 10                        # the child's wall time and CPU (pdfpages.py); a Kaspi receipt takes ~0.1 s
+PDF_MEMORY = 1 << 30                    # its address space
 DONATION_DIR = "donations"
-_pdfium = threading.Lock()              # PDFium isn't thread-safe; rendering takes ~0.1 s
 _ocr = threading.BoundedSemaphore(2)    # ponytail: two OCRs at a time; a rush of receipts waits its turn (~0.5 s each)
 
 
-def picture(data: bytes) -> Image.Image:
-    """The upload as one upright RGB picture: an image as for photos, or the first page of a PDF."""
+def picture(data: bytes, tmp: Path) -> Image.Image:
+    """The upload as one upright RGB picture: an image as for photos, or the first page of a PDF, rendered in a child
+    process with hard limits (pdfpages.py: a crafted PDF costs only that child) in a temp folder under `tmp` (the
+    data's folder, not the image's /tmp, as an event's document)."""
     if data[:5] != b"%PDF-":
         return media.decode(data)
-    with _pdfium:
+    with tempfile.TemporaryDirectory(dir=tmp, prefix=".pdf-") as out:
         try:
-            pdf = pdfium.PdfDocument(data)
-            try:
-                page = pdf[0]
-                w, h = page.get_size()
-                im = page.render(scale=min(300 / 72, SIDE / max(w, h, 1))).to_pil()
-            finally:
-                pdf.close()
-        except (pdfium.PdfiumError, IndexError, ValueError) as exc:
-            raise media.BadImage(type(exc).__name__) from None
-    return im.convert("RGB")
+            page = pdfpages.run(data, Path(out), 1, SIDE, PDF_SECONDS, PDF_MEMORY, cut=True)[0]
+        except ValueError as exc:
+            raise media.BadImage(str(exc)) from None
+        return media.decode(page.read_bytes())  # the child's PNG through the photos' own checks
 
 
 def ready() -> str:
@@ -64,7 +61,7 @@ class NotReceipt(Exception):
 
 def take(data: bytes, root: Path, donation_key: bytes | None = None) -> tuple[dict, dict | None]:
     """Read and store the receipt privately. Donations keep partial readings for review and use independent files."""
-    im = picture(data)
+    im = picture(data, root.parent)
     got = read(im)
     if donation_key is None and got is not None and not got.get("amount") and not got.get("no"):
         raise NotReceipt

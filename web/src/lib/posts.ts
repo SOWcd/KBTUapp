@@ -1,4 +1,4 @@
-// Post labels (SPEC §4.10): the composer's chips by code, named in the UI language; an older free-text tag shows as is.
+// Post labels: the composer's chips by code, named in the UI language; an older free-text tag shows as is.
 import type { Casting, EventCard, Post, PostTag } from './api';
 import { SvelteSet } from 'svelte/reactivity';
 import { t } from './i18n/index.svelte';

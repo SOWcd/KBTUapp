@@ -1,6 +1,6 @@
 <script lang="ts">
-  // The universal profile card (SPEC §4.12): the same sheet from any avatar or name in the app, with the same
-  // hero as Me. Shows only what the viewer may see (§3) — the server filters.
+  // The universal profile card: the same sheet from any avatar or name in the app, with the same
+  // hero as Me. Shows only what the viewer may see — the server filters.
   import { roleName, titleOf } from '../../lib/perms';
   import { achKey, achName, tierName } from '../../lib/awards';
   import Sheet from '../../ui/Sheet.svelte';
@@ -81,7 +81,7 @@
   let next = $state<Friendship | null>(null);
   const shown = $derived.by(() => { const c = p ?? (late || me ? known : null); return c && next ? { ...c, friendship: next } : c; });
 
-  // friendship (§4.7): ask, answer, take back, or end it quietly; the card reloads after a change (where they go)
+  // friendship: ask, answer, take back, or end it quietly; the card reloads after a change (where they go)
   let acting = $state(false);
 
   // the card again after a change. Now a stranger (unfriended, declined, taken back) past the day's limit of strangers,
@@ -148,7 +148,7 @@
 
 <Sheet {overlay} icon={UserRound} title={t('cap.person')}>
   {#if shown}
-    <!-- no award shelf on the card here: the sheet lists every award below it, the showcase first (PLAN 89: "Awards"
+    <!-- no award shelf on the card here: the sheet lists every award below it, the showcase first ("Awards"
          showed twice) -->
     <Hero p={shown} shelf={false} />
 

@@ -19,6 +19,51 @@ def _file(con, cfg, uid, path, kind="event_cover"):
         VALUES (?, ?, 'image/webp', 15, ?, ?, 0)""", (path, kind, path, uid)).lastrowid
 
 
+@pytest.mark.parametrize("username", [None, "", "Example_Ali"])
+def test_deletion_erases_username_lists_and_search_counters(env, username):
+    c, cfg = env
+    uid = login(c, 21, "ali")["id"]
+    con = db.connect(cfg.db_path)
+    con.execute("UPDATE users SET tg_username = ? WHERE id = ?", (username, uid))
+    con.execute("UPDATE students SET email = 'ali@example.test' WHERE user_id = ?", (uid,))
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'club', 'club', 'Club', 'C', 'laptop_3d', 0)")
+    con.execute("INSERT INTO events (id, org_id, title, created_at, updated_at) VALUES (1, 1, 'Guests', 0, 0)")
+    for i, handle in enumerate(("EXAMPLE_ali", "example_ali", "example_alice", "", None)):
+        con.execute("""INSERT INTO event_guests (event_id, student_id, name, username, team)
+            VALUES (1, ?, 'Example guest', ?, 'Team')""", (f"x{i}", handle))
+    for key, name, handle, email in (("mine", "Ali Testov", "EXAMPLE_ALI", None),
+                                   ("reused", "Bob Testov", "example_ali", None),
+                                   ("other", "Ali Testov", "example_alice", None),
+                                   ("mail", "Ali Testov", None, "ALI@example.test"),
+                                   ("empty", "Ali Testov", "", None)):
+        con.execute("""INSERT INTO roster_pending (key, org_id, sheet, role, full_name, tg, email, created_at)
+            VALUES (?, 1, 'sheet', 'member', ?, ?, ?, ?)""", (key, name, handle, email, logic.now()))
+    mine = {f"gsearch:{uid}:0", f"gsearch:{uid}:999"}
+    others = {f"gsearch:{uid}0:0", "gsearch:999:0", f"gsearch:{uid};0"}
+    con.executemany("INSERT INTO meta (key, value) VALUES (?, '1')", [(k,) for k in mine | others])
+    logic.account.delete_me(con, logic.Viewer(uid, "user", True))
+    assert {r[0] for r in con.execute("SELECT student_id FROM event_guests")} == (
+        {"x2", "x3", "x4"} if username else {"x0", "x1", "x2", "x3", "x4"})
+    assert {r[0] for r in con.execute("SELECT key FROM roster_pending")} == (
+        {"reused", "other", "empty"} if username else {"mine", "reused", "other", "empty"})
+    assert {r[0] for r in con.execute("SELECT key FROM meta WHERE key LIKE 'roster_done:%'")} == (
+        {"roster_done:mail", "roster_done:mine"} if username else {"roster_done:mail"})
+    assert {r[0] for r in con.execute("SELECT key FROM meta WHERE key LIKE 'gsearch:%'")} == others
+
+
+def test_roster_username_erasure_requires_verified_name(env):
+    c, cfg = env
+    uid = login(c, 21, "ali")["id"]
+    con = db.connect(cfg.db_path)
+    con.execute("UPDATE users SET tg_username = 'example_ali' WHERE id = ?", (uid,))
+    con.execute("UPDATE students SET manual = 1 WHERE user_id = ?", (uid,))
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'club', 'club', 'Club', 'C', 'laptop_3d', 0)")
+    con.execute("""INSERT INTO roster_pending (key, org_id, sheet, role, full_name, tg, claimed_by, created_at)
+        VALUES ('unverified', 1, 'sheet', 'member', 'Ali Testov', 'example_ali', ?, 0)""", (uid,))
+    logic.account.delete_me(con, logic.Viewer(uid, "user", True))
+    assert tuple(con.execute("SELECT key, claimed_by FROM roster_pending").fetchone()) == ("unverified", None)
+
+
 @pytest.mark.parametrize("photos", [False, True])
 def test_deletion_removes_unused_uploads_but_keeps_live_pictures(env, photos):
     c, cfg = env

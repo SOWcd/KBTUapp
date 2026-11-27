@@ -1,4 +1,4 @@
-"""Texts the server writes itself: share cards now, bot messages next (SPEC §7). Like the app's i18n, ru is
+"""Texts the server writes itself: share cards now, bot messages next. Like the app's i18n, ru is
 the source and kk/en follow it; a user's language comes from users.lang. Only server templates reach
 Telegram: from the client we take ids, never text."""
 from __future__ import annotations
@@ -31,7 +31,7 @@ SHARE_REFER = {  # Use one invite link so it can connect existing students and c
     "kk": ("Дос бол", "👋 <b>{name}</b> сені досқа шақырады!\n\n👀 Кім қайда баратынын көр\n🎟 Барлық іс-шаралар мен клубтар", "🤝 Досқа қосу"),
     "en": ("Be my friend", "👋 <b>{name}</b> wants to be friends!\n\n👀 See who's going where\n🎟 All events and clubs", "🤝 Add friend"),
 }
-SHARE_PRES = {  # the admin's one-time President link (§2): a new club's President opens it
+SHARE_PRES = {  # the admin's one-time President link: a new club's President opens it
     "ru": ("Клуб ждёт президента", "👑 <b>Президент клуба {club}</b>\nТебя назначают в KBTU App\n\n🔐 Войди через KBTU\n🔒 Одноразовая · ⏳ 7 дней", "Стать президентом"),
     "kk": ("Клуб президентін күтеді", "👑 <b>{club} клубының президенті</b>\nСені KBTU App-та тағайындайды\n\n🔐 KBTU арқылы кір\n🔒 Бір реттік · ⏳ 7 күн", "Президент болу"),
     "en": ("A club awaits its President", "👑 <b>President of {club}</b>\nYou're being appointed on KBTU App\n\n🔐 Sign in with KBTU\n🔒 One use · ⏳ 7 days", "Become President"),
@@ -78,7 +78,7 @@ SHARE_JOIN = {
 }
 
 
-# An achievement shared from its card (§4.11): first person (the user sends it), its name and tier as the app names them
+# An achievement shared from its card: first person (the user sends it), its name and tier as the app names them
 # (web i18n ach.<code>.name / ach.tier.N), how rare it is; the button opens the reader's own progress toward it.
 SHARE_AWARD = {
     "ru": ("Моя награда в KBTU App", "🏅 <b>{name}</b>{tier}\nМоя новая награда в KBTU App\n\n💎 Есть у {p}% студентов. Получится так же?", "🏅 Посмотреть награду"),
@@ -213,7 +213,7 @@ def share_event(lang: str, title: str, starts_at: int, place: str, org: str = ""
     return caption, button
 
 
-# Bot messages (SPEC §7): kind → (HTML text, button or None). Fields: title, when, place, org, room.
+# Bot messages: kind → (HTML text, button or None). Fields: title, when, place, org, room.
 BOT = {
     "ru": {
         "paysupport": ("💬 <b>Поддержка по платежам</b>\nЗвёзды — добровольная поддержка приложения, взамен ничего не выдаётся.\nЕсли заплатил по ошибке и хочешь вернуть их, напиши в поддержку: @Sowers. Приложи чек Telegram и свой Telegram ID: <code>{tg_id}</code>", None),
@@ -283,6 +283,7 @@ BOT = {
         "app_home": ("📱 <b>KBTU App почти как отдельное приложение!</b>", "🎬 Смотреть"),
         "acoustic": ("🎸 <b>Acoustic Evening</b>: живая музыка в баре «Танцы»\n📅 26 ноября, 19:30 · 18+\n🔥 <b>Только сегодня с 20:00 до 22:00 билеты на 1000 ₸ дешевле</b>\nВ 22:00 скидка сгорит, успей забрать свой 👇", "🎟 Забрать билет со скидкой"),
         "android_test": ("🤖 <b>KBTU App выходит в Google Play!</b>\nНужны тестировщики с Android: поставь приложение раньше всех и помоги с запуском 👇", "📲 Стать тестировщиком"),
+        "android_welcome": ("🎉 <b>Спасибо за установку KBTU App из Google Play!</b>\n🤖 Ты помогаешь приложению выйти в Play для всех 💙", "🚀 Открыть"),
         "vote_1": ("👍 Интересно", None), "vote_0": ("🔕 Не присылать", None),
         "santa_drawn": ("🎅 Жеребьёвка прошла: <b>{title}</b>\n🎁 Узнай, кому даришь", "🎁 Узнать"),
         "santa_open": ("🎅 <b>{org}</b> играет в Тайного Санту\n🎁 Напиши вишлист, и ты в игре{terms}", "🎄 Играть"),
@@ -406,6 +407,12 @@ BOT = {
         "event_returned": ("↩️ Событие в <b>{org}</b> вернули на доработку. Причина в Студии.", "Открыть"),
         "channel_ask": ("📢 У <b>{name}</b> есть публичный Telegram-канал? Подключи его в профиле клуба, и его посты будут появляться в новостях приложения сами, без повторной публикации.", "📢 Подключить канал"),
         "sid_free": ("🪪 Номер студенческого <b>{sid}</b> освободился. Открой приложение и введи его снова.", "Открыть"),
+        # library seats (logic/library.py): the seat's number and its table's label, never a name
+        "lib_report": ("🪑 Тебя не видят на месте <b>{seat}</b> за столом <b>{table}</b>.\nТы здесь? Ответь за 10 минут, иначе место освободится.", "🙋 Я здесь"),
+        "lib_soon": ("⏳ Место <b>{seat}</b> за столом <b>{table}</b> освободится через 10 минут. Ещё сидишь? Отсканируй QR на столе.", "Открыть"),
+        "lib_still": ("🪑 Место <b>{seat}</b> за столом <b>{table}</b> освободили: тебя там не нашли. Ты на месте? Отсканируй QR на столе.", "Открыть"),
+        "lib_freed": ("✅ Место <b>{seat}</b> за столом <b>{table}</b> свободно: никто не ответил. Отсканируй QR, чтобы сесть.", "Открыть"),
+        "lib_stickers": ("🖨 Наклейки для столов: {room}. Печать на A4, по одной на стол.", None),
         "sid_check": ("🪪 Твой номер студенческого <b>{sid}</b> указал ещё один студент.\n\nПроверь его в профиле → Мои данные. Если там опечатка, исправь: номер освободится.", "Проверить"),
         "id_clash": ("🪪 Номер студенческого <b>{sid}</b> указали двое:\n1. {aname}, {amail}, <a href=\"tg://user?id={aid}\">{atg}</a> — вошёл сейчас\n2. {bname}, {bmail}, <a href=\"tg://user?id={bid}\">{btg}</a> — был раньше\nСпроси обоих. Отдать номер: unlink у второго, первый вводит номер заново.", None),
         "probation_passed": ("🎉 Испытательный срок в <b>{org}</b> пройден — ты полноправный участник!", "Открыть клуб"),
@@ -512,6 +519,7 @@ BOT = {
         "app_home": ("📱 <b>KBTU App енді жеке қолданбаға ұқсас!</b>", "🎬 Көру"),
         "acoustic": ("🎸 <b>Acoustic Evening</b>: «Танцы» барында тірі музыка\n📅 26 қараша, 19:30 · 18+\n🔥 <b>Тек бүгін 20:00–22:00 билеттер 1000 ₸ арзан</b>\n22:00-де жеңілдік бітеді, үлгеріп қал 👇", "🎟 Жеңілдікпен алу"),
         "android_test": ("🤖 <b>KBTU App Google Play-ге шығады!</b>\nAndroid-пен тестерлер керек: қолданбаны бәрінен бұрын орнатып, іске қосуға көмектес 👇", "📲 Тестер болу"),
+        "android_welcome": ("🎉 <b>KBTU App-ты Google Play-ден орнатқаның үшін рақмет!</b>\n🤖 Сен қолданбаның Play-ге бәріне шығуына көмектесесің 💙", "🚀 Ашу"),
         "vote_1": ("👍 Қызық", None), "vote_0": ("🔕 Жібермеу", None),
         "santa_drawn": ("🎅 Жеребе тартылды: <b>{title}</b>\n🎁 Кімге сыйлайтыныңды біл", "🎁 Білу"),
         "santa_open": ("🎅 <b>{org}</b> Құпия Санта ойынын ойнап жатыр\n🎁 Тілек тізіміңді жаз, сонда ойындасың{terms}", "🎄 Ойнау"),
@@ -634,6 +642,11 @@ BOT = {
         "event_returned": ("↩️ <b>{org}</b> клубындағы іс-шараң түзетуге қайтарылды. Себебі Студияда.", "Ашу"),
         "channel_ask": ("📢 <b>{name}</b> клубының ашық Telegram-арнасы бар ма? Оны клуб профилінде қос, сонда оның посттары қосымшаның жаңалықтарында өздігінен шығады, қайта жариялаудың қажеті жоқ.", "📢 Арнаны қосу"),
         "sid_free": ("🪪 <b>{sid}</b> студент нөмірі босады. Қосымшаны ашып, оны қайта енгіз.", "Ашу"),
+        "lib_report": ("🪑 Сені <b>{table}</b> үстеліндегі <b>{seat}</b> орында көрмей тұр.\nОсындасың ба? 10 минут ішінде жауап бер, әйтпесе орын босайды.", "🙋 Осындамын"),
+        "lib_soon": ("⏳ <b>{table}</b> үстеліндегі <b>{seat}</b> орын 10 минуттан кейін босайды. Әлі отырсың ба? Үстелдегі QR-ды сканерле.", "Ашу"),
+        "lib_still": ("🪑 <b>{table}</b> үстеліндегі <b>{seat}</b> орын босатылды: сені таппады. Орныңдасың ба? Үстелдегі QR-ды сканерле.", "Ашу"),
+        "lib_freed": ("✅ <b>{table}</b> үстеліндегі <b>{seat}</b> орын бос: ешкім жауап бермеді. Отыру үшін QR-ды сканерле.", "Ашу"),
+        "lib_stickers": ("🖨 Үстелдерге арналған жапсырмалар: {room}. A4-ке басып шығар, әр үстелге біреуден.", None),
         "sid_check": ("🪪 Сенің <b>{sid}</b> студент нөміріңді тағы бір студент көрсетті.\n\nОны профильде → Менің деректерім бөлімінде тексер. Қате болса, түзет: нөмір босайды.", "Тексеру"),
         "id_clash": ("🪪 <b>{sid}</b> студент нөмірін екі адам көрсетті:\n1. {aname}, {amail}, <a href=\"tg://user?id={aid}\">{atg}</a> — қазір кірді\n2. {bname}, {bmail}, <a href=\"tg://user?id={bid}\">{btg}</a> — бұрын болған\nЕкеуінен де сұра. Нөмірді беру: екіншісіне unlink, біріншісі нөмірді қайта енгізеді.", None),
         "probation_passed": ("🎉 <b>{org}</b> клубындағы сынақ мерзімі аяқталды — сен толыққанды мүшесің!", "Клубты ашу"),
@@ -735,6 +748,7 @@ BOT = {
         "app_home": ("📱 <b>KBTU App is now almost a real app!</b>", "🎬 Watch"),
         "acoustic": ("🎸 <b>Acoustic Evening</b>: live music at Tantsy bar\n📅 Nov 26, 19:30 · 18+\n🔥 <b>Today only, 20:00-22:00: tickets 1000 ₸ off</b>\nThe deal ends at 22:00, grab yours 👇", "🎟 Grab a discounted ticket"),
         "android_test": ("🤖 <b>KBTU App is coming to Google Play!</b>\nWe need testers on Android: get the app before everyone and help us launch 👇", "📲 Become a tester"),
+        "android_welcome": ("🎉 <b>Thanks for installing KBTU App from Google Play!</b>\n🤖 You're helping the app launch on Play for everyone 💙", "🚀 Open"),
         "vote_1": ("👍 Interesting", None), "vote_0": ("🔕 Don't send", None),
         "santa_drawn": ("🎅 The draw is done: <b>{title}</b>\n🎁 See who you're giving to", "🎁 See"),
         "santa_open": ("🎅 <b>{org}</b> is playing Secret Santa\n🎁 Write your wishlist and you are in{terms}", "🎄 Play"),
@@ -857,6 +871,11 @@ BOT = {
         "event_returned": ("↩️ Your event in <b>{org}</b> was returned for changes. The reason is in Studio.", "Open"),
         "channel_ask": ("📢 Does <b>{name}</b> have a public Telegram channel? Link it in the club profile and its posts will show up in the app's news by themselves, no reposting needed.", "📢 Link the channel"),
         "sid_free": ("🪪 Student ID <b>{sid}</b> is free now. Open the app and enter it again.", "Open"),
+        "lib_report": ("🪑 Someone can't see you at seat <b>{seat}</b>, table <b>{table}</b>.\nAre you here? Answer within 10 minutes or the seat frees up.", "🙋 I'm here"),
+        "lib_soon": ("⏳ Seat <b>{seat}</b> at table <b>{table}</b> frees up in 10 minutes. Still there? Scan the QR on the table.", "Open"),
+        "lib_still": ("🪑 Seat <b>{seat}</b> at table <b>{table}</b> was freed: nobody found you there. Are you there? Scan the QR on the table.", "Open"),
+        "lib_freed": ("✅ Seat <b>{seat}</b> at table <b>{table}</b> is free: nobody answered. Scan the QR to sit.", "Open"),
+        "lib_stickers": ("🖨 Table stickers: {room}. Print on A4, one per table.", None),
         "sid_check": ("🪪 Another student gave your student ID <b>{sid}</b>.\n\nCheck it in your profile → My data. If it has a typo, fix it: the ID frees up.", "Check"),
         "id_clash": ("🪪 Two people gave student ID <b>{sid}</b>:\n1. {aname}, {amail}, <a href=\"tg://user?id={aid}\">{atg}</a> — signing in now\n2. {bname}, {bmail}, <a href=\"tg://user?id={bid}\">{btg}</a> — had it before\nAsk both. To move the ID: unlink the second, the first types it again.", None),
         "probation_passed": ("🎉 You passed probation in <b>{org}</b>: you're a full member now!", "Open the club"),
@@ -1038,7 +1057,7 @@ def chat_reply(lang: str, got: list[tuple[str, str, str]]) -> str:
     return "\n\n".join(parts)
 
 
-# The attendee list as a CSV (SPEC §6): headers and statuses in the organizer's language.
+# The attendee list as a CSV: headers and statuses in the organizer's language.
 # "Year of study", not "course", in what DMP reads (their rule for forms: KBTU has years of study, not courses).
 CSV_HEAD = {
     "ru": ("Фамилия", "Имя", "Отчество", "Фамилия (латиницей)", "Имя (латиницей)", "Отчество (латиницей)", "Telegram", "ID студента", "Год обучения", "Школа", "Почта", "Телефон", "Статус", "Записался", "Пришёл", "Записан у входа", "Отмечен вручную"),
@@ -1069,7 +1088,7 @@ REGISTRY_CAPTION = {"ru": "Реестр клубов KBTU App", "kk": "KBTU App 
 
 
 def registry_csv(lang: str, people) -> tuple[str, bytes, str]:
-    """Every roster (DMP, §4.13): the same rules as on screen — contacts only of Presidents and Vices."""
+    """Every roster (DMP): the same rules as on screen — contacts only of Presidents and Vices."""
     lang = lang if lang in REGISTRY_HEAD else "ru"
     out = io.StringIO()
     w = csv.writer(out, delimiter=";")
@@ -1445,7 +1464,7 @@ def print_letter(org: str, events: list[tuple[dict, dict]], pos: str, name: str,
 
 
 def memo_text(org: str, events: list[tuple[dict, dict]], sign: str) -> str:
-    """The week's one memo (PLAN stage 2): events are (e as memo_asks takes it plus `meeting`, its requests). With one
+    """The week's one memo: events are (e as memo_asks takes it plus `meeting`, its requests). With one
     event its requests follow the intro; with more each event's line heads its own, numbered through. With none, the
     blank: the header, "asks you:" and the signature, for the sheet's templates."""
     if not events:

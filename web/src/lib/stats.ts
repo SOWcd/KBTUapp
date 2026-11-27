@@ -15,7 +15,8 @@ type Action = 'do.signup' | 'do.follow' | 'do.forum' | 'do.casting' | 'do.qr' | 
   | 'do.calendar' | 'do.photo' | 'do.helpus' | 'do.anon' | 'do.chatlink' | 'do.kri';
 // the appeals composer's funnel (server stats.APPEALS): counts only, never a word
 type Appeal = 'apl.open' | 'apl.typed' | 'apl.ai' | 'apl.sent' | 'apl.drop' | 'apl.del';
-type Android = 'andr.sheet' | 'andr.go'; // the Android tester sheet, shown and tapped (server stats.ANDROID_APP)
+// the Android tester sheet: shown, shown the second time, tapped; Profile's Google Play row: drawn, tapped (server stats.ANDROID_APP)
+type Android = 'andr.sheet' | 'andr.again' | 'andr.go' | 'andr.row' | 'andr.rowgo';
 type Source = 'from.none' | 'from.event' | 'from.club' | 'from.friend' | 'from.qr' | 'from.other';
 // the key flows' steps (a flow may start at a sheet's own count), then what ends one short (server stats.FUNNELS): counts only
 type Funnel = 'signup.tap' | 'signup.done' | 'signup.fail'
@@ -32,8 +33,11 @@ export type ApiKind = 'network' | 'server' | 'unauthorized' | 'need_student' | '
 type Platform = 'ios' | 'android' | 'desktop' | 'web';
 type Bucket = 0 | 1 | 2 | 3 | 4 | 5;
 type Long = Bucket | 6;
+// the phone's layout numbers, once a launch (server stats.LAY_*): by platform and Telegram's major version, each value by its bucket only
+export type LayMetric = 'safe_b' | 'safe_t' | 'content_b' | 'content_t' | 'env_b' | 'stable' | 'gap';
+type Lay = `lay.${Platform}.${string}.${LayMetric}.${number}` | `lay.${Platform}.${string}.full.${0 | 1}`;
 type Key = Screen | Action | Appeal | Android | Source | Funnel | `hero.${'show' | 'tap'}.${HeroKind}` | `err.${Screen}` | `uniq.${Screen | Action}` | `sess.${Long}` | `time.${Long}`
-  | `open.${Platform}.${Bucket}` | `js.${Screen}.${JsKind}` | `api.${Screen}.${ApiKind}` | `tti.${Screen}.${Platform}.${Bucket}`;
+  | `open.${Platform}.${Bucket}` | `js.${Screen}.${JsKind}` | `api.${Screen}.${ApiKind}` | `tti.${Screen}.${Platform}.${Bucket}` | Lay;
 
 const EVERY = 60_000, GAP = 30_000; // GAP: hidden this long, the next showing is a new session
 const OPEN_EDGES = [1000, 2000, 3000, 5000, 8000];
@@ -101,11 +105,13 @@ export function bucketOf(ms: number, edges = OPEN_EDGES): number {
 }
 
 let hid = document.hidden; // opened in the background: its time says nothing about loading
-const platform = !inTelegram ? 'web' : onIos ? 'ios' : onAndroid ? 'android' : 'desktop';
+export const platform = !inTelegram ? 'web' : onIos ? 'ios' : onAndroid ? 'android' : 'desktop';
 
-/** The first useful frame is on the screen: the app's open time, counted from navigation start. */
+/** The first useful frame is on the screen: the app's open time, counted from navigation start. Then, as a chunk of
+ *  its own (out of the start's budget), the launch's layout numbers once Telegram's insets have come in. */
 export function painted(): void {
   if (!hid) count(`open.${platform}.${bucketOf(performance.now()) as Bucket}`);
+  setTimeout(() => { void import('./layoutStats').then((m) => m.measure()).catch(() => {}); }, 2000);
 }
 
 /** A tab or sheet asked for at `since` (performance.now()) is on the screen: counted at the frame after it drew. A page

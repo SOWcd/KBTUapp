@@ -187,6 +187,7 @@ def latin_names(con, apply: bool = False) -> Counter:
 
 
 PREFILL_COLS = ("email", "student_id", "last", "first", "middle", "school", "phone", "came")
+PREFILL_KEEP = 180 * 86400  # one intake period, from the main list's load
 _text = lambda x, k: " ".join(str(x or "").split())[:k] or None  # noqa: E731
 
 
@@ -229,7 +230,7 @@ def prefill_rest_import(con, got: list[dict], name: str) -> dict[str, int]:
     come back), nothing stored. Otherwise the row waits in
     prefill_rest for ms_link: a KBTU mail only (else NULL), the ID only when it is valid and the list's one person's,
     the phone only well-formed; the ID as typed stays for the owner (never shown, never matched). A row with neither
-    mail nor ID just sits (the owner keeps everything). Rows still in prefill, or kept once and gone since (used, or an
+    mail nor ID waits for the same intake period. Rows still in prefill, or kept once and gone since (used, or an
     account deleted: no student has its mail, and its ID wasn't held when the main import ran), are skipped. Each
     `name` once, after prefill-import ran it. Counts only. ValueError: ran already, or the main import never did."""
     _, good, rest = _prefill_sort(got)
@@ -241,7 +242,7 @@ def prefill_rest_import(con, got: list[dict], name: str) -> dict[str, int]:
     shared = {sid for e, sid, *_ in same if per_sid[sid] > 1 or e and per_mail[e] > 1}
     with tx(con):
         main = one(con, "SELECT value FROM meta WHERE key = ?", f"prefill_list:{name}")
-        if not main or one(con, "SELECT 1 FROM meta WHERE key = ?", f"prefill_rest:{name}"):
+        if not main or int(main[0]) <= core.now() - PREFILL_KEEP or one(con, "SELECT 1 FROM meta WHERE key = ?", f"prefill_rest:{name}"):
             raise ValueError(name)  # a typo'd name would count every kept row gone, or store it again
         con.execute("INSERT INTO meta (key, value) VALUES (?, ?)", (f"prefill_rest:{name}", str(core.now())))
         for x in [*good.values(), *rest]:
@@ -263,9 +264,9 @@ def prefill_rest_import(con, got: list[dict], name: str) -> dict[str, int]:
                         UNION ALL SELECT 1 FROM prefill WHERE student_id = ? AND email != ?""", x["student_id"], int(main[0]), x["student_id"], x["email"]):
                 n["gone"] += 1  # kept by the main import (its ID free then), used or deleted since: never back
             else:
-                con.execute("""INSERT INTO prefill_rest (email, student_id, raw_id, last_name, first_name, middle_name, school, phone, came)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""", (kbtu, sid, _text(x.get("raw_id"), 40), p["last_name"], p["first_name"],
-                                                         p["middle_name"], p["school"], p["phone"], p["came"]))
+                con.execute("""INSERT INTO prefill_rest (email, student_id, raw_id, last_name, first_name, middle_name, school, phone, came, loaded_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", (kbtu, sid, _text(x.get("raw_id"), 40), p["last_name"], p["first_name"],
+                                                         p["middle_name"], p["school"], p["phone"], p["came"], int(main[0])))
                 n["stored"] += 1
                 n["sits"] += not kbtu and not sid
     return dict(n)
@@ -296,12 +297,13 @@ def prefill_import(con, got: list[dict], name: str) -> dict[str, int]:
             else:
                 phone = kz_phone(r.get("phone"))
                 n["bad_phone"] += bool(_text(r.get("phone"), 40) and not phone)  # kept without it: a bad export shows here
-                con.execute("""INSERT INTO prefill (email, student_id, last_name, first_name, middle_name, school, phone, came)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (email) DO UPDATE SET student_id = excluded.student_id,
+                # Correcting a pending row does not renew its original intake window.
+                con.execute("""INSERT INTO prefill (email, student_id, last_name, first_name, middle_name, school, phone, came, loaded_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (email) DO UPDATE SET student_id = excluded.student_id,
                     last_name = excluded.last_name, first_name = excluded.first_name, middle_name = excluded.middle_name,
                     school = excluded.school, phone = excluded.phone, came = excluded.came""",
                             (r["email"], r["student_id"], _text(r.get("last"), 40), _text(r.get("first"), 40), _text(r.get("middle"), 40),
-                             _text(r.get("school"), 120), phone, r["came"]))
+                             _text(r.get("school"), 120), phone, r["came"], core.now()))
                 n["kept"] += 1
     return dict(n)
 
@@ -387,7 +389,7 @@ def ms_claim(con, v: Viewer, secret: str) -> bool:
 
 
 def staff_row(con, uid: int, first: str, last: str, school: str | None = None, consent: str = "staff") -> None:
-    """A KBTU staff member acts as a student (SPEC §1): no student ID of theirs exists, so a placeholder no real one can
+    """A KBTU staff member acts as a student: no student ID of theirs exists, so a placeholder no real one can
     match (`staff<id>`). consent 'staff': typed in by the creator (kbtu.admin staff), no policy gate; else the version
     the person accepted at the sign-in (staff_ok's way)."""
     t = core.now()
@@ -481,9 +483,9 @@ def id_clash(con, sid: str, new: int, old: int) -> None:
 
 
 def _channel(c) -> dict | None:
-    """An org's main chat for Studio's tile: its name, and whether its posts reach the news (a public channel, the switch on)."""
+    """An org's main chat for Studio's tile: its name, and whether its posts reach the news (a public channel, the switch on, proven its own)."""
     from .. import mirror  # it imports this package
-    return {"title": c["title"], "mirror": bool(c["mirror"] and c["kind"] == "channel" and mirror.username(c["url"]))} if c else None
+    return {"title": c["title"], "mirror": chatlist.mirrored(c) and c["kind"] == "channel" and bool(mirror.username(c["url"]))} if c else None
 
 
 def _membership(con, m, mains: dict, logos: dict) -> dict:
@@ -503,7 +505,7 @@ def lent_studio(con, v: Viewer, oid: int) -> dict:
     o = one(con, "SELECT * FROM orgs WHERE id = ?", oid)
     if not (v.lent_full and v.staff_org == oid and o):
         raise ApiError("forbidden", "staff")
-    main = one(con, "SELECT org_id, title, kind, url, mirror FROM chats WHERE main = 1 AND org_id = ?", oid)
+    main = one(con, "SELECT org_id, title, kind, url, mirror, tg_chat_id FROM chats WHERE main = 1 AND org_id = ?", oid)
     m = {**dict(o), "role": "president", "rights": None, "title": None, "title_kk": None, "title_en": None}
     out = _membership(con, m, {oid: main} if main else {}, core._by_id(con, "files", [o["logo_file_id"]]))
     lent = lambda lv, r: [x for x in _ordered(core.club_rights(lv, r, o)) if x != "reports"]  # noqa: E731
@@ -518,15 +520,33 @@ def lent_studio(con, v: Viewer, oid: int) -> dict:
 PLATFORMS = ("android", "ios", "desktop", "web")  # the coarse device kinds kept (user_platforms); the web app picks one
 
 
-def seen_platform(con, uid: int, kind: str | None) -> None:
+def seen_platform(con, uid: int, kind: str | None, app: str | None = None) -> None:
     """The device kind someone opened the app on, from /api/me: a read first, then a write (never waited for) at most
-    once a day per kind, so the creator can write to the people of one platform (admin broadcast --platform)."""
+    once a day per kind, so the creator can write to the people of one platform (admin broadcast --platform).
+    app='play': it was the installed Android app (android_app), so its install row and sheet stop."""
     if kind not in PLATFORMS:
         return
     at = one(con, "SELECT seen_at FROM user_platforms WHERE user_id = ? AND kind = ?", uid, kind)
     if at is None or at[0] <= core.now() - 86400:
         db.maybe(con, con.execute, """INSERT INTO user_platforms (user_id, kind, seen_at) VALUES (?, ?, ?)
             ON CONFLICT (user_id, kind) DO UPDATE SET seen_at = excluded.seen_at""", (uid, kind, core.now()))
+    if app == "play" and kind == "android":
+        at = one(con, "SELECT seen_at FROM android_app WHERE user_id = ?", uid)
+        if at is None or at[0] <= core.now() - 86400:
+            db.maybe(con, _play_seen, con, uid, at is None)
+
+
+WELCOME = "android_welcome"  # meta key: 'on' once the creator approved the text (admin android-welcome on)
+
+
+def _play_seen(con, uid: int, first: bool) -> None:
+    """The installed Android app's day, and on its first launch the bot's one thanks (bot_outbox's unique row; the nightly
+    sweep deletes it after 90 days with android_app, so a comeback later may be thanked again). Nobody is thanked before
+    the creator turned it on."""
+    con.execute("""INSERT INTO android_app (user_id, seen_at) VALUES (?, ?)
+        ON CONFLICT (user_id) DO UPDATE SET seen_at = excluded.seen_at""", (uid, core.now()))
+    if first and one(con, "SELECT 1 FROM meta WHERE key = ? AND value = 'on'", WELCOME):
+        notify(con, uid, WELCOME, "")
 
 
 def me(con, v: Viewer) -> dict:
@@ -541,7 +561,7 @@ def me(con, v: Viewer) -> dict:
     members = rows(con, f"""SELECT m.role, {core.TITLES}, t.rights, o.* FROM org_members m JOIN orgs o ON o.id = m.org_id
         LEFT JOIN org_roles t ON t.id = m.role_id WHERE m.user_id = ? AND o.status = 'active'""", v.id) if s else []
     # Studio's "Channel → news" tile (Vice+, who link chats): each org's main chat, one read for all of them
-    mains = {c["org_id"]: c for c in rows(con, f"SELECT org_id, title, kind, url, mirror FROM chats WHERE main = 1 AND org_id IN ({','.join('?' * len(members))})",
+    mains = {c["org_id"]: c for c in rows(con, f"SELECT org_id, title, kind, url, mirror, tg_chat_id FROM chats WHERE main = 1 AND org_id IN ({','.join('?' * len(members))})",
                                           *(m["id"] for m in members))} if members else {}
     logos = core._by_id(con, "files", (m["logo_file_id"] for m in members))  # every club's logo in one read, not one per membership
     tickets = one(con, """SELECT COUNT(*) FROM registrations r JOIN events e ON e.id = r.event_id
@@ -617,6 +637,7 @@ def me(con, v: Viewer) -> dict:
         "bigScreen": "pair" if any("events" in _rights_from(m["role"], m["rights"]) for m in members) or one(con, """SELECT 1 FROM vol_hands h
             JOIN qr_sessions s ON s.id = h.session_id WHERE h.user_id = ? AND h.revoked_at IS NULL AND s.ended_at IS NULL""", v.id)
             else "qr" if c and c["helper"] else None,
+        "androidApp": bool(one(con, "SELECT 1 FROM android_app WHERE user_id = ?", v.id)),  # Profile's Google Play row goes
     }
 
 
@@ -765,7 +786,7 @@ def _skin_ok(con, uid: int, oid: int):
 
 
 def _qr_code(con, uid: int, col: str = "qr_code") -> str:
-    """The secret half of my badge QR (§4.4), or with "link_code" my links' code (r_, ev_: posted in chats, so never the
+    """The secret half of my badge QR, or with "link_code" my links' code (r_, ev_: posted in chats, so never the
     badge's): made on first use, random like a ticket code."""
     assert col in ("qr_code", "link_code")
     code = one(con, f"SELECT {col} FROM users WHERE id = ?", uid)[col]
@@ -952,7 +973,7 @@ def _update_me(con, v: Viewer, patch: dict) -> None:
         sets["avatar_tg"] = int(bool(patch["avatarTg"]))
     if "bio" in patch:
         sets["bio"] = str(patch["bio"])[:150]
-    if "showcase" in patch:  # up to 6 keys: achievement codes and badges as b<event id>, in the order picked (§4.11)
+    if "showcase" in patch:  # up to 6 keys: achievement codes and badges as b<event id>, in the order picked
         codes = {a[0] for a in ACHIEVEMENTS} - {"activist"}
         keys = [k for k in (patch["showcase"] if isinstance(patch["showcase"], list) else [])
                 if isinstance(k, str) and (k in codes or re.fullmatch(r"b\d{1,9}", k))]
@@ -1089,7 +1110,7 @@ def _may_delete(con, v: Viewer) -> None:
 
 
 def ask_delete(con, v: Viewer, photos: bool = False) -> dict:
-    """"Delete my account" (§4.8) waits a week, then `delete_due` runs it (a change of heart, or someone
+    """"Delete my account" waits a week, then `delete_due` runs it (a change of heart, or someone
     holding my phone, shouldn't cost the awards; asking the KBTU password would shut out whoever no longer has it).
     The bot says so at once, with the way back; nothing is hidden meanwhile. `photos`: the album photos I added go
     too (by default they stay, without my name). A President's club passes on at the deletion (delete_due)."""
@@ -1361,13 +1382,14 @@ def replay_deletions(con) -> tuple[int, int]:
 _DEL_KEEP = {("org_bans", "user_id")}  # a club's ban stays on the Telegram account
 _DEL_GONE = {
     ("donations", "user_id"), ("sponsor_consents", "user_id"),
-    ("fchan_feed_pages", "user_id"), ("broadcast_votes", "user_id"), ("user_platforms", "user_id"),
+    ("fchan_feed_pages", "user_id"), ("broadcast_votes", "user_id"), ("user_platforms", "user_id"), ("android_app", "user_id"),
     ("web_sessions", "user_id"),
     ("identities", "user_id"), ("push_devices", "user_id"),  # my Apple sign-in and my iPhones' push tokens (logic/apple.py)
     ("students", "user_id"), ("staff_ok", "user_id"), ("santa_people", "user_id"), ("santa_msgs", "giver_id"), ("santa_msgs", "to_id"), ("santa_sends", "user_id"), ("schedule_classes", "user_id"), ("org_members", "user_id"), ("join_requests", "user_id"),
     ("club_applications", "user_id"), ("subscriptions", "user_id"), ("registrations", "user_id"), ("saved_events", "user_id"),
     ("post_reactions", "user_id"), ("post_reads", "user_id"), ("achievement_grants", "user_id"),
-    ("achievement_levels", "user_id"), ("chat_opens", "user_id"), ("chat_waits", "user_id"), ("bot_outbox", "user_id"), ("event_ratings", "user_id"), ("roster_toasts", "user_id"),
+    ("achievement_levels", "user_id"), ("chat_opens", "user_id"), ("chat_waits", "user_id"), ("bot_outbox", "user_id"), ("event_ratings", "user_id"),
+    ("roster_toasts", "user_id"), ("roster_rejections", "user_id"),
     ("member_tags", "user_id"), ("removal_requests", "user_id"), ("comment_reads", "user_id"), ("visits", "user_id"),
     ("volunteers", "user_id"), ("qr_marks", "user_id"), ("round_apps", "user_id"), ("round_votes", "user_id"), ("comments", "user_id"),
     ("friendships", "a"), ("friendships", "b"), ("friend_requests", "from_id"), ("friend_requests", "to_id"),
@@ -1400,6 +1422,7 @@ _DEL_GONE = {
     ("vol_people", "user_id"), ("vol_access", "user_id"), ("vol_ties", "user_id"), ("vol_hands", "user_id"),  # my record in a club's volunteers ledger (its shifts, misses, edits go with it), my right to read it, a session's door handed to me
     ("gallery_photos", "user_id"),  # my Gallery posts (delete_me took them out of the albums, their files from disk)
     ("gallery_consents", "user_id"),
+    ("lib_reports", "reporter_id"), ("lib_sits", "user_id"), ("lib_consents", "user_id"),  # library seats: my seats (with others' reports on them), my reports, my yes
     ("chat_sync_todo", "user_id"), ("chat_sync_ask", "user_id"),  # a chat sync's finding about me, waiting for its sweep's end
     ("club_report_marks", "user_id"), ("report_consents", "user_id"),  # my marks, their comments and my consent; nullable author and editor links are cleared below
     ("event_team_members", "user_id"), ("team_consents", "user_id"),  # my place in an event's team (evteams.py; captaincy passes to who came next), my consent to teams
@@ -1433,7 +1456,7 @@ def _placeholder(con) -> int:
 
 
 def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
-    """Delete my data (§4.8, consent withdrawn), run by delete_due after the week. The Telegram account stays a guest:
+    """Delete my data (consent withdrawn), run by delete_due after the week. The Telegram account stays a guest:
     its settings and a club's ban stay on the Telegram ID. Future tickets are given up first, so
     seats free up and the waitlist moves. My part of what is over moves to a nameless placeholder, its free text
     blanked: who came to an ended event, ratings, volunteering, done casting rounds, comments written as the club.
@@ -1489,6 +1512,8 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         con.execute("UPDATE comments SET user_id = :p WHERE user_id = :u", me_)
         for (msg,) in rows(con, "SELECT tg_msg FROM fchan_posts WHERE user_id = ? AND status = 'live' AND anon = 0 AND tg_msg > 0", v.id):
             con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, '1')", (f"fch_resign:{msg}",))
+        # my posts' words as reported (a copy on an open report): gone with me
+        con.execute("UPDATE reports SET body = NULL WHERE target = 'fpost' AND target_id IN (SELECT id FROM fchan_posts WHERE user_id = ?)", (v.id,))
         # my edits of my posts (no user id: through the posts), waiting or kept for the pace: gone with me, their photos too
         con.execute("DELETE FROM fchan_photos WHERE edit_id IN (SELECT e.id FROM fchan_edits e JOIN fchan_posts p ON p.id = e.post_id WHERE p.user_id = ?)", (v.id,))
         con.execute("DELETE FROM fchan_edits WHERE post_id IN (SELECT id FROM fchan_posts WHERE user_id = ?)", (v.id,))
@@ -1514,18 +1539,24 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         uploads = [r[0] for r in rows(con, "SELECT id FROM files WHERE kind != 'receipt' AND owner_id = ?", v.id)]
         tgpic = one(con, "SELECT tg_photo_path FROM users WHERE id = ?", v.id)[0]  # our copy of the Telegram photo
         con.execute(f"DELETE FROM dmp_list WHERE id IN (SELECT d.id {_DMP_MINE})", (v.id,))  # off DMP's list: its own row, by id
+        # Username-only guests have no student ID to match. Read it before clearing the account.
+        con.execute("""DELETE FROM event_guests WHERE lower(username) =
+            (SELECT lower(NULLIF(tg_username, '')) FROM users WHERE id = ?)""", (v.id,))
+        # A verified name protects against reused usernames and typo'd emails; an email claim is kept as before.
+        for (key,) in rows(con, """DELETE FROM roster_pending WHERE
+                (lower(email) = (SELECT lower(email) FROM students WHERE user_id = ?)
+                 AND (claimed_by = ? OR EXISTS (SELECT 1 FROM students s WHERE s.user_id = ?
+                   AND expected_name(full_name, s.ms_oid, s.ms_profile, s.manual, s.first_name, s.last_name))))
+                OR (lower(tg) = (SELECT lower(NULLIF(tg_username, '')) FROM users WHERE id = ?)
+                    AND EXISTS (SELECT 1 FROM students s WHERE s.user_id = ?
+                      AND expected_name(full_name, s.ms_oid, s.ms_profile, s.manual, s.first_name, s.last_name)))
+                RETURNING key""", v.id, v.id, v.id, v.id, v.id):
+            con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, ?)", (f"roster_done:{key}", str(core.now())))
         con.execute("""UPDATE users SET bio = '', showcase = '', qr_code = NULL, link_code = NULL, cal_token = NULL, nick = NULL, avatar_tg = 1,
             avatar_file_id = NULL, tg_username = NULL, tg_first_name = '', tg_last_name = '', tg_photo_url = NULL, tg_photo_path = NULL, tg_photo_src = NULL, tg_photo_at = NULL, mark = NULL,
             skin_org = NULL, skin_pick = NULL, skin_look = NULL, frame = NULL, card_no = NULL, delete_at = NULL, city = NULL, city_hidden = 0, referred_by = NULL, announce_ok = NULL,
             role = 'user', is_founder = 0, forum_seen_msg = 0, notification_undo = '{}' WHERE id = ?""", (v.id,))  # a burnt number isn't given again
-        # A claimed row with my email or a verified email and name match goes, and a reimport skips it.
-        for (key,) in rows(con, """DELETE FROM roster_pending WHERE email = (SELECT lower(email) FROM students WHERE user_id = ?)
-                AND (claimed_by = ? OR EXISTS (SELECT 1 FROM students s WHERE s.user_id = ?
-                AND expected_name(full_name, s.ms_oid, s.ms_profile, s.manual, s.first_name, s.last_name)))
-                RETURNING key""", v.id, v.id, v.id):
-            con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, ?)", (f"roster_done:{key}", str(core.now())))
         con.execute("UPDATE roster_pending SET claimed_by = NULL WHERE claimed_by = ?", (v.id,))
-        con.execute("UPDATE roster_pending SET rejected_by = NULL WHERE rejected_by = ?", (v.id,))
         # what a moderator took down of mine, kept for an undo: gone now with its files, no 30 days
         kept = [r[0] for r in rows(con, "DELETE FROM takedowns WHERE user_id = ? RETURNING file_id", v.id)]
         photos = [p for f in mine + uploads + kept for p in _drop_unused(con, f)]
@@ -1584,6 +1615,7 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         con.execute("""DELETE FROM meta WHERE key >= 'share:' AND key < 'share;'
             AND json_extract(value, '$.uid') = ?""", (v.id,))  # cards waiting for the bot (core.share_hold)
         con.execute("DELETE FROM meta WHERE key LIKE ?", (f"fsearch:{v.id}:%",))  # this hour's count of my searches for people
+        con.execute("DELETE FROM meta WHERE key >= ? AND key < ?", (f"gsearch:{v.id}:", f"gsearch:{v.id};"))
         con.execute("DELETE FROM meta WHERE key LIKE ?", (f"flook:{v.id}:%",))
         con.execute("DELETE FROM meta WHERE key = ?", (f"pymk_live:{v.id}",))  # today's own People you may know (pymk.switch)
         con.execute("DELETE FROM meta WHERE key LIKE ?", (f"subj:{v.id}:%",))  # this hour's count of my subject listings (logic/subjects)

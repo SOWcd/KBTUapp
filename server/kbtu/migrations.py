@@ -2,7 +2,7 @@
 user_version is behind, and the helpers only they use. Moved out of db.py as is (issue #21): the SQL is unchanged."""
 from __future__ import annotations
 
-# Changes after the base schema: (user_version they bring the file to, SQL). Append only; mirror in SPEC §5.
+# Changes after the base schema: (user_version they bring the file to, SQL). Append only.
 def held_by(x: str) -> str:
     """SQL: the club that holds Telegram chat `x` (its chat sync link, else its chats card, else its newest event's
     chat), as logic.chatlist._holder reads it."""
@@ -38,7 +38,7 @@ MIGRATIONS: list[tuple[int, str]] = [
     # Keep recruitment open or closed at the club's discretion in Studio.
     (4, "ALTER TABLE orgs ADD COLUMN recruiting INTEGER NOT NULL DEFAULT 1; UPDATE orgs SET recruiting = 0 WHERE kind IN ('school','office','app');"
         " ALTER TABLE orgs DROP COLUMN recruiting_until;"),
-    # the badge QR (§4.4): a random code per student, so nobody can make a QR from a user id;
+    # the badge QR: a random code per student, so nobody can make a QR from a user id;
     # walk_in marks a registration made at the door with that QR
     (5, "ALTER TABLE users ADD COLUMN qr_code TEXT; CREATE UNIQUE INDEX users_qr ON users(qr_code);"
         " ALTER TABLE registrations ADD COLUMN walk_in INTEGER NOT NULL DEFAULT 0;"),
@@ -147,7 +147,7 @@ MIGRATIONS: list[tuple[int, str]] = [
         last_id INTEGER NOT NULL,
         PRIMARY KEY (event_id, user_id)
     ) STRICT;"""),
-    # a nickname and my own photo (SPEC §3): everyone sees the nick, organizers the real name beside it;
+    # a nickname and my own photo: everyone sees the nick, organizers the real name beside it;
     # avatar_tg is the "Photo from Telegram" switch, off once I upload my own (it goes in users.avatar_file_id)
     (16, """ALTER TABLE users ADD COLUMN nick TEXT CHECK (nick IS NULL OR length(nick) BETWEEN 2 AND 24);
     ALTER TABLE users ADD COLUMN avatar_tg INTEGER NOT NULL DEFAULT 1;"""),
@@ -171,11 +171,11 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE UNIQUE INDEX one_strike_per_meeting ON strikes(event_id, user_id) WHERE event_id IS NOT NULL;"""),
     # the server's own notes between starts: the achievements list the levels were last recorded for
     (20, "CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);"),
-    (21, "ALTER TABLE users ADD COLUMN mark TEXT;"),  # a person's mark by the name besides the Creator's: 'idea' (SPEC §1)
-    (22, "ALTER TABLE org_roles ADD COLUMN rights TEXT;"),  # a club role's toggles, comma-separated; NULL: its level's (SPEC §2)
+    (21, "ALTER TABLE users ADD COLUMN mark TEXT;"),  # a person's mark by the name besides the Creator's: 'idea'
+    (22, "ALTER TABLE org_roles ADD COLUMN rights TEXT;"),  # a club role's toggles, comma-separated; NULL: its level's
     # what the club asks DMP for in its weekly memo: JSON, the editor's "For the memo" block
     (23, "ALTER TABLE events ADD COLUMN memo TEXT;"),
-    # DMP books rooms by memo (SPEC §4.12c).
+    # DMP books rooms by memo.
     (24, "DROP TABLE IF EXISTS room_requests;"),
     # casting: a club's recruitment round, its departments (the club's tags) and own questions, the
     # applications (what the student picked and answered; the rest is their KBTU profile) and the team's votes
@@ -2620,4 +2620,118 @@ MIGRATIONS: list[tuple[int, str]] = [
     # A club's open round by its club (issue #363): clubs.listed asks it for every club on each Clubs list, and the
     # partial one_live_round (status != 'done') can't answer status = 'open', so each club walked every round.
     (253, "CREATE INDEX IF NOT EXISTS rounds_by_org ON rounds(org_id, status);"),
+    # who opened the installed Android app (the Google Play TWA reports itself on /api/me): Profile's "KBTU App in
+    # Google Play" row and the tester sheet stop for them. The device kind the policy already names, kept 90 days
+    # like user_platforms (whose CHECK can't take a fifth kind)
+    (254, """CREATE TABLE IF NOT EXISTS android_app (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      seen_at INTEGER NOT NULL
+    ) STRICT;"""),
+    # A club that announces in a forum group's topic, not a channel (mirror.py): chats.news_topic on its group = the
+    # org's news source instead of the main channel (0: picked, its topic not yet; else the topic's id). chat_topics: the
+    # group's topics as the userbot listed them, for Studio's picker (titles only). tg_channels.stay: the userbot was in
+    # the group before (added by hand): when it stops being a source it is forgotten, never left.
+    (255, """ALTER TABLE chats ADD COLUMN news_topic INTEGER;
+    CREATE TABLE chat_topics (
+      chat_id INTEGER NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+      topic   INTEGER NOT NULL,
+      title   TEXT NOT NULL,
+      PRIMARY KEY (chat_id, topic)
+    ) STRICT;
+    ALTER TABLE tg_channels ADD COLUMN stay INTEGER NOT NULL DEFAULT 0;"""),
+    # Library seats (logic/library.py, LIBRARY; the policy's section 16): rooms and their tables, a QR sticker per table
+    # (code: a bare random string only the app's scanner takes); screen: the room's big-screen key (/show?lib=, seat
+    # states only); gone_at: removed by the admin, undoable. A sit is one person on one seat until `until` (a rescan
+    # moves it on); ended_at and why once it ends. A report: "nobody here" on a live sit, by its reporter; answered_at
+    # the holder's "I'm here" or rescan, still_at the reporter's "still not here" (the seat freed), false_at the holder
+    # back on the seat soon after that. All of it goes after 7 days (library.sweep) or with the account
+    (256, """CREATE TABLE IF NOT EXISTS lib_rooms (
+      id         INTEGER PRIMARY KEY,
+      name       TEXT NOT NULL,
+      screen     TEXT NOT NULL UNIQUE,
+      created_at INTEGER NOT NULL,
+      gone_at    INTEGER
+    ) STRICT;
+    CREATE TABLE IF NOT EXISTS lib_tables (
+      id         INTEGER PRIMARY KEY,
+      room_id    INTEGER NOT NULL REFERENCES lib_rooms(id) ON DELETE CASCADE,
+      label      TEXT NOT NULL,
+      seats      INTEGER NOT NULL CHECK (seats BETWEEN 1 AND 12),
+      code       TEXT NOT NULL UNIQUE,
+      created_at INTEGER NOT NULL,
+      gone_at    INTEGER
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS lib_tables_by_room ON lib_tables(room_id);
+    CREATE TABLE IF NOT EXISTS lib_sits (
+      id         INTEGER PRIMARY KEY,
+      table_id   INTEGER NOT NULL REFERENCES lib_tables(id) ON DELETE CASCADE,
+      seat       INTEGER NOT NULL,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      started_at INTEGER NOT NULL,
+      until      INTEGER NOT NULL,
+      ended_at   INTEGER,
+      why        TEXT
+    ) STRICT;
+    CREATE UNIQUE INDEX IF NOT EXISTS lib_sits_seat ON lib_sits(table_id, seat) WHERE ended_at IS NULL;
+    CREATE UNIQUE INDEX IF NOT EXISTS lib_sits_mine ON lib_sits(user_id) WHERE ended_at IS NULL;
+    CREATE INDEX IF NOT EXISTS lib_sits_until ON lib_sits(until) WHERE ended_at IS NULL;
+    CREATE INDEX IF NOT EXISTS lib_sits_by_user ON lib_sits(user_id, started_at);
+    CREATE TABLE IF NOT EXISTS lib_reports (
+      id          INTEGER PRIMARY KEY,
+      sit_id      INTEGER NOT NULL REFERENCES lib_sits(id) ON DELETE CASCADE,
+      reporter_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at  INTEGER NOT NULL,
+      answered_at INTEGER,
+      still_at    INTEGER,
+      false_at    INTEGER
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS lib_reports_by_sit ON lib_reports(sit_id);
+    CREATE INDEX IF NOT EXISTS lib_reports_by_reporter ON lib_reports(reporter_id, created_at);
+    CREATE INDEX IF NOT EXISTS lib_reports_open ON lib_reports(created_at) WHERE answered_at IS NULL AND still_at IS NULL;
+    CREATE TABLE IF NOT EXISTS lib_consents (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      version TEXT NOT NULL,
+      at      INTEGER NOT NULL
+    ) STRICT;"""),
+    # an org's switches only the creator sets (admin): auto_publish, an event its channel announces goes out at once, not
+    # as a draft (logic/autoev.py); guests_private, who goes to its events never shows to other students (core.GUESTS_SEEN)
+    (257, """CREATE TABLE IF NOT EXISTS org_flags (  -- IF NOT EXISTS: tests rewind user_version
+      org_id         INTEGER PRIMARY KEY REFERENCES orgs(id) ON DELETE CASCADE,
+      auto_publish   INTEGER NOT NULL DEFAULT 0 CHECK (auto_publish IN (0, 1)),
+      guests_private INTEGER NOT NULL DEFAULT 0 CHECK (guests_private IN (0, 1))
+    ) STRICT;"""),
+    # a forum channel post's words when it was reported (moderation.report), for the moderator if it was edited since; only
+    # while the report is open (the trigger wipes it at the decision), and wiped with the post's words (fchannel._wipe)
+    (258, """ALTER TABLE reports ADD COLUMN body TEXT;
+    DROP TRIGGER IF EXISTS report_body_off;
+    CREATE TRIGGER report_body_off AFTER UPDATE OF status ON reports WHEN new.status != 'open' AND new.body IS NOT NULL BEGIN
+        UPDATE reports SET body = NULL WHERE id = new.id;
+    END;"""),
+    # a sheet's row turned down for each student who said it was theirs (roster.decide), so one refusal never hides it from
+    # the next; the old single rejected_by moves here and that column stays unused
+    (259, """CREATE TABLE IF NOT EXISTS roster_rejections (
+      row_id  INTEGER NOT NULL REFERENCES roster_pending(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (row_id, user_id)
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS roster_rejections_by_user ON roster_rejections(user_id);
+    INSERT OR IGNORE INTO roster_rejections (row_id, user_id)
+      SELECT id, rejected_by FROM roster_pending WHERE rejected_by IS NOT NULL;
+    UPDATE roster_pending SET claimed_by = CASE WHEN claimed_by = rejected_by THEN NULL ELSE claimed_by END,
+      rejected_by = NULL WHERE rejected_by IS NOT NULL;"""),
+    # A comment verdict may edit its earlier DM only in the same chat. Legacy message ids have no known chat:
+    # leave it NULL rather than guessing after an account relink.
+    (260, "ALTER TABLE tgc_comments ADD COLUMN dm_chat_id INTEGER;"),
+    # Intake lists expire from their original load, including rows that cannot be matched to an account.
+    # Old rows have no per-list link: use the earliest known main load, or 0 to expire an undated import.
+    (261, """ALTER TABLE prefill ADD COLUMN loaded_at INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE prefill_rest ADD COLUMN loaded_at INTEGER NOT NULL DEFAULT 0;
+    UPDATE prefill SET loaded_at = COALESCE((SELECT MIN(CAST(value AS INTEGER)) FROM meta
+        WHERE key >= 'prefill_list:' AND key < 'prefill_list;'), 0);
+    UPDATE prefill_rest SET loaded_at = COALESCE((SELECT MIN(CAST(value AS INTEGER)) FROM meta
+        WHERE key >= 'prefill_list:' AND key < 'prefill_list;'), 0);"""),
+    # A channel mirrors only once our bot is an admin there (its owners added it) or an admin vouched (chats.mirror = 2,
+    # mirror._MIRRORED). The main channels mirrored today without the bot keep going, as vouched.
+    (262, """UPDATE chats SET mirror = 2 WHERE mirror = 1 AND main = 1 AND kind = 'channel' AND tg_chat_id IS NULL
+        AND org_id IS NOT NULL;"""),
 ]

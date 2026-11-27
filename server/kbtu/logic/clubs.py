@@ -228,7 +228,7 @@ def subscribe(con, v: Viewer, oid: int, on: bool) -> dict:
     return org(con, v, oid)
 
 
-# ---------------------------------------------------------------- joining a club (§4.5)
+# ---------------------------------------------------------------- joining a club
 
 REAPPLY = 30 * 86400    # after a decline, a new application to the same club only in 30 days
 
@@ -286,7 +286,7 @@ def withdraw(con, v: Viewer, oid: int) -> dict:
 
 
 def join_requests(con, v: Viewer, oid: int) -> list[dict]:
-    """Pending applications, oldest first, with what the club needs to write to the person first (§3: Vice+ see contacts)."""
+    """Pending applications, oldest first, with what the club needs to write to the person first (Vice+ see contacts)."""
     _may(con, v, oid, "team")
     found = rows(con, f"""SELECT j.id AS rid, j.created_at AS at, j.answers, {PERSON_COLS}, s.course, s.school, u.tg_username
         FROM join_requests j JOIN users u ON u.id = j.user_id JOIN students s ON s.user_id = u.id
@@ -311,7 +311,7 @@ def decide_join(con, v: Viewer, rid: int, accept: bool) -> None:
 
 
 def update_org(con, v: Viewer, oid: int, body: dict) -> dict:
-    """The club's own profile and settings (Vice+, §2): whether it takes applications, and what students see on its
+    """The club's own profile and settings (Vice+): whether it takes applications, and what students see on its
     sheet — the name and its short one, its logo (an upload of the editor's; null: the emoji on its cover again), emoji
     and cover, about, up to 6 links. Only what is sent changes, all or nothing. DMP may set any club's short name and its name (an official club's name is DMP's alone)."""
     # DMP: any club's abbr, and an official club's name (the club's own Vice+ renames a student initiative)
@@ -416,7 +416,7 @@ def delete_org(con, v: Viewer, oid: int) -> None:
     core._SHARED.clear()
 
 
-# ---------------------------------------------------------------- starting a club (§4.6)
+# ---------------------------------------------------------------- starting a club
 
 CLUB_REAPPLY = 30 * 86400   # after a decline, a new application in 30 days
 COVERS = 6                  # the cover palette (OrgLogo.svelte's COVERS)
@@ -440,7 +440,7 @@ def _club_app(con, a: sqlite3.Row, staff: bool) -> dict:
     out = {"id": a["id"], "name": a["name"], "short": a["short"], "description": a["description"], "emoji": a["emoji"], "cover": a["cover"],
            "links": json.loads(a["links"]), "why": a["why"], "status": a["status"], "reason": a["reason"], "orgId": a["org_id"], "createdAt": a["created_at"],
            "decidedAt": a["decided_at"], "reapplyAt": a["decided_at"] + CLUB_REAPPLY if a["status"] == "rejected" else None}
-    if staff:  # who asks: what the admin needs to judge and to write to them first (§4.6)
+    if staff:  # who asks: what the admin needs to judge and to write to them first
         p = one(con, f"SELECT {DMP_COLS} FROM users u LEFT JOIN students s ON s.user_id = u.id WHERE u.id = ?", a["user_id"])
         out["applicant"] = {"person": person_ref(p), "fullName": f"{p['last_name'] or ''} {p['first_name'] or ''}".strip() or short_name(p),
                             "username": p["tg_username"], "course": p["course"], "school": p["school"]} if p else None
@@ -454,7 +454,7 @@ def my_club_application(con, v: Viewer) -> dict | None:
 
 
 def apply_club(con, v: Viewer, body: dict) -> dict:
-    """A student asks to start a club (§4.6): it opens after the creator's check, said up front. One pending application
+    """A student asks to start a club: it opens after the creator's check, said up front. One pending application
     per person; after a decline, a new one in 30 days. The admins hear about it from the bot."""
     need_student(v)
     name, short = str(body.get("name") or "").strip(), str(body.get("short") or "").strip().upper()
@@ -487,7 +487,7 @@ def club_applications(con, v: Viewer) -> list[dict]:
 
 def decide_club_application(con, v: Viewer, aid: int, approve: bool, reason: object) -> dict:
     """Yes: the club exists at once as a student initiative and the applicant is its President. No: with a reason the
-    applicant reads in the app (the bot's message is our template only, §9)."""
+    applicant reads in the app (the bot's message is our template only)."""
     _admin(v)
     why = str(reason or "").strip()
     if not approve and not 3 <= len(why) <= 300:

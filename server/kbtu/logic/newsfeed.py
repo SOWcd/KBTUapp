@@ -154,7 +154,7 @@ def _worded(title: str) -> bool:
 
 
 def create_post(con, v: Viewer, oid: int, body: dict) -> dict:
-    """A club's post (Head+, SPEC §4.10): public — its members and subscribers see it in News and on the club page; a
+    """A club's post (Head+): public — its members and subscribers see it in News and on the club page; a
     broadcast org (DMP, KBTU App) may write to every member of every club instead (`clubs`), and the bot tells them.
     The photo is one of the caller's own uploads; one pinned post per club."""
     need_student(v)
@@ -192,7 +192,7 @@ def create_post(con, v: Viewer, oid: int, body: dict) -> dict:
         if end is not None and audience == "public":  # its followers outside it hear it once, as for a round (casting.open_round)
             for (uid,) in rows(con, "SELECT user_id FROM subscriptions WHERE org_id = ? AND user_id NOT IN (SELECT user_id FROM org_members WHERE org_id = ?)", oid, oid):
                 notify(con, uid, "casting_open", f"cst:{pid}")
-        if audience == "clubs":  # every member of every club hears it (§7 broadcast), except the author
+        if audience == "clubs":  # every member of every club hears it (a broadcast), except the author
             for (uid,) in rows(con, "SELECT DISTINCT user_id FROM org_members WHERE user_id != ?", v.id):
                 notify(con, uid, "broadcast", f"post:{pid}")
         elif tag == "important" and not one(con, """SELECT 1 FROM bot_outbox b JOIN posts p ON b.ref = 'post:' || p.id
@@ -205,7 +205,7 @@ def create_post(con, v: Viewer, oid: int, body: dict) -> dict:
 
 
 def update_post(con, v: Viewer, pid: int, body: dict) -> dict:
-    """Edit a club's post or pin it (its Head+, §2): the title, text, label and photo as in the composer — then it
+    """Edit a club's post or pin it (its Head+): the title, text, label and photo as in the composer — then it
     reads "edited" — and the pin (one per club). Who sees it stays: a broadcast has already gone out."""
     need_student(v)
     p = one(con, "SELECT * FROM posts WHERE id = ? AND hidden_at IS NULL", pid)
@@ -297,7 +297,7 @@ def unread_broadcasts(con, v: Viewer) -> int:
 
 
 def feature(con, v: Viewer, pid: object, days: object) -> dict:
-    """A post for everyone on top of Events → List (the admin, §2; moderators only filter) for 1–14 days;
+    """A post for everyone on top of Events → List (the admin; moderators only filter) for 1–14 days;
     0 takes it off. Public posts only: a broadcast to club members stays theirs. One at a time: featuring one ends the other."""
     _admin(v)
     p = one(con, "SELECT * FROM posts WHERE id = ? AND hidden_at IS NULL", pid) if isinstance(pid, int) else None

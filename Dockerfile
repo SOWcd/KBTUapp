@@ -37,7 +37,7 @@ COPY --from=web /web/dist /app/web/dist
 # the map's room list: the assistant gives a room's floor only from it (logic/assistant.py MAP_ROOMS)
 COPY web/src/assets/map/uniq-rooms.json /app/web/src/assets/map/uniq-rooms.json
 
-# the database is the only state; it must survive image updates (back it up: SPEC §9)
+# the database is the only state; it must survive image updates (kbtu/offsite.py backs it up)
 VOLUME /var/lib/kbtu
 # DB_MUST_EXIST: refuse to start on a missing database (config.py); SQLite's temp files (big sorts) stay next to the
 # data instead of the container's /tmp on the plain disk

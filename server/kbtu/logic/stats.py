@@ -1,8 +1,8 @@
 """Anonymous usage counters: what students open, what nobody opens, how long the app and each screen take to open, where
 people drop out of the key flows, which errors they hit (by class only). One table of daily totals, (day, key, n), with
 no person in it (no user id, Telegram id, hash, IP or session); that is what keeps it out of the privacy policy. The app
-sends batches (web/src/lib/stats.ts). The owner reads the totals with `admin stats-usage` and the week's changes with
-`admin stats-week`."""
+sends batches (web/src/lib/stats.ts). The owner reads the totals with `admin stats-usage`, the week's changes with
+`admin stats-week` and the phones' layout numbers with `admin stats-layout`."""
 from __future__ import annotations
 
 import math
@@ -19,6 +19,10 @@ SCREENS = ("tab.afisha", "tab.forum", "tab.club", "tab.profile",
            "sheet.map", "sheet.week", "sheet.awards", "sheet.studio", "sheet.news", "sheet.feed", "sheet.assistant",
            "sheet.scanner", "sheet.doorpeople", "sheet.attendees", "sheet.manage", "sheet.editor", "sheet.team", "sheet.member", "sheet.joininbox",
            "sheet.pay", "sheet.people", "sheet.sponsors", "sheet.teams")
+# screens only a club's organizers open (the door, the guests, the editor, the team, join requests): a day's open time
+# by platform could be one club head's, so they have no tti.* keys (their open counts, by class only, stay)
+STAFF_SCREENS = ("sheet.scanner", "sheet.doorpeople", "sheet.attendees", "sheet.manage", "sheet.editor", "sheet.team",
+                 "sheet.member", "sheet.joininbox")
 # what shipped since Nov 20, each counted where it's used (the second row on): `stats-week` shows them as "new"
 NEW_ACTIONS = ("do.coming", "do.heart", "do.comment", "do.research", "do.pymk", "do.pymkon", "do.share", "do.filter", "do.past",
                "do.calendar", "do.photo", "do.helpus", "do.anon", "do.chatlink", "do.kri")
@@ -31,11 +35,15 @@ APPEALS = ("apl.open", "apl.typed", "apl.ai", "apl.sent", "apl.drop", "apl.del")
 HERO_KINDS = ("ticket", "friends", "club", "news", "forum", "class", "next", "today", "week")
 HERO = tuple(f"hero.{a}.{k}" for a in ("show", "tap") for k in HERO_KINDS)
 # the Android tester's funnel: the sheet in the app (shown, tapped), then kbtu.sow.kz/android.html in the phone's
-# browser (opened, each Google step's button, the "Item not found" retry); the page has no sign-in, so `page_hit`
-ANDROID_APP = ("andr.sheet", "andr.go")
+# browser (opened, each Google step's button, the "Item not found" retry); the page has no sign-in, so `page_hit`.
+# Beside the chain: andr.again, the sheet's one second showing (3 days on, dismissed); andr.row / andr.rowgo, Profile's
+# lasting row drawn (once a launch) and tapped
+ANDROID_MORE = ("andr.again", "andr.row", "andr.rowgo")
+ANDROID_APP = ("andr.sheet", "andr.go", *ANDROID_MORE)
 ANDROID_PAGE = ("page", "join", "optin", "play", "retry")
-ANDROID = (*ANDROID_APP, *(f"andr.{k}" for k in ANDROID_PAGE))
+ANDROID = ("andr.sheet", "andr.go", *(f"andr.{k}" for k in ANDROID_PAGE))
 PAGE_CAP = 5000  # a key's day ceiling for the signed-out page: far above real use, so a script can't run it up
+PAGE_PER_IP = 20  # one address's hits on the page a minute (per worker): a campus NAT's real taps fit, a loop doesn't
 # the key flows, step by step (each step's key in order), then what ends one short: where people drop, counts only
 FUNNELS = {
     "signup": (("sheet.event", "signup.tap", "signup.done"), ("signup.fail",)),     # a free or paid event's Going
@@ -55,20 +63,31 @@ BUCKETS = ("≤1", "≤2", "≤3", "≤5", "≤8", "8+")  # seconds from navigat
 TTI = ("≤100ms", "≤250ms", "≤500ms", "≤1s", "≤2s", "2s+")  # a tab's or a sheet's tap to its first frame
 SESSIONS = ("≤30s", "≤1m", "≤3m", "≤5m", "≤10m", "≤20m", "20m+")  # one visit's visible time, ended by 30 s or more hidden
 DAY_TIMES = ("≤1m", "≤5m", "≤10m", "≤20m", "≤40m", "≤60m", "60m+")  # one device's visible time over a calendar day
+# the phone's layout, once a launch (web stats.ts layout()): Telegram's safe-area insets, env(safe-area-inset-bottom),
+# the window's height over Telegram's stable one, the tab bar's gap to the window bottom; by platform and Telegram's
+# major version ('x': another or none), each value by its bucket only, so no exact size can name a device
+LAY = ("0", "1-8", "9-16", "17-24", "25-32", "33-48", "49-64", "65+")  # px
+LAY_VALUES = {"safe_b": "tg safeAreaInset.bottom", "safe_t": "tg safeAreaInset.top", "content_b": "tg contentSafeAreaInset.bottom",
+              "content_t": "tg contentSafeAreaInset.top", "env_b": "env(safe-area-inset-bottom)",
+              "stable": "innerHeight - viewportStableHeight", "gap": "nav bottom gap (10 by design)"}
+TG_MAJORS = ("6", "7", "8", "9", "10", "11", "12", "x")
+LAY_KEYS = (*(f"lay.{p}.{v}.{m}.{b}" for p in PLATFORMS for v in TG_MAJORS for m in LAY_VALUES for b in range(len(LAY))),
+            *(f"lay.{p}.{v}.full.{b}" for p in PLATFORMS for v in TG_MAJORS for b in (0, 1)))
 USES = (*SCREENS, *ACTIONS)  # uniq.<key>: at most once a day per device (a flag kept on the device), for "N% of those active used it"
 FLOW_KEYS = tuple(k for steps, ends in FUNNELS.values() for k in (*steps, *ends))
 KEYS = frozenset((*SCREENS, *ACTIONS, *SOURCES, *APPEALS, *HERO, *ANDROID_APP, *STREAK,
                   *(k for k in FLOW_KEYS if not k.startswith("andr.")),  # the page's own come by page_hit only
                   *(f"err.{s}" for s in SCREENS), *(f"uniq.{k}" for k in USES),
                   *(f"js.{s}.{k}" for s in SCREENS for k in JS_KINDS), *(f"api.{s}.{k}" for s in SCREENS for k in API_KINDS),
-                  *(f"tti.{s}.{p}.{b}" for s in SCREENS for p in PLATFORMS for b in range(len(TTI))),
+                  *(f"tti.{s}.{p}.{b}" for s in SCREENS if s not in STAFF_SCREENS for p in PLATFORMS for b in range(len(TTI))),
                   *(f"open.{p}.{b}" for p in PLATFORMS for b in range(len(BUCKETS))),
-                  *(f"sess.{b}" for b in range(len(SESSIONS))), *(f"time.{b}" for b in range(len(DAY_TIMES)))))
-ONE_A_BATCH = ("open.", "uniq.", "sess.", "time.")  # samples, not taps
+                  *(f"sess.{b}" for b in range(len(SESSIONS))), *(f"time.{b}" for b in range(len(DAY_TIMES))), *LAY_KEYS))
+ONE_A_BATCH = ("open.", "uniq.", "sess.", "time.", "lay.")  # samples, not taps
 
 KEEP_DAYS = 180
 WINDOW = 30  # what `visits` keeps
 MAX_IN_BATCH = 30   # of one key in one batch
+KEY_DAY_CAP = 30    # of one key from one person in a day: batch after batch can't fake a rare key or a funnel's rate
 BATCH_COST, DAY_BUDGET = 5, 1500  # one person's whole day: far above a real one, so one client can't skew the totals much
 # ponytail: per worker and in memory only (user id -> counts spent today, never stored), so the ceiling is the budget
 # times WEB_CONCURRENCY; a shared table would put a person into this feature's data, the one thing it must not have
@@ -76,6 +95,14 @@ _spent: dict[int, int] = {}
 _spent_day = 0
 # ponytail: same ceiling (per worker, in memory): who already counted a uniq.* key today; a repeat is dropped, so one client can't inflate uniques
 _uniq: set[tuple[int, str]] = set()
+# ponytail: same ceiling: how much of each key each person counted today (KEY_DAY_CAP); a uniq.* key is in _uniq instead
+_used: dict[tuple[int, str], int] = {}
+# ponytail: per worker, in memory: the signed-out page's counts today (PAGE_CAP checked before the database's write
+# lock is taken) and each address's hits this minute; nothing is kept past the day or the minute
+_page: dict[str, int] = {}
+_page_day = 0
+_ips: dict[str, int] = {}
+_ips_minute = 0
 
 
 def _today() -> int:
@@ -90,21 +117,40 @@ def add(con, uid: int, body: dict) -> None:
     if day != _spent_day:
         _spent, _spent_day = {}, day
         _uniq.clear()
-    counts = {k: min(n, 1 if k.startswith(ONE_A_BATCH) else MAX_IN_BATCH) for k, n in body.items() if k in KEYS and type(n) is int and n > 0 and (uid, k) not in _uniq}
+        _used.clear()
+    counts = {k: min(n, 1 if k.startswith(ONE_A_BATCH) else MAX_IN_BATCH, KEY_DAY_CAP - _used.get((uid, k), 0))
+              for k, n in body.items() if k in KEYS and type(n) is int and n > 0 and (uid, k) not in _uniq}
+    counts = {k: n for k, n in counts.items() if n > 0}
     cost = sum(counts.values()) + BATCH_COST
     if not counts or _spent.get(uid, 0) + cost > DAY_BUDGET:
         return
     _spent[uid] = _spent.get(uid, 0) + cost
     _uniq.update((uid, k) for k in counts if k.startswith("uniq."))
+    for k, n in counts.items():
+        if not k.startswith("uniq."):
+            _used[uid, k] = _used.get((uid, k), 0) + n
     maybe(con, con.executemany, """INSERT INTO usage_days (day, key, n) VALUES (?, ?, ?)
         ON CONFLICT (day, key) DO UPDATE SET n = n + excluded.n""", [(day, k, n) for k, n in counts.items()])
 
 
-def page_hit(con, key: str) -> None:
-    """One tap on android.html, signed out: one of ANDROID_PAGE, +1, never past PAGE_CAP a day; anything else is ignored."""
-    if key in ANDROID_PAGE:
-        maybe(con, con.execute, """INSERT INTO usage_days (day, key, n) VALUES (?, ?, 1)
-            ON CONFLICT (day, key) DO UPDATE SET n = n + 1 WHERE n < ?""", (_today(), f"andr.{key}", PAGE_CAP))
+def page_hit(con, key: str, ip: str = "") -> None:
+    """One tap on android.html, signed out: one of ANDROID_PAGE, +1, never past PAGE_CAP a day; anything else is ignored.
+    A key at its cap, or an address past PAGE_PER_IP this minute, returns before the database (a loop takes no write lock)."""
+    global _page, _page_day, _ips, _ips_minute
+    if key not in ANDROID_PAGE:
+        return
+    t = core.now()
+    day, minute = core.day_of(t), t // 60
+    if day != _page_day:
+        _page, _page_day = {}, day
+    if minute != _ips_minute:
+        _ips, _ips_minute = {}, minute
+    if _page.get(key, 0) >= PAGE_CAP or _ips.get(ip, 0) >= PAGE_PER_IP:
+        return
+    _ips[ip] = _ips.get(ip, 0) + 1
+    _page[key] = _page.get(key, 0) + 1
+    maybe(con, con.execute, """INSERT INTO usage_days (day, key, n) VALUES (?, ?, 1)
+        ON CONFLICT (day, key) DO UPDATE SET n = n + 1 WHERE n < ?""", (day, f"andr.{key}", PAGE_CAP))
 
 
 def forget(con) -> None:
@@ -174,8 +220,28 @@ def fields(con, days: int, upto: int | None = None) -> dict:
             "sources": lines(sorted(SOURCES, key=lambda k: -got.get(k, 0)), 5),
             "errors": lines(sorted((f"err.{s}" for s in SCREENS if got.get(f"err.{s}")), key=lambda k: -got[k]), 4),
             "hero": "\n".join(f"{k} {got.get(f'hero.tap.{k}', 0)}/{got.get(f'hero.show.{k}', 0)}" for k in HERO_KINDS),
-            "android": " → ".join(f"{k[5:]} {got.get(k, 0)}" for k in ANDROID),
+            "android": " → ".join(f"{k[5:]} {got.get(k, 0)}" for k in ANDROID) + "".join(f" · {k[5:]} {got.get(k, 0)}" for k in ANDROID_MORE),
             "opens": "\n".join(opens) or "—"}
+
+
+def layout(con, days: int) -> str:
+    """`admin stats-layout`: per platform and Telegram version, how many launches were fullscreen, then each layout
+    value's spread over the buckets (px), for `days` days up to and including today."""
+    upto = _today() + 1
+    got = {r[0]: r[1] for r in rows(con, """SELECT key, SUM(n) FROM usage_days WHERE day >= ? AND day < ?
+        AND key GLOB 'lay.*' GROUP BY key""", upto - days, upto)}
+    out = []
+    for p in PLATFORMS:
+        for v in TG_MAJORS:
+            full, rest = got.get(f"lay.{p}.{v}.full.1", 0), got.get(f"lay.{p}.{v}.full.0", 0)
+            lines = []
+            for m, name in LAY_VALUES.items():
+                bars = [(label, got.get(f"lay.{p}.{v}.{m}.{b}", 0)) for b, label in enumerate(LAY)]
+                if any(n for _, n in bars):
+                    lines.append(f"  {name}: " + " · ".join(f"{label} {n}" for label, n in bars if n))
+            if lines or full or rest:
+                out += [f"{p} tg {v}: fullscreen {full}/{full + rest}", *lines]
+    return "\n".join(out) or "—"
 
 
 # ---- the weekly digest (`admin stats-week`): the last 7 whole days against the 7 before ----

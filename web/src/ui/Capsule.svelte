@@ -3,7 +3,7 @@
 </script>
 
 <script lang="ts">
-  // The capsule (SPEC §8.2): one liquid-glass object at the top, between Telegram's own buttons, that
+  // The capsule: one liquid-glass object at the top, between Telegram's own buttons, that
   // always says where you are and what's happening now: the title of the view on top (a sheet, a full-screen view, else
   // the tab), or the live status (an event today, a class soon) when nothing is on top. It never switches pages
   // (one tab, one screen).
@@ -14,7 +14,7 @@
   // narrower on the left, then it grows into the freed space. «Close» is in Telegram's own language, and it is
   // wider in most of them than in English: the Russian one ends ~9 px further right (two iPhones), close
   // enough to touch. So outside English and Kazakh (short words) the window gives up 10 px more on the left.
-  import { onMount, type Component } from 'svelte';
+  import { onMount, untrack, type Component } from 'svelte';
   import { inTelegram, onAndroid, tg } from '../lib/tg';
   import { countdown } from '../lib/time';
   import { glass } from './glass';
@@ -38,9 +38,17 @@
   const mode = $derived(title ? 'title' : mark && icon ? 'mark' : live ? 'live' : 'none');
 
   onMount(() => {
-    const tick = setInterval(() => { if (live) now = Date.now() / 1000; }, 1000);
     const boot = booting ? setTimeout(() => (booting = false), BOOT_MS - performance.now()) : undefined;
-    return () => { clearInterval(tick); clearTimeout(boot); };
+    return () => clearTimeout(boot);
+  });
+  // the clock ticks each second only while it is on screen counting down to an event (hh:mm:ss); every other status is
+  // a fixed label (the anthem's time left comes ready from App), so it reads no clock and nothing ticks
+  const counting = $derived(mode === 'live' && live?.kind === 'event' && live.at > now);
+  $effect(() => {
+    if (!counting) return;
+    untrack(() => (now = Date.now() / 1000)); // it may have stood still since the last countdown
+    const tick = setInterval(() => (now = Date.now() / 1000), 1000);
+    return () => clearInterval(tick);
   });
 
   // a title shrinks to fit before it is cut (the award title was cut on a narrow capsule); 11 px is the floor. Every

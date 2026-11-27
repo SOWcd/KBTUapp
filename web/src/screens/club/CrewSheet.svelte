@@ -22,16 +22,23 @@
   import Row from '../../ui/Row.svelte';
   import SearchField from '../../ui/SearchField.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
+  import Skeleton from '../../ui/Skeleton.svelte';
 
   let { overlay, id, onchange }: { overlay: Overlay; id: Id; onchange?: (n: number) => void } = $props();
   let list = $state<CrewMember[] | null>(null);
   // read as it opens and again as the helper's QR over it closes (who scanned it is listed then)
   const covered = $derived([...overlays].reverse().find((o) => !o.closing)?.id !== overlay.id);
-  $effect(() => { if (!covered) api.event(id).then((d) => (list = d.crew ?? [])).catch(() => { list ??= []; }); });
+  let failed = $state(false); // the first read failed: Retry, never an empty list that looks true
+  const read = () => { failed = false; api.event(id).then((d) => (list = d.crew ?? [])).catch(() => { if (!list) failed = true; }); };
+  $effect(() => { if (!covered) read(); });
+  let opening = $state(false); // one QR per tap: a second tap would start and open it twice
   async function showQr() {
+    if (opening) return;
     haptic.tap();
+    opening = true;
     try { const s = await api.eventScreen(id); if (!s.started) await api.screenAct(s.session, 'start'); sheets.handQr(s.session); }
     catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
+    finally { opening = false; }
   }
   $effect(() => { if (list) onchange?.(list.length); });
 
@@ -81,7 +88,7 @@
   <p class="t-foot sub">{t('crew.hint')}</p>
   {#if list}
     <div class="list">
-      <Button kind="secondary" size="l" full onclick={showQr}>{#snippet icon()}<QrCode size={19} />{/snippet}{t('crew.showQr')}</Button>
+      <Button kind="secondary" size="l" full loading={opening} onclick={showQr}>{#snippet icon()}<QrCode size={19} />{/snippet}{t('crew.showQr')}</Button>
       <Group>
         {#each list as x (x.person.id)}
           {#snippet off()}<Button kind="secondary" size="s" onclick={() => drop(x.person)}>{t('crew.remove')}</Button>{/snippet}
@@ -114,6 +121,8 @@
       <!-- the volunteers who asked, under the one «Helpers» (EventManage) -->
       {#if e?.needsVolunteers}<Group><Row icon={HandHeart} title={t('vol.list')} count={e.volunteersAsked ?? 0} accessory="chevron" onclick={() => sheets.volunteers(id, e.needsVolunteers!)} /></Group>{/if}
     </div>
+  {:else if failed}<EmptyState onretry={read} />
+  {:else}<div class="list"><Skeleton n={2} /></div>
   {/if}
 </Sheet>
 

@@ -1,8 +1,7 @@
 <script lang="ts">
-  import CloseX from '../../ui/CloseX.svelte';
   // My QR — the back of my badge. Opens over a blurred scrim like the ticket, follows the phone's tilt and
   // leans toward a pressing finger. The code holds only a link into the app (my profile; the friend invite
-  // takes its place once friends exist, SPEC §4.7), in the brand gradient with the app's mark in the middle
+  // takes its place once friends exist), in the brand gradient with the app's mark in the middle
   // (the face is once, on top) — big enough for any phone camera across a table. Back, a tap
   // outside or Close dismisses it.
   import { onMount } from 'svelte';
@@ -32,7 +31,7 @@
   // ponytail: our own black pill, not Apple's "Add to Apple Wallet" artwork; swap in the official badge (developer.apple.com/wallet/add-to-apple-wallet-guidelines) with the certificate
   const h = $derived(hero(p));
   const look = $derived(lookOf(p)); // the class and the strap's word
-  // the capsule's title (SPEC §8.2), with a QR mark, and dark like the scrim under it: in the light look dark text
+  // the capsule's title, with a QR mark, and dark like the scrim under it: in the light look dark text
   // on a darkened glass reads poorly
   $effect(() => { overlay.title = t('me.qr'); overlay.icon = QrCode; overlay.theme = 'dark'; });
 
@@ -104,7 +103,6 @@
   <p class="hint">{t('me.qrHint')}</p>
   {#if wallet}<button class="pill wallet" onclick={() => { haptic.tap(); openLink(wallet, true); }}><Wallet size={18} strokeWidth={2.2} />{t('me.wallet')}</button>{/if}
   </div>
-  <CloseX onclick={() => close(overlay.id)} />
 </div>
 
 <style>
@@ -115,8 +113,8 @@
     -webkit-backdrop-filter: blur(18px) saturate(120%); backdrop-filter: blur(18px) saturate(120%);
   }
   :global(html.lowfx) .scrim { --dim: rgba(3, 4, 10, 0.92); -webkit-backdrop-filter: none; backdrop-filter: none; }
-  .wrap { position: absolute; inset: 0; z-index: var(--z-sheet); pointer-events: none; display: flex; flex-direction: column; padding-bottom: var(--close-room); }
-  /* the content scrolls in a box that ends above the × (--close-room): a long text or a short phone never puts a
+  .wrap { position: absolute; inset: 0; z-index: var(--z-sheet); pointer-events: none; display: flex; flex-direction: column; padding-bottom: var(--safe-bottom); }
+  /* the content scrolls in a box that ends above the home bar: a long text or a short phone never puts a
      button under it; no fade at its end (it ate the hint's last line on a short phone, Nov 2). Taps on its empty space still reach the scrim (closes) */
   .page { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; scrollbar-width: none; pointer-events: none; display: flex; flex-direction: column; align-items: center;
     gap: 14px; padding: calc(max(var(--top), var(--head-bottom)) + 8px) 20px 20px; /* below the capsule even where Telegram reports no header */ }

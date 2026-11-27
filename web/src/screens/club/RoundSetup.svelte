@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Opening a recruitment round, or changing the live one (PLAN "Casting"; the "casting" right). About three minutes:
+  // Opening a recruitment round, or changing the live one (the "casting" right). About three minutes:
   // departments (optional: none is a round for the whole club) are the club's tags (a new one right here), each with a line about it and maybe places; how many a
   // student may pick; up to six questions of the club's own, from templates or written (in any one language: the screen
   // around them is in the student's language already); the deadline and "results by"; "what's next" (in-person
@@ -14,6 +14,7 @@
   import { data, studioChanged } from '../../lib/state/data.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t } from '../../lib/i18n/index.svelte';
+  import { sw } from '../../lib/i18n/staff';
   import { dateInput, fromInputs, nowTs, time } from '../../lib/time';
   import { haptic } from '../../lib/tg';
   import { TEAM_COLORS } from '../../lib/perms';
@@ -148,7 +149,7 @@
     <!-- engine: Field has no date/time type: by hand, in Field's look (.fl) -->
     <div class="two">
       <label class="fl" class:bad={tried && err === 'when'}><span>{t('cast.closes')}</span><input type="date" bind:value={closeDate} /></label>
-      <label class="fl" class:bad={tried && err === 'when'}><span>{t('ed.regTime')}</span><input type="time" bind:value={closeTime} /></label>
+      <label class="fl" class:bad={tried && err === 'when'}><span>{sw('ed.regTime')}</span><input type="time" bind:value={closeTime} /></label>
     </div>
     <label class="fl" class:bad={tried && err === 'results'}><span>{t('cast.resultsBy')}</span><input type="date" bind:value={resultsDate} /></label>
     <p class="hint">{t('cast.resultsHint')}</p>

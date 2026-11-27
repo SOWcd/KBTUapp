@@ -205,7 +205,7 @@ def test_closed_stories_advance_without_downloading(env, grouped):
 
     with closing(db.connect(cfg.db_path)) as con:
         con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (1, 'mic', 'club', 'Mic', 'M', 'laptop_3d', 0, 0)")
-        con.execute("INSERT INTO chats (title, kind, url, created_at, status, org_id, main) VALUES ('Mic', 'channel', 'https://t.me/mic_news', 0, 'org', 1, 1)")
+        con.execute("INSERT INTO chats (title, kind, url, created_at, status, org_id, main, tg_chat_id) VALUES ('Mic', 'channel', 'https://t.me/mic_news', 0, 'org', 1, 1, -100500)")
         mirror.joined(con, 500, "mic_news")
         work = userbot.Mirror(cfg, Client(), con)
         msg = NS(peer_id=NS(channel_id=500), action=None, message="", grouped_id=grouped, date=datetime.now(UTC),
@@ -294,7 +294,7 @@ def test_userbot_reconnect_closes_resources_after_tasks(env, monkeypatch, failur
                 await asyncio.sleep(0)
 
     class Work:
-        def __init__(self, cfg, client, con, me):
+        def __init__(self, cfg, client, con, me, *, retry=None):
             client.work = self
             self.con, self.looks, self.http = con, set(), self
 

@@ -407,17 +407,17 @@ def test_account_move(env, capsys, monkeypatch):
     assert _yes(c, 7001101).status_code == 200
     monkeypatch.setattr(admin.config, "load", lambda: cfg)
     with pytest.raises(SystemExit) as e:
-        admin.main(["move", "7001101", "7001103"])
+        admin.main(["move", "7001101", "7001103", "--yes"])
     assert "merge-credits" in str(e.value)
     assert con.execute("SELECT tg_id FROM users WHERE id = ?", (a["id"],)).fetchone()[0] == 7001101  # nothing moved
     assert _names(_get(c, 7001101)) == {"Ann T"}
-    admin.main(["move", "7001101", "7001102"])
+    admin.main(["move", "7001101", "7001102", "--yes"])
     assert con.execute("SELECT tg_id FROM credits WHERE en = 'en hers'").fetchone()[0] == 7001102
     assert [tuple(r) for r in con.execute("SELECT show, version FROM credit_consents WHERE user_id = ? ORDER BY id", (a["id"],))] == [(1, credits.CONSENT), (0, credits.CONSENT)]
     got = _get(c, 7001102)  # the account, on its new Telegram: its line, nameless until a new yes
     assert _names(got) == set() and got["mine"]["consent"] is False and [i["text"]["en"] for i in got["mine"]["items"]] == ["en hers"]
     assert _yes(c, 7001102).status_code == 200
-    admin.main(["move", "7001102", "7001103", "--merge-credits"])
+    admin.main(["move", "7001102", "7001103", "--merge-credits", "--yes"])
     assert {r[0] for r in con.execute("SELECT tg_id FROM credits")} == {7001103}
     assert _names(_get(c, 7001103)) == set()  # merged, and the yes ended again
 
@@ -433,13 +433,13 @@ def test_move_makes_every_pending_yes_stale(env, monkeypatch):
     _line(con, 7001201)
     monkeypatch.setattr(admin.config, "load", lambda: cfg)
     pending = {"show": True, "consent": credits.CONSENT, "rev": _get(c, 7001201)["mine"]["rev"]}  # null: never answered
-    admin.main(["move", "7001201", "7001202"])
+    admin.main(["move", "7001201", "7001202", "--yes"])
     v = logic.Viewer(a["id"], "user", True)  # the request let in before the move, committing after it
     with pytest.raises(logic.ApiError) as e:
         credits.answer(con, v, pending)
     assert (e.value.code, e.value.message) == ("conflict", "stale") and _names(_get(c, 7001202)) == set()
     pending["rev"] = _get(c, 7001202)["mine"]["rev"]  # the last answer is a no now: the same again
-    admin.main(["move", "7001202", "7001203"])
+    admin.main(["move", "7001202", "7001203", "--yes"])
     with pytest.raises(logic.ApiError) as e:
         credits.answer(con, v, pending)
     assert e.value.message == "stale"
@@ -510,7 +510,7 @@ def test_cli(env, capsys, monkeypatch):
                 ["credit", "add", "7000601", "idea", "see T.me/someone", "b", "c"]):
         with pytest.raises(SystemExit):
             admin.main(bad)
-    admin.main(["credit", "del", "1"])
+    admin.main(["credit", "del", "1", "--yes"])
     assert con.execute("SELECT COUNT(*) FROM credits").fetchone()[0] == 0
 
 

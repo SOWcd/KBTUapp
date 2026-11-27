@@ -12,19 +12,19 @@ from .core import (ApiError, Viewer, _org, _qs, can, card, log_action, need_stud
 from . import chatmod
 
 
-# ---------------------------------------------------------------- the chats directory (§4.11)
+# ---------------------------------------------------------------- the chats directory
 
 def _chat(c: sqlite3.Row, opened: set[int], orgs: dict | None = None) -> dict:
-    """orgs: org id -> its ref, for the catalog's chip of whose chat it is (PLAN 86)."""
+    """orgs: org id -> its ref, for the catalog's chip of whose chat it is."""
     return {"id": c["id"], "title": c["title"], "kind": "forum" if c["forum"] else c["kind"], "url": c["url"], "members": c["members"],
             "photo": f"media/{c['photo']}.t.webp" if c["photo"] else None, "school": c["school"], "course": c["course"], "opened": c["id"] in opened,
             "org": (orgs or {}).get(c["org_id"]), "section": c["section"], "sectionAi": bool(c["section_ai"])}
 
 
 def chats(con, v: Viewer) -> dict:
-    """Curated Telegram chats (§4.11), the biggest first (A8); "for you" are the ones aimed at my school and
+    """Curated Telegram chats, the biggest first (A8); "for you" are the ones aimed at my school and
     course plus those for everyone (my school and course first, by size within); a club's or school's chat says whose
-    (PLAN 86; no tick on the ones I opened: it isn't clear what one means)."""
+    (no tick on the ones I opened: it isn't clear what one means)."""
     st = one(con, "SELECT school, course FROM students WHERE user_id = ?", v.id) if v.student else None
     opened = {r[0] for r in rows(con, "SELECT chat_id FROM chat_opens WHERE user_id = ?", v.id)} if v.student else set()
     # a closed chat's invite link (t.me/+…) only to signed-in students: it lets anyone in (any chat)
@@ -344,13 +344,17 @@ def _closed(c: sqlite3.Row) -> bool:
 
 def org_chats(con, oid: int, editor: bool = False) -> list[dict]:
     """The org's chats, the main channel first, then by size. editor (Studio): the invite links too and whether our bot
-    keeps the card."""
-    out = []
+    keeps the card, and a news source group's topics (the userbot lists them: mirror.topics)."""
+    out, tops = [], {}
+    for r in rows(con, """SELECT t.chat_id, t.topic, t.title FROM chat_topics t JOIN chats c ON c.id = t.chat_id
+            WHERE c.org_id = ? AND c.news_topic IS NOT NULL ORDER BY t.topic""", oid) if editor else []:
+        tops.setdefault(r["chat_id"], []).append({"id": r["topic"], "title": r["title"]})
     for c in rows(con, "SELECT * FROM chats WHERE org_id = ? ORDER BY main DESC, COALESCE(members, -1) DESC, title", oid):
         x = {"id": c["id"], "title": c["title"], "kind": "forum" if c["forum"] else c["kind"], "members": c["members"], "about": c["about"],
              "photo": f"media/{c['photo']}.t.webp" if c["photo"] else None, "closed": _closed(c), "main": bool(c["main"]),
              "url": c["url"] if editor or not _closed(c) else None}
-        out.append({**x, "bot": c["tg_chat_id"] is not None, "mirror": bool(c["mirror"]), "swear": bool(c["swear"]),
+        out.append({**x, "bot": c["tg_chat_id"] is not None, "mirror": mirrored(c), "news": c["news_topic"], "topics": tops.get(c["id"], []),
+                    "swear": bool(c["swear"]),
                        "swearMiss": c["swear_miss"].split(",") if c["swear_miss"] else []} if editor else x)
     return out
 
@@ -414,9 +418,18 @@ def main_org_chat(con, v: Viewer, oid: int, cid: int) -> list[dict]:
     return org_chats(con, oid, True)
 
 
+MIRROR_VOUCHED = 2  # chats.mirror: on with no bot inside, on an admin's word (an office's channel: admin office)
+
+
+def mirrored(c: sqlite3.Row) -> bool:
+    """The switch on and the channel proven the org's own (mirror._MIRRORED, the same rule in SQL)."""
+    return c["mirror"] == MIRROR_VOUCHED or bool(c["mirror"] and c["tg_chat_id"] is not None)
+
+
 def mirror_org_chat(con, v: Viewer, oid: int, cid: int, on: object) -> list[dict]:
-    """Studio's switch under the main channel (PLAN 86 part 2): its posts in the club's news, or not. The posts already
-    mirrored stay the club's news; off, the userbot leaves the channel."""
+    """Studio's switch under the main channel: its posts in the club's news, or not. On needs our bot an admin in the
+    channel (only its owners can add it), else any club could fill its news from a channel it doesn't run; the admin
+    may vouch instead (MIRROR_VOUCHED). The posts already mirrored stay the club's news; off, the userbot leaves."""
     if not isinstance(on, bool):
         raise ApiError("bad_input")
     with tx(con):
@@ -424,8 +437,35 @@ def mirror_org_chat(con, v: Viewer, oid: int, cid: int, on: object) -> list[dict
         c = one(con, "SELECT * FROM chats WHERE id = ? AND org_id = ?", cid, oid)
         if not c:
             raise ApiError("not_found")
-        con.execute("UPDATE chats SET mirror = ? WHERE id = ?", (int(on), cid))
+        if on and c["tg_chat_id"] is None and v.role != "admin":
+            raise ApiError("bad_input", "nobot")
+        con.execute("UPDATE chats SET mirror = ? WHERE id = ?", (MIRROR_VOUCHED if on and c["tg_chat_id"] is None else int(on), cid))
         _chats_audit(con, v, oid, f"mirror {'on' if on else 'off'} {c['url']}")
+    return org_chats(con, oid, True)
+
+
+def news_org_chat(con, v: Viewer, oid: int, cid: int, topic: object) -> list[dict]:
+    """Studio: the org's news from this forum group's topic instead of its main channel (mirror.py). None: not any more;
+    0: this group, its topic picked once the userbot has listed them; else a listed topic. One group at a time."""
+    from .. import mirror  # it imports this package
+    if topic is not None and (not isinstance(topic, int) or isinstance(topic, bool) or topic < 0):
+        raise ApiError("bad_input")
+    with tx(con):
+        may_chats(con, v, oid)
+        c = one(con, "SELECT * FROM chats WHERE id = ? AND org_id = ?", cid, oid)
+        if not c:
+            raise ApiError("not_found")
+        if topic is not None:
+            if c["kind"] != "group" or mirror.tid(c["tg_chat_id"]) is None:
+                raise ApiError("bad_input", "nobot")  # our bot inside says which group it is
+            if topic and not one(con, "SELECT 1 FROM chat_topics WHERE chat_id = ? AND topic = ?", cid, topic):
+                raise ApiError("bad_input", "topic")
+            con.execute("UPDATE chats SET news_topic = NULL WHERE org_id = ? AND id != ?", (oid, cid))
+        if c["news_topic"] != topic:
+            con.execute("UPDATE chats SET news_topic = ? WHERE id = ?", (topic, cid))
+            if t := mirror.tid(c["tg_chat_id"]):  # another topic: its last few posts are taken first (userbot.first)
+                con.execute("UPDATE tg_channels SET last_msg = 0 WHERE id = ?", (t,))
+            _chats_audit(con, v, oid, f"news {'off' if topic is None else topic} {c['url']}")
     return org_chats(con, oid, True)
 
 
@@ -455,7 +495,7 @@ def set_chat_org(con, v: Viewer, cid: int, oid: int | None) -> dict:
         if c["status"] == "org" and oid is None:
             raise ApiError("bad_input")  # out of the catalog and nobody's: removed from the club's list instead
         if c["org_id"] != oid:
-            con.execute("UPDATE chats SET org_id = ?, main = 0 WHERE id = ?", (oid, cid))
+            con.execute("UPDATE chats SET org_id = ?, main = 0, news_topic = NULL WHERE id = ?", (oid, cid))  # never the new club's source
             chatmod.forget(con, cid)  # the old club's switch and record don't pass to the new one
             if c["main"] and (nxt := one(con, """SELECT id FROM chats WHERE org_id = ? AND kind = 'channel' AND url NOT LIKE '%/+%'
                     ORDER BY COALESCE(members, -1) DESC LIMIT 1""", c["org_id"])):  # the old org's next public channel
@@ -474,7 +514,7 @@ def _unlink(con, c: sqlite3.Row) -> str | None:
     if c["status"] == "org" or (c["status"] == "pending" and _closed(c)):
         con.execute("DELETE FROM chats WHERE id = ?", (c["id"],))
         return c["photo"]
-    con.execute("UPDATE chats SET org_id = NULL, main = 0 WHERE id = ?", (c["id"],))
+    con.execute("UPDATE chats SET org_id = NULL, main = 0, news_topic = NULL WHERE id = ?", (c["id"],))
     return None
 
 

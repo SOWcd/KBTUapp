@@ -78,8 +78,8 @@
     catch { session.me = was; haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
 
-  // My data (PLAN 71): the phone an event asked for, changed or deleted (null deletes it); the city from the club's
-  // roster (PLAN 95), off the profile or gone. A deleted one takes its page with it.
+  // My data: the phone an event asked for, changed or deleted (null deletes it); the city from the club's
+  // roster, off the profile or gone. A deleted one takes its page with it.
   async function savePhone(p: string | null, done: string) {
     try { session.me = await api.updateMe({ phone: p }); haptic.ok(); say(done, 'sparkles_3d'); if (p == null) close(overlay.id); }
     catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
@@ -171,7 +171,7 @@
   const real = $derived(me?.student?.consent !== 'staff' && me?.student?.consent !== 'admin');
   // the course is picked a tap deeper while it can still be (the ID's year up to the 6th), else it's just shown
   const courseFix = $derived(!!me?.student?.fixable?.includes('course') && (me.student.courseMin ?? 6) < 6);
-  // §4.8: what goes, then a week to change one's mind (a President's club passes on at the deletion: the sheet says so)
+  // what goes, then a week to change one's mind (a President's club passes on at the deletion: the sheet says so)
   function deleteData() {
     const a = data.myCard?.awards;
     const tickets = data.events.filter((e) => e.my && e.my.status !== 'cancelled' && !inner(e)).length;

@@ -207,6 +207,7 @@ def channel_due(con, bot: str = "", limit: int = 3) -> list[tuple[sqlite3.Row, s
     there (its official co-host left or lost the ✓, its club is archived or hidden) is deleted; it comes back with a
     new yes."""
     out = []
+    t = core.now()
     for e in rows(con, """SELECT e.*, o.name AS org_name, o.official AS h_off, o.kind AS h_kind, o.status AS h_status,
             c.id AS co_id, c.name AS co_name, c.official AS co_off, f.path AS cover,
             e.starts_at > ? AND e.visibility = 'public' AND e.meeting = 0 AND e.hidden_at IS NULL AND e.school IS NULL
@@ -218,7 +219,7 @@ def channel_due(con, bot: str = "", limit: int = 3) -> list[tuple[sqlite3.Row, s
             LEFT JOIN orgs c ON c.id = x.org_id AND c.status = 'active' AND c.kind = 'club'
             LEFT JOIN files f ON f.id = e.cover_file_id
             WHERE e.starts_at > ? AND (e.status != 'draft' OR e.channel_msg IS NOT NULL) OR e.channel_via IS NOT NULL
-            ORDER BY e.published_at""", core.now(), core.now()):
+            ORDER BY e.published_at""", t, t):
         on = e["h_status"] == "active"
         own = on and (e["h_off"] or e["h_kind"] != "club")
         kept = on and e["channel_msg"] and e["channel_via"] is None
@@ -227,7 +228,9 @@ def channel_due(con, bot: str = "", limit: int = 3) -> list[tuple[sqlite3.Row, s
             # one still to come that may not be there, or a past one that hung on a co-host now gone
             # (a collab a moderator hid goes too: the official club's name stays on nothing taken down)
             # a school's own event never: one posted before it was made so goes too
-            if e["channel_msg"] and (e["live"] or e["school"] or e["channel_via"] is not None and (e["hidden_at"] or not (own or vouch and e["co_id"] == e["channel_via"]))):
+            upcoming = e["starts_at"] is not None and e["starts_at"] > t
+            if e["channel_msg"] and (upcoming or e["school"] or e["channel_via"] is not None
+                                     and (e["hidden_at"] or not (own or vouch and e["co_id"] == e["channel_via"]))):
                 _unpost(con, e)
             continue
         via = None if own or kept else e["co_id"]
@@ -274,7 +277,7 @@ def signup_open(e: sqlite3.Row) -> bool:
     return e["starts_at"] > core.now() or bool(e["late_signup"]) and core.now() < end_of(e)
 
 
-# "To calendar" on the ticket (§4.2). The phone's browser fetches the file with no session, so the link is signed;
+# "To calendar" on the ticket. The phone's browser fetches the file with no session, so the link is signed;
 # app.create sets the key from TOKEN_KEY, the same in every worker process (this random one is for scripts).
 ICS_KEY = secrets.token_bytes(32)
 
@@ -310,7 +313,7 @@ def _fold(line: str) -> str:
 
 
 def title_in(row: sqlite3.Row, lang: str | None) -> str:
-    """A title in a reader's language (PLAN 9): an event's or a post's translation (ai.py, mirror.py) where
+    """A title in a reader's language: an event's or a post's translation (ai.py, mirror.py) where
     there is one, else as typed. For the bot's messages and the calendar, which otherwise show only the source language."""
     tr = json.loads(row["i18n"]) if "i18n" in row.keys() and row["i18n"] else {}
     return (tr.get(lang) or {}).get("title") or row["title"]
@@ -551,7 +554,7 @@ def _ticket_code(con, eid: int) -> str:
     """4 characters to read out and type at the door, no 0/O or 1/I/L, unique within the event (6 are
     long to type). ~20 bits is enough: only the event's door staff can check a code, and the scanner shows the holder's
     face. Stored as '<event id>-<code>', so the column's global UNIQUE is per-event uniqueness and the door finds a
-    code by (event, code) alone; the API and the QR ('KBTU' + code, the smallest QR there is, §4.4) carry the code."""
+    code by (event, code) alone; the API and the QR ('KBTU' + code, the smallest QR there is) carry the code."""
     while True:
         c = f"{eid}-" + "".join(secrets.choice("23456789ABCDEFGHJKMNPQRSTUVWXYZ") for _ in range(4))
         if not one(con, """SELECT 1 FROM registrations WHERE ticket_code = ?
@@ -569,7 +572,7 @@ def renew_cancelled_ticket(con, eid: int, r: sqlite3.Row) -> None:
 
 
 def notify(con, uid: int, kind: str, ref: str, payload: str = "{}", after: int | None = None) -> None:
-    """Queue a bot message (§7). (user, kind, ref) is unique, so a repeat is a no-op."""
+    """Queue a bot message. (user, kind, ref) is unique, so a repeat is a no-op."""
     con.execute("INSERT OR IGNORE INTO bot_outbox (user_id, kind, ref, payload, send_after) VALUES (?, ?, ?, ?, ?)",
                 (uid, kind, ref, payload, after or core.now()))
 
@@ -589,7 +592,7 @@ def notify_staff(con, uids, kind: str, ref: str) -> None:
 
 
 def add_seats(con, v: Viewer, eid: int, n: object) -> dict:
-    """"+N seats" (§4.2), the club's Head+: the waitlist moves into them at once, in order."""
+    """"+N seats", the club's Head+: the waitlist moves into them at once, in order."""
     if not isinstance(n, int) or isinstance(n, bool) or not 1 <= n <= 500:
         raise ApiError("bad_input")
     with tx(con):
@@ -602,8 +605,8 @@ def add_seats(con, v: Viewer, eid: int, n: object) -> dict:
 
 
 def promote(con, e: sqlite3.Row) -> None:
-    """Free seats go to the waitlist in order: going, or a 30-min hold for paid events (§4.2); a 1st-year student
-    takes one of a paid event's free seats while any are left (§4.3)."""
+    """Free seats go to the waitlist in order: going, or a 30-min hold for paid events; a 1st-year student
+    takes one of a paid event's free seats while any are left."""
     if e["guest_list"] or e["status"] != "published" or end_of(e) <= core.now():
         return  # a cancelled or finished event hands out no seats (a hold to pay for nothing)
     if one(con, "SELECT 1 FROM santa_events WHERE event_id = ? AND drawn_at IS NOT NULL", e["id"]):
@@ -751,7 +754,7 @@ def _answers(e: sqlite3.Row, given: object) -> str | None:
 
 
 def register(con, v: Viewer, eid: int, ref: object = None, phone: object = None, answers: object = None, wish: object = None) -> dict:
-    """phone: typed in the sign-up when the event asks for it and none is kept yet; it's kept (Settings shows it, PLAN 71).
+    """phone: typed in the sign-up when the event asks for it and none is kept yet; it's kept (Settings shows it).
     ref: the badge code of the club member whose link they came by ("My link", ev_<id>_<code>): the member gets the
     credit, the organizers see it in "Who brought"."""
     need_student(v)
@@ -784,6 +787,8 @@ def register(con, v: Viewer, eid: int, ref: object = None, phone: object = None,
         is_full = e["seats"] is not None and taken(con, eid) >= e["seats"]
         free = not is_full and _free_seat(con, e, v.id)
         status = "waitlist" if is_full else "hold" if e["price"] and not free else "going"
+        if status == "hold" and _unchecked(con, eid) >= max(UNCHECKED_CAP, (e["seats"] or 0) // 4):
+            raise ApiError("rate_limited", "unchecked")  # before anyone pays: the organizer catches up on receipts first
         hold = min(core.now() + HOLD, end_of(e)) if status == "hold" else None
         wait = core.now() if status == "waitlist" else None
         if r:
@@ -801,7 +806,7 @@ def register(con, v: Viewer, eid: int, ref: object = None, phone: object = None,
                 by = one(con, "SELECT m.user_id FROM users u JOIN org_members m ON m.user_id = u.id AND m.org_id = ? WHERE u.link_code = ? AND u.id != ?",
                          e["org_id"], ref, v.id)
                 inviter = by["user_id"] if by else None
-            if inviter is None:  # "Bring a friend": the first friend who asked gets the credit ("Life of the party", §4.7)
+            if inviter is None:  # "Bring a friend": the first friend who asked gets the credit ("Life of the party")
                 first = one(con, "SELECT from_id FROM friend_invites WHERE event_id = ? AND to_id = ? ORDER BY created_at LIMIT 1", eid, v.id)
                 inviter = first["from_id"] if first else None
             con.execute("""INSERT INTO registrations (event_id, user_id, status, ticket_code, hold_until, waitlisted_at, invited_by, free, answers, created_at, updated_at, phone_shared)
@@ -816,7 +821,7 @@ RECEIPT_TRIES = 3  # another file in place of a receipt nobody looked at yet: th
 
 def receipt_open(con, v: Viewer, eid: int) -> None:
     """Checked before a receipt's image is processed: the person holds a seat on this event, or has a receipt on it
-    nobody looked at yet (§4.3)."""
+    nobody looked at yet."""
     need_student(v)
     sweep_holds(con)
     with tx(con):
@@ -848,7 +853,7 @@ def _receipt_slot(con, v: Viewer, eid: int) -> tuple[sqlite3.Row, sqlite3.Row, s
 
 
 def add_receipt(con, v: Viewer, eid: int, saved: dict, read: dict | None = None, via: str = "app") -> tuple[dict, list[str]]:
-    """The receipt is in (§4.3), from the app or the bot: the seat becomes a ticket at once. What OCR read off it
+    """The receipt is in, from the app or the bot: the seat becomes a ticket at once. What OCR read off it
     (receipt.py; None = OCR didn't run) raises flags the organizer and student see (my.receiptFlags). Only a fully
     read, matching receipt is checked by the app; the others may be replaced (_receipt_slot, RECEIPT_TRIES times).
     Returns the card and the replaced picture's path, for the caller to drop from disk once this is committed."""
@@ -865,13 +870,16 @@ def add_receipt(con, v: Viewer, eid: int, saved: dict, read: dict | None = None,
         got = read or {}
         flags = _receipt_flags(con, e, saved["sha256"], read, r["id"])
         # a clean one is checked by the app, but 1 in AUDIT waits for the organizer flagged 'spot' (their "Check receipts"),
-        # so a forgery that beats OCR gets seen. The draw is once per seat: a seat that had any receipt before (replaced,
-        # or before a cancel; one row per person and event) is always picked, so neither re-rolls it. Not clean and no
-        # warning either (a field unread): 'partial', in "Check receipts" too, and held at the door until reviewed.
+        # so a forgery that beats OCR gets seen. Not clean and no warning either (a field unread): 'partial'. A seat that
+        # had any receipt before (a flagged one replaced, a rejected one before a new sign-up; one row per person and
+        # event) is never the app's to pass, however clean the new one looks: 'partial' plus 'resent', so the organizer
+        # sees a receipt came in place of another. All of these are held at the door until reviewed (organizing.flagged).
         # A payment predating this hold also needs review: deleted accounts erase duplicate evidence. Kaspi prints minutes.
         clean = _receipt_clean(con, e, saved["sha256"], read, flags) and got["paid_at"] >= r["created_at"] // 60 * 60
-        if clean and (_audit() or one(con, """SELECT 1 FROM receipts WHERE registration_id = ?
-                UNION ALL SELECT 1 FROM receipt_replaced WHERE registration_id = ?""", r["id"], r["id"])):
+        if one(con, """SELECT 1 FROM receipts WHERE registration_id = ?
+                UNION ALL SELECT 1 FROM receipt_replaced WHERE registration_id = ?""", r["id"], r["id"]):
+            flags, clean = ",".join(x for x in (flags or PARTIAL, RESENT) if x), False
+        elif clean and _audit():
             flags, clean = SPOT, False
         elif not clean and not flags:
             flags = PARTIAL
@@ -893,7 +901,7 @@ def add_receipt(con, v: Viewer, eid: int, saved: dict, read: dict | None = None,
 
 
 def _receipt_flags(con, e: sqlite3.Row, sha: str, read: dict | None, rid: int = 0) -> str:
-    """The checks (§4.3): the same file or receipt number came before, a
+    """The checks: the same file or receipt number came before, a
     smaller sum or a bigger one that isn't a whole number of tickets (else a 1 090 receipt for 164 passes), another recipient, a receipt older than the event itself (an old one reused), (nothing readable,
     not a Kaspi receipt, is refused before: receipt.NotReceipt). No sender check: parents and friends pay, the organizer just sees the name."""
     got = read or {}
@@ -926,6 +934,20 @@ def _receipt_flags(con, e: sqlite3.Row, sha: str, read: dict | None, rid: int = 
 AUDIT = 5
 SPOT = "spot"  # the only flag a clean receipt carries: picked for a person's look, nothing wrong found
 PARTIAL = "partial"  # payment not fully verified: a person must check before admission
+RESENT = "resent"  # the seat had a receipt before this one (replaced, or rejected before a new sign-up)
+# any picture OCR reads a sum or a number off turns a hold into a ticket: with this many such tickets nobody reviewed
+# (or a quarter of the seats), the event takes no new paid holds until the organizer catches up, so junk can't take
+# every seat for good. Checked at the hold, never at the receipt: nobody pays into a refusal.
+UNCHECKED_CAP = 20
+
+
+def _unchecked(con, eid: int) -> int:
+    """This event's tickets not yet at the door whose receipt warns or is read in part and nobody reviewed it (a spot
+    one is clean; OCR down is our outage, not a junk picture)."""
+    return one(con, """SELECT COUNT(*) FROM registrations r JOIN receipts c ON c.id = (SELECT MAX(id) FROM receipts
+            WHERE registration_id = r.id AND status = 'accepted' AND created_at >= r.created_at)
+        WHERE r.event_id = ? AND r.status = 'going' AND r.checked_in_at IS NULL AND c.reviewed_at IS NULL
+        AND c.flags NOT IN ('', 'spot') AND c.flags NOT LIKE '%ocr_unavailable%'""", eid)[0]
 
 
 def _audit() -> bool:
@@ -967,7 +989,7 @@ REJECT_WHY = ("short", "other_event", "used", "unclear")  # texts.REJECT_WHY: th
 
 
 def review_receipt(con, v: Viewer, rid: int, reject: object, why: object = None) -> None:
-    """The organizer checked a receipt against their Kaspi history (§4.3): fine, or rejected — then the ticket stops
+    """The organizer checked a receipt against their Kaspi history: fine, or rejected — then the ticket stops
     working, the seat goes to the waitlist and the bot tells the student to talk to the club. Refunds happen outside.
     why: a rejection's reason, one of REJECT_WHY (never words); none (an old client): the bot's old text."""
     if not isinstance(reject, bool) or why is not None and (not reject or why not in REJECT_WHY):
@@ -1021,7 +1043,7 @@ def seat_by_hand(con, uid: int, eid: int) -> str:
 
 
 def _remind(con, uid: int, e: sqlite3.Row) -> None:
-    """The 2-hour reminder (§7), unless the person turned it off; ref carries the start, so a moved event re-arms it."""
+    """The 2-hour reminder, unless the person turned it off; ref carries the start, so a moved event re-arms it."""
     if one(con, "SELECT n_remind FROM users WHERE id = ?", uid)[0] and e["starts_at"] - 7200 > core.now():
         notify(con, uid, "remind_2h", f"event:{e['id']}:{e['starts_at']}", after=e["starts_at"] - 7200)
 

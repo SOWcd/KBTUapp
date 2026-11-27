@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Afisha → News, a sheet from the news circles' "All" ("one news feed is the killer feature"; PLAN 58): KBTU's news in
+  // Afisha → News, a sheet from the news circles' "All" ("one news feed is the killer feature"): KBTU's news in
   // one place, not only events: the broadcasts "From DMP and KBTU App" first (a gradient edge, "new" until seen; seeing
   // them clears the dot), then every club's and office's public posts, newest first (a club's new
   // event is on the list already, not here too). Writing is in Studio. A post: the club, when, its label, a photo, the text (long ones fold), the two
@@ -155,7 +155,7 @@
     {#if p.casting}<CastingBlock casting={p.casting} />{/if}
     <!-- the card crops it: a tap shows it whole -->
     {#if p.photo}{@const ph = p.photo}<button class="pic" aria-label={p.title} onclick={() => sheets.photos([{ ...ph, id: ph.id ?? -p.id, by: null, mine: true, canDelete: false }], 0)}>
-      <img src={ph.url} alt="" loading="lazy" decoding="async" style:object-position={focusPos(ph)} /></button>{/if}
+      <img draggable="false" src={ph.url} alt="" loading="lazy" decoding="async" style:object-position={focusPos(ph)} /></button>{/if}
     <h3 class="tt">{#if rich}<RichText text={p.title} entities={p.titleFmt} />{:else}{p.title}{/if}</h3>
     {#if body}
       <p class="bd" class:fold={long(body) && !open.has(p.id)}>{#if rich}<RichText text={body} entities={p.fmt} />{:else}<Linked text={body} />{/if}</p>
@@ -163,7 +163,7 @@
     {/if}
     {#if !rich}<div class="vl">{#each videoLinks(p.body) as l (l.url)}<Button kind="tinted" size="s" onclick={() => openLink(l.url)}>{#snippet icon()}<SocialIcon kind={l.kind} size={16} />{/snippet}{l.label}</Button>{/each}</div>{/if}
     {#if p.tg}
-      <!-- the club's Telegram channel post: its counts and comments live there, its video plays in Telegram's widget (PLAN 86) -->
+      <!-- the club's Telegram channel post: its counts and comments live there, its video plays in Telegram's widget -->
       {@const tg = p.tg}
       {@const v = playing.get(p.id)}
       {#if tg.media === 'video' && v === 'wait'}<div class="tgv-wait" aria-busy="true"></div>

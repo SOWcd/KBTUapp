@@ -1,9 +1,11 @@
 <script lang="ts">
-  // A club, from anywhere its name or logo shows (SPEC §8.3: one sheet for "Subscribe" and "Join"): who they
+  // A club, from anywhere its name or logo shows (one sheet for "Subscribe" and "Join"): who they
   // are, their socials, what's coming up. Subscribe and Apply answer at once (optimistic, data.svelte.ts); a
   // club can be written to: a DM to its President (lib/clubdm; in the footer once applications are closed). Its Vice+ change
   // the logo and the rest by tapping the logo (it is looked for here, not in Studio).
   import OfficialMark from '../../ui/OfficialMark.svelte';
+  import OfficeMark from '../../ui/OfficeMark.svelte';
+  import { service } from '../../lib/clubs';
   import Bell from '@lucide/svelte/icons/bell';
   import BellCheck from '@lucide/svelte/icons/bell-check';
   import TelegramMark from '../../ui/TelegramMark.svelte';
@@ -66,10 +68,10 @@
   const o = $derived(data.orgs.find((x) => x.id === id) ?? data.small.find((x) => x.id === id) ?? fetched);
   const eventRating = $derived(fetched ? fetched.eventRating : o?.eventRating);
   const leaders = $derived(fetched?.leaders ?? []); // the catalog's copy has none
-  // its Telegram chats (PLAN 86), the main channel first (the server's order), all the same rows; a closed one has no way in
+  // its Telegram chats, the main channel first (the server's order), all the same rows; a closed one has no way in
   const chats = $derived(fetched?.chats ?? []);
   const tap = (url: string) => { haptic.tap(); openLink(url); };
-  let raw = $state(false); // the description as typed, not the AI's translation (PLAN 9)
+  let raw = $state(false); // the description as typed, not the AI's translation
   function load() {
     failed = false;
     api.org(id).then((x) => (fetched = x)).catch(() => (failed = true));
@@ -99,8 +101,8 @@
         <span class="lg"><button class="logo" onclick={() => sheets.clubEdit(o.id)} aria-label={t('ce.title')}><OrgLogo org={o} size={84} /></button>
           <span class="cam"><IconButton icon={Camera} kind="primary" size="s" label={t('ce.title')} onclick={() => sheets.clubEdit(o.id)} /></span></span>
       {:else}<OrgLogo org={o} size={84} />{/if}
-      <h2 class="t-h2 name">{o.name}{#if o.official && o.kind === 'club'}<span class="ok"><OfficialMark size={21} explain /></span>{/if}</h2>
-      <p class="t-foot">{o.official ? t('clubs.official') : t('club.initiative')}</p>
+      <h2 class="t-h2 name">{o.name}{#if o.official && o.kind === 'club'}<span class="ok"><OfficialMark size={21} explain /></span>{/if}{#if service(o)}<span class="ok"><OfficeMark size={20} /></span>{/if}</h2>
+      <p class="t-foot">{service(o) ? t('clubs.office') : o.official ? t('clubs.official') : t('club.initiative')}</p>
       <p class="t-foot stats">{[tn('clubs.subscribers', o.subscribers), tn('club.members', o.members)].join(' · ')}</p>
       {#if o.myRole}<span class="tag"><Tag tone="accent">{t('club.myRole', { role: roleLabel({ role: o.myRole, title: o.myTitle, titleKk: o.myTitleKk, titleEn: o.myTitleEn }) })}</Tag></span>
       {:else if o.round}<span class="tag"><Tag tone="success">{t('cast.recruiting', { when: dayMonth(o.round.closesAt) })}</Tag></span>
@@ -207,7 +209,7 @@
               {:else if p.photo}
                 {@const ph = p.photo}
                 <Row dense title={p.title} subtitle={sub} onclick={() => play(p)}>
-                  {#snippet lead()}<img class="ph" src={ph.url} alt="" loading="lazy" decoding="async" style:object-position={focusPos(ph)} />{/snippet}
+                  {#snippet lead()}<img draggable="false" class="ph" src={ph.url} alt="" loading="lazy" decoding="async" style:object-position={focusPos(ph)} />{/snippet}
                 </Row>
               {:else}<Row dense title={p.title} subtitle={sub} onclick={() => play(p)} />{/if}
             {/each}

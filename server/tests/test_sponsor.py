@@ -606,11 +606,11 @@ def test_admin_donation_add_by_hand_grants_the_medal_shown_by_default(support, m
     assert out.count("manual") == 2 and "2026-11-20" in out and "public yes" in out and "Aidar" not in out
     assert f"user {ids[7]}" in out and "tg 7" not in out
     for did, in con.execute("SELECT id FROM donations WHERE flags = 'manual'").fetchall():
-        admin.main(["donation", "remove", str(did)])
+        admin.main(["donation", "remove", str(did), "--yes"])
     assert mine(support)["tier"] == 0 and mine(support)["total"] == 0
     assert not con.execute("SELECT 1 FROM achievement_levels WHERE user_id = ? AND code = 'sponsor'", (ids[7],)).fetchone()
     with pytest.raises(SystemExit):
-        admin.main(["donation", "remove", str(did)])
+        admin.main(["donation", "remove", str(did), "--yes"])
 
 
 def test_an_account_move_hides_a_donor_who_never_answered(support, monkeypatch, capsys):
@@ -622,6 +622,6 @@ def test_an_account_move_hides_a_donor_who_never_answered(support, monkeypatch, 
     assert not con.execute("SELECT 1 FROM sponsor_consents WHERE user_id = ?", (ids[7],)).fetchone()
     assert board(support) == [(2, 6000)]
     c.get("/api/me", headers=tma(9, "Fresh"))
-    admin.main(["move", "7", "9"])
+    admin.main(["move", "7", "9", "--yes"])
     assert board(support) == []
     assert {tuple(r) for r in con.execute("SELECT show, amount FROM sponsor_consents WHERE user_id = ?", (ids[7],))} == {(0, None)}

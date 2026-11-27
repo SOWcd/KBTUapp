@@ -105,7 +105,7 @@ def fresh_process_memory(monkeypatch):
     """A worker's in-memory state starts empty in every test, so a test passes the same in any order and on any
     worker: chatlist._unheld (a chat with no club, kept 10 min: an earlier test's chat -100 made
     test_live_list_union_order_and_cap's club chat count as unheld now and then), llm._rest (a provider resting after
-    another test's 502s) and the usage counters' per-day budget and uniques (logic.stats)."""
+    another test's 502s) and the usage counters' per-day budget, uniques, per-key caps and the page's counters (logic.stats)."""
     from kbtu import llm
     from kbtu.logic import chatlist, stats
     monkeypatch.setattr(chatlist, "_unheld", {})
@@ -113,13 +113,24 @@ def fresh_process_memory(monkeypatch):
     monkeypatch.setattr(stats, "_spent", {})
     monkeypatch.setattr(stats, "_spent_day", 0)
     monkeypatch.setattr(stats, "_uniq", set())
+    monkeypatch.setattr(stats, "_used", {})
+    monkeypatch.setattr(stats, "_page", {})
+    monkeypatch.setattr(stats, "_page_day", 0)
+    monkeypatch.setattr(stats, "_ips", {})
+    monkeypatch.setattr(stats, "_ips_minute", 0)
 
 
 @pytest.fixture
 def before_notification_migration():
     def rewind(con):
         # Rewind to 212, undoing the newest migrations first.
-        con.executescript("""DROP INDEX fchan_photos_by_edit;
+        con.executescript("""ALTER TABLE prefill DROP COLUMN loaded_at;
+            ALTER TABLE prefill_rest DROP COLUMN loaded_at;
+            ALTER TABLE tgc_comments DROP COLUMN dm_chat_id;
+            DROP TABLE chat_topics;
+            ALTER TABLE chats DROP COLUMN news_topic;
+            ALTER TABLE tg_channels DROP COLUMN stay;
+            DROP INDEX fchan_photos_by_edit;
             ALTER TABLE fchan_photos DROP COLUMN sync;
             ALTER TABLE fchan_photos DROP COLUMN edit_id;
             DROP INDEX fchan_posts_edit_sync;

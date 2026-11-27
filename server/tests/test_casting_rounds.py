@@ -3,12 +3,69 @@ from __future__ import annotations
 
 import time
 
+import pytest
+
 from kbtu import casting, db, logic, outbox, texts
 from test_core import env, login, tma  # noqa: F401  (env: the fixture)
 
 
+def _settings_round(env):
+    c, cfg = env
+    pres = login(c, 20, "pres")
+    login(c, 10, "ann")
+    con = db.connect(cfg.db_path)
+    oid = logic.create_org(con, None, "Chess Club", "CH", "crown_3d", True)
+    logic.set_role(con, None, pres["id"], oid, "president", "test")
+    body = {"title": "Fall", "closesAt": int(time.time()) + 86400, "departments": [],
+            "questions": [{"kind": "short", "text": "Why?"}]}
+    r = c.post(f"/api/orgs/{oid}/round", headers=tma(20), json=body).json()
+    return c, con, oid, body, r
+
+
+@pytest.mark.parametrize("withdrawn", [False, True])
+def test_settings_keep_answer_question_ids(env, withdrawn):
+    c, con, oid, body, r = _settings_round(env)
+    body = {**body, "questions": [{"kind": "long", "text": "Why this club?"}]}
+    r = c.patch(f"/api/rounds/{r['id']}", headers=tma(20), json=body).json()
+    assert r["questions"][0]["text"] == "Why this club?"  # no applications: questions can change
+    answers = {str(r["questions"][0]["id"]): "I enjoy chess"}
+    application = {"departments": [], "answers": answers}
+    assert c.post(f"/api/rounds/{r['id']}/apply", headers=tma(10), json=application).status_code == 200
+    if withdrawn:
+        assert c.delete(f"/api/rounds/{r['id']}/apply", headers=tma(10)).status_code == 200
+
+    # A later question prevents SQLite from silently reusing this round's deleted ids.
+    other = logic.create_org(con, None, "Debate Club", "DC", "crown_3d", True)
+    pres = con.execute("SELECT user_id FROM org_members WHERE org_id = ?", (oid,)).fetchone()[0]
+    logic.set_role(con, None, pres, other, "president", "test")
+    assert c.post(f"/api/orgs/{other}/round", headers=tma(20), json=body).status_code == 200
+
+    saved = c.patch(f"/api/rounds/{r['id']}", headers=tma(20), json={**body, "title": "Winter", "questions": []}).json()
+    assert saved["title"] == "Winter" and saved["questions"] == r["questions"]
+    if withdrawn:
+        assert c.post(f"/api/rounds/{r['id']}/apply", headers=tma(10), json=application).status_code == 200
+    board = c.get(f"/api/rounds/{r['id']}/apps", headers=tma(20)).json()
+    assert {str(q["id"]): board[0]["answers"][str(q["id"])] for q in saved["questions"]} == answers
+    assert c.get(f"/api/orgs/{oid}/round", headers=tma(10)).json()["mine"]["answers"] == answers
+
+
+def test_settings_keep_intake_closed_until_explicitly_reopened(env):
+    c, con, oid, body, r = _settings_round(env)
+    url = f"/api/rounds/{r['id']}"
+    assert c.patch(url, headers=tma(20), json={"close": True}).json()["status"] == "closed"
+    saved = c.patch(url, headers=tma(20), json={**body, "title": "Winter"}).json()
+    assert saved["title"] == "Winter" and saved["status"] == "closed" and not saved["open"]
+    application = {"departments": [], "answers": {str(r["questions"][0]["id"]): "Chess"}}
+    assert c.post(f"{url}/apply", headers=tma(10), json=application).json()["error"] == "closed"
+    reopened = c.patch(url, headers=tma(20), json={**body, "close": False}).json()
+    assert reopened["status"] == "open" and reopened["open"]
+    application["answers"] = {str(reopened["questions"][0]["id"]): "Chess"}
+    assert c.post(f"{url}/apply", headers=tma(10), json=application).status_code == 200
+    assert c.patch(url, headers=tma(20), json=body).json()["open"]
+
+
 def test_casting(env):
-    """Casting (PLAN "Casting"): a club opens a round with its tags as departments and a few questions; its
+    """Casting: a club opens a round with its tags as departments and a few questions; its
     followers hear it; students apply (a department's own question only if they picked it); the casting team (Head+ by
     default) sees the applications with what only the app knows, votes, takes one into a department; the results in one
     tap make the accepted members with the department's tag and tell everyone."""

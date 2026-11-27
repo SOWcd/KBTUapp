@@ -10,8 +10,10 @@
   import { flushSync, tick } from 'svelte';
   import { data } from '../lib/state/data.svelte';
   import { irisFrom, openMapFrom, sheets } from '../lib/state/sheets';
-  import { goTab, ui } from '../lib/state/ui.svelte';
+  import { goTab, topAction, ui } from '../lib/state/ui.svelte';
   import { backButton, onAndroid } from '../lib/tg';
+  import { backOut, cubicIn } from 'svelte/easing';
+  import { calm } from './fold';
   import { glass } from './glass';
   import { tabSearches, type TabSearch } from './PullSearch.svelte';
 
@@ -36,6 +38,19 @@
   function unfold() {
     flushSync(() => { launching = true; });
     grid?.querySelector<HTMLElement>('button:not(:disabled)')?.focus({ preventScroll: true });
+  }
+
+  // The screen's own action (owner, Nov 27), as an iOS nav bar's trailing item: the screen on top declares it
+  // (Overlay.action) the way it names itself in the capsule, and the pill becomes it. The dots fade into the pill's
+  // middle and the action's icon turns in; one action to the next crossfades the same way. None: the menu is back.
+  const act = $derived(topAction());
+  $effect(() => { if (act) launching = false; });
+  const turn = (_: Element, { out = false } = {}) => ({ duration: calm() ? 0 : out ? 140 : 380, delay: out ? 0 : 60, easing: out ? cubicIn : backOut,
+    css: (k: number) => `opacity: ${k}; transform: rotate(${(1 - k) * (out ? 30 : -30)}deg) scale(${0.55 + 0.45 * k})` });
+  function press(e: MouseEvent) {
+    if (act) act.run(e);
+    else if (launching) launching = false;
+    else unfold();
   }
 
   // The one search of the web app. No Back: the left pill is Search, and a tap stretches it into a field across the whole
@@ -99,11 +114,13 @@
   </div>
   {#if launching}<div class="catch" role="presentation" onclick={() => (launching = false)}></div>{/if}
   <div class="glass glass-pill shelf" class:open={launching} aria-hidden="true"><span class="tone-base"></span></div>
-  <button class="glass glass-pill side more" class:open={launching} class:away={shown} class:tinted={!!tint} class:flat={onAndroid} type="button" inert={shown} aria-label={t('web.menu')} aria-haspopup="menu" aria-expanded={launching}
-    onpointerdown={warm} onclick={() => (launching ? (launching = false) : unfold())} onkeydown={esc} use:glass={{ bloom: true }}>
+  <button class="glass glass-pill side more" class:open={launching} class:away={shown} class:tinted={!!tint} class:flat={onAndroid} type="button" inert={shown}
+    aria-label={act?.label ?? t('web.menu')} aria-haspopup={act ? undefined : 'menu'} aria-expanded={act ? undefined : launching}
+    onpointerdown={act ? undefined : warm} onclick={press} onkeydown={esc} use:glass={{ bloom: true }}>
     <span class="tone-base" aria-hidden="true"></span><X size={17} strokeWidth={2.4} />
+    {#if act}{#key act.icon}<span class="act" aria-hidden="true" in:turn|global out:turn|global={{ out: true }}><act.icon size={17} strokeWidth={2.4} /></span>{/key}{/if}
   </button>
-  <div class="grid" class:open={launching} class:away={shown} role="menu" tabindex="-1" inert={!launching} bind:this={grid} onkeydown={esc}>
+  <div class="grid" class:open={launching} class:away={shown} class:hid={!!act} role="menu" tabindex="-1" inert={!launching} bind:this={grid} onkeydown={esc}>
     {#each tiles as x, i (i)}
       {@const Icon = x.icon}
       <button class="tile" type="button" role="menuitem" disabled={x.off} style:--i={i} onclick={(e) => { launching = false; x.go(e); }}>
@@ -158,6 +175,10 @@
   .grid { position: absolute; top: 44px; right: 12px; width: 192px; height: 172px; outline: none; pointer-events: none;
     transition: transform 200ms var(--ease), opacity 180ms var(--ease); }
   .grid.open { pointer-events: auto; }
+  /* the screen's action holds the pill: the dots draw into its middle and fade (the pill's centre in the grid's box) */
+  .grid.hid { opacity: 0; transform: scale(.6); transform-origin: calc(192px - var(--pill) / 2) -25px;
+    transition: transform 220ms var(--ease-in), opacity 140ms var(--ease-in); }
+  .act { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
   .tile { position: absolute; left: 8px; top: 8px; width: 86px; height: 76px; padding-top: 8px; display: flex; flex-direction: column; align-items: center; gap: 6px;
     color: var(--text); transform-origin: 50% 28px; transform: translate(var(--x), var(--y)) scale(.125);
     --x: calc(136.5px - var(--pill) / 2); --y: -65.5px; transition: transform 420ms var(--ease-spring) calc((3 - var(--i)) * 12ms); }
@@ -213,6 +234,6 @@
   .x::after { content: ''; position: absolute; inset: -7px; } /* a 44 px target */
   @media (prefers-reduced-motion: reduce) {
     .side, .ico > i, .txt > i, .fld, .shelf, .grid, .tile, .chip, .more > :global(svg), .chip :global(svg), .lb { transition: opacity 120ms linear !important; }
-    .ico > i, .txt > i, .more.away, .grid.away, .more > :global(svg) { transform: none !important; }
+    .ico > i, .txt > i, .more.away, .grid.away, .grid.hid, .more > :global(svg) { transform: none !important; }
   }
 </style>

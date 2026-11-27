@@ -1,4 +1,4 @@
-"""The clubs' rosters from DMP's Student Union sheet (PLAN 95): DMP gave it and allowed its use; every
+"""The clubs' rosters from DMP's Student Union sheet: DMP gave it and allowed its use; every
 row waits in roster_pending for its student and stays theirs (the city hidden or deleted any time). A one-off until
 everyone has signed up: the table is dropped by hand then.
 
@@ -83,11 +83,11 @@ def classify(position: str | None, dept_col: str | None = None) -> tuple[str, st
     dept = _dept(dept_col)
     if p in PLAIN:
         return "member", None, dept
-    if p.startswith("ex"):
+    if re.match(r"^ex[\s.-]", p):
         return "member", raw, dept
     if re.match(r"^vi[ct]s?e[\s-]*head", p):  # the head's deputy: a member of that department
-        m = re.search(r"head(?:\s+of)?\s+(.+)$", p)
-        return "member", raw, dept or (_dept(raw[-len(m.group(1)):]) if m else None)
+        m = re.search(r"head(?:\s+of)?\s+(.+)$", raw, re.I)
+        return "member", raw, dept or (_dept(m.group(1)) if m else None)
     if OFFICIAL.match(p):
         return ("vice" if p.startswith("vi") else "president"), None, dept
     if re.match(r"^vi[ct]s?e\b|^vice", p):
@@ -179,7 +179,7 @@ def _mine(con, uid: int) -> tuple[sqlite3.Row | None, list[sqlite3.Row]]:
     if not s:
         return None, []
     found = rows(con, """SELECT * FROM roster_pending WHERE ((tg IS NOT NULL AND tg = lower(?)) OR (email IS NOT NULL AND email = lower(?)))
-        AND (rejected_by IS NULL OR rejected_by != ?)
+        AND NOT EXISTS (SELECT 1 FROM roster_rejections x WHERE x.row_id = roster_pending.id AND x.user_id = ?)
         AND NOT EXISTS (SELECT 1 FROM org_bans b WHERE b.org_id = roster_pending.org_id AND b.user_id = ?) ORDER BY id""",
                  s["tg_username"] or "", s["email"] or "", uid, uid)  # a club's ban outranks the sheet (join): not theirs to match or claim
     return s, found
@@ -279,16 +279,13 @@ def join(con, uid: int, r: sqlite3.Row, trusted: bool = True, promote: bool = Fa
 def claim(con, uid: int, rid: int) -> None:
     """Request approval for a candidate row before granting membership or assigning attendance."""
     from .logic import ApiError, notify
-    r = next((x for x in asks(con, uid) if x["id"] == rid), None)
-    if r is None:
-        raise ApiError("not_found")
-    if r["claimed_by"]:  # another student's claim on it waits: never overwritten
-        raise ApiError("conflict")
-    if one(con, "SELECT 1 FROM org_bans WHERE org_id = ? AND user_id = ?", r["org_id"], uid):
-        raise ApiError("forbidden", "banned")
     with tx(con):
-        if not con.execute("UPDATE roster_pending SET claimed_by = ? WHERE id = ? AND claimed_by IS NULL", (uid, rid)).rowcount:
+        r = next((x for x in asks(con, uid) if x["id"] == rid), None)
+        if r is None:
+            raise ApiError("not_found")
+        if r["claimed_by"]:  # another student's claim on it waits: never overwritten
             raise ApiError("conflict")
+        con.execute("UPDATE roster_pending SET claimed_by = ? WHERE id = ?", (uid, rid))
         for (aid,) in _approvers(con, r["org_id"]):
             notify(con, aid, "roster_claim", f"rq:{rid}:{uid}")
 
@@ -335,11 +332,13 @@ def decide(con, v, rid: int, ok: bool) -> None:
             raise ApiError("forbidden")
         if not r or r["claimed_by"] is None:  # confirmed (the row went) or turned down (unclaimed) a moment ago
             raise decided(con, f"roster:{rid}") if done else ApiError("not_found")
-        log_action(con, v.id, "roster_ok" if ok else "roster_no", f"roster:{rid}", json.dumps({"org": org}))
         if ok:
-            join(con, r["claimed_by"], r, trusted=False, promote=True)
+            if join(con, r["claimed_by"], r, trusted=False, promote=True) is None:
+                raise ApiError("forbidden", "banned")
         else:
-            con.execute("UPDATE roster_pending SET rejected_by = claimed_by, claimed_by = NULL WHERE id = ?", (rid,))
+            con.execute("INSERT INTO roster_rejections (row_id, user_id) VALUES (?, ?)", (rid, r["claimed_by"]))
+            con.execute("UPDATE roster_pending SET claimed_by = NULL WHERE id = ?", (rid,))
+        log_action(con, v.id, "roster_ok" if ok else "roster_no", f"roster:{rid}", json.dumps({"org": org}))
 
 
 
@@ -349,7 +348,8 @@ def mine(con, uid: int) -> dict | None:
     s, found = _mine(con, uid)
     if not s:
         u = one(con, "SELECT tg_username FROM users WHERE id = ?", uid)
-        found = rows(con, """SELECT DISTINCT org_id, title, role FROM roster_pending WHERE tg = lower(?) AND rejected_by IS NULL ORDER BY id""",
+        found = rows(con, """SELECT DISTINCT org_id, title, role FROM roster_pending WHERE tg = lower(?)
+            AND NOT EXISTS (SELECT 1 FROM roster_rejections WHERE row_id = roster_pending.id) ORDER BY id""",
                      u["tg_username"] or "") if u and u["tg_username"] else []
         return {"welcome": [{"org": r["org_id"], "title": r["title"], "role": r["role"]} for r in found]} if found else None
     joined = rows(con, "SELECT org_id, title FROM roster_toasts WHERE user_id = ? ORDER BY at", uid)

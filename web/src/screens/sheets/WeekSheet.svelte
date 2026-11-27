@@ -1,5 +1,5 @@
 <script lang="ts">
-  // My whole week of classes (PLAN 26: the class card on Home, tapped; the bot's "check them in the app"): a day a
+  // My whole week of classes (the class card on Home, tapped; the bot's "check them in the app"): a day a
   // block, each class its times, kind, room and teacher, as the portal had them. A new one from the portal replaces it;
   // the last row deletes it. Its languages under the week: the portal's page sent again in another one adds its names
   // (only what the student sends, no translation).

@@ -63,11 +63,12 @@
   import { t, tn, money, friendsLine, fmtNum, type Key, placeOf, subjectOf } from '../../lib/i18n/index.svelte';
   import { relDay, time, nowTs, dayMonthShort, parts, at, duration, ago, multiDay, daySpan, endTime } from '../../lib/time';
   import Megaphone from '@lucide/svelte/icons/megaphone';
-  import { openLink, haptic, shareCard } from '../../lib/tg';
+  import { openLink, haptic, inTelegram, shareCard } from '../../lib/tg';
   import { count } from '../../lib/stats';
   import { sheets, registration } from '../../lib/state/sheets';
   import { coverFor, focusPos } from '../../lib/photo';
   import { nameOf, schoolName, shortOf } from '../../lib/short';
+  import { service } from '../../lib/clubs';
   import Group from '../../ui/Group.svelte';
   import Row from '../../ui/Row.svelte';
   import Section from '../../ui/Section.svelte';
@@ -108,7 +109,7 @@
   onMount(() => { let stop = after(() => { soon = true; stop = after(() => (later = true)); }); return () => stop(); });
   $effect(() => { if (overlay.closing) land(); });
   const about = $derived(preview ? preview.description : detail?.description);
-  let raw = $state(false); // the description as typed, not the AI's translation (PLAN 9)
+  let raw = $state(false); // the description as typed, not the AI's translation
   const aiAbout = $derived(!preview && !!detail && translated(detail, 'description'));
   // the description's addresses as typed (a translation may mangle one), less those with a row of their own
   const links = $derived(eventLinks(preview ? preview.description : detail?.orig?.description ?? detail?.description,
@@ -124,7 +125,7 @@
   const going = $derived(st === 'going');
   const full = $derived(!!e && e.seats != null && e.taken >= e.seats && st !== 'going' && st !== 'hold');
   const cancelled = $derived(e?.status === 'cancelled');
-  // the horizontal clip plays only where it costs nothing extra: not on the light look, not with Data Saver (PLAN 32)
+  // the horizontal clip plays only where it costs nothing extra: not on the light look, not with Data Saver
   const wv = $derived(e && 'wideVideo' in e ? (e as EventFull).wideVideo : null);
   const wide = $derived(wv?.url && !cancelled && !document.documentElement.classList.contains('lowfx')
     && !(navigator as { connection?: { saveData?: boolean } }).connection?.saveData ? wv.url : null);
@@ -132,7 +133,7 @@
   const cost = $derived(!e ? '' : e.price ? money(e.price) : e.guestHost || inner(e) || e.meeting ? '' : t('event.free'));
   const pct = $derived(e && e.seats ? Math.min(100, Math.round((e.taken / e.seats) * 100)) : 0);
   const started = $derived(!!e && e.startsAt <= nowTs());
-  // the registration deadline closes "Going" for those not in yet; a 1st-year takes a paid event's free seat (§4.3)
+  // the registration deadline closes "Going" for those not in yet; a 1st-year takes a paid event's free seat
   const regShut = $derived(!!e?.regUntil && e.regUntil <= nowTs() && st !== 'going' && st !== 'hold' && st !== 'waitlist');
   // still open and I'm not in: said right over the button (closed: the button itself says so)
   const regNote = $derived(!!e?.regUntil && e.regUntil > nowTs() && !cancelled && !started && !e.externalUrl && st !== 'going' && st !== 'hold' && st !== 'waitlist' && !e.santa); // a Santa game: its own row names the deadline
@@ -212,7 +213,7 @@
     try { detail = await api.volunteerLeave(id); haptic.soft(); say(phrase('say.volLeft'), 'waving_hand_3d_default'); } catch { haptic.error(); }
   }
 
-  // ---- "+N seats" (§4.2): when it's full, the club's Head+ add seats right here; the waitlist moves in ----
+  // ---- "+N seats": when it's full, the club's Head+ add seats right here; the waitlist moves in ----
   let adding2 = $state(false);
   async function addSeats(n: number) {
     adding2 = true;
@@ -221,11 +222,11 @@
     finally { adding2 = false; }
   }
 
-  // ---- a leaders meeting (§4.10): DMP sees every club's answers ----
+  // ---- a leaders meeting: DMP sees every club's answers ----
   let answers = $state<import('../../lib/api').LeadersAnswer[] | null>(null);
   $effect(() => { if (e?.visibility === 'leaders' && head && crew) api.leadersAnswers(id).then((l) => (answers = l)).catch(() => {}); });
 
-  // ---- a club meeting (§2b): "can't" says why; the club's Head+ see everyone expected, and after it who came ----
+  // ---- a club meeting: "can't" says why; the club's Head+ see everyone expected, and after it who came ----
   let meet = $state<MeetingAnswer[] | null>(null);
   const loadMeet = () => api.meetingAnswers(id).then((l) => (meet = l)).catch(() => {});
   $effect(() => { if (e?.meeting && head && crew) void loadMeet(); });
@@ -333,6 +334,8 @@
     shareCard({ kind: 'ev', id: String(id) }).then((sent) => { if (sent) say(phrase('say.shared'), 'party_popper_3d'); })
       .catch(() => { haptic.error(); say(t('common.error'), 'warning_3d'); });
   }
+  // the web app: Share is the top pill (Overlay.action), the save stays on the picture; inside Telegram both stay there
+  $effect(() => { if (!inTelegram) overlay.action = e && !preview ? { icon: Share, label: t('event.share'), run: share } : null; });
   // "My link": the same card with my badge code in its button, so who signs up by it counts for me (EventManage's "Who brought")
   const myLink = $derived(!!mem && !!e && e.status === 'published' && !started && !e.guestHost && !e.externalUrl && !inner(e) && !preview);
   // the team's tools group has a row to show (a guest host's event leaves a Member nothing)
@@ -353,7 +356,7 @@
   {#if e}
     {#if preview}<p class="pv"><Tag tone="accent"><Eye size={15} />{t('event.preview')}</Tag></p>{/if}
     <div class="hero" class:cancelled bind:this={hero}>
-      <!-- the header (PLAN 32/33): the horizontal clip behind it, else the vertical one, else the photos swiped sideways, else the cover -->
+      <!-- the header: the horizontal clip behind it, else the vertical one, else the photos swiped sideways, else the cover -->
       {#if wide}
         <Poster item={e} big radius={22} />
         <video class="wide" src={wide} poster={wv?.poster?.url} autoplay muted loop playsinline preload="none"></video>
@@ -361,7 +364,7 @@
         <div class="strip" onscroll={(s) => (pic = Math.round(s.currentTarget.scrollLeft / s.currentTarget.clientWidth))}>
           {#each [coverFor(e.cover, 'card')!, ...e.slides] as p, i (p.id)}
             <button class="pic" aria-label={t('fc.photo')} onclick={() => sheets.photos([coverFor(e.cover, 'card')!, ...e.slides].map((x, k) => ({ ...x, id: x.id ?? -k, by: null, mine: true, canDelete: false })), i)}>
-              <img src={p.url} alt="" decoding="async" loading={i ? 'lazy' : 'eager'} style:object-position={i ? null : focusPos(p)} /></button>
+              <img draggable="false" src={p.url} alt="" decoding="async" loading={i ? 'lazy' : 'eager'} style:object-position={i ? null : focusPos(p)} /></button>
           {/each}
         </div>
         <span class="dots" aria-hidden="true">{#each [e.cover, ...e.slides] as _, k (k)}<i class:on={k === pic}></i>{/each}</span>
@@ -374,10 +377,11 @@
       {:else}<button class="org" onclick={() => sheets.club(e.org.id)}><OrgTag org={e.org} /></button>{/if}
       <span class="acts" class:on={e.saved} inert={!!preview}>
         <IconButton icon={Bookmark} kind="glass" size="s" on={e.saved} label={e.saved ? t('event.saved') : t('event.save')} onclick={() => toggleSaved(id)} />
-        <IconButton icon={Share} kind="glass" size="s" label={t('event.share')} onclick={share} /></span></div>
+        {#if inTelegram}<IconButton icon={Share} kind="glass" size="s" label={t('event.share')} onclick={share} />{/if}</span></div>
       <div class="tags">
       {#if e.meeting}<Tag tone="onphoto">{t('event.meeting')}</Tag>{:else if e.visibility === 'members'}<Tag tone="onphoto">{t('event.teamOnly')}</Tag>{:else if e.visibility === 'leaders'}<Tag tone="onphoto">{t('event.leaders')}</Tag>{:else if e.firstYear}<Tag tone="warning">{t('event.firstYear')}</Tag>{/if}
-      {#if e.school}<Tag tone="onphoto">{t('event.schoolOnly', { school: shortOf(e.org) })}</Tag>{/if}</div>
+      {#if e.school}<Tag tone="onphoto">{t('event.schoolOnly', { school: shortOf(e.org) })}</Tag>{/if}
+      {#if service(e.org)}<Tag tone="onphoto">{t('clubs.office')}</Tag>{/if}</div>
     </div>
 
     <!-- what, when, how much: type alone, read in one look -->
@@ -421,7 +425,7 @@
           <div class="mosaic n{Math.min(shown, 3)}" bind:this={mosaic}>
             {#each photos.slice(0, shown) as p, i (p.id)}
               <button class="ph" data-id={p.id} style="background-color:{p.color ?? 'var(--surface-2)'}" aria-label={i === shown - 1 && photos.length > shown ? undefined : t('fc.photo')} onclick={() => (i === shown - 1 && photos.length > shown ? allPhotos() : viewAlbum(i))}>
-                <img src={p.thumb} alt="" loading="lazy" decoding="async" />
+                <img draggable="false" src={p.thumb} alt="" loading="lazy" decoding="async" />
                 {#if i === shown - 1 && photos.length > shown}<span class="more num">+{photos.length - shown}</span>{/if}
               </button>
             {/each}
@@ -544,7 +548,7 @@
           {#if head}
             {#if !e.guestHost}<Row icon={UsersRound} title={t('studio.attendees')} accessory="chevron" onclick={() => sheets.attendees(id)} />{/if}
             {#if e.teamMax}<Row icon={UsersRound} title={t('tm.board')} value={detail?.teams?.count ? String(detail.teams.count) : undefined} accessory="chevron" onclick={() => sheets.teams(id)} />{/if}
-            <!-- full before it starts: more seats right here, the waitlist moves in (§4.2) -->
+            <!-- full before it starts: more seats right here, the waitlist moves in -->
             {#if e.seats && !cancelled && !started && e.taken >= e.seats}<Row icon={Plus} title={t('seats.addRow')} disabled={adding2}
               menu={[5, 10, 20].map((n) => ({ label: `+${n}`, onselect: () => void addSeats(n) }))} />{/if}
             <Row icon={Megaphone} title={t('upd.write')} accessory="disclosure" open={writing} onclick={() => (writing = !writing)} />

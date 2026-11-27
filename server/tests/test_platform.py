@@ -48,3 +48,87 @@ def test_platform_swept_and_deleted(env, monkeypatch):
     logic.account.delete_me(con, logic.Viewer(stu, "user", True))
     assert kinds(con, stu) == {} and kinds(con, bob) == {"android": night}
     assert ("user_platforms", "user_id") in logic.account._DEL_GONE
+
+
+def test_android_app_reported(env, monkeypatch):
+    """The installed Android app (the Google Play TWA) says app=play: /api/me answers androidApp from then on (Profile's
+    Google Play row and the tester sheet stop); only with platform=android, swept after 90 days, gone with the account."""
+    c, cfg = env
+    login(c, 90, "stu")
+    con = db.connect(cfg.db_path)
+    uid = con.execute("SELECT id FROM users WHERE tg_id = 90").fetchone()[0]
+    now = ((int(time.time()) + 5 * 3600) // 86400 + 2) * 86400 - 4 * 3600       # two days on, 01:00 Almaty: the sweep runs
+    set_clock(monkeypatch, lambda: now)
+    assert c.get("/api/me?platform=android", headers=tma(90)).json()["androidApp"] is False
+    for bad in ("?platform=ios&app=play", "?platform=android&app=other", "?app=play"):  # another kind or word: nothing kept
+        c.get("/api/me" + bad, headers=tma(90))
+    assert c.get("/api/me?platform=android", headers=tma(90)).json()["androidApp"] is False
+    c.get("/api/me?platform=android&app=play", headers=tma(90))
+    assert c.get("/api/me", headers=tma(90)).json()["androidApp"] is True      # Telegram too: the account knows
+    con.execute("UPDATE android_app SET seen_at = ?", (now - 91 * 86400,))
+    logic.stats_day(con)
+    assert con.execute("SELECT COUNT(*) FROM android_app").fetchone()[0] == 0
+    c.get("/api/me?platform=android&app=play", headers=tma(90))
+    logic.account.delete_me(con, logic.Viewer(uid, "user", True))
+    assert con.execute("SELECT COUNT(*) FROM android_app").fetchone()[0] == 0
+    assert ("android_app", "user_id") in logic.account._DEL_GONE
+
+
+def test_device_rows_in_the_outbox_swept(env, monkeypatch):
+    """A bot_outbox row that says someone used Android (the Play app's thanks, a --platform broadcast) goes after 90 days
+    like user_platforms; a --platform row keeps only its mark through the 30-day blanking; other rows stay."""
+    c, cfg = env
+    login(c, 90, "stu")
+    con = db.connect(cfg.db_path)
+    uid = con.execute("SELECT id FROM users WHERE tg_id = 90").fetchone()[0]
+    night = ((int(time.time()) + 5 * 3600) // 86400 + 2) * 86400 - 4 * 3600        # two days on, 01:00 Almaty
+    set_clock(monkeypatch, lambda: night)
+    con.executemany("INSERT INTO bot_outbox (user_id, kind, ref, payload, send_after, sent_at) VALUES (?, ?, ?, ?, ?, ?)", [
+        (uid, "android_welcome", "", "{}", night - 91 * 86400, night - 91 * 86400),
+        (uid, "android_welcome", "p1", "{}", night - 89 * 86400, night - 89 * 86400),
+        (uid, "app_broadcast", "old", '{"url":"https://t.me/x","p":1}', night - 91 * 86400, night - 91 * 86400),
+        (uid, "app_broadcast", "mid", '{"url":"https://t.me/x","p":1}', night - 31 * 86400, night - 31 * 86400),
+        (uid, "app_broadcast", "all", '{"url":"https://t.me/x"}', night - 91 * 86400, night - 91 * 86400),
+        (uid, "remind_2h", "r", "not json", night - 91 * 86400, night - 91 * 86400)])
+    logic.stats_day(con)
+    assert dict(con.execute("SELECT kind || ':' || ref, payload FROM bot_outbox")) == {
+        "android_welcome:p1": "{}", "app_broadcast:mid": '{"p":1}', "app_broadcast:all": "{}", "remind_2h:r": "{}"}
+
+
+def test_android_welcome_once_after_the_yes(env, monkeypatch, capsys):
+    """The installed app's first launch queues the bot's one thanks, but only once the creator turned it on (admin
+    android-welcome on, which also thanks whoever opened it before); off stops new ones; a preview goes to one person."""
+    from kbtu import admin, outbox
+    c, cfg = env
+    monkeypatch.setattr(admin.config, "load", lambda: cfg)
+    login(c, 90, "stu")
+    login(c, 91, "two")
+    con = db.connect(cfg.db_path)
+    uid = {tg: con.execute("SELECT id FROM users WHERE tg_id = ?", (tg,)).fetchone()[0] for tg in (90, 91)}
+
+    def thanks():
+        return [r[0] for r in con.execute("SELECT user_id FROM bot_outbox WHERE kind = 'android_welcome' AND ref = '' ORDER BY user_id")]
+    c.get("/api/me?platform=android&app=play", headers=tma(90))
+    assert thanks() == []                                                    # not before the yes
+    admin.main(["android-welcome", "on", "--dry"])
+    assert capsys.readouterr().out.strip() == "would queue 1"
+    admin.main(["android-welcome", "on"])
+    assert capsys.readouterr().out.strip() == "on, queued 1"
+    assert thanks() == [uid[90]]
+    c.get("/api/me?platform=android&app=play", headers=tma(91))
+    con.execute("UPDATE android_app SET seen_at = 0")                         # a later day: no second thanks
+    c.get("/api/me?platform=android&app=play", headers=tma(91))
+    c.get("/api/me?platform=android&app=play", headers=tma(90))
+    admin.main(["android-welcome", "on"])
+    assert thanks() == [uid[90], uid[91]]
+    row = con.execute("SELECT * FROM bot_outbox WHERE kind = 'android_welcome' AND user_id = ?", (uid[91],)).fetchone()
+    text, button, start = outbox._render(con, {**dict(row), "lang": "en", "tg_id": 91})
+    assert text.startswith("\U0001f389") and button and start == ""
+    admin.main(["android-welcome", "off"])
+    con.execute("DELETE FROM android_app")
+    con.execute("DELETE FROM bot_outbox")
+    c.get("/api/me?platform=android&app=play", headers=tma(90))
+    assert thanks() == []                                                    # off: no new ones
+    con.execute("UPDATE users SET tg_username = 'owner90' WHERE tg_id = 90")
+    admin.main(["android-welcome", "@owner90"])
+    assert [r[0] for r in con.execute("SELECT user_id FROM bot_outbox WHERE kind = 'android_welcome' AND ref != ''")] == [uid[90]]

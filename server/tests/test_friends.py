@@ -8,7 +8,7 @@ from test_core import delete_now, env, login, tma  # noqa: F401  (env: the fixtu
 
 
 def test_friends(env):
-    """Friends (SPEC §4.7): a request and its answer, a mutual ask that settles itself, a quiet decline that keeps
+    """Friends: a request and its answer, a mutual ask that settles itself, a quiet decline that keeps
     looking pending, a one-time link (the first one wins), where friends go (only if they allow it), unfriend."""
     c, cfg = env
     ali, zhan, dana = login(c, 31, "ali"), login(c, 32, "zhan"), login(c, 33, "dana")
@@ -86,7 +86,7 @@ def test_can_friend_off(env):
 
 
 def test_referrals(env):
-    """Invite links (PLAN): r_<badge code>, never a user ID; the first link wins, only before the KBTU
+    """Invite links: r_<badge code>, never a user ID; the first link wins, only before the KBTU
     sign-in; it counts once the invitee is confirmed by Microsoft; "Recruiter" at 3; gone with the account."""
     c, cfg = env
     con = db.connect(cfg.db_path)

@@ -1,5 +1,5 @@
 <script lang="ts">
-  // A Telegram chat's avatar with the mark of what it is (PLAN 86: an org's chats on its page and in Studio): its own
+  // A Telegram chat's avatar with the mark of what it is (an org's chats on its page and in Studio): its own
   // picture, or its letters on a colour of its own; a topics group is a squircle, as Telegram draws it.
   import type { Chat } from '../lib/api';
   import ChatKind from './ChatKind.svelte';
@@ -10,7 +10,7 @@
 </script>
 
 <span class="ca" class:sq={kind === 'forum'} style="--s:{size}px" style:background={photo ? null : tint}>
-  {#if photo}<img src={photo} alt="" loading="lazy" decoding="async" />{:else}<em>{initials(title)}</em>{/if}
+  {#if photo}<img draggable="false" src={photo} alt="" loading="lazy" decoding="async" />{:else}<em>{initials(title)}</em>{/if}
   <span class="kind"><ChatKind {kind} size={Math.round(size * 0.4)} /></span>
 </span>
 

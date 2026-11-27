@@ -17,6 +17,7 @@ import re
 import secrets
 import sqlite3
 import time
+import unicodedata
 from collections.abc import Callable
 from functools import cache
 from pathlib import Path
@@ -27,6 +28,7 @@ from .clubs import shown_links
 from .oversight import _mod
 
 A_DAY = 30
+GLOBAL_A_DAY = 1000       # all students and event fills together, per UTC day; keys may be billed
 TURNS = 6                 # the last turns sent along (a follow-up "and where is it?" needs the one before)
 Q_MAX = 300
 WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
@@ -127,6 +129,19 @@ _BRING = re.compile(r"\b(bring|wear|prepare|dress[ -]?code|with you)\b|"
                     r"\u0430\u043b\u044b\u043f \u043a\u0435\u043b|\u0430\u043b\u0430 \u043a\u0435\u043b|\u04e9\u0437\u0456\u04a3\u043c\u0435\u043d|\u043a\u0438\u0456\u043c|\u0434\u0430\u0439\u044b\u043d\u0434\u0430", re.I)
 
 
+_CONTACT_PART = re.compile(r"[+\uff0b]?\d[\d \t\u00a0().-]{7,}\d|\S+")
+
+
+def _fact_excerpt(text: str, limit: int) -> str:
+    """Keep whole tokens, including spaced phone numbers, so a cut cannot create a new contact."""
+    if len(text) <= limit:
+        return text
+    for part in _CONTACT_PART.finditer(text):
+        if part.end() > limit:
+            return text[:min(limit, part.start())].rstrip()
+    return text[:limit].rstrip()
+
+
 def _event_about(text: str, limit: int = 320) -> str:
     if len(flat := _one_line(text)) <= limit:
         return flat
@@ -134,9 +149,9 @@ def _event_about(text: str, limit: int = 320) -> str:
     parts = re.split(r"(?<=[.!?])\s+", flat)
     start = next((i for i, part in enumerate(parts) if _BRING.search(part)), 0)
     if not start:
-        return flat[:limit]
-    excerpt = _one_line(" ".join(parts[start:]))[:min(limit, 320)]
-    intro = flat[:max(0, limit - len(excerpt) - 5)]
+        return _fact_excerpt(flat, limit)
+    excerpt = _fact_excerpt(_one_line(" ".join(parts[start:])), min(limit, 320))
+    intro = _fact_excerpt(flat, max(0, limit - len(excerpt) - 5))
     return f"{intro} ... {excerpt}" if intro else excerpt
 
 
@@ -184,10 +199,10 @@ def brief(con, v: Viewer, lang: str = "en", q: str = "") -> tuple[str, set[str],
                 f"Event [{e['id']}] {e['title']}, {_when(e['starts_at'])}, {e['place'] or ('online' if e['online'] is not None else 'place to be announced')}, {e['org']}"
                 + (f" (club {e['oid']})" if e["ost"] == "active" else "")
                 + f". About (excerpt): {_event_about(e['description']) or 'not specified'}", e["id"], e["oid"] if e["ost"] == "active" else None) for e in evs]
-    public += [(2 if o["id"] in named else 0, f"[club {o['id']}] {o['name']}. About: {_one_line(o['description'])[:180] or 'not specified'}", None, o["id"]) for o in orgs]
+    public += [(2 if o["id"] in named else 0, f"[club {o['id']}] {o['name']}. About: {_fact_excerpt(_one_line(o['description']), 180) or 'not specified'}", None, o["id"]) for o in orgs]
     # Named records first, whole records only: a long directory must not cut off the club the question asks about,
     # nor allow a button for an event/club the model never received. No extra model call or topic classifier.
-    text, events, clubs = "\n".join(lines)[:FACTS_MAX], set(), set()
+    text, events, clubs = _fact_excerpt("\n".join(lines), FACTS_MAX), set(), set()
     for _, line, eid, oid in sorted(public, key=lambda p: -p[0]):
         if len(text) + len(line) + 1 > FACTS_MAX:
             continue
@@ -256,16 +271,31 @@ def card(con, ctx: object) -> tuple[str, int | None, set[int]] | None:
                 (ls := shown_links(o["links"])) and f"links: {', '.join(ls)}"]
         about, eid, clubs = o["description"], None, {o["id"]}
         head = "a club's page"
-    facts = "; ".join(str(b) for b in bits if b) + (f". About: {_one_line(about)[:1200]}" if about else "")
-    return f'The student opened you from {head} in the app; "this", "it", "here", "they" mean it: {facts}'[:CARD_MAX], eid, clubs
+    facts = "; ".join(str(b) for b in bits if b) + (f". About: {_fact_excerpt(_one_line(about), 1200)}" if about else "")
+    return _fact_excerpt(f'The student opened you from {head} in the app; "this", "it", "here", "they" mean it: {facts}', CARD_MAX), eid, clubs
 
 
 def _spend(con, v: Viewer) -> None:
     """One of the day's AI uses (the questions and the event fills together), counted before the model is asked."""
-    with tx(con):  # one step across workers
-        if one(con, "SELECT COUNT(*) FROM assist_uses WHERE user_id = ? AND at > ?", v.id, now() - 86400)[0] >= A_DAY:
-            raise ApiError("rate_limited", "assistant")
-        con.execute("INSERT INTO assist_uses (user_id, at) VALUES (?, ?)", (v.id, now()))
+    try:
+        with tx(con):  # both allowances reserved atomically across workers, even for failed calls
+            t = now()
+            day = t // 86400
+            if one(con, "SELECT COUNT(*) FROM assist_uses WHERE user_id = ? AND at > ?", v.id, t - 86400)[0] >= A_DAY:
+                raise ApiError("rate_limited", "assistant")
+            row = one(con, "SELECT value FROM meta WHERE key = 'assist_calls'")
+            use = json.loads(row[0]) if row else {"day": day, "n": 0}
+            if not isinstance(use, dict) or type(use.get("day")) is not int or type(use.get("n")) is not int \
+                    or not 0 <= use["day"] <= day or use["n"] < 0:
+                raise ApiError("unavailable", "assistant")
+            n = use["n"] if use["day"] == day else 0
+            if n >= GLOBAL_A_DAY:
+                raise ApiError("rate_limited", "assistant")
+            con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('assist_calls', ?)",
+                        (json.dumps({"day": day, "n": n + 1}),))
+            con.execute("INSERT INTO assist_uses (user_id, at) VALUES (?, ?)", (v.id, t))
+    except (sqlite3.Error, ValueError, TypeError):  # no reliable reservation: never send a potentially billed request
+        raise ApiError("unavailable", "assistant") from None
 
 
 # The map's own room list (Uni-Q's plans, by floor 0-5: what the map searches, web CampusMap ROOMS); the image copies it to
@@ -314,7 +344,7 @@ def prompt(con, v: Viewer, body: dict, lang: str, ask: str = "", forum: bool = F
     _spend(con, v)
     facts, rooms, events, clubs = brief(con, v, lang, docs_query(body))
     named, found = rooms_asked(docs_query(body))  # a short follow-up ("and 405?") with the turn before it
-    facts = f"{facts[:FACTS_MAX]}\nThe forum: {'on' if forum else 'off'}. The subjects: {'on' if subjects else 'off'}."
+    facts = f"{facts}\nThe forum: {'on' if forum else 'off'}. The subjects: {'on' if subjects else 'off'}."
     facts, rooms = f"{facts}\n{named}" if named else facts, rooms | found
     if on:
         facts, events, clubs = f"{facts}\n{on[0]}", events | ({on[1]} if on[1] else set()), clubs | on[2]
@@ -326,7 +356,7 @@ def prompt(con, v: Viewer, body: dict, lang: str, ask: str = "", forum: bool = F
             msgs.append({"role": m["role"], "content": m["text"][:Q_MAX * 2]})
     msgs.append({"role": "user", "content": q})
     from .appeals import ask_on
-    return msgs, {"map": rooms, "event": events, "club": clubs, "ask": ask_on(con, ask, v),  # ask: the help desk open to me (ASK)
+    return msgs, {"facts": quoted, "map": rooms, "event": events, "club": clubs, "ask": ask_on(con, ask, v),  # ask: the help desk open to me (ASK)
                   **studio(con, v), "opt": {*(("forum", "post") if forum else ()), *(("subjects",) if subjects else ())}}
 
 
@@ -381,10 +411,10 @@ def docs_query(body: dict) -> str:
     return " ".join(f"{past[-1][:Q_MAX]} {q}".split()) if past and len(q.split()) < 4 else q
 
 
-def with_docs(msgs: list[dict], q: str, qvec=None, year: int | None = None) -> list[dict]:
+def with_docs(msgs: list[dict], q: str, qvec=None, year: int | None = None, *, ok: dict | None = None) -> list[dict]:
     """The messages with the documents' rule in the system message and their excerpts quoted in a message just before
-    the question (none found, or no docs file: as they were; the question stays the last message). `year`: the
-    student's intake, whose curricula come first (only our own search reads it)."""
+    the question (none found, or no docs file: as they were; the question stays the last message). The same excerpts
+    join the reply's trusted facts in `ok`. `year`: the student's intake, whose curricula come first."""
     from .. import docs
     try:
         hits = DOCS.search(q, qvec, k=DOCS_K, intake=year) if DOCS else []
@@ -395,6 +425,8 @@ def with_docs(msgs: list[dict], q: str, qvec=None, year: int | None = None) -> l
     if not hits:
         return msgs
     quoted = re.sub(r"</?excerpts", "excerpts", docs.cite(hits), flags=re.I)  # a document can't close the quote itself
+    if ok is not None:
+        ok["facts"] += "\n" + quoted
     return [{**msgs[0], "content": f"{msgs[0]['content']}\n\n{DOCS_RULE}"}, *msgs[1:-1],
             {"role": "user", "content": f"{DOCS_HEAD}\n<excerpts>\n{quoted}\n</excerpts>"}, msgs[-1]]
 
@@ -416,6 +448,34 @@ def _json(text: str) -> dict | None:
 
 def usable(text: str) -> bool:
     return _json(text) is not None
+
+
+def _answer_text(text: str, facts: str) -> str:
+    """Drop lines with invented contacts, including invisible/fullwidth disguises. Only exact contacts from the
+    server's brief or retrieved excerpts may survive; the question and client-supplied history never allow one."""
+    from .fchannel import DOTS, LINKY, ZWJ, _long_number, _visible
+
+    def bare(s: str) -> str:
+        return s.strip(".,;:!?()[]{}<>\"'`")
+
+    def risky(s: str) -> bool:
+        seen = unicodedata.normalize("NFKC", s.replace(ZWJ, "")).translate(DOTS)
+        return "@" in seen or bool(LINKY.search(seen)) or _long_number(seen)
+
+    display = "".join(c for c in text if _visible(c)).strip()
+    allowed = None
+    lines = []
+    # Validate the displayed text: cutting an allowed handle afterwards could turn it into someone else's.
+    for line in display[:1200].splitlines():
+        if risky(line):
+            # Match whole tokens from the original facts. Only detection uses normalization.
+            if allowed is None:
+                allowed = {bare(part[0]) for part in _CONTACT_PART.finditer(facts) if risky(part[0])}
+            remaining = _CONTACT_PART.sub(lambda m: "#" if bare(m[0]) in allowed else m[0], line)
+            if risky(remaining):
+                continue
+        lines.append(line)
+    return "\n".join(lines).strip()
 
 
 def answer(text: str, ok: dict) -> dict:
@@ -446,7 +506,7 @@ def answer(text: str, ok: dict) -> dict:
             continue
         if b not in acts:
             acts.append(b)
-    return {"text": x["text"].strip()[:1200], "actions": acts[:3]}
+    return {"text": _answer_text(x["text"], ok.get("facts", "")), "actions": acts[:3]}
 
 
 # ------------------------------------------------------------ distress and feedback
@@ -532,6 +592,8 @@ def reply(con, text: str, ok: dict, lang: str, q: str = "") -> dict:
     out, x = answer(text, ok), _json(text) or {}
     if x.get("care") is True or distress(q):  # the helplines, never "Ask a person" (a 5-day queue) beside them
         return {**out, "actions": [a for a in out["actions"] if a["type"] != "ask"]} | care(con, lang)
+    if not out["text"]:
+        raise ApiError("unavailable", "assistant")
     topic = _topic(x.get("topic"))
     if topic:
         day, nonce = now() // 86400, secrets.token_hex(8)

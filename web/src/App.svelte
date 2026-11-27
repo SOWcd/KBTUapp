@@ -14,7 +14,7 @@
   import { keepTickets } from './lib/offlineTickets';
   import { channel, channelUnread, warmChannelFeeds, watchChannelVisit } from './lib/state/channel.svelte';
   import { loadSubjects, subjReady } from './lib/state/subjects.svelte';
-  import { data, resetResearch, loadResearch, loadResearchRequests, loadAfisha, loadSchedule, loadCredits, loadSupport, loadGallery, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadVol, loadAppeals, loadSg, loadAsks, loadHelpq, loadStudio, loadTeam, loadMeetups, loadMeetupSetup, phrase, studioChanged, eventById, eventTeamChunk, toggleGoing, skipped, classKey } from './lib/state/data.svelte';
+  import { data, resetResearch, loadResearch, loadResearchRequests, loadAfisha, loadSchedule, loadCredits, loadSupport, loadGallery, loadFriends, loadMyCard, loadNews, loadInbox, loadRegistry, loadVol, loadAppeals, loadLibrary, loadSg, loadAsks, loadHelpq, loadStudio, loadTeam, loadMeetups, loadMeetupSetup, phrase, studioChanged, eventById, eventTeamChunk, toggleGoing, skipped, classKey } from './lib/state/data.svelte';
   import { burst } from './ui/burst';
   import { hiNow, nextUp, once, opened, returning, seen } from './lib/greet';
   import { visit } from './lib/helpus';
@@ -43,7 +43,7 @@
   // after lib/map: imported before it, the map's place names (i18n/spots) became a chunk of their own at the start
   import { chunks, dropLazy, lazy, openCheckin, openDeepLink, warm } from './lib/state/openers';
   import { count, crashed, launchedFrom, painted, timed } from './lib/stats';
-
+  import { offerDue } from './lib/androidTest';
   let { standaloneBar: StandaloneBar }: { standaloneBar?: Component<{ back: boolean; tint?: string | null }> } = $props();
   setLucideProps({ size: 22, strokeWidth: 2 }); // stroke 2 everywhere (the design system, Oct 30; was 1.9)
 
@@ -72,7 +72,8 @@
   // sheets.consent), and may be declined. Staff and students added by hand have no consent of theirs; a deletion
   // pending is exempt. Only on the server's word (boardKnown): the launch copy's policy is the default, not the one in force.
   let asked = $state(false);
-  const consentGate = () => import('./screens/ConsentGate.svelte');
+  // offline, its chunk fails: the gate steps back (the app stays usable) and asks again on the next held action
+  const consentGate = () => import('./screens/ConsentGate.svelte').catch((e) => { asked = false; say(t('common.error'), 'warning_3d'); throw e; });
   const gated = $derived.by(() => {
     const s = session.me?.student;
     return !!s && session.boardKnown && !session.me?.deleteAt && asked && !['staff', 'admin', session.policy, session.policy + CONSENT_VOL].includes(s.consent);
@@ -138,7 +139,7 @@
   const rosterWelcome = () => import('./screens/sheets/RosterWelcome.svelte'), rosterAsk = () => import('./screens/sheets/RosterAsk.svelte');
   sheets.consent = () => { asked = true; void loadMe(); };
   let registryOpened = false; // in this launch, by any path: the desk's auto-open stays off after it (lib/desk.ts)
-  sheets.registry = () => { registryOpened = true; return lazy(() => import('./screens/dmp/RegistrySheet.svelte'), {}); };
+  sheets.registry = (focus?: 'memos') => { registryOpened = true; return lazy(() => import('./screens/dmp/RegistrySheet.svelte'), { focus }); };
   sheets.celebrate = () => void celebrate();
   setLoginHook((after, lock) => sheets.login(after, lock));
 
@@ -180,6 +181,17 @@
   // at 4x CPU). So each one, once built, is drawn once in a later idle moment, unseen (.drawing), then skipped again with
   // its layout kept; the tap only shows it.
   let drawing = $state<string | null>(null);
+  // the tab just left stays drawn under the new one while they crossfade (.tab.out), then is skipped again. Set before
+  // the DOM changes (pre), so it never goes hidden in between; one at a time (a third tab cuts the first off).
+  // Reduced motion: no fade, it goes at once
+  let leaving = $state<Tab | null>(null);
+  let lastTab = ui.tab;
+  $effect.pre(() => {
+    const k = ui.tab;
+    if (k === lastTab) return;
+    leaving = matchMedia('(prefers-reduced-motion: reduce)').matches ? null : lastTab;
+    lastTab = k;
+  });
   const idle = (fn: () => void) => { if ('requestIdleCallback' in window) requestIdleCallback(fn, { timeout: 4000 }); else setTimeout(fn, 500); };
   function prebuild() {
     const k = tabs.find((x) => !built[x] && (x !== 'club' || session.ready));
@@ -210,7 +222,7 @@
   // the app's open time ends at the first frame drawn with the first tab built and something to show (the copy or the server)
   let measured = false;
   $effect(() => { if (measured || !built[ui.tab] || !pageReady(ui.tab) || !session.ready || !data.eventsReady) return; measured = true; requestAnimationFrame(() => setTimeout(painted)); });
-  // the capsule says what the top overlay is (SPEC §8.2); a closing one lets go at once, so it morphs back with the exit.
+  // the capsule says what the top overlay is; a closing one lets go at once, so it morphs back with the exit.
   // It takes that overlay's own theme too (the map's switch), so it never sits light on a dark map.
   // The top overlay that speaks decides (a Pane at rest is quiet but still the top: the capsule never names the page
   // under it); a menu or an Ask says nothing and lets the one below speak.
@@ -299,7 +311,7 @@
     });
   });
 
-  // ---- the clubs' rosters (PLAN 95): joined from DMP's list (a toast each, once), the welcome before the KBTU sign-in,
+  // ---- the clubs' rosters: joined from DMP's list (a toast each, once), the welcome before the KBTU sign-in,
   // a row under another name; each sheet once per launch, after the start's own moments ----
   const rosterShown = new Set<string>();
   $effect(() => {
@@ -359,12 +371,13 @@
     if (p === 'map') { sheets.map(); return; }
     if (p === 'awards') { ui.tab = 'profile'; asStudent(() => sheets.awards()); return; }
     if (p === 'feed') { ui.tab = 'afisha'; sheets.feed(); return; }
-    if (p === 'exit') { sheets.map(undefined, true); return; } // the owner's "help me get out" link (PLAN item 21)
+    if (p === 'exit') { sheets.map(undefined, true); return; } // the owner's "help me get out" link
     if (p === 'friends') { ui.tab = 'profile'; sheets.friends(); return; }
     if (p === 'me') { ui.tab = 'profile'; return; }
     if (p === 'apl') { ui.tab = session.channel ? 'forum' : 'profile'; if (session.me?.appeals) sheets.appeals(); return; } // the bot: SG answered my appeal   // the bot: "keep my account"
     if (p === 'ask') { ui.tab = 'profile'; if (session.me?.ask) sheets.askHuman(); return; } // the bot: my question to a person has an answer (old messages)
     if (p === 'cm') return; // the bot's "register" under a deleted Telegram comment: the comment's card is a launch moment (tgComment)
+    if (p === 'lib') { ui.tab = 'profile'; if (session.me?.library) sheets.library(); return; } // the bot: my seat (a report, time running out) or the one I reported
     if (p === 'anthem') { sheets.anthem(); return; } // the volunteers' chat link: the anthem over the tab as it is, guests too
     if (p === 'android') { void lazy(() => import('./screens/sheets/AndroidTestSheet.svelte'), {}); return; } // the bot's android_test broadcast: become a tester of the app on Google Play
     if (p === 'capps') { sheets.admin(); return; }                              // the bot: a club to check
@@ -530,16 +543,24 @@
     untrack(() => { localize(data); localize(session.me); });
   });
 
-  // ---- a new achievement level the app hasn't celebrated yet (§4.11): one moment at a time, once the app has settled ----
+  // ---- a new achievement level the app hasn't celebrated yet: one moment at a time, once the app has settled ----
   // (and after signing in later: a returning student may bring one)
   let booted = $state(false), wasStudent = false;
+  // the launch's Afisha load answered (loadAfisha never rejects); set in onMount below
+  let afishaDone!: () => void;
+  const afishaIn = new Promise<void>((r) => (afishaDone = r));
   $effect(() => {
     const st = !!session.me?.student;
     if (st !== wasStudent) untrack(() => {
-      // known to be a student (the stored copy, the server, a sign-in): Profile's and the club tab's pages fill at once
-      loadMine();
-      void loadGallery();
-      void loadInbox(true); // staff only (it checks)
+      // known to be a student (the stored copy, the server, a sign-in): Profile's and the club tab's pages fill ahead of a
+      // tap. The stories now (StoryRow); the other 10-15 requests wait for the Afisha's answer and an idle moment, so
+      // they never compete with the first screen's request
+      void loadNews(true);
+      void afishaIn.then(() => idle(() => {
+        loadMine();
+        void loadGallery();
+        void loadInbox(true); // staff only (it checks)
+      }));
     });
     if (st && !wasStudent && booted) { moment(tgComment); moment(celebrate); } // signed in just now: his comment first
     wasStudent = st;
@@ -553,6 +574,7 @@
     if (session.me?.oversee) void loadRegistry();
     if (session.me?.vol?.ledger) void loadVol();
     if (session.me?.appeals) void loadAppeals();
+    if (session.me?.library) void loadLibrary();
     if (session.me?.appeals?.sg) void loadSg();
     if (session.me?.ask) void loadAsks();
     if (session.me?.ask?.staff) void loadHelpq();
@@ -563,7 +585,7 @@
     void loginSheet().catch(() => {}); void askSheet().catch(() => {});
     warm(chunks.person); warm(chunks.club);
     if (inTelegram && session.me && !session.me.canDm) warm(dmSheet);
-    for (const tab of tabs) void loadPage(tab).catch(() => {});
+    // (the tabs' chunks: prebuild and warmChannel fetch them one per idle moment, not all in the first frame)
   }
   // my own comment the bot deleted in the forum channel's Telegram group (the server knows me by the signed initData,
   // not by the bot's button, startapp=cm): the first launch moment, the others wait behind it (owner, Nov 1)
@@ -669,14 +691,17 @@
     }
     const account = inTelegram ? loadMe(false, true) : Promise.resolve();
     const afisha = loadAfisha();
+    void afisha.then(afishaDone);
     // Warm the first event while the lists are on their way.
     warm(chunks.event);
     void account.then(() => {
       // Made together: Profile's row and its screen, ahead of any tap. Something of mine there and never answered:
       // the "show your name?" sheet once on this phone (owner, Nov 20: few open that screen, so ask at the door)
-      const credits = loadCredits();
+      // (after the Afisha's answer, in an idle moment: never beside the first screen's request)
+      const settled = afishaIn.then(() => new Promise<void>((r) => idle(r)));
+      const credits = settled.then(() => loadCredits());
       if (session.banned || session.revoked) return;
-      void loadSupport();
+      void settled.then(() => { if (!session.banned && !session.revoked) void loadSupport(); });
       requestAnimationFrame(() => setTimeout(warmNavigation));
       // A Microsoft return without a start parameter can still carry a verified pending claim.
       const microsoftReturn = !!session.me?.msPending;
@@ -701,11 +726,12 @@
         try { if (localStorage.getItem(k)) return; localStorage.setItem(k, '1'); } catch { return; }
         moment(() => sheets.creditAsk());
       });
-      // the owner: Android people are offered the Google Play closed test once, on entry (no broadcast)
-      if (onAndroid && inTelegram && !ui.gate) {
-        let seen = true;
-        try { seen = !!localStorage.getItem('andr.asked'); if (!seen) localStorage.setItem('andr.asked', '1'); } catch { /* blocked: never nag */ }
-        if (!seen) moment(() => void lazy(() => import('./screens/sheets/AndroidTestSheet.svelte'), {}));
+      // the owner: Android people are offered the Google Play closed test on entry (no broadcast), once more 3 days on
+      // if they closed it (lib/androidTest.ts); never once they've opened the installed app. Profile's row stays.
+      if (onAndroid && inTelegram && !ui.gate && !session.me?.androidApp) {
+        const due = offerDue();
+        if (due === 'again') count('andr.again');
+        if (due) moment(() => void lazy(() => import('./screens/sheets/AndroidTestSheet.svelte'), {}));
       }
       setTimeout(chunks.ticket, 1500); setTimeout(warmPages, 3000); setTimeout(warmChannel, 1800); setTimeout(warmSubjects, 3500); setTimeout(prebuild, 2500);
       if (!inTelegram && session.me && !session.me.student?.ms) sheets.login();
@@ -731,7 +757,8 @@
     <div class="banned" role="alert"><p>{t('common.error')}</p></div>
   {:else if !session.banned}
     {#each tabs as tab (tab)}
-      <section class="tab" class:on={ui.tab === tab} class:drawing={drawing === tab && ui.tab !== tab} aria-hidden={ui.tab !== tab} inert={gated}>
+      <section class="tab" class:on={ui.tab === tab} class:out={leaving === tab} class:drawing={drawing === tab && ui.tab !== tab} aria-hidden={ui.tab !== tab} inert={gated}
+               onanimationend={(e) => { if (e.target === e.currentTarget && leaving === tab) leaving = null; }}>
         {#if tab === 'afisha'}
           {#if built.afisha}<ListPage />{/if}
         {:else}
@@ -749,7 +776,7 @@
     {#if StandaloneBar && !gated}<StandaloneBar back={showBack} tint={capOf?.tint} />{/if}
 
     {#if gated}
-      {#await consentGate() then m}<m.default oncancel={() => (asked = false)} />{/await}
+      {#await consentGate() then m}<m.default oncancel={() => (asked = false)} />{:catch}{/await}
     {:else}
       <!-- Keep exiting entries mounted until their animation calls removeOverlay. -->
       {#each overlays as o (o.id)}<o.component {...o.props} overlay={o} />{/each}
@@ -814,8 +841,13 @@
   /* where the engine has it, a tab away is skipped whole (no style, layout or paint while it waits; its scroll and
      layout kept): flipping `visibility` restyled every node of the tab on each switch (5k on a full Afisha: 65 ms) */
   @supports (content-visibility: hidden) { .tab { visibility: visible; content-visibility: hidden; } .tab.drawing { content-visibility: visible; opacity: 0; } }
-  /* opacity only, backwards fill: a lingering transform fill would pin the pages (prototype bug) */
-  .tab.on { visibility: visible; content-visibility: visible; z-index: auto; animation: tabIn 200ms var(--ease) backwards; }
+  /* a crossfade on the nav lens's spring (tokens: --t-tab), one motion with it: the new tab fades in on top, taking
+     taps from its first frame; the one left (.out, App's `leaving`) stays drawn under it and fades out, then is
+     skipped again. Opacity only, no forwards fill: a lingering transform fill would pin the pages (prototype bug),
+     and .out rests at 0 by itself until its class goes */
+  .tab.on { visibility: visible; content-visibility: visible; z-index: auto; animation: tabIn var(--t-tab) var(--ease-tab) backwards; }
+  .tab.out { visibility: visible; content-visibility: visible; opacity: 0; animation: tabOut var(--t-tab) var(--ease-tab); }
   .view.off { display: none; }
   @keyframes tabIn { from { opacity: 0; } }
+  @keyframes tabOut { from { opacity: 1; } }
 </style>

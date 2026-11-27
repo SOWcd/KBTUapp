@@ -1,4 +1,4 @@
-// The chats directory (SPEC §4.11): opening a chat goes through Telegram; a student's first open ticks it on the server.
+// The chats directory: opening a chat goes through Telegram; a student's first open ticks it on the server.
 import { api, type Chat } from './api';
 import { session } from './state/session.svelte';
 import { sheets } from './state/sheets';
@@ -11,7 +11,7 @@ export async function openChat(c: Chat): Promise<void> {
   if (session.me?.student && !c.opened) await api.chatOpened(c.id).catch(() => {});
 }
 
-/** "Suggest a chat" (PLAN item 45): the bot's own Telegram chat picker, one tap per chat; the admins check it. */
+/** "Suggest a chat": the bot's own Telegram chat picker, one tap per chat; the admins check it. */
 /** "Suggest a chat": the app's own sheet (the bot's chat left the screen empty); a guest signs in first. */
 export function suggestChat(): void {
   haptic.tap();
@@ -27,7 +27,7 @@ export const compact = (n: number): string => new Intl.NumberFormat(i18n.lang ==
 /** The KBTU App's chats as one Telegram folder: Telegram offers to add it. A row on the app's own page. */
 export const APP_FOLDER = 'https://t.me/addlist/VtFWmJ1lMboxZjli';
 
-/** Studio's "Add our bot" to a club's chat (PLAN 86): a group by a start link that says which chat it is; a channel
+/** Studio's "Add our bot" to a club's chat: a group by a start link that says which chat it is; a channel
  *  takes a bot only as an admin (the least: inviting, so Telegram tells the bot the chat's own link); a group asks for the
  *  rights every add-to-group link asks for (app.py's). */
 export const addBotLink = (c: { id: number; kind: Chat['kind'] }): string =>

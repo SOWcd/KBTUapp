@@ -19,7 +19,9 @@
   let { start, energy = 0, hold = false, on = $bindable(false) }: { start: boolean; energy?: number; hold?: boolean; on?: boolean } = $props();
 
   // GLSL 100: WebGL1 and 2 both take it. The box is 1.6 balls wide and 1.75 tall (room under it for the pool): the
-  // ball's radius is uRes.x / 3.2, its centre half a width down from the top
+  // ball's radius is uRes.x / 3.2, its centre half a width down from the top. The radius is the CSS orb's from the
+  // first frame: the glass must not change size while it fades in over that one (a ring of it showed round a smaller
+  // ball); the intro blooms only what is inside the glass and round it
   const FRAG = `
 #ifdef GL_FRAGMENT_PRECISION_HIGH
 precision highp float;
@@ -55,7 +57,7 @@ float star(vec2 uv, float k) {
 }
 void main() {
   vec2 fc = gl_FragCoord.xy;
-  float rad = uRes.x / 3.2 * (0.94 + 0.06 * uIntro);
+  float rad = uRes.x / 3.2;
   vec2 p = (fc - vec2(uRes.x * 0.5, uRes.y - uRes.x * 0.5)) / rad;
   float r = length(p);
   vec3 VIO = vec3(0.46, 0.28, 1.0), IND = vec3(0.16, 0.18, 0.85), LAV = vec3(0.80, 0.74, 1.0);

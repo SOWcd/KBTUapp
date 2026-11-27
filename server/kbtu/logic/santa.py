@@ -248,7 +248,7 @@ def _draw(con, e: sqlite3.Row) -> str | None:
     for uid in sorted(ids):  # by user id, never in the ring's order: the outbox's ids would spell out every pair
         notify(con, uid, "santa_drawn", f"event:{eid}")
     con.execute("UPDATE santa_events SET drawn_at = ? WHERE event_id = ?", (now(), eid))
-    con.execute("INSERT OR REPLACE INTO santa_chats (event_id, until) VALUES (?, ?)", (eid, e["starts_at"] + MSG_KEEP))  # fixed here: a moved gifts day revives nothing
+    con.execute("INSERT OR REPLACE INTO santa_chats (event_id, until) VALUES (?, ?)", (eid, e["starts_at"] + MSG_KEEP))  # positive: enabled; 0: permanently retired
     # the app shows "Registration closed" (wish() refuses whatever the deadline says later); updated_at: lists' cached cards see the draw at once
     shut = e["reg_until"] if e["reg_until"] and e["reg_until"] <= now() else min(now(), e["starts_at"])
     con.execute("UPDATE events SET reg_until = ?, updated_at = ? WHERE id = ?", (shut, now(), eid))
@@ -384,14 +384,15 @@ def view(con, v: Viewer, e: sqlite3.Row, head: bool) -> dict:
 
 
 def chat_on(con, eid: int, uid: int) -> bool:
-    """The game has a chat for me now: drawn, published, its club live, before santa_chats.until (0: someone left the ring),
+    """The game has a chat for me now: drawn, published, its club live, within MSG_KEEP of the current gifts day,
+    santa_chats.until positive (0: someone left the ring),
     MSG_RING in the ring, and I'm still going, not banned and, in a team-only game, still in the club. One answer for
     reading, writing, reporting and the bot's push."""
     return bool(one(con, _GOING + """ AND p.user_id = ? AND EXISTS (SELECT 1 FROM santa_chats g JOIN events e ON e.id = g.event_id
         JOIN orgs o ON o.id = e.org_id AND o.status = 'active' JOIN users u ON u.id = p.user_id AND u.banned_at IS NULL
-        WHERE g.event_id = p.event_id AND g.until > ? AND e.status = 'published' AND e.hidden_at IS NULL
+        WHERE g.event_id = p.event_id AND g.until > 0 AND e.starts_at > ? AND e.status = 'published' AND e.hidden_at IS NULL
           AND (e.visibility = 'public' OR EXISTS (SELECT 1 FROM org_members m WHERE m.org_id = e.org_id AND m.user_id = p.user_id))
-          AND (SELECT COUNT(*) FROM santa_people x WHERE x.event_id = p.event_id) >= ?)""", eid, uid, now(), MSG_RING))
+          AND (SELECT COUNT(*) FROM santa_people x WHERE x.event_id = p.event_id) >= ?)""", eid, uid, now() - MSG_KEEP, MSG_RING))
 
 
 def _thread(con, eid: int, uid: int, mine: bool) -> tuple[int, int] | None:
@@ -514,13 +515,13 @@ def report_done(con, v: Viewer, rid: int) -> None:
 
 
 def forget(con) -> None:
-    """The nightly sweep (daily.stats_day): a thread goes at its game's santa_chats.until; a reported one REPORT_KEEP after the
+    """The nightly sweep (daily.stats_day): a thread goes MSG_KEEP after the current gifts day; a reported one REPORT_KEEP after the
     gifts day once the staff handled it, REPORT_MAX after it whatever. The day's counts go with their day."""
     con.execute("""DELETE FROM santa_msgs WHERE id IN (SELECT m.id FROM santa_msgs m JOIN events e ON e.id = m.event_id
         LEFT JOIN santa_chats g ON g.event_id = m.event_id
         LEFT JOIN santa_msgs r ON r.event_id = m.event_id AND r.giver_id = m.giver_id AND r.to_id = m.to_id AND r.text IS NULL
-        WHERE CASE WHEN r.id IS NULL THEN COALESCE(g.until, 0) <= ?
-                   ELSE COALESCE(e.ends_at, e.starts_at) + CASE WHEN r.done_at IS NULL THEN ? ELSE ? END <= ? END)""", (now(), REPORT_MAX, REPORT_KEEP, now()))
+        WHERE CASE WHEN r.id IS NULL THEN COALESCE(g.until, 0) = 0 OR e.starts_at <= ?
+                   ELSE e.starts_at + CASE WHEN r.done_at IS NULL THEN ? ELSE ? END <= ? END)""", (now() - MSG_KEEP, REPORT_MAX, REPORT_KEEP, now()))
     con.execute("DELETE FROM santa_sends WHERE at <= ?", (now() - DAY,))
 
 

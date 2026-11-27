@@ -1,9 +1,10 @@
 import type { ChatFill } from '../eventFill';
-// The real server (SPEC §6). Calls use signed initData or the browser session; errors come back as
+// The real server. Calls use signed initData or the browser session; errors come back as
 // { error, message } and become ApiErr.
 import type { ResearchAnswers, ResearchSurvey, ResearchInput, ResearchRequest, Support, Sponsor, DonationReview, ApiError, Credits, ClubApplication, Id, OfficialPath, PersonCard, Video, AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, MemberPatch, Friends, Friendship, FoundStudent, LinkCard, PersonRef, Media, GalleryPage, AlbumPhoto, Attendee, DoorPerson, EventUpdate, PostInput, CheckinResult, ClassItem, JoinRequest, CohostInvite, CrewKind, CrewMember, EventReport, ReportPatch, EventCard, EventFull, EventInput, Me, Org, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, ChatSection, Chats, ClubApplicationInput, OfficialRequest, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, LentStudio, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp, TeamAsk, TeamPick, TeamInvite, TeamsBoard, ShortLink, StudioChat, ChatTree, WaitingChat, SwearRow, ChatRoles, RosterRequest, Skill, ForumMe, ForumCard, Ask, AskInput, Contact, ForumMod, AssistReply, Fixable, TgComment, TgcRule, VolLedger, VolPerson, VolDoor, Appeal, AppealHelp, AppealTopic, AppealStatus, SgQueue, Solved, Subjects, SubjectCard, RejectWhy } from './types';
 import type { BracketMatch, BracketSeed, EventBracket, EventGroups, EventMatch, MatchScore } from './types';
 import type { Archived, ReportLogEntry, ReportMarkPatch, ReviewReason, SantaChats, SantaMsg, SantaReport } from './types';
+import type { LibAct, LibRoom, LibState, LibTable, LibWall } from './types';
 import type { Graph } from '../route';
 import { splitVariants } from '../awards';
 import { ApiErr } from './errors';
@@ -121,10 +122,10 @@ async function call<T>(method: string, path: string, body?: unknown, staffEvent?
   return localize(data) as T;
 }
 
-// what the server has in the viewer's language (PLAN 9): a school's name, description and short name (kbtu.edu.kz), a
+// what the server has in the viewer's language: a school's name, description and short name (kbtu.edu.kz), a
 // club's description and an event's title and description (ai.py). The text as typed stays in `orig`, so a second pass
 // (another language, a copy from the cache) starts from it and the editors save it, never a translation.
-const SHOWN = ['name', 'realName', 'title', 'description', 'body'] as const; // body: a channel's post (PLAN 86); realName: a person's Latin short name
+const SHOWN = ['name', 'realName', 'title', 'description', 'body'] as const; // body: a channel's post; realName: a person's Latin short name
 const POST_FORMAT = [['title', 'titleFmt'], ['body', 'fmt']] as const;
 export function localize(x: unknown): unknown {
   if (Array.isArray(x)) x.forEach(localize);
@@ -160,10 +161,12 @@ const query = (q: Record<string, number | string | undefined>) => {
 // an event's video in 8 MB pieces (Cloudflare refuses a request over 100 MB; a dropped connection resends one piece):
 // a piece whose answer got lost is answered with where the file stands, and the next one starts there
 const PIECE = 8 * 1024 * 1024;
-async function uploadVideo(file: Blob, progress: (done: number) => void, wide = false): Promise<Video> {
+// signal: the editor closed; stops before the next piece (the server drops an unfinished upload by itself)
+async function uploadVideo(file: Blob, progress: (done: number) => void, wide = false, signal?: AbortSignal): Promise<Video> {
   const { id } = await call<{ id: Id }>('POST', '/videos', wide ? { size: file.size, wide } : { size: file.size });
   let at = 0, fails = 0;
   while (at < file.size) {
+    if (signal?.aborted) throw new ApiErr('unavailable', 'aborted');
     try {
       at = (await call<{ at: number }>('PUT', `/videos/${id}?at=${at}`, file.slice(at, at + PIECE))).at;
       fails = 0;
@@ -200,7 +203,7 @@ export const server = {
   reviewDonation: (id: Id, revision: number, action: 'confirm' | 'reject' | 'undo', amount?: number): Promise<void> => call('POST', `/admin/donations/${id}/review`, { revision, action, amount }),
   donationImage: (id: Id): Promise<string> => receiptImage(`/api/donate/receipts/${id}/image`),
   // the device kind rides along (the server keeps it at most once a day, for a broadcast to one platform)
-  me: (withReportLog = false): Promise<Me & { reportLog?: ReportLogEntry[] }> => call('GET', `/me?platform=${tg.kind}${withReportLog ? '' : '&reportLog=false'}`),
+  me: (withReportLog = false): Promise<Me & { reportLog?: ReportLogEntry[] }> => call('GET', `/me?platform=${tg.kind}${tg.playApp ? '&app=play' : ''}${withReportLog ? '' : '&reportLog=false'}`),
   webLogin: (widget: unknown): Promise<void> => changeWebSession('/web/login', widget),
   webDemo: (code: string): Promise<void> => changeWebSession('/web/demo', { code }), // the stores' reviewers (android/README.md)
   webLogout: (): Promise<void> => changeWebSession('/web/logout'),
@@ -223,7 +226,7 @@ export const server = {
     & { [k in Exclude<Fixable, 'course' | 'school'>]?: string }): Promise<Me> => call('PATCH', '/me', patch), // phone, city: null deletes it; a Fixable: once each (the server says `fixed` after)
   uploadMyPhoto: (file: Blob): Promise<Me> => call('POST', '/me/photo', file), // my own photo: "Photo from Telegram" goes off
   deleteMyPhoto: (): Promise<Me> => call('DELETE', '/me/photo'), // gone from the server too; Telegram's is back
-  /** §4.8, with the KBTU login and password again; a wrong or another student's one: bad_input/'credentials';
+  /** Deleting my account, with the KBTU login and password again; a wrong or another student's one: bad_input/'credentials';
    *  a President: conflict/'president'. */
   deleteMe: (photos: boolean = false): Promise<Me> => call('POST', '/me/delete', { photos }), // in 7 days (Me.deleteAt); photos: my album photos go too
   deleteInfo: (): Promise<{ photos: number; paid: boolean }> => call('GET', '/me/delete'), // what the delete sheet says first
@@ -241,9 +244,9 @@ export const server = {
   event: (id: Id): Promise<EventFull> => call('GET', `/events/${id}`),
   addSeats: (id: Id, add: number): Promise<EventFull> => call('POST', `/events/${id}/seats`, { add }),
   changePlace: (id: Id, place: string): Promise<EventFull> => call('POST', `/events/${id}/place`, { place }), // Studio's "Change room" during the event (Head+)          // "+N seats", the club's Head+: the waitlist moves in
-  decline: (id: Id, note?: string): Promise<EventCard> => call('POST', `/events/${id}/decline`, note ? { note } : {}), // a leaders meeting or a club meeting: "Can't make it" (§4.10, §2b: why, required)
+  decline: (id: Id, note?: string): Promise<EventCard> => call('POST', `/events/${id}/decline`, note ? { note } : {}), // a leaders meeting or a club meeting: "Can't make it" (why, required)
   leadersAnswers: (id: Id): Promise<LeadersAnswer[]> => call('GET', `/events/${id}/leaders`), // DMP: the answers per club
-  meetingAnswers: (id: Id): Promise<MeetingAnswer[]> => call('GET', `/events/${id}/meeting`), // a club meeting's Head+: everyone expected (§2b)
+  meetingAnswers: (id: Id): Promise<MeetingAnswer[]> => call('GET', `/events/${id}/meeting`), // a club meeting's Head+: everyone expected
   register: (id: Id, ref?: string, phone?: string, answers?: { q: string; a: string }[], team?: TeamPick, wish?: string, teamConsent?: string): Promise<EventCard> => call('POST', `/events/${id}/registration`, { ...(ref ? { ref } : {}), ...(phone ? { phone } : {}), ...(answers ? { answers } : {}), ...(team ? { team } : {}), ...(wish ? { wish } : {}), ...(teamConsent ? { teamConsent } : {}) }), // teamConsent: the version of the line the sign-up button showed (signing up is the teams consent) // wish: Secret Santa's wishlist // team: a team event's choice (create, join by link) // answers: each with its question's words // ref: a member's code from their link; phone: asked at the sign-up, kept (needsPhone)
   unregister: (id: Id): Promise<EventCard> => call('DELETE', `/events/${id}/registration`),
   setSaved: (id: Id, on: boolean): Promise<void> => call(on ? 'PUT' : 'DELETE', `/events/${id}/saved`),
@@ -264,18 +267,19 @@ export const server = {
   santaRemind: (id: Id): Promise<{ n: number; nudgeAt: Ts | null }> => call('POST', `/events/${id}/santa/remind`), // "Remind those not in yet", once a day (error conflict soon)
   santaDraw: (id: Id): Promise<EventFull> => call('POST', `/events/${id}/santa/draw`), // Secret Santa: the one draw (errors conflict few / drawn)
   openDoor: (id: Id): Promise<EventFull> => call('POST', `/events/${id}/door-open`), // the President or a Vice opens check-in early (from 4 h before the start)
-  // the club's own team (SPEC §2, the rank rule): Vice+ manage people below them, the President hands the club over
+  // the club's own team (the rank rule): Vice+ manage people below them, the President hands the club over
   team: (org: Id): Promise<TeamMember[]> => call('GET', `/orgs/${org}/members`),
   /** everyone in a club or school, as anyone sees them (403 when the club hides the list) */
   people: (org: Id): Promise<Member[]> => call('GET', `/orgs/${org}/people`),
-  // the club's invite link (§4.5, Vice+): the same token until replaced; a student who opens it is a Member at once
+  // the club's invite link (Vice+): the same token until replaced; a student who opens it is a Member at once
   invite: (org: Id, dept?: Id): Promise<{ token: string }> => call('POST', `/orgs/${org}/invites`, dept ? { dept } : {}), // dept: the newcomer lands in that department
   acceptInvite: (token: string): Promise<Org> => call('POST', `/invites/${token}`),
   teamLink: (org: Id): Promise<{ token: string; expiresAt: Ts }> => call('POST', `/orgs/${org}/team-link`), // the link for the whole team, 7 days: the live one, else a new one
   teamLinkOff: (org: Id): Promise<void> => call('DELETE', `/orgs/${org}/team-link`),
+  teamLinkBack: (org: Id): Promise<{ expiresAt: Ts }> => call('POST', `/orgs/${org}/team-link/back`), // Undo of off: the same link
   removeMember: (org: Id, user: Id): Promise<void> => call('DELETE', `/orgs/${org}/members/${user}`), // my own id = leave; a President: conflict/'president'
   transfer: (org: Id, user: Id): Promise<TeamMember[]> => call('POST', `/orgs/${org}/transfer`, { userId: user }),
-  // Team 2.0 (§2b): the club's own roles (Vice+) and tags (Head+), probation, removal by request, bans
+  // Team 2.0: the club's own roles (Vice+) and tags (Head+), probation, removal by request, bans
   teamSetup: (org: Id): Promise<TeamSetup> => call('GET', `/orgs/${org}/team`),
   saveRole: (org: Id, input: { name: string; tr?: Partial<Record<'ru' | 'kk' | 'en', string>>; color: string; rights: Right[] }, id?: Id): Promise<TeamSetup> => (id == null ? call('POST', `/orgs/${org}/roles`, input) : call('PATCH', `/orgs/${org}/roles/${id}`, input)), // conflict/'taken'
   deleteRole: (org: Id, id: Id): Promise<TeamSetup> => call('DELETE', `/orgs/${org}/roles/${id}`),
@@ -294,7 +298,7 @@ export const server = {
   adminPresLink: (org: Id): Promise<{ token: string; expiresAt: Ts }> => call('POST', `/admin/orgs/${org}/president-link`), // the President's one-time link, shown as a QR
   org: (id: Id): Promise<Org> => call('GET', `/orgs/${id}`),
   subscribe: (id: Id, on: boolean): Promise<Org> => call(on ? 'PUT' : 'DELETE', `/orgs/${id}/subscription`),
-  apply: (org: Id, answers?: Record<string, string | string[]>): Promise<Org> => call('POST', `/orgs/${org}/join-requests`, answers ? { answers } : undefined), // join application (§4.5)
+  apply: (org: Id, answers?: Record<string, string | string[]>): Promise<Org> => call('POST', `/orgs/${org}/join-requests`, answers ? { answers } : undefined), // join application
   withdraw: (org: Id): Promise<Org> => call('DELETE', `/orgs/${org}/join-requests/mine`),
 
   schedule: (): Promise<ClassItem[]> => call('GET', '/me/schedule'),
@@ -302,7 +306,7 @@ export const server = {
 
   posts: (scope: 'all' | 'subs' | 'clubs' | { org: Id }): Promise<Post[]> => call('GET', '/posts?scope=' + encodeURIComponent(typeof scope === 'string' ? scope : `org:${scope.org}`)),
   react: (postId: Id, kind: 'fire' | 'heart', on: boolean): Promise<Post> => call(on ? 'PUT' : 'DELETE', `/posts/${postId}/reactions/${kind}`),
-  createPost: (org: Id, input: PostInput): Promise<Post> => call('POST', `/orgs/${org}/posts`, input), // Head+ (§4.10); a broadcast tells every club member
+  createPost: (org: Id, input: PostInput): Promise<Post> => call('POST', `/orgs/${org}/posts`, input), // Head+; a broadcast tells every club member
   updatePost: (id: Id, patch: PostPatch): Promise<Post> => call('PATCH', `/posts/${id}`, patch), // the club's Head+: text, label, photo ("edited"), the pin
   castings: (): Promise<Post[]> => call('GET', '/castings'), // the Clubs tab's strip: not over yet, soonest first
   cancelCasting: (id: Id): Promise<Post> => call('POST', `/posts/${id}/casting/cancel`), // the club's Head+
@@ -313,7 +317,7 @@ export const server = {
   // a badge held in several variants (a performer who also volunteered): each shows
   person: (id: Id): Promise<PersonCard> => call<PersonCard>('GET', `/users/${id}`).then((p) => (p?.awards ? { ...p, awards: { ...p.awards, achievements: splitVariants(p.awards.achievements) } } : p)),
 
-  // friends (§4.7): a request the other one answers, or my one invite link (r_<code>) whose landing makes friends in one tap
+  // friends: a request the other one answers, or my one invite link (r_<code>) whose landing makes friends in one tap
   friends: (): Promise<Friends> => call('GET', '/friends'),
   findFriend: (username: string): Promise<FoundStudent> => call('GET', '/friends/find?username=' + encodeURIComponent(username)), // not_found: no student with that @username
   askFriend: (user: Id): Promise<{ person: PersonRef; friendship: Friendship }> => call('POST', '/friends/requests', { userId: user }), // 'friends' when they had asked me
@@ -325,7 +329,7 @@ export const server = {
   addByLink: (code: string): Promise<{ person: PersonRef; friendship: Friendship; created: boolean }> => call('POST', `/invite/${code}`), // friends at once ('requested': they quietly declined me)
   friendJoined: (since: Ts): Promise<{ usedBy: PersonRef | null; at: Ts }> => call('GET', `/friends/joined?since=${since}`), // my invite QR on screen: the newest friend since
 
-  // Studio (own org, SPEC §6): Member+ reads and scans, Head+ creates, edits and sees attendees
+  // Studio (own org): Member+ reads and scans, Head+ creates, edits and sees attendees
   orgEvents: (org: Id): Promise<EventCard[]> => call('GET', `/orgs/${org}/events`),
   /** the creator's Studio of a club he isn't in (Admin; X-Staff-Org): its President's membership and every role to view it as */
   lentStudio: (org: Id): Promise<LentStudio> => call('GET', `/orgs/${org}/lent`),
@@ -479,7 +483,7 @@ export const server = {
   teamList: (id: Id): Promise<import('./types').TeamList> => call('GET', `/events/${id}/door-team`),
   teamMark: (id: Id, key: string, on: boolean): Promise<import('./types').TeamList> => call('POST', `/events/${id}/door-team`, { key, on }),
   setAudience: (id: Id, audience: import('./types').DoorAudience): Promise<{ audience: import('./types').DoorAudience }> => call('PUT', `/events/${id}/audience`, { audience }),
-  // no QR at the door (a dead phone): the door list and a check-in by name, taken back within 10 min (§4.4)
+  // no QR at the door (a dead phone): the door list and a check-in by name, taken back within 10 min
   door: (id: Id): Promise<DoorPerson[]> => call('GET', `/events/${id}/door`),
   // the organizer's updates (Head+, three a day): pinned on the event, the bot pings the people going
   postUpdate: (id: Id, body: string): Promise<EventUpdate[]> => call('POST', `/events/${id}/updates`, { body }),
@@ -504,14 +508,14 @@ export const server = {
   uploadPhoto: (file: Blob, logo = false): Promise<Media> => call('POST', logo ? '/photos?logo=1' : '/photos', file),
   uploadVideo, // Head+; in pieces, then compressed: its id as videoId (wide: wideVideoId)
   video: (id: Id): Promise<Video> => call('GET', `/videos/${id}`), // my upload, while it is compressed
-  /** Paid events (§4.3): my receipt for the seat I hold → the ticket at once (Kaspi's PDF or an image; the server reads it). */
+  /** Paid events: my receipt for the seat I hold → the ticket at once (Kaspi's PDF or an image; the server reads it). */
   uploadReceipt: (event: Id, file: Blob): Promise<EventCard> => call('POST', `/events/${event}/receipt`, file),
   /** A receipt's image (its sender, the event's Head+, the admin), as an object URL to show. */
   receiptImage: (id: Id): Promise<string> => receiptImage(`/api/receipts/${id}/image`),
   /** Head+: the receipt is fine, or rejected (the ticket stops working, the seat goes on, the bot tells the student). */
   // why: a rejection's reason, which the bot names to the student (server seats.REJECT_WHY)
   reviewReceipt: (id: Id, reject: boolean, why?: RejectWhy): Promise<void> => call('POST', `/receipts/${id}/review`, why ? { reject, why } : { reject }),
-  comments: (kind: 'post' | 'event', id: Id): Promise<CommentThread> => call('GET', `/${kind}s/${id}/comments`), // students (§4.10)
+  comments: (kind: 'post' | 'event', id: Id): Promise<CommentThread> => call('GET', `/${kind}s/${id}/comments`), // students
   addComment: (kind: 'post' | 'event', id: Id, body: string, asOrg?: boolean, replyTo?: Id | null): Promise<CommentThread> => call('POST', `/${kind}s/${id}/comments`, { body, asOrg: !!asOrg, ...(replyTo ? { replyTo } : {}) }), // 500 chars, 10 a minute
   setComments: (kind: 'post' | 'event', id: Id, on: boolean): Promise<CommentThread> => call('PATCH', `/${kind}s/${id}/comments`, { on }), // the club's Head+
   deleteComment: (id: Id): Promise<void> => call('DELETE', `/comments/${id}`), // mine, or as the club's Head+
@@ -574,6 +578,25 @@ export const server = {
   channelReplyRestore: (id: Id): Promise<void> => call('POST', `/forum-replies/${id}/restore`), // a take-down undone
   mapFlaw: (f: { ver: string; floor: number; u: number; v: number; px: number; py: number; body: string }): Promise<void> => call('POST', '/map/flaws', f), // a long press on the map
   mapFlaws: (): Promise<{ id: Id; ver: string; floor: number; u: number; v: number; px: number | null; py: number | null; body: string; at: Ts; done: Ts | null }[]> => call('GET', '/map/flaws'), // the admin
+  // library seats (server logic/library.py): a scanned sticker's code goes with every seat action (I'm at the table)
+  library: (): Promise<LibState> => call('GET', '/library'),
+  libTable: (code: string): Promise<LibTable> => call('POST', '/library/table', { code }),
+  libSit: (code: string, seat: number, consent?: string): Promise<LibAct> => call('POST', '/library/sit', { code, seat, consent }),
+  libReport: (code: string, seat: number, consent?: string): Promise<LibAct> => call('POST', '/library/report', { code, seat, consent }),
+  libStill: (code: string, report: Id): Promise<LibAct> => call('POST', '/library/still', { code, report }),
+  libHere: (): Promise<LibState> => call('POST', '/library/here'),
+  libLeave: (): Promise<LibState> => call('POST', '/library/leave'),
+  libWithdraw: (): Promise<void> => call('DELETE', '/library/consent'),
+  libRooms: (): Promise<LibRoom[]> => call('GET', '/admin/library'),
+  libAddRoom: (name: string): Promise<LibRoom[]> => call('POST', '/admin/library/rooms', { name }),
+  libEditRoom: (id: Id, patch: { name?: string; gone?: boolean }): Promise<LibRoom[]> => call('PATCH', `/admin/library/rooms/${id}`, patch),
+  libAddTables: (room: Id, seats: number, n: number): Promise<LibRoom[]> => call('POST', `/admin/library/rooms/${room}/tables`, { seats, n }),
+  libEditTable: (id: Id, patch: { label?: string; seats?: number; gone?: boolean }): Promise<LibRoom[]> => call('PATCH', `/admin/library/tables/${id}`, patch),
+  libStickers: (room: Id, pages: string[]): Promise<void> => call('POST', `/admin/library/rooms/${room}/stickers`, { pages }), // the PDF comes in the bot's chat
+  libWall: async (key: string): Promise<LibWall | null> => { // the big screen: no sign-in, the room's key is all it needs
+    const r = await fetch(`/api/library/screen/${encodeURIComponent(key)}`).catch(() => null);
+    return r?.ok ? r.json() : null;
+  },
   mapFlawsMine: (): Promise<{ id: Id; ver: string; floor: number; u: number; v: number; px: number | null; py: number | null; body: string }[]> => call('GET', '/map/flaws/mine'), // my own open ones, pins on the map
   mapFlawDone: (id: Id, done: boolean): Promise<void> => call('POST', `/map/flaws/${id}/done`, { done }),
   research: (): Promise<ResearchSurvey[]> => call('GET', '/research'),
@@ -613,7 +636,7 @@ export const server = {
   restore: (target: TakenDown['target'], id: Id): Promise<void> => call('POST', `/admin/taken-down/${target}/${id}/restore`), // admin: undo one
   resolveReport: (target: ReportItem['target'], id: Id, remove: boolean, abuse?: boolean, rule?: TgcRule): Promise<void> => call('POST', `/admin/reports/${target}/${id}`, { remove, abuse, rule }), // admin: take it down or leave it (a Telegram comment: the terms clause it broke, or the reports were abuse)
   tgComment: (): Promise<TgComment | null> => call('POST', '/me/tg-comment'), // my own deleted Telegram comment, to me alone
-  myClubApplication: (): Promise<ClubApplication | null> => call<{ application: ClubApplication | null }>('GET', '/club-applications/mine').then((r) => r.application), // starting a club (§4.6): my latest application
+  myClubApplication: (): Promise<ClubApplication | null> => call<{ application: ClubApplication | null }>('GET', '/club-applications/mine').then((r) => r.application), // starting a club: my latest application
   applyClub: (input: ClubApplicationInput): Promise<ClubApplication> => call('POST', '/club-applications', input),
   decideClubApplication: (id: Id, approve: boolean, reason?: string): Promise<ClubApplication> => call('POST', `/admin/club-applications/${id}`, { approve, reason: reason ?? '' }),
   officialPath: (org: Id): Promise<OfficialPath | null> => call<{ path: OfficialPath | null }>('GET', `/orgs/${org}/official-path`).then((r) => r.path), // the club's team: the Ascent's checklist (null: official already)
@@ -664,12 +687,12 @@ export const server = {
   /** the people of the app: the whole screen in one read; my answer to "name me?" (the text's version, and the latest answer the app saw: a yes on top of anything newer is refused) */
   credits: (): Promise<Credits> => call('GET', '/credits'),
   creditsConsent: (show: boolean, version: string, rev: number | null): Promise<unknown> => call('PUT', '/credits/consent', { show, consent: version, rev }),
-  chats: (): Promise<Chats> => call('GET', '/chats'), // the chats directory (§4.11)
+  chats: (): Promise<Chats> => call('GET', '/chats'), // the chats directory
   /** any chat suggested from the app: @name, a t.me link or an invite link */
   suggestChat: (link: string): Promise<{ status: 'sent' | 'waiting' | 'exists' | 'org' | 'limit' | 'later' | 'slow' | 'notchat' | 'bad'; title: string }> => call('POST', '/chats/suggest', { link }),
   chatOpened: (id: Id): Promise<void> => call('POST', `/chats/${id}/opened`), // the tick
   addChat: (input: { title: string; url: string; kind: Chat['kind']; school: string | null; course: number | null }): Promise<Chat> => call('POST', '/admin/chats', input), // moderators, admin
-  setChatOrg: (id: Id, org: Id | null): Promise<Chat> => call('PUT', `/admin/chats/${id}/org`, { orgId: org }), // the admin: whose a catalog chat is (PLAN 86)
+  setChatOrg: (id: Id, org: Id | null): Promise<Chat> => call('PUT', `/admin/chats/${id}/org`, { orgId: org }), // the admin: whose a catalog chat is
   setChatSection: (id: Id, section: ChatSection): Promise<Chat> => call('PUT', `/admin/chats/${id}/section`, { section }), // staff: what a chat is for (the AI's mark goes)
   chatTree: (org: Id): Promise<ChatTree> => call('GET', `/orgs/${org}/chats/tree`), // the club's groups as a tree (Vice+)
   placeChat: (org: Id, chat: Id, place: 'main' | 'dept' | 'other' | null, tag?: Id): Promise<ChatTree> => call('PUT', `/orgs/${org}/chats/${chat}/place`, { place, tag }), // a label only
@@ -679,17 +702,18 @@ export const server = {
   dropOrgChat: (org: Id, chat: Id): Promise<StudioChat[]> => call('DELETE', `/orgs/${org}/chats/${chat}`),
   waitingChats: (org: Id): Promise<WaitingChat[]> => call('GET', `/orgs/${org}/chats/waiting`), // chats I made our bot an admin in, mine to link here
   linkWaitingChat: (org: Id, wait: Id): Promise<StudioChat[]> => call('POST', `/orgs/${org}/chats/waiting/${wait}`), // conflict rights: the bot or I no longer its admin; taken / not_found
-  rosterSeen: (): Promise<void> => call('POST', '/roster/seen'), // PLAN 95: the join toasts shown
+  rosterSeen: (): Promise<void> => call('POST', '/roster/seen'), // the join toasts shown
   rosterClaim: (row: Id): Promise<void> => call('POST', `/roster/${row}/claim`), // "Yes, it's me" on a row under another name
   rosterRequests: (org?: Id): Promise<RosterRequest[]> => call('GET', org ? `/roster/requests?org=${org}` : '/roster/requests'), // the claims I confirm (President; DMP for a club without one)
   rosterDecide: (row: Id, ok: boolean): Promise<void> => call('POST', `/roster/requests/${row}`, { ok }), // the main channel's posts in the club's news
   mirrorOrgChat: (org: Id, chat: Id, on: boolean): Promise<StudioChat[]> => call('PUT', `/orgs/${org}/chats/${chat}/mirror`, { on }),
+  newsOrgChat: (org: Id, chat: Id, topic: number | null): Promise<StudioChat[]> => call('PUT', `/orgs/${org}/chats/${chat}/news`, { topic }),
   swearOrgChat: (org: Id, chat: Id, on: boolean): Promise<StudioChat[]> => call('PUT', `/orgs/${org}/chats/${chat}/swear`, { on }), // President or Vice; conflict rights: the bot can't delete and restrict there
   swearReport: (org: Id): Promise<SwearRow[]> => call('GET', `/orgs/${org}/chats/swear`), // President, Vice, Heads
   chatRoles: (org: Id, chat: Id): Promise<ChatRoles> => call('GET', `/orgs/${org}/chats/${chat}/roles`), // the group's admins against the club's roles, asked of Telegram now
   deleteChat: (id: Id): Promise<void> => call('DELETE', `/admin/chats/${id}`), // a suggestion declined too
   approveChat: (id: Id): Promise<Chat> => call('POST', `/admin/chats/${id}/approve`), // a suggested chat into the catalog
-  registry: (back: number = 0): Promise<RegistryOrg[]> => call('GET', `/registry/orgs?back=${back}`), // DMP Head+ and the admin (§4.13); a month `back` months ago (0–12)
+  registry: (back: number = 0): Promise<RegistryOrg[]> => call('GET', `/registry/orgs?back=${back}`), // DMP Head+ and the admin; a month `back` months ago (0–12)
   registryRoster: (org: Id): Promise<RosterMember[]> => call('GET', `/registry/orgs/${org}/members`),
   /** DMP Head+ (and the admin) give a club the ✓ or take it back; its President hears it from the bot */
   setOfficial: (org: Id, on: boolean): Promise<OrgRef> => call('POST', `/registry/orgs/${org}/official`, { on }),
