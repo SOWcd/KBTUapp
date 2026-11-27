@@ -865,16 +865,21 @@ def add_receipt(con, v: Viewer, eid: int, saved: dict, read: dict | None = None,
         got = read or {}
         flags = _receipt_flags(con, e, saved["sha256"], read, r["id"])
         # a clean one is checked by the app, but 1 in AUDIT waits for the organizer flagged 'spot' (their "Check receipts"),
-        # so a forgery that beats OCR gets seen. The draw is once per seat: a seat that had any receipt before (replaced,
-        # or before a cancel; one row per person and event) is always picked, so neither re-rolls it. Not clean and no
-        # warning either (a field unread): 'partial', in "Check receipts" too, and held at the door until reviewed.
+        # so a forgery that beats OCR gets seen. Not clean and no warning either (a field unread): 'partial'. A seat that
+        # had any receipt before (a flagged one replaced, a rejected one before a new sign-up; one row per person and
+        # event) is never the app's to pass, however clean the new one looks: 'partial' plus 'resent', so the organizer
+        # sees a receipt came in place of another. All of these are held at the door until reviewed (organizing.flagged).
         # A payment predating this hold also needs review: deleted accounts erase duplicate evidence. Kaspi prints minutes.
         clean = _receipt_clean(con, e, saved["sha256"], read, flags) and got["paid_at"] >= r["created_at"] // 60 * 60
-        if clean and (_audit() or one(con, """SELECT 1 FROM receipts WHERE registration_id = ?
-                UNION ALL SELECT 1 FROM receipt_replaced WHERE registration_id = ?""", r["id"], r["id"])):
+        if one(con, """SELECT 1 FROM receipts WHERE registration_id = ?
+                UNION ALL SELECT 1 FROM receipt_replaced WHERE registration_id = ?""", r["id"], r["id"]):
+            flags, clean = ",".join(x for x in (flags or PARTIAL, RESENT) if x), False
+        elif clean and _audit():
             flags, clean = SPOT, False
         elif not clean and not flags:
             flags = PARTIAL
+        if not old and not clean and flags != SPOT and _unchecked(con, eid) >= UNCHECKED_CAP:
+            raise ApiError("rate_limited", "unchecked")  # the hold stays (and runs out): the organizer catches up first
         reviewed_at = core.now() if clean else None
         fid = con.execute("""INSERT INTO files (sha256, kind, mime, bytes, width, height, path, owner_id, created_at)
             VALUES (?, 'receipt', 'image/webp', ?, ?, ?, ?, ?, ?)""", (saved["sha256"], saved["bytes"], saved["width"], saved["height"], saved["path"], v.id, core.now())).lastrowid
@@ -926,6 +931,17 @@ def _receipt_flags(con, e: sqlite3.Row, sha: str, read: dict | None, rid: int = 
 AUDIT = 5
 SPOT = "spot"  # the only flag a clean receipt carries: picked for a person's look, nothing wrong found
 PARTIAL = "partial"  # payment not fully verified: a person must check before admission
+RESENT = "resent"  # the seat had a receipt before this one (replaced, or rejected before a new sign-up)
+# any picture OCR reads a sum or a number off turns a hold into a ticket; tickets on receipts nobody passed stop here
+# per event, so junk can't take every seat for good. ponytail: one number for every event; scale by seats if one fills it
+UNCHECKED_CAP = 20
+
+
+def _unchecked(con, eid: int) -> int:
+    """This event's tickets whose receipt warns or is read in part and nobody reviewed it yet (a spot one is clean)."""
+    return one(con, """SELECT COUNT(*) FROM registrations r JOIN receipts c ON c.id = (SELECT MAX(id) FROM receipts
+            WHERE registration_id = r.id AND status = 'accepted' AND created_at >= r.created_at)
+        WHERE r.event_id = ? AND r.status = 'going' AND c.reviewed_at IS NULL AND c.flags NOT IN ('', 'spot')""", eid)[0]
 
 
 def _audit() -> bool:

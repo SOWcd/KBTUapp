@@ -204,7 +204,7 @@ def test_receipt_reading(env, monkeypatch):
     fake({"amount": 3000, "no": "555000111222333445", "recipient": look("Arman A."), "paid_at": made + 60})
     assert c.post(f"/api/events/{eid}/receipt", headers=tma(10), content=pdf(503)).json()["my"]["receiptFlags"] == ["amount_over"]
     got = {a["fullName"]: a["receipt"] for a in c.get(f"/api/events/{eid}/attendees", headers=tma(20)).json()}["Testov Ali"]
-    assert got["flags"] == ["amount_over"] and got["amount"] == 3000 and rows_of() == 1
+    assert got["flags"] == ["amount_over", "resent"] and got["amount"] == 3000 and rows_of() == 1
     assert c.post(f"/api/receipts/{got['id']}/review", headers=tma(20), json={"reject": False}).status_code < 300
     assert c.get(f"/api/events/{eid}", headers=tma(10)).json()["my"]["receiptFlags"] == []           # looked at: settled
     assert c.post(f"/api/events/{eid}/receipt", headers=tma(10), content=pdf(504)).status_code >= 400  # and no longer replaceable

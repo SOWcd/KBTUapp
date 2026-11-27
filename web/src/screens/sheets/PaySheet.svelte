@@ -83,7 +83,7 @@
       if (owner.get(id) !== me) return;
       count('paid.fail');
       haptic.error();
-      say(x instanceof ApiErr && x.code === 'closed' ? t('pay.expired') : x instanceof ApiErr && x.code === 'rate_limited' ? t('pay.tooMany') : x instanceof ApiErr && x.message === 'not_receipt' ? t('pay.notReceipt') : x instanceof ApiErr && x.code === 'bad_input' ? t('ed.photoBad') : t('common.error'), 'warning_3d');
+      say(x instanceof ApiErr && x.code === 'closed' ? t('pay.expired') : x instanceof ApiErr && x.code === 'rate_limited' ? t(x.message === 'unchecked' ? 'pay.queue' : 'pay.tooMany') : x instanceof ApiErr && x.message === 'not_receipt' ? t('pay.notReceipt') : x instanceof ApiErr && x.code === 'bad_input' ? t('ed.photoBad') : t('common.error'), 'warning_3d');
     } finally { busy = false; if (going.get(id) === job) going.delete(id); }
   }
   function release() { toggleGoing(id); close(overlay.id); }
