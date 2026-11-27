@@ -5,6 +5,7 @@
   import { api, type Id, type MemoAsks } from '../../lib/api';
   import { close, type Overlay } from '../../lib/state/ui.svelte';
   import { t } from '../../lib/i18n/index.svelte';
+  import { sw } from '../../lib/i18n/staff';
   import { dateInput, fromInputs } from '../../lib/time';
   import { haptic } from '../../lib/tg';
   import Sheet from '../../ui/Sheet.svelte';
@@ -34,10 +35,10 @@
   <div class="stack">
     {#if timed}
       <!-- engine: Field has no date/time type (nor min): by hand, in Field's look (.fl) -->
-      <label class="fl"><span>{t('ed.date')}</span><input type="date" bind:value={f.date} min={dateInput(from)} /></label>
+      <label class="fl"><span>{sw('ed.date')}</span><input type="date" bind:value={f.date} min={dateInput(from)} /></label>
       <div class="two">
-        <label class="fl"><span>{t('ed.start')}</span><input type="time" bind:value={f.start} /></label>
-        <label class="fl"><span>{t('ed.end')}</span><input type="time" bind:value={f.end} /></label>
+        <label class="fl"><span>{sw('ed.start')}</span><input type="time" bind:value={f.start} /></label>
+        <label class="fl"><span>{sw('ed.end')}</span><input type="time" bind:value={f.end} /></label>
       </div>
       <Field label={t('ed.place')} bind:value={f.place} maxlength={80} placeholder={t('memo.itemPlacePh')} />
     {/if}

@@ -73,16 +73,27 @@
 
   let openPost = $state(false);
 
-  // the clock: a minute is enough for "21 min left"; moves on at midnight (the app can stay open overnight)
-  let now = $state(nowTs());
+  // the clock: a minute is enough for "21 min left", so it is rounded to one and changes once a minute at most; it moves
+  // on at midnight (the app can stay open overnight). Only while the Afisha is the tab: back on it, it catches up at once
+  const minute = () => Math.floor(nowTs() / 60) * 60;
+  let now = $state(minute());
+  function step() {
+    const next = minute();
+    if (next === now) return;
+    if (data.events.some((e) => e.my?.status === 'going' && endOf(e) > now && endOf(e) <= next)) void loadMyPast();
+    now = next;
+  }
   onMount(() => {
-    const id = setInterval(() => {
-      const next = nowTs();
-      if (data.events.some((e) => e.my?.status === 'going' && endOf(e) > now && endOf(e) <= next)) void loadMyPast();
-      now = next;
-    }, 30_000);
+    const id = setInterval(() => { if (ui.tab === 'afisha') step(); }, 30_000);
     return () => clearInterval(id);
   });
+  $effect(() => { if (ui.tab === 'afisha') untrack(step); });
+  // the events over and on now, as id strings: a row's tags follow these, so they re-render only when an event crosses its
+  // start or end, not on every tick
+  const overIds = $derived(data.events.filter((e) => endOf(e) <= now).map((e) => e.id).join());
+  const liveIds = $derived(data.events.filter((e) => e.startsAt <= now && endOf(e) > now).map((e) => e.id).join());
+  const overSet = $derived(new Set(overIds.split(',')));
+  const liveSet = $derived(new Set(liveIds.split(',')));
   const today = $derived(dayNo(now));
   const dayTs = (d: number) => d * 86400 - OFFSET; // start of local day d as a UTC timestamp
 
@@ -323,8 +334,8 @@
 {#snippet status(e: EventCard)}
   {@const st = e.my?.status}
   {@const cancelled = e.status === 'cancelled'}
-  {@const over = !cancelled && endOf(e) <= now}
-  {@const live = !cancelled && !over && e.startsAt <= now}
+  {@const over = !cancelled && overSet.has(String(e.id))}
+  {@const live = !cancelled && !over && liveSet.has(String(e.id))}
   {@const full = e.seats != null && e.taken >= e.seats && st !== 'going' && st !== 'hold'}
   {#if e.toCheck && !cancelled}<Tag tone="warning">{t('studio.chipCheck', { n: e.toCheck })}</Tag>{/if}
   {#if cancelled}<Tag tone="danger">{t('event.cancelled')}</Tag>

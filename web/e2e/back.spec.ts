@@ -160,7 +160,7 @@ test('Back closes the full-screen campus map back to the home screen', async ({ 
   await atHome(dana);
 
   await page.getByRole('button', { name: tr('map.open'), exact: true }).click();
-  const floors = page.getByRole('tablist');
+  const floors = page.getByRole('group', { name: tr('map.floors') });
   await expect(floors).toBeVisible();
   await backShown(dana, true); // once the map's opening (its iris) is done
   await dana.look('map');

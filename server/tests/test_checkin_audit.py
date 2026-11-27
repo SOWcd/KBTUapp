@@ -355,8 +355,11 @@ def test_m20_displayed_phase_is_bound_to_the_qr(door):
     arrival = c.post(f"/api/screens/{sid}/start", headers=tma(9)).json()["param"]
     assert _scan(c, 1, arrival).json()["done"]
     departure = c.post(f"/api/screens/{sid}/out", headers=tma(9)).json()["param"]
-    assert departure != arrival and _scan(c, 1, arrival).status_code == 400
+    # the app retrying the arrival after the switch: already counted, so the confirmation again, never a departure
+    assert departure != arrival and _scan(c, 1, arrival).json() == {
+        "title": "Phase", "done": True, "left": False, "event": None, "again": True}
     assert con.execute("SELECT left_at FROM qr_marks WHERE session_id = ?", (sid,)).fetchone()[0] is None
+    assert _scan(c, 9, arrival).status_code == 400  # not counted: the other phase's QR stays invalid
     assert _scan(c, 1, departure).json()["left"]
 
 

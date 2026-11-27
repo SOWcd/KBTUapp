@@ -538,8 +538,9 @@ WELCOME = "android_welcome"  # meta key: 'on' once the creator approved the text
 
 
 def _play_seen(con, uid: int, first: bool) -> None:
-    """The installed Android app's day, and on its first launch the bot's one thanks (bot_outbox's unique row, kept
-    after the 90-day sweep of android_app: once per account). Nobody is thanked before the creator turned it on."""
+    """The installed Android app's day, and on its first launch the bot's one thanks (bot_outbox's unique row; the nightly
+    sweep deletes it after 90 days with android_app, so a comeback later may be thanked again). Nobody is thanked before
+    the creator turned it on."""
     con.execute("""INSERT INTO android_app (user_id, seen_at) VALUES (?, ?)
         ON CONFLICT (user_id) DO UPDATE SET seen_at = excluded.seen_at""", (uid, core.now()))
     if first and one(con, "SELECT 1 FROM meta WHERE key = ? AND value = 'on'", WELCOME):
@@ -1509,6 +1510,8 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         con.execute("UPDATE comments SET user_id = :p WHERE user_id = :u", me_)
         for (msg,) in rows(con, "SELECT tg_msg FROM fchan_posts WHERE user_id = ? AND status = 'live' AND anon = 0 AND tg_msg > 0", v.id):
             con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, '1')", (f"fch_resign:{msg}",))
+        # my posts' words as reported (a copy on an open report): gone with me
+        con.execute("UPDATE reports SET body = NULL WHERE target = 'fpost' AND target_id IN (SELECT id FROM fchan_posts WHERE user_id = ?)", (v.id,))
         # my edits of my posts (no user id: through the posts), waiting or kept for the pace: gone with me, their photos too
         con.execute("DELETE FROM fchan_photos WHERE edit_id IN (SELECT e.id FROM fchan_edits e JOIN fchan_posts p ON p.id = e.post_id WHERE p.user_id = ?)", (v.id,))
         con.execute("DELETE FROM fchan_edits WHERE post_id IN (SELECT id FROM fchan_posts WHERE user_id = ?)", (v.id,))

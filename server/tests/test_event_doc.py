@@ -96,7 +96,7 @@ def test_a_slow_pdf_is_cut_off_and_blocks_no_receipt(env, monkeypatch):
     th.start()
     time.sleep(0.5)  # the child is rendering now
     t = time.monotonic()
-    receipt.picture(_pdf(1))  # a Kaspi receipt's PDF: no lock held by the document
+    receipt.picture(_pdf(1), Path(env[1].db_path).parent)  # a Kaspi receipt's PDF: its own child, no lock held by the document
     assert time.monotonic() - t < 1
     th.join(30)
     assert res["r"].status_code == 400 and res["r"].json()["message"] == "not_a_pdf"

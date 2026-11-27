@@ -14,6 +14,7 @@
   import { session, loadMe } from '../../lib/state/session.svelte';
   import { may } from '../../lib/perms';
   import { t } from '../../lib/i18n/index.svelte';
+  import { sw } from '../../lib/i18n/staff';
   import { downloadFile, haptic, scanQr } from '../../lib/tg';
   import { nameOf } from '../../lib/short';
   import { menu } from '../../ui/menu';
@@ -79,7 +80,7 @@
       haptic.error();
       // who runs events but has no session yet hears that, not "this isn't for you"
       const none = m === 'screen' && session.me?.bigScreen === 'pair' && !(await api.screens().catch(() => [])).length;
-      note = m === 'pair' ? t('scr.stale') : none ? t('scr.noneOpen') : m === 'screen' ? t('scr.notYours') : t('common.error');
+      note = m === 'pair' ? sw('scr.stale') : none ? sw('scr.noneOpen') : m === 'screen' ? t('scr.notYours') : t('common.error');
       list = [];
     }
   }
@@ -90,12 +91,12 @@
       if (!s) {
         const ev = eventById(eid) ?? await api.event(eid), name = ev.title;
         if (who === undefined) { prepare(ev.org.id); return null; }
-        s = await api.crewScreen(eid, `${name.length > 48 ? name.slice(0, 47).trimEnd() + '…' : name} · ${t('scr.teamMark')}`, who);
+        s = await api.crewScreen(eid, `${name.length > 48 ? name.slice(0, 47).trimEnd() + '…' : name} · ${sw('scr.teamMark')}`, who);
       }
       if (!s.started && !s.ended) { const initial = s; s = await api.screenAct(s.session, 'start').catch(() => initial); void loadMe(true); }
       made = s.session; list = [s]; note = '';
       return s;
-    } catch (e) { haptic.error(); note = t(e instanceof ApiErr && e.code === 'rate_limited' ? 'scr.tooMany' : 'common.error'); list = []; return null; }
+    } catch (e) { haptic.error(); note = sw(e instanceof ApiErr && e.code === 'rate_limited' ? 'scr.tooMany' : 'common.error'); list = []; return null; }
   }
   onMount(() => {
     for (const m of clubs) void loadMeetupSetup(m.org.id);
@@ -131,8 +132,8 @@
 
   async function act(s: ScreenSession, a: 'start' | 'finish' | 'unpair' | 'out' | 'in') {
     if (busy) return;
-    if (a === 'finish' && !(await sheets.ask({ title: t('scr.finishAsk'), text: t('scr.finishText'), ok: t('scr.finish'), cancel: t('scr.keep'), danger: true }))) return;
-    if (a === 'unpair' && !(await sheets.ask({ title: t('scr.unpairAsk'), text: t('scr.unpairText'), ok: t('scr.unpair'), cancel: t('scr.keep') }))) return;
+    if (a === 'finish' && !(await sheets.ask({ title: sw('scr.finishAsk'), text: sw('scr.finishText'), ok: sw('scr.finish'), cancel: t('scr.keep'), danger: true }))) return;
+    if (a === 'unpair' && !(await sheets.ask({ title: sw('scr.unpairAsk'), text: sw('scr.unpairText'), ok: sw('scr.unpair'), cancel: t('scr.keep') }))) return;
     busy = s.session;
     try {
       const n = await api.screenAct(s.session, a);
@@ -172,12 +173,12 @@
     if (creating) return null;
     creating = true;
     try {
-      const s = await api.clubScreen(o, t('scr.meeting', { date: dayMonth(nowTs()) }), who);
+      const s = await api.clubScreen(o, sw('scr.meeting', { date: dayMonth(nowTs()) }), who);
       const n = await api.screenAct(s.session, 'start').catch(() => s);
       haptic.ok(); void loadMe(true); // the capsule
       list = [n, ...(list ?? []).filter((x) => x.session !== n.session)]; sel = n.session; note = '';
       return n;
-    } catch (e) { haptic.error(); say(t(e instanceof ApiErr && e.code === 'rate_limited' ? 'scr.tooMany' : 'common.error'), 'warning_3d'); return null; }
+    } catch (e) { haptic.error(); say(sw(e instanceof ApiErr && e.code === 'rate_limited' ? 'scr.tooMany' : 'common.error'), 'warning_3d'); return null; }
     finally { creating = false; }
   }
   // which club, when I run several (Studio's row says which)
@@ -192,9 +193,9 @@
   const PAIR_QR = /[?&]startapp=sh_([0-9a-f]{16})$/;
   function pairScan(sid?: Id) {
     haptic.tap();
-    const can = scanQr(t('scr.aim'), (text) => {
+    const can = scanQr(sw('scr.aim'), (text) => {
       const m = text.match(PAIR_QR);
-      if (!m) { haptic.error(); say(t('scr.wrongQr'), 'pleading_face_3d'); return true; }
+      if (!m) { haptic.error(); say(sw('scr.wrongQr'), 'pleading_face_3d'); return true; }
       pairing = m[1]; note = '';
       void bind(sid);
       return true;
@@ -207,13 +208,13 @@
   function byHand(s: ScreenSession) {
     haptic.tap();
     let wrong = '';
-    const can = scanQr(t('scr.byHandAim'), (text) => {
+    const can = scanQr(sw('scr.byHandAim'), (text) => {
       if (!BADGE.test(text)) { if (text !== wrong) { wrong = text; haptic.error(); } return false; }
       api.screenBadge(s.session, text).then((r) => {
         if (!r.done) { haptic.error(); say(t('ci.hNo'), 'warning_3d'); return; }
-        haptic.ok(); say(t('scr.marked', { name: r.person }), 'sparkles_3d'); void refresh();
+        haptic.ok(); say(sw('scr.marked', { name: r.person }), 'sparkles_3d'); void refresh();
       },
-        (e) => { haptic.error(); say(t(e instanceof ApiErr ? (e.message === 'already' ? 'scr.already' : e.message === 'flagged' ? 'scr.flagged' : e.code === 'closed' ? 'scr.closed' : e.code === 'not_found' ? 'scan.notFound' : 'common.error') : 'common.error'), 'warning_3d'); });
+        (e) => { haptic.error(); say(sw(e instanceof ApiErr ? (e.message === 'already' ? 'scr.already' : e.message === 'flagged' ? 'scr.flagged' : e.code === 'closed' ? 'scr.closed' : e.code === 'not_found' ? 'scan.notFound' : 'common.error') : 'common.error'), 'warning_3d'); });
       return true;
     });
     if (!can) say(t('give.phone'), 'pleading_face_3d');
@@ -286,15 +287,15 @@
 <Pane {overlay} title={t('scr.page')} icon={ScanQrCode}>
   <div class="pg">
     {#if forming}
-      <Group caption={t('scr.audience')}>
-        <Row title={t('scr.wholeClub')} accessory="chevron" onclick={() => launch('club')} />
+      <Group caption={sw('scr.audience')}>
+        <Row title={sw('scr.wholeClub')} accessory="chevron" onclick={() => launch('club')} />
         {#each data.meetupSetup[forming]?.tags.filter((d) => d.department) ?? [] as d (d.id)}
           <Row title={d.name} accessory="chevron" onclick={() => launch(d.id)} />
         {/each}
       </Group>
     {/if}
     {#if pick}
-      <p class="lead">{t('scr.pick')}</p>
+      <p class="lead">{sw('scr.pick')}</p>
       <Group>{#each list ?? [] as s (s.session)}<Row title={nm(s)} accessory="chevron" onclick={() => bind(s.session)} />{/each}</Group>
     {:else if note}
       <div class="hero"><span class="mark"><MonitorUp size={34} strokeWidth={1.6} /></span><p class="lead">{note}</p></div>
@@ -303,7 +304,7 @@
       {#if live.length > 1 && !made && !event && !pastOpen}
         <Group>
           {#each live as x (x.session)}
-            <Row title={nm(x)} subtitle={[x.department, x.flagged ? t('scr.flaggedN', { n: x.flagged }) : ''].filter(Boolean).join(' · ')}
+            <Row title={nm(x)} subtitle={[x.department, x.flagged ? sw('scr.flaggedN', { n: x.flagged }) : ''].filter(Boolean).join(' · ')}
               accessory="check" checked={x.session === s.session} onclick={() => { haptic.tap(); sel = x.session; }} />
           {/each}
         </Group>
@@ -311,53 +312,53 @@
       <header class="head">
         <h2 class="t-h2 ttl">{nm(s)}</h2>
         {#if s.department}<p class="sub">{s.department}</p>{/if}
-        {#if s.flagged}<Tag tone="accent">{t('scr.flaggedN', { n: s.flagged })}</Tag>{/if}
-        <Tag tone={s.started && !s.ended ? 'accent' : 'neutral'}>{s.ended ? `${t('scr.closed')} · ${when(s)}` : s.started ? t('scr.live') : t('scr.waiting')}</Tag>
+        {#if s.flagged}<Tag tone="accent">{sw('scr.flaggedN', { n: s.flagged })}</Tag>{/if}
+        <Tag tone={s.started && !s.ended ? 'accent' : 'neutral'}>{s.ended ? `${sw('scr.closed')} · ${when(s)}` : s.started ? sw('scr.live') : sw('scr.waiting')}</Tag>
       </header>
       <!-- the members who came of the club's members; without a list (an event's guests), everyone counted -->
       <div class="big">
-        {#if s.expected}<span class="n">{s.came ?? 0}</span><span class="of">{t('scr.ofM', { m: s.expected })}</span>
-        {:else}<span class="n">{s.done}</span><span class="of">{t('scr.done')}</span>{/if}
+        {#if s.expected}<span class="n">{s.came ?? 0}</span><span class="of">{sw('scr.ofM', { m: s.expected })}</span>
+        {:else}<span class="n">{s.done}</span><span class="of">{sw('scr.done')}</span>{/if}
       </div>
       {#if s.pending || s.phase === 'out' || s.departed}
-        <p class="sub">{[s.pending ? t('scr.joining', { n: s.pending }) : '', s.phase === 'out' ? t('scr.outNow', { n: s.departed }) : s.departed ? t('scr.leftN', { n: s.departed }) : ''].filter(Boolean).join(' · ')}</p>
+        <p class="sub">{[s.pending ? sw('scr.joining', { n: s.pending }) : '', s.phase === 'out' ? sw('scr.outNow', { n: s.departed }) : s.departed ? sw('scr.leftN', { n: s.departed }) : ''].filter(Boolean).join(' · ')}</p>
       {/if}
-      {#if paired === s.session}<p class="ok"><Check size={16} strokeWidth={2.6} />{t('scr.paired')}</p>{/if}
+      {#if paired === s.session}<p class="ok"><Check size={16} strokeWidth={2.6} />{sw('scr.paired')}</p>{/if}
 
       {#if !s.ended && !s.reviewOnly}
         <div class="cta">
           <!-- an event's guests (EventManage → More → Big screen): its QR and helpers live on the door screen; here the laptop -->
-          {#if event && s.started}<Button kind="primary" size="l" full onclick={() => pairScan(s.session)}>{#snippet icon()}<MonitorUp size={19} />{/snippet}{t('scr.connect')}</Button>
+          {#if event && s.started}<Button kind="primary" size="l" full onclick={() => pairScan(s.session)}>{#snippet icon()}<MonitorUp size={19} />{/snippet}{sw('scr.connect')}</Button>
           {:else if s.started}<Button kind="primary" size="l" full onclick={() => showQr(s)}>{#snippet icon()}<QrCode size={19} />{/snippet}{t('aw.show')}</Button>
-          {:else}<Button kind="primary" size="l" full loading={busy === s.session} onclick={() => act(s, 'start')}>{#snippet icon()}<Play size={18} />{/snippet}{t('scr.start')}</Button>{/if}
+          {:else}<Button kind="primary" size="l" full loading={busy === s.session} onclick={() => act(s, 'start')}>{#snippet icon()}<Play size={18} />{/snippet}{sw('scr.start')}</Button>{/if}
           <!-- what the door person needs next: hand the check-in over -->
-          {#if s.started && board(s) && !event}<Button kind="secondary" size="l" full onclick={() => { haptic.tap(); sheets.handQr(s.session); }}>{#snippet icon()}<UserPlus size={18} />{/snippet}{t('scr.hand')}</Button>{/if}
+          {#if s.started && board(s) && !event}<Button kind="secondary" size="l" full onclick={() => { haptic.tap(); sheets.handQr(s.session); }}>{#snippet icon()}<UserPlus size={18} />{/snippet}{sw('scr.hand')}</Button>{/if}
         </div>
       {/if}
 
       {#if s.expected && own(s) && !handed(s)}
         {@const p = people[s.session]}
         <Group>
-          <Row icon={UserCheck} title={t('scr.cameL')} value={String(s.came ?? 0)} accessory="disclosure" open={open === 'came'} onclick={() => unfold('came')} />
+          <Row icon={UserCheck} title={sw('scr.cameL')} value={String(s.came ?? 0)} accessory="disclosure" open={open === 'came'} onclick={() => unfold('came')} />
           {#if open === 'came'}{#each p?.came ?? [] as name, i (i)}<Row dense title={name} />{/each}{/if}
-          {#if s.done > (s.came ?? 0)}<Row icon={UserRound} title={t('scr.other')} value={String(s.done - (s.came ?? 0))} accessory="disclosure" open={open === 'other'} onclick={() => unfold('other')} />
+          {#if s.done > (s.came ?? 0)}<Row icon={UserRound} title={sw('scr.other')} value={String(s.done - (s.came ?? 0))} accessory="disclosure" open={open === 'other'} onclick={() => unfold('other')} />
             {#if open === 'other'}{#each p?.other ?? [] as name, i (i)}<Row dense title={name} />{/each}{/if}{/if}
-          <Row icon={UserX} title={t('scr.absentL')} value={String(s.expected - (s.came ?? 0))} accessory="disclosure" open={open === 'absent'} onclick={() => unfold('absent')} />
+          <Row icon={UserX} title={sw('scr.absentL')} value={String(s.expected - (s.came ?? 0))} accessory="disclosure" open={open === 'absent'} onclick={() => unfold('absent')} />
           {#if open === 'absent'}{#each p?.absent ?? [] as name, i (i)}<Row dense title={name} />{/each}{/if}
         </Group>
       {/if}
 
       {#if s.meetup}
-        <Group caption={t('scr.scans')}>
+        <Group caption={sw('scr.scans')}>
           {#each scans[s.session] ?? [] as p (p.id)}
             <Row dense icon={p.flag ? UserX : UserCheck} title={p.name}
-              subtitle={[`${dayMonth(p.at)} · ${time(p.at)}`, t(p.phase === 'out' ? 'scr.scanOut' : 'scr.scanIn'),
-                p.flag ? t(p.flag === 'outsider' ? 'scr.outsider' : p.flag === 'unassigned' ? 'scr.unassigned' : 'scr.outsideDept') : '',
-                p.review ? t(p.review === 'added' ? 'scr.deptAdded' : 'scr.deptDeclined') : ''].filter(Boolean).join(' · ')} />
+              subtitle={[`${dayMonth(p.at)} · ${time(p.at)}`, sw(p.phase === 'out' ? 'scr.scanOut' : 'scr.scanIn'),
+                p.flag ? sw(p.flag === 'outsider' ? 'scr.outsider' : p.flag === 'unassigned' ? 'scr.unassigned' : 'scr.outsideDept') : '',
+                p.review ? sw(p.review === 'added' ? 'scr.deptAdded' : 'scr.deptDeclined') : ''].filter(Boolean).join(' · ')} />
             {#if p.ask}
-              <Row dense title={t('scr.askDept')} />
-              <Row dense icon={UserPlus} title={t('scr.addDept')} onclick={() => decide(s, p, true)} />
-              <Row dense icon={UserX} title={t('scr.notMine')} onclick={() => decide(s, p, false)} />
+              <Row dense title={sw('scr.askDept')} />
+              <Row dense icon={UserPlus} title={sw('scr.addDept')} onclick={() => decide(s, p, true)} />
+              <Row dense icon={UserX} title={sw('scr.notMine')} onclick={() => decide(s, p, false)} />
             {/if}
           {/each}
           {#if scanNext[s.session]}<Row title={t('common.more')} accessory="chevron" onclick={() => loadScans(s.session, true)} />{/if}
@@ -365,38 +366,38 @@
       {/if}
 
       <Group>
-        {#if s.started && !s.ended && !s.reviewOnly && s.phase !== 'out' && !event}<Row icon={ScanLine} title={t('scr.byHand')} accessory="chevron" onclick={() => byHand(s)} />{/if}
-        {#if s.started && !s.ended && own(s)}<Row icon={s.phase === 'out' ? LogIn : LogOut} title={t(s.phase === 'out' ? 'scr.toIn' : 'scr.toOut')} onclick={() => act(s, s.phase === 'out' ? 'in' : 'out')} />{/if}
-        {#if doors[s.session] && (waiting(s) || (doors[s.session].lead && (!s.ended || doors[s.session].hand)))}<Row icon={DoorOpen} title={waiting(s) ? t('ledg.unresolvedN', { n: waiting(s) }) : t('ledg.hand')} accessory="chevron" onclick={() => { haptic.tap(); sheets.volDoor(s.session, s.title); }} />{/if}
-        {#if handed(s) && doors[s.session].by}<Row icon={DoorOpen} title={t('ledg.handedBy', { name: doors[s.session].by!.name })} />{/if}
-        {#if s.started && own(s) && !handed(s)}<Row icon={Download} title={t('scr.csv')} accessory="chevron" onclick={() => csv(s)} />{/if}
-        {#if s.paired && own(s) && !handed(s) && !s.ended}<Row icon={Unplug} title={t('scr.unpair')} onclick={() => act(s, 'unpair')} />{/if}
+        {#if s.started && !s.ended && !s.reviewOnly && s.phase !== 'out' && !event}<Row icon={ScanLine} title={sw('scr.byHand')} accessory="chevron" onclick={() => byHand(s)} />{/if}
+        {#if s.started && !s.ended && own(s)}<Row icon={s.phase === 'out' ? LogIn : LogOut} title={sw(s.phase === 'out' ? 'scr.toIn' : 'scr.toOut')} onclick={() => act(s, s.phase === 'out' ? 'in' : 'out')} />{/if}
+        {#if doors[s.session] && (waiting(s) || (doors[s.session].lead && (!s.ended || doors[s.session].hand)))}<Row icon={DoorOpen} title={waiting(s) ? sw('ledg.unresolvedN', { n: waiting(s) }) : sw('ledg.hand')} accessory="chevron" onclick={() => { haptic.tap(); sheets.volDoor(s.session, s.title); }} />{/if}
+        {#if handed(s) && doors[s.session].by}<Row icon={DoorOpen} title={sw('ledg.handedBy', { name: doors[s.session].by!.name })} />{/if}
+        {#if s.started && own(s) && !handed(s)}<Row icon={Download} title={sw('scr.csv')} accessory="chevron" onclick={() => csv(s)} />{/if}
+        {#if s.paired && own(s) && !handed(s) && !s.ended}<Row icon={Unplug} title={sw('scr.unpair')} onclick={() => act(s, 'unpair')} />{/if}
       </Group>
       {#if s.started && !s.ended && own(s)}
-        <Group><Row tone="destructive" icon={Square} title={t('scr.finish')} onclick={() => act(s, 'finish')} /></Group>
+        <Group><Row tone="destructive" icon={Square} title={sw('scr.finish')} onclick={() => act(s, 'finish')} /></Group>
       {/if}
       {#if clubs.length && !made && !event && !crew && !forming}
-        <div class="cta"><Button kind="secondary" size="l" full loading={creating} onclick={(ev) => forClub(ev, (o) => prepare(o))}>{#snippet icon()}<Play size={18} />{/snippet}{t('scr.newMeetup')}</Button></div>
+        <div class="cta"><Button kind="secondary" size="l" full loading={creating} onclick={(ev) => forClub(ev, (o) => prepare(o))}>{#snippet icon()}<Play size={18} />{/snippet}{sw('scr.newMeetup')}</Button></div>
       {/if}
     {:else if !forming && (list || !(made || event || crew || code))}
       <!-- nothing open: what this is, one obvious action, and the laptop's way in -->
       <div class="hero">
         <span class="mark"><ScanQrCode size={36} strokeWidth={1.6} /></span>
-        <p class="lead">{t('scr.heroText')}</p>
+        <p class="lead">{sw('scr.heroText')}</p>
         {#if clubs.length}
-          <Button kind="primary" size="l" full loading={creating} onclick={(ev) => forClub(ev, (o) => prepare(o))}>{#snippet icon()}<Play size={18} />{/snippet}{t('scr.start')}</Button>
-          <Button kind="plain" size="m" full onclick={(ev) => forClub(ev, (o) => prepare(o, true))}>{#snippet icon()}<MonitorUp size={17} />{/snippet}{t('scr.connect')}</Button>
-        {:else if list}<p class="sub">{t('scr.none')}</p>{/if}
+          <Button kind="primary" size="l" full loading={creating} onclick={(ev) => forClub(ev, (o) => prepare(o))}>{#snippet icon()}<Play size={18} />{/snippet}{sw('scr.start')}</Button>
+          <Button kind="plain" size="m" full onclick={(ev) => forClub(ev, (o) => prepare(o, true))}>{#snippet icon()}<MonitorUp size={17} />{/snippet}{sw('scr.connect')}</Button>
+        {:else if list}<p class="sub">{sw('scr.none')}</p>{/if}
       </div>
     {/if}
 
     {#if past.length && !made && !event && !pick && !note}
       {#if showPast}
-        <Group caption={t('scr.past')}>
-          {#each past as x (x.session)}<Row title={nm(x)} subtitle={[when(x), x.department, x.flagged ? t('scr.flaggedN', { n: x.flagged }) : ''].filter(Boolean).join(' · ')} value={x.expected ? `${x.came ?? 0}/${x.expected}` : String(x.done)} accessory="chevron" onclick={() => { haptic.tap(); sel = x.session; showPast = false; }} />{/each}
+        <Group caption={sw('scr.past')}>
+          {#each past as x (x.session)}<Row title={nm(x)} subtitle={[when(x), x.department, x.flagged ? sw('scr.flaggedN', { n: x.flagged }) : ''].filter(Boolean).join(' · ')} value={x.expected ? `${x.came ?? 0}/${x.expected}` : String(x.done)} accessory="chevron" onclick={() => { haptic.tap(); sel = x.session; showPast = false; }} />{/each}
         </Group>
       {:else}
-        <button class="past" onclick={() => { haptic.tap(); showPast = true; }}>{t('scr.past')} · {past.length}</button>
+        <button class="past" onclick={() => { haptic.tap(); showPast = true; }}>{sw('scr.past')} · {past.length}</button>
       {/if}
     {/if}
   </div>

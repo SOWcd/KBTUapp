@@ -191,6 +191,8 @@ def _save_parts(con, rid: int, f: dict) -> None:
     con.execute("DELETE FROM round_departments WHERE round_id = ?", (rid,))
     for i, (tag, about, places) in enumerate(f["deps"]):
         con.execute("INSERT INTO round_departments (round_id, tag_id, pos, about, places) VALUES (?, ?, ?, ?, ?)", (rid, tag, i, about, places))
+    if one(con, "SELECT 1 FROM round_apps WHERE round_id = ? LIMIT 1", rid):
+        return  # answers use question ids, including withdrawn applications that may return
     con.execute("DELETE FROM round_questions WHERE round_id = ?", (rid,))
     for i, (kind, text, options, required, tag) in enumerate(f["qs"]):
         con.execute("INSERT INTO round_questions (round_id, pos, kind, text, options, required, tag_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -199,22 +201,20 @@ def _save_parts(con, rid: int, f: dict) -> None:
 
 def update_round(con, v: Viewer, rid: int, body: dict) -> dict:
     """Settings change while the round is live; once someone has applied the questions stay as they are (answers would
-    stop matching them), the rest may change. {close: true} stops new applications at once."""
-    r = _get(con, rid)
-    _may(con, v, r["org_id"], "casting")
-    if r["status"] == "done":
-        raise ApiError("closed")
+    stop matching them), the rest may change. {close: true} stops new applications at once; close: false with settings
+    explicitly reopens intake. Saving settings alone keeps its status."""
     with tx(con):
+        r = _get(con, rid)
+        _may(con, v, r["org_id"], "casting")
+        if r["status"] == "done":
+            raise ApiError("closed")
         if body.get("close") is True:
             con.execute("UPDATE rounds SET status = 'closed', closes_at = MIN(closes_at, ?) WHERE id = ?", (now(), rid))
         else:
             f = _clean(con, r["org_id"], {**body, "closesAt": body.get("closesAt", max(r["closes_at"], now() + 60))})
-            applied = one(con, "SELECT 1 FROM round_apps WHERE round_id = ?", rid)
-            if applied:
-                f["qs"] = [(q["kind"], q["text"], json.loads(q["options"]) if q["options"] else [], bool(q["required"]), q["tag_id"])
-                           for q in rows(con, "SELECT * FROM round_questions WHERE round_id = ? ORDER BY pos", rid)]
             con.execute("""UPDATE rounds SET title = ?, picks = ?, closes_at = ?, results_by = ?, decline_text = ?, next_text = ?, group_link = ?,
-                status = 'open' WHERE id = ?""", (f["title"], f["picks"], f["closes"], f["results"], f["decline"], f["next"], f["group"], rid))
+                status = ? WHERE id = ?""", (f["title"], f["picks"], f["closes"], f["results"], f["decline"], f["next"], f["group"],
+                                           "open" if body.get("close") is False else r["status"], rid))
             _save_parts(con, rid, f)
     return view(con, v, r["org_id"])
 
@@ -316,12 +316,15 @@ def vote(con, v: Viewer, app_id: int, body: dict) -> dict:
         verdict, stars, note = body.get("verdict"), body.get("stars"), " ".join(str(body.get("note") or "").split())
         if verdict not in VERDICTS or not (stars is None or isinstance(stars, int) and not isinstance(stars, bool) and 1 <= stars <= 5) or len(note) > 500:
             raise ApiError("bad_input")
+        # a "no" is decided unless a "no" vote set it (that vote and the stage share their moment): a vote stays open to the next one
+        decided = a["stage"] == "yes" or a["stage"] == "no" and not one(
+            con, "SELECT 1 FROM round_votes WHERE app_id = ? AND verdict = 'no' AND at = ?", app_id, a["updated_at"])
         con.execute("""INSERT INTO round_votes (app_id, user_id, verdict, stars, note, at) VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT (app_id, user_id) DO UPDATE SET verdict = excluded.verdict, stars = excluded.stars, note = excluded.note, at = excluded.at""",
                     (app_id, v.id, verdict, stars, note, now()))
-        if a["stage"] not in ("yes",):
+        if not decided:
             con.execute("UPDATE round_apps SET stage = ?, updated_at = ? WHERE id = ?", (verdict, now(), app_id))
-    return {"stage": verdict if a["stage"] != "yes" else "yes"}
+    return {"stage": a["stage"] if decided else verdict}
 
 
 def decide(con, v: Viewer, app_id: int, body: dict) -> dict:

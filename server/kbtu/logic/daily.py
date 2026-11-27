@@ -13,6 +13,8 @@ from .core import TZ, ApiError, PERSON, Viewer, _may, _once, _org, _rights_from,
 
 log = logging.getLogger(__name__)
 
+# a bot_outbox row of a broadcast sent by device kind (admin _broadcast --platform marks its payload); CASE guards json_extract
+_DEVICE = "CASE WHEN kind = 'app_broadcast' THEN json_extract(payload, '$.p') END IS 1"
 MEMO_ASKS = ("room", "guests", "provide", "promo", "gear", "print", "film")
 
 
@@ -231,9 +233,13 @@ def stats_day(con) -> None:
     con.execute("DELETE FROM fchan_feed_pages WHERE expires_at <= ?", (core.now(),))
     from .organizing import GUEST_DAYS
     con.execute("DELETE FROM door_guests WHERE user_id IS NULL AND created_at <= ?", (core.now() - GUEST_DAYS,))
-    # the bot's copy of a message older than 30 days loses its words; the row stays, its key keeps it from going twice
-    con.execute("UPDATE bot_outbox SET payload = '{}' WHERE send_after < ? AND payload != '{}' AND (sent_at IS NOT NULL OR error IS NOT NULL)",
-                (core.now() - 30 * 86400,))  # one still waiting keeps its words
+    # the bot's copy of a message older than 30 days loses its words; the row stays, its key keeps it from going twice.
+    # A device-kind broadcast keeps its mark 'p' (admin _broadcast --platform) for the 90-day delete below
+    con.execute(f"""UPDATE bot_outbox SET payload = CASE WHEN {_DEVICE} THEN '{{"p":1}}' ELSE '{{}}' END WHERE send_after < ?
+        AND payload NOT IN ('{{}}', '{{"p":1}}') AND (sent_at IS NOT NULL OR error IS NOT NULL)""", (core.now() - 30 * 86400,))  # one still waiting keeps its words
+    # a row that says someone used Android (the Play app's thanks, a --platform broadcast) goes with user_platforms at 90 days;
+    # the thanks may then come again if they reinstall, a fair price for the policy's 90 days
+    con.execute(f"DELETE FROM bot_outbox WHERE send_after < ? AND (kind = 'android_welcome' OR {_DEVICE})", (core.now() - 90 * 86400,))
     con.execute("UPDATE audit_log SET data = '{}' WHERE action = 'registry_search' AND at < ? AND data != '{}'", (core.now() - 30 * 86400,))
     con.execute("DELETE FROM bot_outbox WHERE kind = 'id_clash' AND send_after < ?", (core.now() - 30 * 86400,))  # the ref names a student ID
     con.execute("DELETE FROM chat_seen WHERE seen_at < ?", (core.now() - chatlist.SEEN_KEEP,))  # /all's memory: 180 days

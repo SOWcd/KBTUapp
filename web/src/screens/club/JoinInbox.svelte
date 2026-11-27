@@ -11,6 +11,7 @@
   import { sheets } from '../../lib/state/sheets';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { t, tn } from '../../lib/i18n/index.svelte';
+  import { sw } from '../../lib/i18n/staff';
   import { relDay } from '../../lib/time';
   import { haptic, openLink } from '../../lib/tg';
   import Sheet from '../../ui/Sheet.svelte';
@@ -48,7 +49,7 @@
       studioChanged(); // member counts and the Studio row
     } catch (e) {
       if (e instanceof ApiErr && e.code === 'conflict') {
-        say(t('adm.decidedAnon'), 'warning_3d'); studioChanged(); return;
+        say(sw('adm.decidedAnon'), 'warning_3d'); studioChanged(); return;
       }
       list = [r, ...list!].sort((a, b) => a.id - b.id);
       haptic.error(); say(t('common.error'), 'warning_3d');

@@ -10,6 +10,7 @@
   import { loadAfisha } from '../../lib/state/data.svelte';
   import { open, say, type Overlay } from '../../lib/state/ui.svelte';
   import { t } from '../../lib/i18n/index.svelte';
+  import { sw } from '../../lib/i18n/staff';
   import { haptic } from '../../lib/tg';
   import { PICK_EMOJI } from '../../lib/emoji';
   import { fold } from '../../ui/fold';
@@ -52,48 +53,48 @@
       if (!still()) return;
       putOrg(o);
       adding = false; nc = { name: '', emoji: PICK_EMOJI[1], official: false };
-      haptic.ok(); say(t('adm.created'), 'party_popper_3d');
+      haptic.ok(); say(sw('adm.created'), 'party_popper_3d');
       void loadAfisha(); // the club shows in Clubs at once
       open(AdminOrgPane, { org: o }); // its President next
     } catch (e) {
       haptic.error();
-      say(e instanceof ApiErr && e.message === 'emoji' ? t('nc.emoji') : e instanceof ApiErr && e.code === 'bad_input' ? t('adm.bad') : t('common.error'), 'warning_3d');
+      say(e instanceof ApiErr && e.message === 'emoji' ? t('nc.emoji') : e instanceof ApiErr && e.code === 'bad_input' ? sw('adm.bad') : t('common.error'), 'warning_3d');
     } finally { busy = false; }
   }
 </script>
 
-<Sheet {overlay} icon={TAB_ICON.club} full title={t('adm.clubs')}>
+<Sheet {overlay} icon={TAB_ICON.club} full title={sw('adm.clubs')}>
   <div class="page">
-    <Segmented bind:value={kind} label={t('adm.clubs')} onchange={() => (adding = false)} items={[
+    <Segmented bind:value={kind} label={sw('adm.clubs')} onchange={() => (adding = false)} items={[
       { value: 'club', label: t('clubs.clubs') + (orgs ? ` · ${orgs.length - schools}` : '') },
       ...(schools ? [{ value: 'school' as const, label: `${t('clubs.schools')} · ${schools}` }] : []),
-      { value: 'registry', label: t('adm.registry') }]} />
+      { value: 'registry', label: sw('adm.registry') }]} />
     {#if kind === 'registry'}
       <Registry inSheet />
     {:else if !orgs}
       {#if adminOrgs.failed}<EmptyState inline text={t('common.error')} onretry={loadAdminOrgs} />{:else}<Skeleton n={6} />{/if}
     {:else}
       {#if kind === 'club'}
-        <Group><Row tone="add" title={t('adm.newClub')} onclick={() => { haptic.select(); adding = !adding; }} /></Group>
+        <Group><Row tone="add" title={sw('adm.newClub')} onclick={() => { haptic.select(); adding = !adding; }} /></Group>
         {#if adding}
           <form class="new" onsubmit={create} transition:fold>
-            <Field label={t('adm.name')} bind:value={nc.name} maxlength={60} enterkeyhint="done" />
+            <Field label={sw('adm.name')} bind:value={nc.name} maxlength={60} enterkeyhint="done" />
             <Group><Row title={t('reg.official')} accessory="switch" checked={nc.official} onchange={(on) => (nc.official = on)} /></Group>
             <EmojiPick bind:value={nc.emoji} size={26} />
-            <Button kind="filled" full type="submit" loading={busy} disabled={nc.name.trim().length < 2}>{t('adm.create')}</Button>
+            <Button kind="filled" full type="submit" loading={busy} disabled={nc.name.trim().length < 2}>{sw('adm.create')}</Button>
           </form>
         {/if}
       {/if}
       {#if shown.length}
         <Group>
           {#each shown as o (o.id)}
-            <Row dense title={o.name} subtitle={(o.hidden ? t('adm.hiddenTag') + ' · ' : '') + orgLine(o)} accessory="chevron" onclick={() => page(o)}>
+            <Row dense title={o.name} subtitle={(o.hidden ? sw('adm.hiddenTag') + ' · ' : '') + orgLine(o)} accessory="chevron" onclick={() => page(o)}>
               {#snippet lead()}<span class={{ dim: o.hidden }}><OrgLogo org={o} size={36} /></span>{/snippet}
               {#snippet detail()}{#if o.official && o.kind === 'club'}<span class="ok"><OfficialMark size={16} /></span>{/if}{/snippet}
             </Row>
           {/each}
         </Group>
-      {:else}<EmptyState inline text={t('adm.noClubs')} />{/if}
+      {:else}<EmptyState inline text={sw('adm.noClubs')} />{/if}
     {/if}
   </div>
 </Sheet>
