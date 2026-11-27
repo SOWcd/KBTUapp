@@ -20,7 +20,8 @@ function sticksOut(page: Page): Promise<string[]> {
 
     for (const el of document.body.querySelectorAll<HTMLElement>('*')) {
       const r = el.getBoundingClientRect(), cs = getComputedStyle(el);
-      if (!r.width || !r.height || cs.visibility === 'hidden' || el.closest('[aria-hidden="true"], [inert]')) continue;
+      // (.pane-under: the page a pushed one covers, drifted left on purpose, base.css)
+      if (!r.width || !r.height || cs.visibility === 'hidden' || el.closest('[aria-hidden="true"], [inert], .pane-under')) continue;
       if (r.left >= -1 && r.right <= vw + 1) continue;
       let clipped = false;
       for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
