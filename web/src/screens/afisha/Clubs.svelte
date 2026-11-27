@@ -269,7 +269,7 @@
 
   /* my clubs: a shelf of marks in its card, as the medals in Awards; a green ring when something is coming up there */
   .dock { gap: var(--s-1); padding: var(--s-3) 10px 14px; scroll-padding-inline: 10px; }
-  .me { flex: none; width: 76px; display: flex; flex-direction: column; align-items: center; gap: 3px; scroll-snap-align: start; color: var(--text); }
+  .me { flex: none; width: 88px; display: flex; flex-direction: column; align-items: center; gap: 3px; scroll-snap-align: start; color: var(--text); }
   .ring { display: flex; padding: 3px; border-radius: var(--r-l); box-shadow: inset 0 0 0 2px var(--line-2); }
   .ring.hot { box-shadow: inset 0 0 0 2px var(--success); }
   .me b { max-width: 100%; margin-top: 3px; font: 600 var(--fs-cap)/1.2 var(--font-text); }
