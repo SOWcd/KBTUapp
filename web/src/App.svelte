@@ -546,13 +546,21 @@
   // ---- a new achievement level the app hasn't celebrated yet: one moment at a time, once the app has settled ----
   // (and after signing in later: a returning student may bring one)
   let booted = $state(false), wasStudent = false;
+  // the launch's Afisha load answered (loadAfisha never rejects); set in onMount below
+  let afishaDone!: () => void;
+  const afishaIn = new Promise<void>((r) => (afishaDone = r));
   $effect(() => {
     const st = !!session.me?.student;
     if (st !== wasStudent) untrack(() => {
-      // known to be a student (the stored copy, the server, a sign-in): Profile's and the club tab's pages fill at once
-      loadMine();
-      void loadGallery();
-      void loadInbox(true); // staff only (it checks)
+      // known to be a student (the stored copy, the server, a sign-in): Profile's and the club tab's pages fill ahead of a
+      // tap. The stories now (StoryRow); the other 10-15 requests wait for the Afisha's answer and an idle moment, so
+      // they never compete with the first screen's request
+      void loadNews(true);
+      void afishaIn.then(() => idle(() => {
+        loadMine();
+        void loadGallery();
+        void loadInbox(true); // staff only (it checks)
+      }));
     });
     if (st && !wasStudent && booted) { moment(tgComment); moment(celebrate); } // signed in just now: his comment first
     wasStudent = st;
@@ -577,7 +585,7 @@
     void loginSheet().catch(() => {}); void askSheet().catch(() => {});
     warm(chunks.person); warm(chunks.club);
     if (inTelegram && session.me && !session.me.canDm) warm(dmSheet);
-    for (const tab of tabs) void loadPage(tab).catch(() => {});
+    // (the tabs' chunks: prebuild and warmChannel fetch them one per idle moment, not all in the first frame)
   }
   // my own comment the bot deleted in the forum channel's Telegram group (the server knows me by the signed initData,
   // not by the bot's button, startapp=cm): the first launch moment, the others wait behind it (owner, Nov 1)
@@ -683,14 +691,17 @@
     }
     const account = inTelegram ? loadMe(false, true) : Promise.resolve();
     const afisha = loadAfisha();
+    void afisha.then(afishaDone);
     // Warm the first event while the lists are on their way.
     warm(chunks.event);
     void account.then(() => {
       // Made together: Profile's row and its screen, ahead of any tap. Something of mine there and never answered:
       // the "show your name?" sheet once on this phone (owner, Nov 20: few open that screen, so ask at the door)
-      const credits = loadCredits();
+      // (after the Afisha's answer, in an idle moment: never beside the first screen's request)
+      const settled = afishaIn.then(() => new Promise<void>((r) => idle(r)));
+      const credits = settled.then(() => loadCredits());
       if (session.banned || session.revoked) return;
-      void loadSupport();
+      void settled.then(() => { if (!session.banned && !session.revoked) void loadSupport(); });
       requestAnimationFrame(() => setTimeout(warmNavigation));
       // A Microsoft return without a start parameter can still carry a verified pending claim.
       const microsoftReturn = !!session.me?.msPending;
