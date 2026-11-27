@@ -544,3 +544,36 @@ def test_trim_bars(tmp_path):
     assert abs(saved["width"] - 1200) <= 3 and abs(saved["height"] - 900) <= 3
     raw = media.save(letterbox, tmp_path)
     assert (raw["width"], raw["height"]) == (1200, 1600)
+
+
+def test_trim_frame(tmp_path):
+    import io
+    from PIL import Image, ImageDraw
+
+    def logo(ground, mark, bars=0, frame=0):
+        """A square logo (a mark on its ground) with thin black bars at its sides or a black frame round it, via JPEG."""
+        im = Image.new("RGB", (600, 600), (0, 0, 0))
+        ImageDraw.Draw(im).rectangle((bars or frame, frame, 599 - (bars or frame), 599 - frame), fill=ground)
+        ImageDraw.Draw(im).ellipse((200, 200, 400, 400), fill=mark)
+        buf = io.BytesIO()
+        im.save(buf, "JPEG", quality=85)
+        return buf.getvalue()
+
+    def light_edges(im):
+        w, h = im.size
+        return w == h and all(min(im.getpixel(p)) > 200 for p in ((0, h // 2), (w - 1, h // 2), (w // 2, 0), (w // 2, h - 1), (0, 0)))
+
+    # Startup Inc's: thin black bars down the sides of a light logo go, and it is square again on its own ground
+    assert light_edges(media.trim_frame(media.decode(logo((233, 227, 224), (30, 60, 200), bars=18))))
+    # a black frame all round, too, and the mark stays in the middle
+    out = media.trim_frame(media.decode(logo((255, 255, 255), (200, 30, 30), frame=12)))
+    assert light_edges(out) and out.width < 600 and out.getpixel((out.width // 2, out.height // 2))[0] > 150
+    # a logo drawn on a black ground keeps it; a light logo without a frame is itself
+    for data in (logo((0, 0, 0), (255, 255, 255)), logo((255, 255, 255), (0, 0, 0))):
+        im = media.decode(data)
+        assert media.trim_frame(im) is im
+    # a logo upload is stored trimmed; a cover as it came
+    framed = logo((240, 240, 240), (20, 120, 60), bars=24)
+    stored = lambda saved: Image.open(tmp_path / f"{saved['path']}.webp").convert("RGB")  # noqa: E731
+    assert light_edges(stored(media.save(framed, tmp_path, logo=True)))
+    assert not light_edges(stored(media.save(framed, tmp_path)))

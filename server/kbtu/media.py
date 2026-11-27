@@ -50,12 +50,47 @@ def drop(root: Path, paths) -> None:
             (root / f"{rel}{ext}").unlink(missing_ok=True)
 
 
-def save(data: bytes, root: Path, key: bytes | None = None, trim: bool = False) -> dict:
+def save(data: bytes, root: Path, key: bytes | None = None, trim: bool = False, logo: bool = False) -> dict:
     """key: what names the files instead of the upload's bytes (a random one: no hash that matches the same picture elsewhere).
-    trim: an album photo, its baked-in bars cut off (trim_bars)."""
+    trim: an album photo, its baked-in bars cut off (trim_bars). logo: a club's logo, its dark frame cut off (trim_frame)."""
     with _busy:
         im = _decode(data)
-        return {**store(trim_bars(im) if trim else im, key or data, root), "taken": taken(data)}
+        im = trim_bars(im) if trim else trim_frame(im) if logo else im
+        return {**store(im, key or data, root), "taken": taken(data)}
+
+
+def trim_frame(im: Image.Image, dark: int = 48) -> Image.Image:
+    """A logo without the dark bars or frame a screenshot or an export bakes round it (Startup Inc's, Nov 27: thin black
+    bars down its sides, read as the avatar's own edges). The frame is near-black on all four corners; the logo is the
+    box of pixels lighter than that (a 3x3 min filter first: JPEG specks and the antialiased seam don't count). Cut only
+    when each bar is under a third of its side and the logo's own edge just inside is mostly light, so a logo drawn on a
+    dark ground keeps its ground. The rest goes back to a square on its own edge colour (the avatar shows it whole)."""
+    g = im.convert("L")
+    w, h = g.size
+    if max(g.getpixel(p) for p in ((0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1))) > dark:
+        return im
+    box = g.point(lambda p: 255 if p > dark else 0).filter(ImageFilter.MinFilter(3)).getbbox()
+    if not box or box == (0, 0, w, h):
+        return im
+    left, top, right, bottom = box
+    if left > w / 3 or w - right > w / 3 or top > h / 3 or h - bottom > h / 3:
+        return im
+    # 2 px further in on a cut side: JPEG's ringing leaves a grey hairline along the seam
+    box = (left + 2 * (left > 0), top + 2 * (top > 0), right - 2 * (right < w), bottom - 2 * (bottom < h))
+    inner = g.crop(box)
+    iw, ih = inner.size
+    if iw < 8 or ih < 8:
+        return im
+    ring = [inner.getpixel((x, y)) for x in range(iw) for y in (1, ih - 2)] + [inner.getpixel((x, y)) for y in range(ih) for x in (1, iw - 2)]
+    if sum(p > dark for p in ring) < 0.6 * len(ring):
+        return im
+    out = im.crop(box)
+    edge = [out.getpixel(p) for p in ((1, 1), (iw - 2, 1), (1, ih - 2), (iw - 2, ih - 2))]
+    fill = tuple(sorted(c[i] for c in edge)[1] for i in range(3))  # the lower middle of the four corners, per channel
+    side = max(iw, ih)
+    square = Image.new("RGB", (side, side), fill)
+    square.paste(out, ((side - iw) // 2, (side - ih) // 2))
+    return square
 
 
 def trim_bars(im: Image.Image, tol: int = 12) -> Image.Image:

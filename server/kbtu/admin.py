@@ -3,6 +3,8 @@
   .venv/bin/python -m kbtu.admin users                                  who opened the app
   .venv/bin/python -m kbtu.admin orgs                                   clubs and their teams
   .venv/bin/python -m kbtu.admin rename <slug> "<name>"                 an org's name as is (its slug and lanyard stay)
+  .venv/bin/python -m kbtu.admin logos-trim [--apply]                   every club logo's baked-in dark frame cut off, as an upload
+                                now does (media.trim_frame); without --apply only which ones would change
   .venv/bin/python -m kbtu.admin org <slug> "<name>" <short> <emoji> [--official] [--school]   a school is official, never closes
   .venv/bin/python -m kbtu.admin org-award <id | slug | "exact name"> <year> "<title>"   a KBTU Awards nomination it won,
                                 on its card (the ceremony's English name); org-award-del with the same words removes it
@@ -278,6 +280,34 @@ def _event_input(given: bytes | None = None) -> dict:
     if not isinstance(body, dict):
         sys.exit(f"stdin: one JSON object, {EVENT_STDIN >> 20} MB at most")
     return body
+
+
+def _logos_trim(con, root: Path, apply: bool) -> None:
+    """Every club's logo through media.trim_frame, as an upload now goes: one with a dark frame gets new files (named by
+    content, cached forever) on the same files row, so everything pointing at the logo shows it; the old files leave the
+    disk once nothing else shows them. Without apply: which ones would change, nothing written."""
+    from . import media
+    from .logic.chatlist import photo_free
+    changed = 0
+    for o in rows(con, "SELECT o.slug, f.id, f.path FROM orgs o JOIN files f ON f.id = o.logo_file_id ORDER BY o.id"):
+        src = root / f"{o['path']}.webp"
+        if not src.exists():
+            continue
+        im = media.decode(src.read_bytes())
+        out = media.trim_frame(im)
+        if out is im:
+            continue
+        changed += 1
+        print(f"{o['slug']}: {im.width}x{im.height} -> {out.width}x{out.height}")
+        if not apply:
+            continue
+        saved = media.store(out, out.tobytes(), root)
+        with db.tx(con):
+            con.execute("UPDATE files SET sha256 = ?, path = ?, width = ?, height = ?, bytes = ?, color = ? WHERE id = ?",
+                        (saved["sha256"], saved["path"], saved["width"], saved["height"], saved["bytes"], saved["color"], o["id"]))
+            if photo_free(con, o["path"]):
+                media.drop(root, [o["path"]])
+    print(f"{'trimmed' if apply else 'would trim'} {changed}")
 
 
 def _event_picture(body: dict, field: str, root: Path) -> dict | None:
@@ -758,6 +788,8 @@ def main(args: list[str]) -> None:
             sys.exit(f"{slug}: taken")
         create_org(con, None, name, short, emoji, "--official" in args, slug, "school" if "--school" in args else "club")
         print(f"created {slug}")
+    elif cmd == "logos-trim" and args[1:] in ([], ["--apply"]):
+        _logos_trim(con, Path(cfg.db_path).resolve().parent / "media", "--apply" in args)
     elif cmd == "rename" and len(args) == 3 and args[2].strip():  # e.g. "Moments" without its sparkles
         o = one(con, "SELECT id, name FROM orgs WHERE slug = ?", args[1]) or sys.exit(f"{args[1]}: no such club")
         con.execute("UPDATE orgs SET name = ? WHERE id = ?", (args[2].strip(), o["id"]))
