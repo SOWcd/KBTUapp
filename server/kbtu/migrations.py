@@ -2707,4 +2707,7 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE TRIGGER report_body_off AFTER UPDATE OF status ON reports WHEN new.status != 'open' AND new.body IS NOT NULL BEGIN
         UPDATE reports SET body = NULL WHERE id = new.id;
     END;"""),
+    # A comment verdict may edit its earlier DM only in the same chat. Legacy message ids have no known chat:
+    # leave it NULL rather than guessing after an account relink.
+    (259, "ALTER TABLE tgc_comments ADD COLUMN dm_chat_id INTEGER;"),
 ]

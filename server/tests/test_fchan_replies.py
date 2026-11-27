@@ -240,7 +240,7 @@ def test_reply_delete_takedown_undo(env, monkeypatch):
     t[0] += 61
     w.tg.say["deleteMessage"] = (400, "Bad Request: message can't be deleted")
     tick(w.cfg, w.tg, w.con)
-    assert w.tg.of("editMessageText")[-1] == {"chat_id": G, "message_id": msgs[1], "text": texts.bot_message("ru", "fch_reply_removed")[0]}
+    assert w.tg.of("editMessageText")[-1] == {"chat_id": G, "message_id": msgs[1], "text": texts.bot_message("ru", "fch_reply_removed")[0], "parse_mode": "HTML"}
     assert w.con.execute("SELECT tg_msg FROM fchan_replies WHERE id = ?", (ids[1],)).fetchone()[0] is None
     acts = [a for (a,) in w.con.execute("SELECT action FROM audit_log WHERE target = ? ORDER BY id", (f"fchanr:{ids[1]}",))]
     assert acts == ["fchan_reply_hide", "fchan_reply_undo", "fchan_reply_hide"]

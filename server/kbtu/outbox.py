@@ -1,6 +1,9 @@
 """The postman: sends what logic.notify() queued in bot_outbox, as server templates (texts.py) in the user's
 language with a button into the app; only to users who let the bot write (can_dm). A user who blocked the bot loses
-can_dm until Telegram says otherwise. bot.py's _postman runs send_due every POLL seconds, in the worker that leads."""
+can_dm until Telegram says otherwise. bot.py's _postman runs send_due every POLL seconds, in the worker that leads.
+Transport errors leave contact_ask and tgc_* lost: Telegram may already have accepted them. Other kinds use
+at-least-once delivery after the lease expires, so a lost response can mean a duplicate. A worker crash also
+leaves its leases available for retry."""
 from __future__ import annotations
 
 import asyncio
@@ -678,14 +681,17 @@ async def _batch(cfg: Config, http: httpx.AsyncClient, con, due: list) -> bool:
         await asyncio.sleep(at - time.monotonic())
         return not (halt.is_set() or _stopping())  # between messages: one cut mid-send would go again after its LEASE, maybe twice
 
-    async def send(body: dict) -> httpx.Response | None:
+    async def send(body: dict, uid: int) -> httpx.Response | None:
         # Concurrent push failures can reach Telegram together, after their original slots.
         nonlocal next_telegram
         async with telegram_gate:
             if (delay := next_telegram - time.monotonic()) > 0:
                 await asyncio.sleep(delay)
-            if halt.is_set():
-                return None  # no new Telegram sends after a 429 or transport failure
+            async with lock:
+                if halt.is_set():
+                    return None  # no new Telegram sends after a 429 or transport failure
+                if not one(con, "SELECT 1 FROM users WHERE id = ? AND tg_id = ?", uid, body["chat_id"]):
+                    return None  # an account can move while waiting for its Telegram send slot
             next_telegram = time.monotonic() + GAP
         return await _send(cfg, http, body)
 
@@ -706,7 +712,7 @@ async def _batch(cfg: Config, http: httpx.AsyncClient, con, due: list) -> bool:
 
 
 async def _deliver(cfg: Config, http: httpx.AsyncClient, con, m, lock: asyncio.Lock, halt: asyncio.Event,
-                   send: Callable[[dict], Awaitable[httpx.Response | None]]) -> None:
+                   send: Callable[[dict, int], Awaitable[httpx.Response | None]]) -> None:
     """One queued message taken, sent and marked. The connection serves one thread at a time (lock), the sends run
     side by side; the network down or a 429 sets halt."""
     async with lock:
@@ -731,8 +737,6 @@ async def _deliver(cfg: Config, http: httpx.AsyncClient, con, m, lock: asyncio.L
             if to is None:
                 _mark(con, m, False, "gone")
                 return
-        if m["kind"] in tgc.AUTHOR and not one(con, "SELECT 1 FROM users WHERE id = ? AND tg_id = ?", m["user_id"], to):
-            return  # the account moved after the batch was read; the retry will use the new chat
         body = {"chat_id": to, "text": text, "parse_mode": "HTML", "link_preview_options": {"is_disabled": True}}
         if isinstance(start, list):  # the whole keyboard; "start" buttons open the app there
             body["reply_markup"] = {"inline_keyboard": [[{"text": b["text"], "url": f"https://t.me/{cfg.bot_username}?startapp={b['start']}"}
@@ -749,15 +753,20 @@ async def _deliver(cfg: Config, http: httpx.AsyncClient, con, m, lock: asyncio.L
                     _feedback_buttons(cfg, to, m["lang"], category))
     try:
         async with lock:  # it reads the connection first (and returns at once for any other kind)
+            if not one(con, "SELECT 1 FROM users WHERE id = ? AND tg_id = ?", m["user_id"], m["tg_id"]):
+                return  # the account moved after the batch was read; the retry will use the new chat
             r = await tgc.edit_first(cfg, http, con, m, body)  # a comment's verdict: its first message edited
         if r is None:
-            r = await send(body)
+            r = await send(body, m["user_id"])
         if r is None:
             return
         answer = r.json()
     except (httpx.HTTPError, ValueError) as exc:
         log.warning("postman: %s", type(exc).__name__)
         halt.set()  # the network is down: the rest stays queued for the next round
+        if m["kind"] == "contact_ask" or m["kind"].startswith("tgc_"):
+            async with lock:
+                await anyio.to_thread.run_sync(_mark, con, m, False, "lost")
         return
     if not answer.get("ok") and r.status_code == 429:  # too fast: everyone waits as told; this one goes again after its LEASE
         halt.set()
