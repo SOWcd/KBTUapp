@@ -4,7 +4,7 @@
   // Loaded with the app (data.vol), refreshed as it opens.
   import { api, type Id, type VolLedger } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
-  import { data, loadVol } from '../../lib/state/data.svelte';
+  import { data, loadTeam, loadVol } from '../../lib/state/data.svelte';
   import { session } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t } from '../../lib/i18n/index.svelte';
@@ -20,9 +20,13 @@
   import Row from '../../ui/Row.svelte';
   import SearchField from '../../ui/SearchField.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
+  import Skeleton from '../../ui/Skeleton.svelte';
 
   let { overlay }: { overlay: Overlay; vol?: boolean /* App: closes with the ledger */ } = $props();
-  $effect(() => { void loadVol(); }); // no longer mine: it closes (volGone)
+  // no longer mine: it closes (volGone); nothing kept and the read failed: Retry
+  let failed = $state(false);
+  const read = () => { failed = false; void loadVol().then((ok) => (failed = !ok)); };
+  $effect(read);
   const v = $derived(data.vol);
   let q = $state('');
   const people = $derived((v?.people ?? []).filter((p) => !q.trim() || hit(q, [p.name, p.tg ?? '', p.person?.name ?? ''])));
@@ -84,17 +88,21 @@
               {#snippet lead()}<Avatar person={p} size={32} tappable={false} />{/snippet}
             </Row>
           {/each}
-          <Row tone="add" title={sw('ledg.grant')} accessory="disclosure" open={granting} onclick={() => (granting = !granting)} />
+          <Row tone="add" title={sw('ledg.grant')} accessory="disclosure" open={granting} onclick={() => { granting = !granting; if (granting && !data.team[org]) void loadTeam(org); }} />
           {#if granting}
             {#each grantable as p (p.id)}
               <Row dense title={p.name} onclick={() => access(p.id, true)}>
                 {#snippet lead()}<Avatar person={p} size={32} tappable={false} />{/snippet}
               </Row>
+            {:else}
+              {#if data.team[org]}<EmptyState inline text={sw('ledg.nobody')} />{:else}<Skeleton n={2} />{/if}
             {/each}
           {/if}
         </Group>
       {/if}
     </div>
+  {:else if failed}<EmptyState onretry={read} />
+  {:else}<Skeleton n={6} />
   {/if}
 </Sheet>
 

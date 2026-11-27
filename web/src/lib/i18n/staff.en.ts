@@ -425,6 +425,7 @@ const en: StaffDict = {
   'ledg.teamNote': "Switched on: the session is team-building. Its hours don't count, and anyone who didn't come gets an absence once it's finished and at least a quarter of people (three or more) are marked",
   'ledg.access': "Access",
   'ledg.accessNote': "They see the list but can't edit it",
+  'ledg.nobody': "No one else in the club's team",
   'ledg.grant': "Give access",
   'ledg.noAccount': "no account",
   'ledg.shifts': "Shifts",

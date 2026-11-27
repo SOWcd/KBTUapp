@@ -2033,6 +2033,7 @@ const en: Dict = {
   'ro.askText': "Does this entry on the {org} roster belong to you? The club President or DMP will check your request.",
   'ro.yes': "Yes, it's me",
   'ro.asked': "Request sent for review",
+  'ro.reqNone': "No claims waiting",
   'ro.reqTitle': "Confirm roster claims",
   'ro.reqText': "Check that each student is the person on the roster before confirming their club membership and position.",
   'ro.listed': "In the list: {name}",

@@ -14,33 +14,43 @@
   import Button from '../../ui/Button.svelte';
   import Group from '../../ui/Group.svelte';
   import Row from '../../ui/Row.svelte';
+  import EmptyState from '../../ui/EmptyState.svelte';
+  import Skeleton from '../../ui/Skeleton.svelte';
+  import { readState } from '../../lib/state/readState.svelte';
 
   // org: one club's (its Studio); none: every claim I confirm (DMP's Studio, the Admin sheet, the bot's link)
   let { overlay, ondone, org }: { overlay: Overlay; ondone?: () => void; org?: number } = $props();
-  let list = $state<RosterRequest[] | null>(null);
-  $effect(() => { api.rosterRequests(org).then((l) => (list = l)).catch(() => (list = [])); });
+  const { state: rs, load } = readState(() => api.rosterRequests(org));
+  $effect(() => { void load(); });
+  let busy = $state<number[]>([]); // one answer per claim: a second tap waits for the first
   async function decide(r: RosterRequest, ok: boolean) {
+    if (busy.includes(r.id)) return;
+    busy = [...busy, r.id];
     try {
       await api.rosterDecide(r.id, ok); haptic.ok(); say(t(ok ? 'ro.confirmed' : 'ro.declined'), ok ? 'party_popper_3d' : 'waving_hand_3d_default');
-      list = (list ?? []).filter((x) => x.id !== r.id); ondone?.();
+      rs.value = (rs.value ?? []).filter((x) => x.id !== r.id); ondone?.();
     } catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
+    finally { busy = busy.filter((x) => x !== r.id); }
   }
 </script>
 
 <Sheet {overlay} icon={ListChecks} title={t('ro.reqTitle')}>
   <p class="t-foot sub">{t('ro.reqText')}</p>
   <div class="list">
-    {#each list ?? [] as r (r.id)}
+    {#if rs.status === 'error' && !rs.value}<EmptyState onretry={load} />{:else if !rs.value}<Skeleton n={2} />{/if}
+    {#each rs.value ?? [] as r (r.id)}
       <Group>
         <Row dense title={r.name} subtitle={`${t('ro.listed', { name: r.sheetName ?? '—' })} · ${nameOf(r.org)} · ${r.title || roleName(r.role, null)}${r.dept ? ' · ' + r.dept : ''}`}>
           {#snippet lead()}<Avatar person={r.person} size={36} />{/snippet}
         </Row>
         <!-- engine: Row needs content under it (a request's actions) -->
         <div class="acts btns">
-          <Button kind="secondary" size="m" full onclick={() => decide(r, false)}>{t('ro.decline')}</Button>
-          <Button kind="primary" size="m" full onclick={() => decide(r, true)}>{t('ro.confirm')}</Button>
+          <Button kind="secondary" size="m" full disabled={busy.includes(r.id)} onclick={() => decide(r, false)}>{t('ro.decline')}</Button>
+          <Button kind="primary" size="m" full disabled={busy.includes(r.id)} onclick={() => decide(r, true)}>{t('ro.confirm')}</Button>
         </div>
       </Group>
+    {:else}
+      {#if rs.value}<EmptyState inline text={t('ro.reqNone')} />{/if}
     {/each}
   </div>
 </Sheet>
