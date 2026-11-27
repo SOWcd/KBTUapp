@@ -58,7 +58,7 @@ def work(env, monkeypatch):
     _, cfg = env
     con = db.connect(cfg.db_path)
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (1, 'mic', 'club', 'Open Mic', 'OM', 'laptop_3d', 1, 0)")
-    con.execute("INSERT INTO chats (title, kind, url, created_at, status, org_id, main) VALUES ('Open Mic News', 'channel', 'https://t.me/mic_news', 0, 'org', 1, 1)")
+    con.execute("INSERT INTO chats (title, kind, url, created_at, status, org_id, main, tg_chat_id) VALUES ('Open Mic News', 'channel', 'https://t.me/mic_news', 0, 'org', 1, 1, -100500)")
     mirror.joined(con, 500, "mic_news")
     result = userbot.Mirror(cfg, Client(), con)
     result.listen()

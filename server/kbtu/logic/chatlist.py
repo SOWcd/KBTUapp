@@ -353,7 +353,7 @@ def org_chats(con, oid: int, editor: bool = False) -> list[dict]:
         x = {"id": c["id"], "title": c["title"], "kind": "forum" if c["forum"] else c["kind"], "members": c["members"], "about": c["about"],
              "photo": f"media/{c['photo']}.t.webp" if c["photo"] else None, "closed": _closed(c), "main": bool(c["main"]),
              "url": c["url"] if editor or not _closed(c) else None}
-        out.append({**x, "bot": c["tg_chat_id"] is not None, "mirror": bool(c["mirror"]), "news": c["news_topic"], "topics": tops.get(c["id"], []),
+        out.append({**x, "bot": c["tg_chat_id"] is not None, "mirror": mirrored(c), "news": c["news_topic"], "topics": tops.get(c["id"], []),
                     "swear": bool(c["swear"]),
                        "swearMiss": c["swear_miss"].split(",") if c["swear_miss"] else []} if editor else x)
     return out
@@ -418,9 +418,18 @@ def main_org_chat(con, v: Viewer, oid: int, cid: int) -> list[dict]:
     return org_chats(con, oid, True)
 
 
+MIRROR_VOUCHED = 2  # chats.mirror: on with no bot inside, on an admin's word (an office's channel: admin office)
+
+
+def mirrored(c: sqlite3.Row) -> bool:
+    """The switch on and the channel proven the org's own (mirror._MIRRORED, the same rule in SQL)."""
+    return c["mirror"] == MIRROR_VOUCHED or bool(c["mirror"] and c["tg_chat_id"] is not None)
+
+
 def mirror_org_chat(con, v: Viewer, oid: int, cid: int, on: object) -> list[dict]:
-    """Studio's switch under the main channel: its posts in the club's news, or not. The posts already
-    mirrored stay the club's news; off, the userbot leaves the channel."""
+    """Studio's switch under the main channel: its posts in the club's news, or not. On needs our bot an admin in the
+    channel (only its owners can add it), else any club could fill its news from a channel it doesn't run; the admin
+    may vouch instead (MIRROR_VOUCHED). The posts already mirrored stay the club's news; off, the userbot leaves."""
     if not isinstance(on, bool):
         raise ApiError("bad_input")
     with tx(con):
@@ -428,7 +437,9 @@ def mirror_org_chat(con, v: Viewer, oid: int, cid: int, on: object) -> list[dict
         c = one(con, "SELECT * FROM chats WHERE id = ? AND org_id = ?", cid, oid)
         if not c:
             raise ApiError("not_found")
-        con.execute("UPDATE chats SET mirror = ? WHERE id = ?", (int(on), cid))
+        if on and c["tg_chat_id"] is None and v.role != "admin":
+            raise ApiError("bad_input", "nobot")
+        con.execute("UPDATE chats SET mirror = ? WHERE id = ?", (MIRROR_VOUCHED if on and c["tg_chat_id"] is None else int(on), cid))
         _chats_audit(con, v, oid, f"mirror {'on' if on else 'off'} {c['url']}")
     return org_chats(con, oid, True)
 

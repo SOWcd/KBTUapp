@@ -146,8 +146,8 @@ def test_channel_mirror(env, tmp_path):
     con = db.connect(cfg.db_path)
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (1, 'mic', 'club', 'Open Mic', 'OM', 'laptop_3d', 1, 0)")
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'president', 0)", (pres["id"],))
-    con.execute("""INSERT INTO chats (id, title, kind, url, created_at, status, org_id, main) VALUES
-        (1, 'Open Mic News', 'channel', 'https://t.me/Mic_News', 0, 'org', 1, 1), (2, 'Open Mic Team', 'channel', 'https://t.me/+Secret1', 0, 'org', 1, 0)""")
+    con.execute("""INSERT INTO chats (id, title, kind, url, created_at, status, org_id, main, tg_chat_id) VALUES
+        (1, 'Open Mic News', 'channel', 'https://t.me/Mic_News', 0, 'org', 1, 1, -100500), (2, 'Open Mic Team', 'channel', 'https://t.me/+Secret1', 0, 'org', 1, 0, NULL)""")
     assert mirror.wanted(con) == {"mic_news": 1} and mirror.to_join(con) == ["mic_news"]   # the main public channel only
     assert mirror.take(con, 500, mirror.Msg(id=1, date=1000, text="Not joined")) is None    # a channel we don't mirror: dropped
     mirror.joined(con, 500, "mic_news")
@@ -210,7 +210,7 @@ def test_channel_mirror(env, tmp_path):
     mirror.left(con, 500)
     # another main channel: that one is joined next
     c.put("/api/orgs/1/chats/1/mirror", headers=tma(80), json={"on": True})
-    con.execute("INSERT INTO chats (id, title, kind, url, created_at, status, org_id) VALUES (3, 'Mic Live', 'channel', 'https://t.me/mic_live', 0, 'org', 1)")
+    con.execute("INSERT INTO chats (id, title, kind, url, created_at, status, org_id, tg_chat_id) VALUES (3, 'Mic Live', 'channel', 'https://t.me/mic_live', 0, 'org', 1, -100501)")
     c.put("/api/orgs/1/chats/3/main", headers=tma(80))
     assert mirror.to_join(con) == ["mic_live"]
 
@@ -282,7 +282,7 @@ def test_userbot_reads_telethon_messages(env):
     c, cfg = env
     con = db.connect(cfg.db_path)
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (1, 'mic', 'club', 'Open Mic', 'OM', 'laptop_3d', 1, 0)")
-    con.execute("INSERT INTO chats (title, kind, url, created_at, status, org_id, main) VALUES ('Open Mic News', 'channel', 'https://t.me/mic_news', 0, 'org', 1, 1)")
+    con.execute("INSERT INTO chats (title, kind, url, created_at, status, org_id, main, tg_chat_id) VALUES ('Open Mic News', 'channel', 'https://t.me/mic_news', 0, 'org', 1, 1, -100500)")
     mirror.joined(con, 500, "mic_news")
     png = io.BytesIO(); Image.new("RGB", (40, 30), "blue").save(png, "PNG")
     downloads = []
@@ -320,7 +320,7 @@ def test_mirrored_album_caption_removal(env, monkeypatch):
     _, cfg = env
     con = db.connect(cfg.db_path)
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (1, 'mic', 'club', 'Open Mic', 'OM', 'laptop_3d', 1, 0)")
-    con.execute("INSERT INTO chats (title, kind, url, created_at, status, org_id, main) VALUES ('Open Mic News', 'channel', 'https://t.me/mic_news', 0, 'org', 1, 1)")
+    con.execute("INSERT INTO chats (title, kind, url, created_at, status, org_id, main, tg_chat_id) VALUES ('Open Mic News', 'channel', 'https://t.me/mic_news', 0, 'org', 1, 1, -100500)")
     mirror.joined(con, 500, "mic_news")
     messages = {}
 
@@ -366,7 +366,7 @@ def test_mirror_languages(env):
     login(c, 80, "ali")
     con = db.connect(cfg.db_path)
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'site', 'school', 'SITE', 'S', 'laptop_3d', 0)")
-    con.execute("INSERT INTO chats (title, kind, url, created_at, status, org_id, main) VALUES ('KBTU | SITE', 'channel', 'https://t.me/kbtusite', 0, 'org', 1, 1)")
+    con.execute("INSERT INTO chats (title, kind, url, created_at, status, org_id, main, tg_chat_id) VALUES ('KBTU | SITE', 'channel', 'https://t.me/kbtusite', 0, 'org', 1, 1, -100500)")
     mirror.joined(con, 700, "kbtusite")
     t0 = logic.now() - 5 * 3600
     kk = "\u0414\u04d9\u0440\u0456\u0441 \u0443\u0430\u049b\u044b\u0442\u044b \u04e9\u0437\u0433\u0435\u0440\u0434\u0456\n\u0421\u04d9\u0440\u0441\u0435\u043d\u0431\u0456 \u043a\u04af\u043d\u0456"  # Kazakh (letters Russian lacks)
@@ -433,7 +433,7 @@ def test_userbot_reads_only_the_channels_comments(env):
     c, cfg = env
     con = db.connect(cfg.db_path)
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'site', 'school', 'SITE', 'S', 'laptop_3d', 0)")
-    con.execute("INSERT INTO chats (title, kind, url, created_at, status, org_id, main) VALUES ('KBTU | SITE', 'channel', 'https://t.me/kbtusite', 0, 'org', 1, 1)")
+    con.execute("INSERT INTO chats (title, kind, url, created_at, status, org_id, main, tg_chat_id) VALUES ('KBTU | SITE', 'channel', 'https://t.me/kbtusite', 0, 'org', 1, 1, -100500)")
     mirror.joined(con, 700, "kbtusite")
     mirror.take(con, 700, mirror.Msg(id=10, date=logic.now() - 3600, text="Open day on Saturday"))
     ru = "\u0414\u0435\u043d\u044c \u043e\u0442\u043a\u0440\u044b\u0442\u044b\u0445 \u0434\u0432\u0435\u0440\u0435\u0439"
@@ -584,7 +584,7 @@ def test_mirror_gone_wipes_the_post(env, tmp_path):
     _, cfg = env
     con = db.connect(cfg.db_path)
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (1, 'mic', 'club', 'Open Mic', 'OM', 'laptop_3d', 1, 0)")
-    con.execute("INSERT INTO chats (title, kind, url, created_at, status, org_id, main) VALUES ('Open Mic News', 'channel', 'https://t.me/mic_news', 0, 'org', 1, 1)")
+    con.execute("INSERT INTO chats (title, kind, url, created_at, status, org_id, main, tg_chat_id) VALUES ('Open Mic News', 'channel', 'https://t.me/mic_news', 0, 'org', 1, 1, -100500)")
     mirror.joined(con, 500, "mic_news")
     pics = []
     for color in ("red", "green"):
@@ -624,8 +624,8 @@ def test_channel_ask(env, monkeypatch, capsys):
     for oid, uid in ((1, pres["id"]), (2, pres["id"]), (3, pres["id"]), (4, mute["id"]), (6, pres["id"]), (7, pres["id"])):
         con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, 'president', 0)", (oid, uid))
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (2, ?, 'head', 0)", (head["id"],))
-    con.execute("""INSERT INTO chats (title, kind, url, created_at, status, org_id, main) VALUES
-        ('Has', 'channel', 'https://t.me/has_ch', 0, 'org', 1, 1), ('Secret', 'channel', 'https://t.me/+Secret1', 0, 'org', 4, 1)""")
+    con.execute("""INSERT INTO chats (title, kind, url, created_at, status, org_id, main, tg_chat_id) VALUES
+        ('Has', 'channel', 'https://t.me/has_ch', 0, 'org', 1, 1, -100500), ('Secret', 'channel', 'https://t.me/+Secret1', 0, 'org', 4, 1, NULL)""")
     asks = lambda: sorted(r[0] for r in con.execute("SELECT ref FROM bot_outbox WHERE kind = 'channel_ask'"))  # noqa: E731
     capsys.readouterr()
     admin.main(["channel-ask"])
@@ -644,7 +644,7 @@ def test_channel_ask(env, monkeypatch, capsys):
     assert tiles[1]["channel"] == {"title": "Has", "mirror": True} and tiles[2]["channel"] is None
     assert "channel" not in c.get("/api/me", headers=tma(82)).json()["memberships"][0]   # a Head doesn't link chats
     assert c.get("/api/me", headers=tma(81)).json()["memberships"][0]["channel"] == {"title": "Secret", "mirror": False}
-    con.execute("INSERT INTO chats (title, kind, url, created_at, status, org_id, main) VALUES ('Alpha', 'channel', 'https://t.me/alpha_ch', 0, 'org', 2, 1)")
+    con.execute("INSERT INTO chats (title, kind, url, created_at, status, org_id, main, tg_chat_id) VALUES ('Alpha', 'channel', 'https://t.me/alpha_ch', 0, 'org', 2, 1, -100502)")
     assert outbox._render(con, m) is None                                  # linked meanwhile: not sent
 
 
@@ -708,7 +708,7 @@ def test_deleted_posts_are_wiped(env, monkeypatch, tmp_path):
     assert c.delete(f"/api/posts/{headed}", headers=Mo).status_code == 204 and wiped(headed)
 
     # a channel post deleted in the app by its club: a later edit in Telegram neither revives it nor makes a new post
-    con.execute("INSERT INTO chats (title, kind, url, created_at, status, org_id, main) VALUES ('IT News', 'channel', 'https://t.me/it_news', 0, 'org', 1, 1)")
+    con.execute("INSERT INTO chats (title, kind, url, created_at, status, org_id, main, tg_chat_id) VALUES ('IT News', 'channel', 'https://t.me/it_news', 0, 'org', 1, 1, -100500)")
     mirror.joined(con, 500, "it_news")
     png = io.BytesIO()
     Image.new("RGB", (40, 30), "red").save(png, "PNG")
@@ -737,7 +737,7 @@ def test_forum_topic_source(env):
     con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (1, 'mk', 'club', 'Mountain', 'MK', 'laptop_3d', 1, 0)")
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'president', 0)", (pres["id"],))
     con.execute("""INSERT INTO chats (id, title, kind, url, created_at, status, org_id, main, tg_chat_id) VALUES
-        (1, 'MK News', 'channel', 'https://t.me/mk_news', 0, 'org', 1, 1, NULL),
+        (1, 'MK News', 'channel', 'https://t.me/mk_news', 0, 'org', 1, 1, -100500),
         (2, 'MK Hikers', 'group', 'https://t.me/+AbCdEfGh12', 0, 'org', 1, 0, -1009001),
         (3, 'MK Old', 'group', 'https://t.me/+ZzZzZzZz99', 0, 'org', 1, 0, NULL)""")
     assert mirror.wanted(con) == {"mk_news": 1} and mirror.groups(con) == {}
@@ -799,3 +799,30 @@ def test_forum_topic_source(env):
     put(2, 5)
     mirror.unpick(con, 9001)                                      # the userbot can't use it: never tried again
     assert mirror.groups(con) == {} and mirror.wanted(con) == {"mk_news": 1}
+
+
+def test_mirror_needs_the_channel_proven_own(env):
+    """A club mirrors only a channel it runs: our bot an admin there (only the channel's owners can add it); a public
+    channel it merely linked stays out of its news, and Studio's switch refuses (nobot). The admin vouches instead
+    (an office's channel); the bot leaving stops a bot-proven mirror; the mirrors live before this keep going (262)."""
+    from kbtu import migrations, mirror
+    c, cfg = env
+    pres, boss = login(c, 80, "pres"), login(c, 81, "boss")
+    con = db.connect(cfg.db_path)
+    con.execute("UPDATE users SET role = 'admin' WHERE id = ?", (boss["id"],))
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (1, 'mic', 'club', 'Open Mic', 'OM', 'laptop_3d', 1, 0)")
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'president', 0)", (pres["id"],))
+    con.execute("INSERT INTO chats (id, title, kind, url, created_at, status, org_id, main) VALUES (1, 'Big News', 'channel', 'https://t.me/big_news', 0, 'org', 1, 1)")
+    assert mirror.wanted(con) == {}                                                  # linked, not proven: not mirrored
+    sw = lambda on, who=80: c.put("/api/orgs/1/chats/1/mirror", headers=tma(who), json={"on": on})  # noqa: E731
+    r = sw(True)
+    assert r.status_code == 400 and r.json()["message"] == "nobot" and mirror.wanted(con) == {}
+    assert sw(False).json()[0]["mirror"] is False
+    assert sw(True, 81).json()[0]["mirror"] is True and mirror.wanted(con) == {"big_news": 1}   # the admin's word
+    assert con.execute("SELECT mirror FROM chats WHERE id = 1").fetchone()[0] == 2
+    con.execute("UPDATE chats SET mirror = 1, tg_chat_id = -100700 WHERE id = 1")   # our bot made an admin there
+    assert sw(True).json()[0]["mirror"] is True and mirror.wanted(con) == {"big_news": 1}
+    logic.chatlist.bot_left(con, -100700)
+    assert mirror.wanted(con) == {} and sw(True).status_code == 400
+    con.executescript(dict(migrations.MIGRATIONS)[262])                              # mirrored before the rule: vouched
+    assert mirror.wanted(con) == {"big_news": 1}
