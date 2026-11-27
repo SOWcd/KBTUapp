@@ -43,7 +43,7 @@ test('admissions: the applicant from a manager\'s link to the status page', asyn
   await shot(p, 'ako-docs-done');
   await page.getByRole('button', { name: tr('ako.next') }).click();
   await expect(page.getByRole('heading', { name: tr('ako.slotTitle'), exact: true })).toBeVisible();
-  await page.getByRole('button', { name: /^1[05]:[03]0/ }).first().click();
+  await page.getByRole('radio', { name: /1[05]:[03]0/ }).first().click();
   await expect(page.getByText(new RegExp(tr('ako.slotPicked').replace('{when}', '.+')))).toBeVisible();
   await shot(p, 'ako-slot');
   await page.getByRole('button', { name: tr('ako.next') }).click();
