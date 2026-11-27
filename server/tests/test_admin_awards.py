@@ -333,12 +333,12 @@ def test_honor_only_consent_after_move_and_unlink(env, monkeypatch):
     c.get("/api/me", headers=tma(63, "Fresh"))
     monkeypatch.setattr(admin.config, "load", lambda: cfg)
     admin.main(["honor", "--yes", "62"])
-    admin.main(["move", "62", "63"])
+    admin.main(["move", "62", "63", "--yes"])
     with pytest.raises(logic.ApiError) as stale:
         credits.answer(con, logic.Viewer(uid, "user", True), {"show": True, "rev": None, "consent": credits.CONSENT})
     assert (stale.value.code, stale.value.message) == ("conflict", "stale")
     assert not c.get("/api/credits", headers=tma(61)).json()["people"]
-    admin.main(["unlink", "63"])
+    admin.main(["unlink", "63", "--yes"])
     admin.main(["honor-off", "--yes", "63"])
     assert not con.execute("SELECT 1 FROM achievement_grants WHERE code = 'honor'").fetchone()
     admin.main(["honor", "--yes", "63"])
