@@ -1,5 +1,5 @@
 <script lang="ts">
-  // One receipt of a paid event (SPEC §4.3), for the club's Head+: what the student sent and what was read off it, to
+  // One receipt of a paid event, for the club's Head+: what the student sent and what was read off it, to
   // compare with the club's Kaspi history. "Reject": the organizer picks why (a fixed list), the ticket stops working,
   // the seat goes to the waitlist and the bot names the reason to the student (money goes back outside the app). One
   // the app didn't check can be passed; one it did (`auto`) can still be rejected.

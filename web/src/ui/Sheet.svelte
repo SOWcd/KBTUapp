@@ -26,7 +26,7 @@
   // heading: the sheet's title in its own header row, at the top, wrapping, never cut (the design system: 50 of 56 Russian
   // titles didn't fit the capsule at 320 px); the capsule then shows the sheet's icon alone. actions: that row's
   // buttons on the right (a Toolbar, a ⋯).
-  // title: the old way, what the capsule says while this sheet is on top (SPEC §8.2); icon: a small mark before it
+  // title: the old way, what the capsule says while this sheet is on top; icon: a small mark before it
   // hold: while it says true, a close (Back, scrim, pull) is turned back — the sheet springs home and onhold runs (ask first).
   // Without one, text typed here and not sent asks before a hand closes it (a pull lost a club's application).
   // see: the page stays bright above it and the sheet takes at most the lower part, so what it changes shows live above

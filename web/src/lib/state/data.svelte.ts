@@ -699,7 +699,7 @@ export function toggleGoing(id: Id, onPaid?: (e: EventCard) => void, team?: Team
     const agrees = !leaving && !!before.teamMax && !fullNow && !session.me?.teams?.consent;
     if (agrees && !(await sheets.ask({ title: t('tm.consentT'), text: t('tm.signupText'), ok: t('tm.signupOk'), cancel: t('common.cancel'),
       link: { label: t('tm.consentLink'), url: `${location.origin}/privacy?lang=${i18n.lang}` } }))) return;
-    // the event needs a phone and none is kept: asked right here, sent with the same tap and kept (PLAN 71)
+    // the event needs a phone and none is kept: asked right here, sent with the same tap and kept
     const phone = !leaving && before.needsPhone && !session.me?.student?.phone
       ? await sheets.askText({ title: t('pd.ask'), text: t('pd.askText'), ok: t('event.go'), cancel: t('common.cancel'), placeholder: '+7 (707) 123 45 67', max: 18, tel: true })
       : undefined;
@@ -763,7 +763,7 @@ export async function askDm(eid?: Id, again = false): Promise<void> {
   try { session.me = await api.dmOn(eid); haptic.ok(); say(t('dm.on'), 'speech_balloon_3d'); } catch { /* the next launch tells the server */ }
 }
 
-/** A leaders meeting (§4.10): "Can't make it" — the answer DMP sees; "I'll be there" is toggleGoing. */
+/** A leaders meeting: "Can't make it" — the answer DMP sees; "I'll be there" is toggleGoing. */
 export function declineInvite(id: Id, note?: string): void {
   asStudent(async () => {
     if (goingPending.has(id)) return;
@@ -786,7 +786,7 @@ export function toggleSaved(id: Id): void {
   }));
 }
 
-/** Apply to join, or withdraw a pending application after a question (§4.5). The button answers at once. */
+/** Apply to join, or withdraw a pending application after a question. The button answers at once. */
 export function toggleJoin(id: Id): void {
   asStudent(() => writing(async () => {
     const o = [...data.orgs, ...data.small].find((x) => x.id === id); if (!o) return;

@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The editor's "For the memo" block (PLAN "Memo in one tap", DMP's template): what this event asks DMP for. Each
+  // The editor's "For the memo" block (DMP's template): what this event asks DMP for. Each
   // request is a switch; on, its few fields (a request present in `memo` = asked). The server writes DMP's text from it
   // and the bot brings the whole week's memo on Wednesday. Dates default to the event's day. A room may be in the dorm
   // (its gates for guests), with more dates and times; DMP's own things to provide; a promo over several days; the studio.

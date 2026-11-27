@@ -33,7 +33,7 @@ function hueBins(px: ArrayLike<number>) {
   return bins.map((b) => ({ w: b.w, hue: (Math.atan2(b.y, b.x) / (2 * Math.PI) + 1) % 1, sat: Math.min(0.85, Math.max(0.55, b.s / b.w)) })).sort((a, b) => b.w - a.w);
 }
 
-/** A cover's own colour (SPEC §4.8b): the most vivid hue around the photo's focus, its lightness evened out so the tint
+/** A cover's own colour: the most vivid hue around the photo's focus, its lightness evened out so the tint
  *  reads in both themes. Null for a photo with hardly any colour (the dots stay). */
 export async function coverColor(m: { url: string; focus?: [number, number] | null }): Promise<string | null> {
   const px = await sample(m.url, 0.6, m.focus ?? undefined);

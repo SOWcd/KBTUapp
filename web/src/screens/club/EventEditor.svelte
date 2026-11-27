@@ -8,7 +8,7 @@
   // Publishing runs an instant check first (lib/eventCheck.ts: a trip once went out free while its text asked 7500
   // tenge) with a one-tap fix per note. A new event or a draft: "Publish" or "Draft"; a published one: "Save" (the
   // server tells registered people when the time or place moves). Leaving with changes asks. An official club's Vice+
-  // can make it paid (§4.3). A member without the "events" right makes a draft and sends it to the club's President
+  // can make it paid. A member without the "events" right makes a draft and sends it to the club's President
   // and Vices, who approve (it goes out) or return it with a reason (server organizing.submit_event).
   import { keyboard } from '../../lib/state/keyboard.svelte';
   import { teamSize } from '../../lib/teams';
@@ -175,10 +175,10 @@
   let tried = $state(false); // errors show after the first submit
   let busy = $state('');
 
-  // a club meeting (§2b): team-only, the whole club or one tag expected; no seats, deadline, price or 1st-year tag
+  // a club meeting: team-only, the whole club or one tag expected; no seats, deadline, price or 1st-year tag
   const isMeeting = $derived(f.teamOnly && f.meeting);
   let tags = $state<import('../../lib/api').ClubTag[]>([]);
-  // a Head with departments calls only those (PLAN 35): the first is picked, the rest of the club's aren't offered
+  // a Head with departments calls only those: the first is picked, the rest of the club's aren't offered
   let ownDepts = $state<Id[]>([]), inDept = $state(false); // in a department only the chat sync gave: none to call
   const deptOnly = $derived(inDept && RANK[session.me?.memberships.find((x) => x.org.id === org)?.role ?? 'member'] < RANK.vice);
   // "For whom": any team-only event, required or not; picking a department doesn't make it required
@@ -293,7 +293,7 @@
   const fmtTag = (k: CoverFormat) => (f.formats[k]?.id ? t('ed.fmtPhoto') : f.formats[k] ? t('ed.fmtCrop') : '');
 
   // the photo's own colour (around its focus) is the first dot and gets picked with a new photo; a dot chosen on
-  // purpose stays (SPEC §4.8b)
+  // purpose stays
   let photoColor = $state<string | null>(null);
   async function readColor(pick: boolean) {
     if (!f.cover) return;
@@ -308,7 +308,7 @@
   }
 
   // the event's videos (server video.py): the vertical one plays in the Feed, the horizontal one behind the event's
-  // sheet (PLAN 32). Sent in pieces with a progress bar, then compressed on the server while the form stays usable;
+  // sheet. Sent in pieces with a progress bar, then compressed on the server while the form stays usable;
   // their status lives beside the form (f has only the ids), so the polling doesn't make it dirty
   type Slot = 'tall' | 'wide';
   const KEY = { tall: 'videoId', wide: 'wideVideoId' } as const;
@@ -371,7 +371,7 @@
     try { await api.dropEventDoc(saved.id); haptic.soft(); } catch { if (saved) saved = { ...saved, doc: was }; haptic.error(); }
   }
 
-  // more photos after the cover, swiped sideways in the Feed and the sheet (PLAN 33): nine at most, in the order picked
+  // more photos after the cover, swiped sideways in the Feed and the sheet: nine at most, in the order picked
   const SLIDES = 9;
   let slidesUp = $state(0); // how many are being sent
   async function pickSlides(ev: Event) {
@@ -399,7 +399,7 @@
     panel.animate([{ transform: 'translate3d(0,100%,0)' }, { transform: 'none' }], { duration: 380, easing: 'cubic-bezier(.2,.9,.25,1)' });
     if (id) {
       api.event(id).then(async (got) => {
-        const e = original(got); // the text as typed, never a translation (PLAN 9)
+        const e = original(got); // the text as typed, never a translation
         saved = e;
         vids = { tall: e.video ?? null, wide: e.wideVideo ?? null };
         f = { emoji: e.emoji ?? EMOJI[0], color: e.color ?? BRAND, cover: e.cover, formats: e.cover?.formats ?? {}, slides: e.slides ?? [], videoId: e.video?.id ?? null, wideVideoId: e.wideVideo?.id ?? null, title: e.title, date: dateInput(e.startsAt), start: time(e.startsAt),
@@ -751,7 +751,7 @@
   const PAGE: Record<Exclude<Page, `cover.${CoverFormat}`>, string> = { cover: 'ed.cover', place: 'ed.place', about: 'ed.about', price: 'ex.price', seats: 'ed.seats',
     reg: 'ex.regUntil', who: 'ex.who', more: 'ex.more', video: 'ed.video', form: 'ed.form', vol: 'ed.vol', teams: 'ed.teams', partner: 'ed.partner', cohost: 'co.invite', memo: 'studio.memoShort', check: 'ex.checkTitle' };
   const pageTitle = $derived(!pick ? '' : fmt ? t(FMT_NAME[fmt]) : t(PAGE[pick as keyof typeof PAGE] as 'ed.cover'));
-  // the capsule's title (SPEC §8.2), between Telegram's Back and ⋯: the event, or the page that is open
+  // the capsule's title, between Telegram's Back and ⋯: the event, or the page that is open
   $effect(() => { overlay.title = pageTitle || (live ? t('ed.edit') : t('ed.new')); overlay.icon = live ? PencilLine : CalendarPlus; });
 
   // the rows' values
@@ -1058,7 +1058,7 @@
 
         {:else if pick === 'about'}
           <Field label={t('ed.about')} multiline rows={7} bind:value={f.description} maxlength={2000} placeholder={t('ed.aboutPh')} />
-          {#if !isMeeting && !f.teamOnly && !f.leaders}<p class="hint">{t('ce.aboutHint')}</p>{/if}<!-- only public events go to the AI (PLAN 9) -->
+          {#if !isMeeting && !f.teamOnly && !f.leaders}<p class="hint">{t('ce.aboutHint')}</p>{/if}<!-- only public events go to the AI -->
           {#if session.board}
             {#if suggestion}
               <Notice tone="accent" title={t('ex.aiSuggest')}>
@@ -1120,7 +1120,7 @@
                 <Row icon={TagIcon} title={t('ed.meetingWho')} menu={tagMenu}
                   value={f.forBoard ? t('ed.meetingBoard') : tags.find((g) => g.id === f.meetingTag)?.name ?? t('ed.meetingAll')} />
               {/if}
-              <!-- a Head with a department calls only theirs (PLAN 35): required puts their department back -->
+              <!-- a Head with a department calls only theirs: required puts their department back -->
               {#if f.teamOnly}<Row icon={CalendarCheck} title={t('ed.meeting')} accessory="switch" checked={f.meeting} onchange={(v) => { f.meeting = v; if (v && deptOnly) { f.meetingTag = ownDepts.includes(f.meetingTag ?? -1) ? f.meetingTag : ownDepts[0] ?? null; f.forBoard = false; } }} />{/if}
             </Group>
           {/if}

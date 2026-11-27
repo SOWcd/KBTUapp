@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Starting a club (SPEC §4.6). Said up front: clubs open after the creator's check, so the form asks for the idea —
+  // Starting a club. Said up front: clubs open after the creator's check, so the form asks for the idea —
   // the name (a real club's as the example), its look (LookPick, as the event editor), one description and the club's
   // networks (LinksEdit; no "why / first month", a button per network). After sending: "on the check";
   // a yes opens the club (I'm its President), a no shows the reason and when a new application is possible.

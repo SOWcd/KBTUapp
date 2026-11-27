@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The weeks-in-a-row flame (§4.11, a student's idea, Nov 27): the current run of weeks with a check-in, the number big
+  // The weeks-in-a-row flame (a student's idea, Nov 27): the current run of weeks with a check-in, the number big
   // by a flame; on my Profile my friends' flames beside mine (the Friends page's rows carry them: no request of its own).
   // A tap opens the Streak medal. Nothing shows at zero: an empty flame reads as a reproach.
   import type { Achievement, FriendRow } from '../../lib/api';

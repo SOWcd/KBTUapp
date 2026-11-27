@@ -2466,7 +2466,7 @@ const ru = {
   'don.thanks': "Спасибо за поддержку",
   'psy.kbtu': "Психолог",
   'me.psychBook': "Записаться",
-  // the academic calendar (SPEC §4.11)
+  // the academic calendar
   'acad.title': "Академический календарь",
   'acad.sub': "2026–2027 учебный год · бакалавриат",
   'acad.subM': "2026–2027 учебный год · магистратура",
@@ -3033,7 +3033,7 @@ const ru = {
   'dur.min': "{n} мин",
   'dur.h': "{h} ч",
   'dur.hm': "{h} ч {m} мин",
-  // friends (§4.7)
+  // friends
   'fr.count': { one: "{n} друг", few: "{n} друга", many: "{n} друзей", other: "{n} друга" },
   'fr.add': "Добавить",
   'fr.requests': "Заявки в друзья",
@@ -3078,7 +3078,7 @@ const ru = {
   'pymk.on': "Включить",
   'pymk.later': "Не сейчас",
   'pymk.turnedOn': "Готово — новые знакомые появятся здесь",
-  // the Awards page (§4.11)
+  // the Awards page
   'awp.showcase': "Витрина",
   'awp.next': "Ближе всего",
   'awp.left': "Ещё {n} до уровня {tier}",
@@ -3094,7 +3094,7 @@ const ru = {
   'awp.guestTitle': "Награды — после входа",
   'awp.guestText': "Приходи на события, зови друзей, держи серию — и собирай медали, которых почти ни у кого нет.",
   'awp.empty': "пусто",
-  // News and the post composer (§4.10)
+  // News and the post composer
   'news.sub': "Всё, что происходит на кампусе",
   'news.broadcasts': "От {dmp} и KBTU App",
   'news.clubs': "Клубы",
@@ -3177,7 +3177,7 @@ const ru = {
   'time.min': "{n} мин назад",
   'time.h': "{n} ч назад",
   'time.yesterday': "вчера",
-  // check in by name at the door (§4.4)
+  // check in by name at the door
   'door.byName': "Нет QR? Найти по имени",
   'door.search': "Имя или фамилия",
   'door.mark': "Отметить",

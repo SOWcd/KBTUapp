@@ -3,7 +3,7 @@
 </script>
 
 <script lang="ts">
-  // The capsule (SPEC §8.2): one liquid-glass object at the top, between Telegram's own buttons, that
+  // The capsule: one liquid-glass object at the top, between Telegram's own buttons, that
   // always says where you are and what's happening now: the title of the view on top (a sheet, a full-screen view, else
   // the tab), or the live status (an event today, a class soon) when nothing is on top. It never switches pages
   // (one tab, one screen).

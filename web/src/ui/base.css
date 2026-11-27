@@ -243,7 +243,7 @@ html.lowfx * { -webkit-backdrop-filter: none !important; backdrop-filter: none !
 /* every button answers a press: a small give, zero specificity, so a
    component's own :active, transform or transition always wins */
 :where(button:not(:disabled), [role='button']) { transition: transform 450ms var(--ease-bounce), opacity var(--t-fast) var(--ease); }
-/* not a container while a button inside it is pressed: :active reaches every ancestor (the Feed's slide, PLAN 81) */
+/* not a container while a button inside it is pressed: :active reaches every ancestor (the Feed's slide) */
 :where(button:not(:disabled), [role='button']):active:not(:has(:where(button, [role='button']):active)) { transform: scale(0.965); opacity: 0.9; transition-duration: 80ms; }
 
 /* the theme switch (theme.svelte.ts): the circle is drawn by script on the new snapshot, so both snapshots sit still

@@ -1,8 +1,8 @@
 <script lang="ts">
-  // A club's roster for DMP (SPEC §3, §4.13), the body of the phone's sheet (Roster.svelte) and of the wide registry's
+  // A club's roster for DMP, the body of the phone's sheet (Roster.svelte) and of the wide registry's
   // right pane: leaders first, then everyone with full name, student ID, course, school and since when;
   // the President's and Vices' contacts (Telegram, email, phone) a tap away; who hasn't come in 60 days marked.
-  // On top, a club's ✓ (§2, §4.6): DMP makes a student initiative official — the President hears it from the bot; taking
+  // On top, a club's ✓: DMP makes a student initiative official — the President hears it from the bot; taking
   // it back asks first.
   import BadgeCheck from '@lucide/svelte/icons/badge-check';
   import { untrack } from 'svelte';

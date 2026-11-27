@@ -2443,7 +2443,7 @@ const kk: Dict = {
   'don.thanks': "Қолдауыңа рақмет",
   'psy.kbtu': "Психолог",
   'me.psychBook': "Жазылу",
-  // the academic calendar (SPEC §4.11)
+  // the academic calendar
   'acad.title': "Академиялық күнтізбе",
   'acad.sub': "2026–2027 оқу жылы · бакалавриат",
   'acad.subM': "2026–2027 оқу жылы · магистратура",
@@ -3010,7 +3010,7 @@ const kk: Dict = {
   'dur.min': "{n} мин",
   'dur.h': "{h} сағ",
   'dur.hm': "{h} сағ {m} мин",
-  // friends (§4.7)
+  // friends
   'fr.count': { one: "{n} дос", other: "{n} дос" },
   'fr.add': "Қосу",
   'fr.requests': "Достыққа өтінімдер",
@@ -3055,7 +3055,7 @@ const kk: Dict = {
   'pymk.on': "Қосу",
   'pymk.later': "Қазір емес",
   'pymk.turnedOn': "Дайын — жаңа таныстар осында шығады",
-  // the Awards page (§4.11)
+  // the Awards page
   'awp.showcase': "Витрина",
   'awp.next': "Ең жақыны",
   'awp.left': "{tier} деңгейіне дейін тағы {n}",
@@ -3071,7 +3071,7 @@ const kk: Dict = {
   'awp.guestTitle': "Марапаттар — кіргеннен кейін",
   'awp.guestText': "Іс-шараларға кел, достарыңды шақыр, серияны үзбе — және ешкімде жоқ дерлік медальдарды жина.",
   'awp.empty': "бос",
-  // News and the post composer (§4.10)
+  // News and the post composer
   'news.sub': "Кампуста болып жатқанның бәрі",
   'news.broadcasts': "{dmp} және KBTU App-тан",
   'news.clubs': "Клубтар",
@@ -3154,7 +3154,7 @@ const kk: Dict = {
   'time.min': "{n} мин бұрын",
   'time.h': "{n} сағ бұрын",
   'time.yesterday': "кеше",
-  // check in by name at the door (§4.4)
+  // check in by name at the door
   'door.byName': "QR жоқ па? Аты бойынша табу",
   'door.search': "Аты не тегі",
   'door.mark': "Белгілеу",

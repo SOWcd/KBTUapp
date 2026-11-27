@@ -1,6 +1,6 @@
 <script lang="ts">
   import { withNick } from '../../lib/perms';
-  // A club's applications (Vice+, §4.5), oldest first. The flow: look at the person (the avatar opens
+  // A club's applications (Vice+), oldest first. The flow: look at the person (the avatar opens
   // their card), write to them first ("come by, let's meet"), then accept or decline; the bot tells them.
   // "Recruiting" (the round) is the row on top; the "always open" switch lives in the round form (RoundSetup).
   // Studio's "Recruiting" opens this only while applications wait (or without the casting right).

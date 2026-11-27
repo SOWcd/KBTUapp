@@ -1,5 +1,5 @@
 <script lang="ts">
-  // An album full screen (SPEC §4.9), as the phone's Photos: the photo grows out of the square it was
+  // An album full screen, as the phone's Photos: the photo grows out of the square it was
   // tapped in and shrinks back into the one it is on when it closes; a swipe goes to the next (the browser's own
   // scroll, its momentum and snapping), a pull down drags the photo away (it shrinks, the black fades; far or fast
   // enough it closes into its square, else springs back); pinch or a double tap zooms at the fingers, a zoomed photo

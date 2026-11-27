@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The org's Telegram chats on its page (PLAN 86): its Vice+ add them by @name, a link or an
+  // The org's Telegram chats on its page: its Vice+ add them by @name, a link or an
   // invite link, pick the main channel (the page's Subscribe button) and add our bot, which keeps each card current.
   // Saved here at once, not with the profile's Save, like the short links.
   import Ellipsis from '@lucide/svelte/icons/ellipsis';
@@ -203,7 +203,7 @@
     {#if !byLink}<Row tone="add" title={t('oc.byLink')} onclick={() => (byLink = true)} />{/if}
   </Group>
   {#if mainOne || groups.length}
-    <!-- the club's news (PLAN 86 part 2): the main channel's posts (on by linking it, off here), or a forum group's
+    <!-- the club's news: the main channel's posts (on by linking it, off here), or a forum group's
          announcements topic instead (server mirror.py), for clubs that have no channel -->
     <Group footnote={!src ? t('oc.mirrorNote') : src.topics.length ? t('oc.topicNote') : t('oc.topicWait')}>
       {#if groups.length}

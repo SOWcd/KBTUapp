@@ -67,13 +67,13 @@
   const m = $derived(mine.find((x) => x.org.id === ui.club) ?? mine[0]);
   const staff = $derived(may(m, 'events'));
   const vice = $derived(may(m, 'team'));  // applications
-  const casting = $derived(may(m, 'casting'));  // recruitment rounds (PLAN "Casting")
+  const casting = $derived(may(m, 'casting'));  // recruitment rounds
   let round = $state<Round | null>(null);
   let claims = $state(0);  // DMP's list: claims waiting for this club's President (refreshClaims, below)
   const refreshRound = () => { const o = m?.org.id; if (o && casting) api.round(o).then((x) => { if (m?.org.id === o) round = x; }).catch(() => {}); else round = null; };
   $effect(() => { void data.rev; void m?.org.id; void casting; refreshRound(); });
 
-  // Vice+: the applications row (§4.5) — how many wait, or whether the club takes them
+  // Vice+: the applications row — how many wait, or whether the club takes them
   let waiting = $state(0);
   $effect(() => {
     const org = m?.org.id;
@@ -81,7 +81,7 @@
     if (org && vice) api.joinRequests(org).then((l) => { if (m?.org.id === org) waiting = l.length; }).catch(() => {});
     else waiting = 0;
   });
-  // Vice+: the removal requests waiting on Team (§2b), on its row
+  // Vice+: the removal requests waiting on Team, on its row
   let removals = $state(0);
   $effect(() => {
     const org = m?.org.id;
@@ -236,7 +236,7 @@
     catch (e) { haptic.error(); say(e instanceof ApiErr && e.message === 'no_dm' ? t('att.noDm') : t('common.error'), 'warning_3d'); }
     finally { exporting = false; }
   }
-  // DMP's list (PLAN 95): students who say they're the one listed under another name, for the President (DMP: clubs
+  // DMP's list: students who say they're the one listed under another name, for the President (DMP: clubs
   // with none) to confirm
   // this club's claims; DMP's Studio, every club's without a President. An admin's fallback is in the Admin sheet
   const claimOrg = $derived(dmp ? undefined : m?.org.id);

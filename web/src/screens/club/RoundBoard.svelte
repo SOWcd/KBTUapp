@@ -1,6 +1,6 @@
 <script lang="ts">
   import { fold } from '../../ui/fold';
-  // The casting team's board for the live round (PLAN "Casting"): applications by stage (new, maybe, next, taken, no),
+  // The casting team's board for the live round: applications by stage (new, maybe, next, taken, no),
   // a department filter, "review one by one" (the next new one after each verdict). An application opens in place:
   // the profile, the picks in order, the answers, what only the app knows (the club's events they came to, friends in
   // the club, an earlier try, in the app since), the team's votes with who; my verdict with stars and a note; the

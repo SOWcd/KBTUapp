@@ -1,5 +1,5 @@
 <script lang="ts">
-  // A Telegram chat's avatar with the mark of what it is (PLAN 86: an org's chats on its page and in Studio): its own
+  // A Telegram chat's avatar with the mark of what it is (an org's chats on its page and in Studio): its own
   // picture, or its letters on a colour of its own; a topics group is a squircle, as Telegram draws it.
   import type { Chat } from '../lib/api';
   import ChatKind from './ChatKind.svelte';

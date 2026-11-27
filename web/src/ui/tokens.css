@@ -1,5 +1,5 @@
 /* Design tokens: the only place where colours, type, spacing, radii, layers and motion are defined.
-   Components and screens use these variables, never raw values. SPEC §8.1. */
+   Components and screens use these variables, never raw values. */
 
 :root {
   /* type: one family, Inter (variable wght + opsz). Big sizes switch to its Display cut by themselves

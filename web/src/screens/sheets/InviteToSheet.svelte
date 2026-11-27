@@ -1,5 +1,5 @@
 <script lang="ts">
-  // "Bring a friend" from a friend's card (SPEC §4.7, §4.12): the events I'm going to, and "Invite" next to each — the bot
+  // "Bring a friend" from a friend's card: the events I'm going to, and "Invite" next to each — the bot
   // brings them our card, once per event. Nothing upcoming yet: the way to Events.
   import Mail from '@lucide/svelte/icons/mail';
   import { api, ApiErr, type Id, type PersonCard } from '../../lib/api';
