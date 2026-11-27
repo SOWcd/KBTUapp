@@ -575,6 +575,37 @@ def test_place_changes(env, monkeypatch):
     assert c.post(f"/api/events/{e['id']}/place", headers=tma(20), json={"place": "Aud. 1"}).status_code == 409   # over
 
 
+@pytest.mark.parametrize("online", [None, "", "https://example.com/meeting"], ids=["tba", "online-no-link", "online-link"])
+@pytest.mark.parametrize("editor", [False, True], ids=["change-room", "edit-event"])
+def test_online_to_room_tells_reminder_subscribers(env, monkeypatch, online, editor):
+    c, cfg = env
+    clock = int(time.time())
+    set_clock(monkeypatch, lambda: clock)
+    pres, ann, bob = login(c, 20, "pres"), login(c, 10, "ann"), login(c, 11, "bob")
+    con = db.connect(cfg.db_path)
+    oid = logic.create_org(con, None, "Chess Club", "CH", "crown_3d", True)
+    logic.set_role(con, None, pres["id"], oid, "president", "test")
+    con.execute("UPDATE users SET n_remind = 0 WHERE id = ?", (bob["id"],))
+    body = {"title": "Chess", "place": "", "startsAt": clock + 2 * 86400, "emoji": "crown_3d", "color": "#3B6BFF", "seats": None,
+            "online": online is not None, "onlineUrl": online}
+    created = c.post(f"/api/orgs/{oid}/events", headers=tma(20), json=body)
+    assert created.status_code == 200, created.text
+    e = created.json()
+    url = f"/api/events/{e['id']}"
+    assert c.post(f"{url}/publish", headers=tma(20)).status_code == 200
+    for tg in (10, 11):
+        assert c.post(f"{url}/registration", headers=tma(tg), json={}).status_code == 200
+    if editor:
+        changed = c.patch(url, headers=tma(20), json={**body, "online": False, "place": "Aud. 305"})
+    else:
+        changed = c.post(f"{url}/place", headers=tma(20), json={"place": "Aud. 305"})
+    assert changed.status_code == 200
+    assert tuple(con.execute("SELECT place, online FROM events WHERE id = ?", (e["id"],)).fetchone()) == ("Aud. 305", None)
+    notices = dict(con.execute("SELECT user_id, send_after FROM bot_outbox WHERE kind = 'event_changed' AND sent_at IS NULL"))
+    expected = {bob["id"]} if online is None else {ann["id"], bob["id"]}
+    assert notices == {uid: clock + 600 for uid in expected}
+
+
 def test_comment_replies(env):
     """Comment replies: a reply quotes the comment it answers (only one still up in the same thread), and
     its author hears it once an hour per thread; not for answering oneself, not twice for an asker the club answers."""

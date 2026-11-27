@@ -135,7 +135,7 @@ async def screen(cfg, http: httpx.AsyncClient, text: str, con=None, only: tuple[
             {"role": "user", "content": json.dumps({"post": CONTROL.sub("", text)[:2000]}, ensure_ascii=False)}]
     try:
         word, _ = await llm.chat(cfg, http, msgs, max_tokens=WORD_TOKENS, temperature=0, check=_verdict, con=con, only=only,
-                                 chain=chain(cfg), timeout=15, race=True)
+                                 chain=chain(cfg), timeout=15)
     except (llm.Busy, llm.BadAnswers):
         return None
     return _word(word) == "OK"
@@ -183,11 +183,12 @@ async def screen_post(cfg, http: httpx.AsyncClient, text: str, con=None, only: t
 
 async def _screen(cfg, http: httpx.AsyncClient, text: str, con, prompt: str, words: tuple[str, ...],
                   only: tuple[str, ...] = PUBLIC_PROVIDERS) -> str | None:
+    # Publishing waits for the strongest available verdict: a faster fallback's OK must not beat its FLAG.
     msgs = [{"role": "system", "content": prompt},
             {"role": "user", "content": json.dumps({"post": CONTROL.sub("", text)[:2000]}, ensure_ascii=False)}]
     try:
         word, _ = await llm.chat(cfg, http, msgs, max_tokens=WORD_TOKENS, temperature=0, check=lambda w: _word(w) in words, con=con,
-                                 only=only, chain=chain(cfg), timeout=15, race=True)
+                                 only=only, chain=chain(cfg), timeout=15)
     except (llm.Busy, llm.BadAnswers):
         return None
     return _word(word).lower() if _word(word) in words else None

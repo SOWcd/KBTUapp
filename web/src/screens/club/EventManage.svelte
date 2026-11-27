@@ -25,6 +25,7 @@
   import { sheets, registration } from '../../lib/state/sheets';
   import { session } from '../../lib/state/session.svelte';
   import { t, money, placeOf } from '../../lib/i18n/index.svelte';
+  import { sw } from '../../lib/i18n/staff';
   import { relDay, time, nowTs, dayNo, dayMonthShort } from '../../lib/time';
   import { haptic, openLink } from '../../lib/tg';
   import { count } from '../../lib/stats';
@@ -44,6 +45,7 @@
   import Skeleton from '../../ui/Skeleton.svelte';
   import IconButton from '../../ui/IconButton.svelte';
   import X from '@lucide/svelte/icons/x';
+  import Check from '@lucide/svelte/icons/check';
   import Gift from '@lucide/svelte/icons/gift';
   import MapPin from '@lucide/svelte/icons/map-pin';
   import Field from '../../ui/Field.svelte';
@@ -83,9 +85,19 @@
   const paying = $derived(going.filter((a) => !a.free).length);
   const byReceipts = $derived(going.reduce((n, a) => n + (a.receipt?.amount ?? 0), 0));
   const unread = $derived(going.filter((a) => a.receipt && a.receipt.amount == null).length);
-  // receipts the app checked by itself (no person looked): one total to find in Kaspi instead of every receipt
-  const auto = $derived(going.filter((a) => a.receipt?.auto));
-  const autoSum = $derived(auto.reduce((n, a) => n + (a.receipt?.amount ?? 0), 0));
+  // the receipts no person has matched with the club's Kaspi history yet: the ones the app passed by itself and the
+  // spot-checked ones (OCR can't tell a well-made fake from a real one). Each row: sum, minute, number; one tap ticks
+  // it off (a person's review), so before the event every ticket the app let through has been seen in Kaspi
+  let kaspiOpen = $state(false);
+  let found = $state<Id[]>([]); // ticked, the review on its way: the row leaves at once
+  const kaspi = $derived(going.filter((a) => a.receipt && !found.includes(a.receipt.id) && (a.receipt.auto || !a.receipt.reviewed && a.receipt.flags.includes('spot'))));
+  const kaspiSum = $derived(kaspi.reduce((n, a) => n + (a.receipt?.amount ?? 0), 0));
+  async function inKaspi(rid: Id) {
+    haptic.tap();
+    found = [...found, rid];
+    try { await api.reviewReceipt(rid, false); haptic.ok(); studioChanged(); }
+    catch { found = found.filter((x) => x !== rid); haptic.error(); say(t('common.error'), 'warning_3d'); }
+  }
   // the event's Telegram group: open it; "Create chat" adds our bot to a group the organizer picks (it lets in only
   // those going), or "Paste the group's link" names one the organizers already have (no bot)
   let chat = $state<string | null>(null);
@@ -191,7 +203,7 @@
   const toCheck = $derived(going.filter((a) => a.receipt?.flags.length && !a.receipt.reviewed).length);
 
   async function removeEvent() {
-    if (!(await sheets.ask({ title: t('studio.deleteAsk'), text: t('studio.deleteText'), ok: t('ed.deleteGo'), cancel: t('tk.keep'), danger: true }))) return;
+    if (!(await sheets.ask({ title: t('studio.deleteAsk'), text: t('studio.deleteText'), ok: sw('ed.deleteGo'), cancel: t('tk.keep'), danger: true }))) return;
     // off every Studio list at once (an admin's soft delete too), before their reload says the same
     const gone = () => { for (const [k, l] of Object.entries(data.studio)) data.studio[+k] = l.filter((x) => x.id !== id); studioChanged(); haptic.warn(); say(phrase('say.eventDeleted'), 'waving_hand_3d_default'); close(overlay.id); };
     try { await api.deleteEvent(id); gone(); }
@@ -253,12 +265,16 @@
   // works it (the creator as its President does); a co-host's event team works it as from the event's sheet
   const ends = $derived(e ? e.endsAt ?? e.startsAt + 6 * 3600 : 0);
   const doorDay = $derived(!!e && live && !e.guestHost && !plain && (co ? coCrew : true) && (started || dayNo(e.startsAt) === dayNo(tick)) && ends > tick);
+  let qrBusy = false; // one door per tap: a second tap would ask twice or open the screen twice
   async function showQr() {
-    if (!e) return;
+    if (!e || qrBusy) return;
     haptic.tap();
-    // shut yet: today's confirm first (it tells the guests), and «Cancel» cancels; a team-only door asks nothing (no guest to tell)
-    if (!doorOpen && opener && aud !== 'team' && e.startsAt - 4 * 3600 <= tick && !(await openDoor())) return;
-    registration(e, co || head, session.me?.vol?.org);
+    qrBusy = true;
+    try {
+      // shut yet: today's confirm first (it tells the guests), and «Cancel» cancels; a team-only door asks nothing (no guest to tell)
+      if (!doorOpen && opener && aud !== 'team' && e.startsAt - 4 * 3600 <= tick && !(await openDoor())) return;
+      registration(e, co || head, session.me?.vol?.org);
+    } finally { qrBusy = false; }
   }
   let more = $state(false);
   // the rows under «More», the same conditions as below: three or fewer show plainly, no fold (a fold of two is pointless)
@@ -284,6 +300,7 @@
   let asks = $state<TeamAsk[]>([]);
   $effect(() => { void data.rev; if (opener) api.teamAsks(id).then((l) => (asks = l)).catch(() => {}); });
   async function decide(x: TeamAsk, yes: boolean) {
+    if (!asks.includes(x)) return; // answered already (a second tap)
     haptic.tap();
     asks = asks.filter((y) => y !== x); // at once; back if the server says no
     try { await api.teamDecide(id, x.person.id, yes); haptic.ok(); say(t(yes ? 'ta.saidYes' : 'ta.saidNo'), yes ? 'party_popper_3d' : 'waving_hand_3d_default'); studioChanged(); }
@@ -361,9 +378,9 @@
             {#if started || doorDay}<Row icon={UsersRound} title={t('mg.cameOf', { n: came, m: going.length })} subtitle={teamLine} accessory="chevron" onclick={() => sheets.attendees(id)} />
             {:else}<Row icon={UsersRound} title={t('mg.going')} value="{going.length}{e.seats ? ' / ' + e.seats : ''}" accessory="chevron" onclick={() => sheets.attendees(id)} />{/if}
           {/if}
-          {#if toCheck}<Row icon={TriangleAlert} title={t('mg.check')} count={toCheck} accessory="chevron" onclick={() => sheets.attendees(id)} />{/if}
-          {#if price && of('hold').length}<Row title={t('mg.holds')} value={String(of('hold').length)} accessory="chevron" onclick={() => sheets.attendees(id)} />{/if}
-          {#if of('waitlist').length}<Row title={t('mg.waitlist')} value={String(of('waitlist').length)} accessory="chevron" onclick={() => sheets.attendees(id)} />{/if}
+          {#if toCheck}<Row icon={TriangleAlert} title={t('mg.check')} count={toCheck} accessory="chevron" onclick={() => sheets.attendees(id, 'check')} />{/if}
+          {#if price && of('hold').length}<Row title={t('mg.holds')} value={String(of('hold').length)} accessory="chevron" onclick={() => sheets.attendees(id, 'hold')} />{/if}
+          {#if of('waitlist').length}<Row title={t('mg.waitlist')} value={String(of('waitlist').length)} accessory="chevron" onclick={() => sheets.attendees(id, 'waitlist')} />{/if}
           {#if e.needsVolunteers && e.volunteersAsked}<Row icon={HandHeart} title={t('vol.list')} count={e.volunteersAsked} accessory="chevron" onclick={() => sheets.volunteers(id, e.needsVolunteers!)} />{/if}
         </Group>
         {/if}
@@ -430,7 +447,18 @@
           <Row title={t('mg.byReceipts')} subtitle={unread ? t('mg.unread', { n: unread }) : undefined}>
             {#snippet detail()}<span class="sum num" class:short={byReceipts < paying * price}>{money(byReceipts)}</span>{/snippet}
           </Row>
-          {#if auto.length}<Row title={t('mg.auto', { n: auto.length })} subtitle={t('mg.autoHint')} value={money(autoSum)} />{/if}
+          {#if kaspi.length}
+            <Row title={t('mg.kaspi', { n: kaspi.length })} subtitle={t('mg.kaspiHint')} value={money(kaspiSum)} accessory="disclosure" open={kaspiOpen}
+              onclick={() => { haptic.tap(); kaspiOpen = !kaspiOpen; }} />
+            {#if kaspiOpen}
+              {#each kaspi as a (a.receipt!.id)}
+                {@const r = a.receipt!}
+                <Row dense title={money(r.amount ?? 0)} subtitle={[r.paidAt && until(r.paidAt), r.sender, r.no && `№ ${r.no}`].filter(Boolean).join(' · ')}>
+                  {#snippet trailing()}<IconButton icon={Check} size="s" kind="tinted" label={t('rc.ok')} onclick={() => inKaspi(r.id)} />{/snippet}
+                </Row>
+              {/each}
+            {/if}
+          {/if}
         </Group>
       {/if}
 
@@ -463,7 +491,7 @@
               {#if e.needsVolunteers}<Row icon={HandHeart} title={t('mg.helpers')} count={e.volunteersAsked ?? 0} accessory="chevron" onclick={() => sheets.volunteers(id, e.needsVolunteers!)} />{/if}
               <!-- the big screen at the door (/show): connect a laptop, finish, the CSV -->
               <!-- a partner's event has no door of ours: its team is marked here -->
-              {#if e.guestHost && teamMark}<Row icon={UserCheck} title={t('scr.team')} accessory="chevron" onclick={() => { haptic.tap(); sheets.screens(undefined, undefined, undefined, undefined, id); }} />{/if}
+              {#if e.guestHost && teamMark}<Row icon={UserCheck} title={sw('scr.team')} accessory="chevron" onclick={() => { haptic.tap(); sheets.screens(undefined, undefined, undefined, undefined, id); }} />{/if}
               {#if live && !e.guestHost}<Row icon={MonitorUp} title={t('scr.title')} accessory="chevron" onclick={() => sheets.screens(undefined, id)} />{/if}
             {/if}
             {#if reports}<Row icon={ClipboardCheck} title={t('evr.title')} accessory="chevron" onclick={() => sheets.eventReport(id, co ? org : undefined)} />{/if}

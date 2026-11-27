@@ -13,6 +13,7 @@
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t } from '../../lib/i18n/index.svelte';
+  import { sw } from '../../lib/i18n/staff';
   import { byRank, may } from '../../lib/perms';
   import CalendarPlus from '@lucide/svelte/icons/calendar-plus';
   import { POST_TAGS, castingOn } from '../../lib/posts';
@@ -66,7 +67,7 @@
   const castShown = $derived(isCasting && !castFixed);
   const castErr = $derived(!castShown ? null
     : Number.isNaN(castFrom) || Number.isNaN(castTo) ? t('casting.needWhen')
-    : castTo <= castFrom ? t('ed.endEarly') : castTo - castFrom > 14 * 86400 || castTo <= nowTs() ? t('casting.badTime') : null);
+    : castTo <= castFrom ? sw('ed.endEarly') : castTo - castFrom > 14 * 86400 || castTo <= nowTs() ? t('casting.badTime') : null);
   const noPlace = $derived(castShown && place.trim().length < 2);
   const patch = $derived.by(() => {
     const p: PostPatch = {};
@@ -157,7 +158,7 @@
     {#if !was && events}<Group><Row icon={CalendarPlus} title={t('post.eventTip')} accessory="chevron" onclick={() => sheets.editor(pick)} /></Group>{/if}
 
     {#if photo}
-      <div class="shot"><img draggable="false" src={photo.url} alt="" /><span class="rm"><IconButton icon={X} kind="glass" size="s" label={t('ed.photoRemove')} onclick={() => (photo = null)} /></span></div>
+      <div class="shot"><img draggable="false" src={photo.url} alt="" /><span class="rm"><IconButton icon={X} kind="glass" size="s" label={sw('ed.photoRemove')} onclick={() => (photo = null)} /></span></div>
     {:else}
       <label class="add" class:busy={uploading}>
         <ImagePlus size={24} /><span>{t('post.photo')}</span>
@@ -172,9 +173,9 @@
     {#if castShown}
       <!-- engine: Field has no date/time type: by hand, in Field's look (.fl), as EventEditor -->
       <div class="when">
-        <label class={['fl', { bad: tried && !!castErr }]}><span>{t('ed.start')}</span><input type="date" bind:value={fromDate} onchange={() => (toDate ||= fromDate)} /></label>
+        <label class={['fl', { bad: tried && !!castErr }]}><span>{sw('ed.start')}</span><input type="date" bind:value={fromDate} onchange={() => (toDate ||= fromDate)} /></label>
         <label class={['fl', { bad: tried && !!castErr }]}><span>{t('casting.time')}</span><input type="time" bind:value={fromTime} /></label>
-        <label class={['fl', { bad: tried && !!castErr }]}><span>{t('ed.end')}</span><input type="date" bind:value={toDate} min={fromDate} /></label>
+        <label class={['fl', { bad: tried && !!castErr }]}><span>{sw('ed.end')}</span><input type="date" bind:value={toDate} min={fromDate} /></label>
         <label class={['fl', { bad: tried && !!castErr }]}><span>{t('casting.time')}</span><input type="time" bind:value={toTime} /></label>
       </div>
       {#if tried && castErr}<p class="err">{castErr}</p>{/if}

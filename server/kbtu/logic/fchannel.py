@@ -117,6 +117,12 @@ def _nick(p) -> list[int] | None:
     return [p["nick_a"], p["nick_n"]] if p["anon"] and p["nick_a"] is not None else None
 
 
+def _mod_at(anon: bool, at: int, posted: int | None = None) -> int:
+    """When, as moderators see it: an anonymous author's own moment (writing, editing) only to the hour, as the feed never
+    shows it; once out, when it went out (the channel shows that to everyone). Queues still sort by id."""
+    return at if not anon else posted or at - at % 3600  # Almaty is UTC+5: the UTC hour is its hour
+
+
 def _shape(p) -> dict:
     return {"id": p["id"], "body": p["body"], "anon": bool(p["anon"]), "nick": _nick(p), "status": p["status"], "at": p["created_at"]}
 
@@ -786,6 +792,7 @@ def _wipe(con, p) -> None:
         drop_at = CASE WHEN tg_msg >= 0 THEN ? END WHERE post_id = ?""", (core.now(), pid))
     con.execute("""UPDATE fchan_posts SET status = 'gone', body = '', sign = NULL, why = NULL, tg_msg = NULL, ai_reason = NULL, ai_fix = NULL,
                    ai_quote = NULL, refused = NULL WHERE id = ?""", (pid,))
+    con.execute("UPDATE reports SET body = NULL WHERE target = 'fpost' AND target_id = ?", (pid,))  # the reported words go with them
     con.execute("DELETE FROM fchan_photos WHERE post_id = ?", (pid,))  # its photos with the words (their files: the bot's round)
     _edits_off(con, pid)
     _notes_off(con, pid)
@@ -869,8 +876,8 @@ def _edit_shape(e) -> dict:
 
 
 def edit_settle(con, v: Viewer, eid: int, verdict: str | None) -> dict:
-    """The AI's word on my edit (untouched meanwhile): 'ok' changes the post (an anonymous one with photos waits for a
-    moderator: the AI can't judge pictures); 'noise' or 'ad' refuse it, the post as it was, my new photos back to me
+    """The AI's word on my edit (untouched meanwhile): 'ok' changes the post (a reported one, or an anonymous one with
+    photos, waits for a moderator: the AI can't judge pictures); 'noise' or 'ad' refuse it, the post as it was, my new photos back to me
     (to try again); 'person', a 'flag' or no answer wait for a moderator."""
     with tx(con):
         e = one(con, """SELECT e.*, p.anon, p.status AS post_status FROM fchan_edits e JOIN fchan_posts p ON p.id = e.post_id
@@ -883,10 +890,11 @@ def edit_settle(con, v: Viewer, eid: int, verdict: str | None) -> dict:
             if verdict in ("noise", "ad"):
                 con.execute("UPDATE fchan_edits SET status = 'refused', why = ?, body = '', photos = NULL WHERE id = ?", (verdict, eid))
                 con.execute("UPDATE fchan_photos SET user_id = ?, edit_id = NULL, created_at = ? WHERE edit_id = ?", (v.id, core.now(), eid))
-            elif verdict == "ok" and (e["anon"] and _has_photos(con, e["post_id"]) or e["photos"] is not None
-                                      and one(con, "SELECT 1 FROM reports WHERE target = 'fpost' AND target_id = ?", e["post_id"])):
-                # the AI can't judge pictures: an anonymous post's, or new ones on a post someone reported (a swap
-                # under a report, then back after a moderator's keep, would pass nobody)
+            elif verdict == "ok" and one(con, "SELECT 1 FROM reports WHERE target = 'fpost' AND target_id = ?", e["post_id"]):
+                # someone reported it: any edit, words or photos, to a moderator (a swap to harmless words under a report,
+                # then back after the decision, would pass nobody)
+                con.execute("UPDATE fchan_edits SET status = 'held', why = 'reported' WHERE id = ?", (eid,))
+            elif verdict == "ok" and e["anon"] and _has_photos(con, e["post_id"]):  # the AI can't judge an anonymous post's pictures
                 con.execute("UPDATE fchan_edits SET status = 'held', why = 'photo' WHERE id = ?", (eid,))
             elif verdict == "ok":
                 _apply_edit(con, e)
@@ -950,7 +958,7 @@ def edit_mod_queue(con, v: Viewer) -> list[dict]:
     ids = {e["user_id"] for e in es if not e["anon"]}
     people = {p["id"]: person_ref(p) for p in rows(con, f"{PERSON} WHERE u.id IN ({','.join('?' * len(ids))})", *ids)} if ids else {}
     me_owner = _owner(con, v) if es else False
-    return [{"id": e["post_id"], "body": e["body"], "anon": bool(e["anon"]), "nick": _nick(e), "status": "held", "at": e["created_at"],
+    return [{"id": e["post_id"], "body": e["body"], "anon": bool(e["anon"]), "nick": _nick(e), "status": "held", "at": _mod_at(e["anon"], e["created_at"]),
              "photos": _edit_pics(con, e), "own": e["user_id"] == v.id and not me_owner, "why": e["why"] or "check", "aiWhy": None,
              "author": None if e["anon"] else people.get(e["user_id"]), "edit": {"id": e["id"], "was": e["was"]}} for e in es]
 
@@ -1075,6 +1083,20 @@ def sent(con, pid: int, msg_id: int, pics: list[int] | None = None) -> None:
         why = "moderator" if p and p["status"] == "hidden" else "author"
         for m in dict.fromkeys([msg_id] + (pics or [])):
             con.execute("INSERT OR IGNORE INTO tg_unpost (msg_id, why, at, photo) VALUES (?, ?, ?, ?)", (m, why, core.now(), int(bool(pics))))
+
+
+def edit_refused(con, pid: int, mark: int) -> None:
+    """Telegram refused an edited photo for good (400): the channel would keep a picture the post no longer has. Out of
+    the channel and held as a refused send (why 'tgno'): a moderator's release sends it anew, a take-down tells its
+    author. A newer edit meanwhile (another mark): its own round tries again."""
+    with tx(con):
+        p = one(con, "SELECT * FROM fchan_posts WHERE id = ? AND status = 'live' AND edit_sync = ? AND tg_msg > 0", pid, mark)
+        if not p:
+            return
+        _unpost(con, p, "moderator")
+        _post_off(con, pid)
+        con.execute("UPDATE fchan_photos SET msg = NULL, sync = 0 WHERE post_id = ?", (pid,))
+        con.execute("UPDATE fchan_posts SET status = 'held', why = 'tgno', tg_msg = NULL, edit_sync = NULL WHERE id = ?", (pid,))
 
 
 def refused_send(con, pid: int) -> None:
@@ -1297,7 +1319,7 @@ def mod_queue(con, v: Viewer) -> dict:
     people = {p["id"]: person_ref(p) for p in rows(con, f"{PERSON} WHERE u.id IN ({','.join('?' * len(ids))})", *ids)} if ids else {}
     me_owner = _owner(con, v)
     pics = _photos(con, {p["id"] for p in held + live + removed})
-    shape = lambda p: _shape(p) | {"photos": pics.get(p["id"], []), "own": p["user_id"] == v.id and not me_owner, "why": p["why"], "aiWhy": p["ai_reason"], "author": None if p["anon"] else people.get(p["user_id"])}  # noqa: E731
+    shape = lambda p: _shape(p) | {"at": _mod_at(p["anon"], p["created_at"], p["posted_at"]), "photos": pics.get(p["id"], []), "own": p["user_id"] == v.id and not me_owner, "why": p["why"], "aiWhy": p["ai_reason"], "author": None if p["anon"] else people.get(p["user_id"])}  # noqa: E731
     return {"held": [shape(p) for p in held], "live": [shape(p) for p in live],
             "removed": [shape(p) | {"undo": _pending(con, p["tg_msg"])} for p in removed], "replies": reply_mod_queue(con),
             "edits": edit_mod_queue(con, v)}
@@ -1672,7 +1694,7 @@ def _reply_mod_shape(r) -> dict:
     signed = r["who"] is not None  # a signed comment: not an anonymous author's, whatever its post is
     return {"id": r["id"], "body": r["body"], "post": r["post_id"], "postBody": r["pbody"], "why": r["why"], "reports": r["reports"], "anon": bool(r["anon"]) and not signed,
             "nick": None if signed else _nick(r),
-            "aiWhy": r["ai_reason"], "at": r["created_at"], "undo": bool(r["tg_msg"]) and (r["drop_at"] or 0) > core.now()}
+            "aiWhy": r["ai_reason"], "at": _mod_at(r["anon"] and not signed, r["created_at"]), "undo": bool(r["tg_msg"]) and (r["drop_at"] or 0) > core.now()}
 
 
 def reply_mod_queue(con) -> dict:

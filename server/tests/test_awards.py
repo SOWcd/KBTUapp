@@ -324,6 +324,13 @@ def test_streak_flame(env):
     assert page(tma(93, "Bea"))["now"] == want and page(tma(92, "Ali"))["now"] == want
     assert "now" not in page(tma(94, "Cat"))                                                         # a stranger: the medal alone
     assert cat["id"] and not con.execute("SELECT 1 FROM bot_outbox WHERE ref LIKE 'ach:streak:%'").fetchone()
+    # an earned level stays though the live count drops (a past week's public event published or unpublished since)
+    con.execute("INSERT OR REPLACE INTO achievement_levels (user_id, code, level, reached_at, seen) VALUES (?, 'streak', 3, 0, 3)", (bea["id"],))
+    con.commit()
+    mine = page(tma(93, "Bea"))
+    assert mine["level"] == 3 and [x["reached"] for x in mine["levels"]] == [True, True, True, False] and mine["count"] >= 8
+    logic.profiles._celebrate(con, bea["id"], {**logic.profiles._levels(con, bea["id"]), "streak": 0})  # a lower live level never overwrites it
+    assert con.execute("SELECT level FROM achievement_levels WHERE user_id = ? AND code = 'streak'", (bea["id"],)).fetchone()[0] == 3
 
 
 def test_badge_skin(env):

@@ -19,6 +19,10 @@ SCREENS = ("tab.afisha", "tab.forum", "tab.club", "tab.profile",
            "sheet.map", "sheet.week", "sheet.awards", "sheet.studio", "sheet.news", "sheet.feed", "sheet.assistant",
            "sheet.scanner", "sheet.doorpeople", "sheet.attendees", "sheet.manage", "sheet.editor", "sheet.team", "sheet.member", "sheet.joininbox",
            "sheet.pay", "sheet.people", "sheet.sponsors", "sheet.teams")
+# screens only a club's organizers open (the door, the guests, the editor, the team, join requests): a day's open time
+# by platform could be one club head's, so they have no tti.* keys (their open counts, by class only, stay)
+STAFF_SCREENS = ("sheet.scanner", "sheet.doorpeople", "sheet.attendees", "sheet.manage", "sheet.editor", "sheet.team",
+                 "sheet.member", "sheet.joininbox")
 # what shipped since Nov 20, each counted where it's used (the second row on): `stats-week` shows them as "new"
 NEW_ACTIONS = ("do.coming", "do.heart", "do.comment", "do.research", "do.pymk", "do.pymkon", "do.share", "do.filter", "do.past",
                "do.calendar", "do.photo", "do.helpus", "do.anon", "do.chatlink", "do.kri")
@@ -39,6 +43,7 @@ ANDROID_APP = ("andr.sheet", "andr.go", *ANDROID_MORE)
 ANDROID_PAGE = ("page", "join", "optin", "play", "retry")
 ANDROID = ("andr.sheet", "andr.go", *(f"andr.{k}" for k in ANDROID_PAGE))
 PAGE_CAP = 5000  # a key's day ceiling for the signed-out page: far above real use, so a script can't run it up
+PAGE_PER_IP = 20  # one address's hits on the page a minute (per worker): a campus NAT's real taps fit, a loop doesn't
 # the key flows, step by step (each step's key in order), then what ends one short: where people drop, counts only
 FUNNELS = {
     "signup": (("sheet.event", "signup.tap", "signup.done"), ("signup.fail",)),     # a free or paid event's Going
@@ -74,7 +79,7 @@ KEYS = frozenset((*SCREENS, *ACTIONS, *SOURCES, *APPEALS, *HERO, *ANDROID_APP, *
                   *(k for k in FLOW_KEYS if not k.startswith("andr.")),  # the page's own come by page_hit only
                   *(f"err.{s}" for s in SCREENS), *(f"uniq.{k}" for k in USES),
                   *(f"js.{s}.{k}" for s in SCREENS for k in JS_KINDS), *(f"api.{s}.{k}" for s in SCREENS for k in API_KINDS),
-                  *(f"tti.{s}.{p}.{b}" for s in SCREENS for p in PLATFORMS for b in range(len(TTI))),
+                  *(f"tti.{s}.{p}.{b}" for s in SCREENS if s not in STAFF_SCREENS for p in PLATFORMS for b in range(len(TTI))),
                   *(f"open.{p}.{b}" for p in PLATFORMS for b in range(len(BUCKETS))),
                   *(f"sess.{b}" for b in range(len(SESSIONS))), *(f"time.{b}" for b in range(len(DAY_TIMES))), *LAY_KEYS))
 ONE_A_BATCH = ("open.", "uniq.", "sess.", "time.", "lay.")  # samples, not taps
@@ -82,6 +87,7 @@ ONE_A_BATCH = ("open.", "uniq.", "sess.", "time.", "lay.")  # samples, not taps
 KEEP_DAYS = 180
 WINDOW = 30  # what `visits` keeps
 MAX_IN_BATCH = 30   # of one key in one batch
+KEY_DAY_CAP = 30    # of one key from one person in a day: batch after batch can't fake a rare key or a funnel's rate
 BATCH_COST, DAY_BUDGET = 5, 1500  # one person's whole day: far above a real one, so one client can't skew the totals much
 # ponytail: per worker and in memory only (user id -> counts spent today, never stored), so the ceiling is the budget
 # times WEB_CONCURRENCY; a shared table would put a person into this feature's data, the one thing it must not have
@@ -89,6 +95,14 @@ _spent: dict[int, int] = {}
 _spent_day = 0
 # ponytail: same ceiling (per worker, in memory): who already counted a uniq.* key today; a repeat is dropped, so one client can't inflate uniques
 _uniq: set[tuple[int, str]] = set()
+# ponytail: same ceiling: how much of each key each person counted today (KEY_DAY_CAP); a uniq.* key is in _uniq instead
+_used: dict[tuple[int, str], int] = {}
+# ponytail: per worker, in memory: the signed-out page's counts today (PAGE_CAP checked before the database's write
+# lock is taken) and each address's hits this minute; nothing is kept past the day or the minute
+_page: dict[str, int] = {}
+_page_day = 0
+_ips: dict[str, int] = {}
+_ips_minute = 0
 
 
 def _today() -> int:
@@ -103,21 +117,40 @@ def add(con, uid: int, body: dict) -> None:
     if day != _spent_day:
         _spent, _spent_day = {}, day
         _uniq.clear()
-    counts = {k: min(n, 1 if k.startswith(ONE_A_BATCH) else MAX_IN_BATCH) for k, n in body.items() if k in KEYS and type(n) is int and n > 0 and (uid, k) not in _uniq}
+        _used.clear()
+    counts = {k: min(n, 1 if k.startswith(ONE_A_BATCH) else MAX_IN_BATCH, KEY_DAY_CAP - _used.get((uid, k), 0))
+              for k, n in body.items() if k in KEYS and type(n) is int and n > 0 and (uid, k) not in _uniq}
+    counts = {k: n for k, n in counts.items() if n > 0}
     cost = sum(counts.values()) + BATCH_COST
     if not counts or _spent.get(uid, 0) + cost > DAY_BUDGET:
         return
     _spent[uid] = _spent.get(uid, 0) + cost
     _uniq.update((uid, k) for k in counts if k.startswith("uniq."))
+    for k, n in counts.items():
+        if not k.startswith("uniq."):
+            _used[uid, k] = _used.get((uid, k), 0) + n
     maybe(con, con.executemany, """INSERT INTO usage_days (day, key, n) VALUES (?, ?, ?)
         ON CONFLICT (day, key) DO UPDATE SET n = n + excluded.n""", [(day, k, n) for k, n in counts.items()])
 
 
-def page_hit(con, key: str) -> None:
-    """One tap on android.html, signed out: one of ANDROID_PAGE, +1, never past PAGE_CAP a day; anything else is ignored."""
-    if key in ANDROID_PAGE:
-        maybe(con, con.execute, """INSERT INTO usage_days (day, key, n) VALUES (?, ?, 1)
-            ON CONFLICT (day, key) DO UPDATE SET n = n + 1 WHERE n < ?""", (_today(), f"andr.{key}", PAGE_CAP))
+def page_hit(con, key: str, ip: str = "") -> None:
+    """One tap on android.html, signed out: one of ANDROID_PAGE, +1, never past PAGE_CAP a day; anything else is ignored.
+    A key at its cap, or an address past PAGE_PER_IP this minute, returns before the database (a loop takes no write lock)."""
+    global _page, _page_day, _ips, _ips_minute
+    if key not in ANDROID_PAGE:
+        return
+    t = core.now()
+    day, minute = core.day_of(t), t // 60
+    if day != _page_day:
+        _page, _page_day = {}, day
+    if minute != _ips_minute:
+        _ips, _ips_minute = {}, minute
+    if _page.get(key, 0) >= PAGE_CAP or _ips.get(ip, 0) >= PAGE_PER_IP:
+        return
+    _ips[ip] = _ips.get(ip, 0) + 1
+    _page[key] = _page.get(key, 0) + 1
+    maybe(con, con.execute, """INSERT INTO usage_days (day, key, n) VALUES (?, ?, 1)
+        ON CONFLICT (day, key) DO UPDATE SET n = n + 1 WHERE n < ?""", (day, f"andr.{key}", PAGE_CAP))
 
 
 def forget(con) -> None:

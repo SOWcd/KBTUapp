@@ -306,8 +306,8 @@ export function loadNews(join = false): Promise<void> {
 
 /** A club's events for Studio and its people for Team, kept per club; the club in view loads with the app, the others
  * the first time they're picked; every visit refreshes quietly. */
-export async function loadStudio(org: Id): Promise<void> {
-  try { data.studio[org] = await api.orgEvents(org); } catch { /* the last copy stays */ }
+export async function loadStudio(org: Id): Promise<boolean> {
+  try { data.studio[org] = await api.orgEvents(org); return true; } catch { return false; /* the last copy stays */ }
 }
 export async function loadTeam(org: Id): Promise<void> {
   try { data.team[org] = await api.team(org); } catch { data.team[org] ??= []; /* the last copy stays; never an endless placeholder */ }
@@ -352,8 +352,8 @@ export async function loadHelpq(): Promise<void> {
   try { data.helpq = await api.helpQueue(); } catch (e) { if (e instanceof ApiErr && e.code !== 'unavailable') data.helpq = null; }
 }
 
-export async function loadVol(): Promise<void> {
-  try { data.vol = await api.volLedger(); } catch (e) { volGone(e); }
+export async function loadVol(): Promise<boolean> {
+  try { data.vol = await api.volLedger(); return true; } catch (e) { volGone(e); return false; }
 }
 
 export async function loadRegistry(): Promise<boolean> {
@@ -665,6 +665,7 @@ export function errorText(e: unknown): string {
     if (team) return t(team);
     if (e.code === 'closed') return e.message === 'deadline' ? t('event.regClosed') : t('event.closed');
     if (e.code === 'full') return t('event.full');
+    if (e.code === 'rate_limited' && e.message === 'unchecked') return t('pay.queue'); // a paid event's receipts wait for the organizer
     if (e.code === 'guest_list') return t('event.guestList'); // tickets only from the organizers' list
     if (e.code === 'forbidden' && e.message === 'team') return t('event.team');
     if (e.code === 'conflict' && e.message === 'answers') { void loadAfisha(); return t('qs.changed'); } // the questions changed meanwhile

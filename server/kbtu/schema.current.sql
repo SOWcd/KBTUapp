@@ -1095,7 +1095,7 @@ CREATE TABLE "reports" (
         created_at INTEGER NOT NULL,
         resolved_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
         resolved_at INTEGER
-    ) STRICT;
+    , body TEXT) STRICT;
 CREATE TABLE research_answers (
       id TEXT PRIMARY KEY NOT NULL,
       form_id INTEGER NOT NULL REFERENCES forms(id) ON DELETE CASCADE,
@@ -1149,6 +1149,11 @@ CREATE TABLE roster_pending (
         claimed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,  -- "Yes, it's me" on another name: for the club to confirm
         created_at INTEGER NOT NULL
     , door_key TEXT) STRICT;
+CREATE TABLE roster_rejections (
+      row_id  INTEGER NOT NULL REFERENCES roster_pending(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (row_id, user_id)
+    ) STRICT;
 CREATE TABLE roster_toasts (
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         org_id  INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
@@ -1414,7 +1419,7 @@ CREATE TABLE tgc_comments (
       review     INTEGER NOT NULL DEFAULT 0 CHECK (review IN (0, 1)),  -- deleted on the reports and the AI: a moderator confirms or restores
       shown      INTEGER NOT NULL DEFAULT 0 CHECK (shown IN (0, 1)),   -- deleted, and its author (whom the bot can't write to) saw it in the app
       rule       TEXT CHECK (rule IN ('spam', 'insult', 'danger', 'other')),  -- the rule it broke: the AI's guess, then the moderator's word
-      dm_id      INTEGER, clause TEXT CHECK (clause IN ('abuse', 'fake', 'spam', 'pdata', 'disrupt', 'other')),                               -- the bot's message to its author: a verdict edits it in place
+      dm_id      INTEGER, clause TEXT CHECK (clause IN ('abuse', 'fake', 'spam', 'pdata', 'disrupt', 'other')), dm_chat_id INTEGER,                               -- the bot's message to its author: a verdict edits it in place
       UNIQUE (chat_id, msg_id)
     ) STRICT;
 CREATE TABLE tgc_reports (
@@ -1796,6 +1801,7 @@ CREATE INDEX roster_by_email ON roster_pending(email);
 CREATE INDEX roster_by_org ON roster_pending(org_id);
 CREATE INDEX roster_by_tg ON roster_pending(tg);
 CREATE UNIQUE INDEX roster_pending_door_key ON roster_pending(door_key);
+CREATE INDEX roster_rejections_by_user ON roster_rejections(user_id);
 CREATE INDEX round_apps_by_user ON round_apps (user_id);
 CREATE INDEX slots_by_round ON round_slots(round_id, starts_at);
 CREATE UNIQUE INDEX one_live_round ON rounds(org_id) WHERE status != 'done';
@@ -1980,6 +1986,9 @@ CREATE TRIGGER santa_moved_upd BEFORE UPDATE OF status, user_id ON registrations
         FROM santa_people p WHERE p.event_id = OLD.event_id AND p.user_id != OLD.user_id
           AND (SELECT COUNT(*) FROM santa_people x WHERE x.event_id = OLD.event_id AND x.user_id != OLD.user_id) IN (1, 2)
         ORDER BY p.user_id;
+    END;
+CREATE TRIGGER report_body_off AFTER UPDATE OF status ON reports WHEN new.status != 'open' AND new.body IS NOT NULL BEGIN
+        UPDATE reports SET body = NULL WHERE id = new.id;
     END;
 CREATE TRIGGER qr_hand_roster_gone AFTER DELETE ON roster_pending BEGIN
         DELETE FROM qr_hand_marks WHERE who = 'r' || old.door_key;

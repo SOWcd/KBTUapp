@@ -2700,9 +2700,31 @@ MIGRATIONS: list[tuple[int, str]] = [
       auto_publish   INTEGER NOT NULL DEFAULT 0 CHECK (auto_publish IN (0, 1)),
       guests_private INTEGER NOT NULL DEFAULT 0 CHECK (guests_private IN (0, 1))
     ) STRICT;"""),
+    # a forum channel post's words when it was reported (moderation.report), for the moderator if it was edited since; only
+    # while the report is open (the trigger wipes it at the decision), and wiped with the post's words (fchannel._wipe)
+    (258, """ALTER TABLE reports ADD COLUMN body TEXT;
+    DROP TRIGGER IF EXISTS report_body_off;
+    CREATE TRIGGER report_body_off AFTER UPDATE OF status ON reports WHEN new.status != 'open' AND new.body IS NOT NULL BEGIN
+        UPDATE reports SET body = NULL WHERE id = new.id;
+    END;"""),
+    # a sheet's row turned down for each student who said it was theirs (roster.decide), so one refusal never hides it from
+    # the next; the old single rejected_by moves here and that column stays unused
+    (259, """CREATE TABLE IF NOT EXISTS roster_rejections (
+      row_id  INTEGER NOT NULL REFERENCES roster_pending(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (row_id, user_id)
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS roster_rejections_by_user ON roster_rejections(user_id);
+    INSERT OR IGNORE INTO roster_rejections (row_id, user_id)
+      SELECT id, rejected_by FROM roster_pending WHERE rejected_by IS NOT NULL;
+    UPDATE roster_pending SET claimed_by = CASE WHEN claimed_by = rejected_by THEN NULL ELSE claimed_by END,
+      rejected_by = NULL WHERE rejected_by IS NOT NULL;"""),
+    # A comment verdict may edit its earlier DM only in the same chat. Legacy message ids have no known chat:
+    # leave it NULL rather than guessing after an account relink.
+    (260, "ALTER TABLE tgc_comments ADD COLUMN dm_chat_id INTEGER;"),
     # Intake lists expire from their original load, including rows that cannot be matched to an account.
     # Old rows have no per-list link: use the earliest known main load, or 0 to expire an undated import.
-    (258, """ALTER TABLE prefill ADD COLUMN loaded_at INTEGER NOT NULL DEFAULT 0;
+    (261, """ALTER TABLE prefill ADD COLUMN loaded_at INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE prefill_rest ADD COLUMN loaded_at INTEGER NOT NULL DEFAULT 0;
     UPDATE prefill SET loaded_at = COALESCE((SELECT MIN(CAST(value AS INTEGER)) FROM meta
         WHERE key >= 'prefill_list:' AND key < 'prefill_list;'), 0);

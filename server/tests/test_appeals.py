@@ -96,6 +96,10 @@ def test_rights_and_anonymity(ap):
     assert "author" not in items[a["id"]] and items[b["id"]]["author"] == "Bek T"     # a named one: the short name only
     assert items[b["id"]]["text"] == "named one" and "answer" not in items[b["id"]]   # a row: the first line only; the whole from detail
     assert "z" * 10 not in q.text
+    # when an anonymous one was written: the Almaty day only (its due keeps the time of day: the day too); a named one, exact
+    day = items[a["id"]]["at"]
+    assert day == appeals._day(a["at"]) <= a["at"] and (day + 5 * 3600) % 86400 == 0 and items[a["id"]]["due"] == appeals._day(a["due"])
+    assert items[b["id"]]["at"] == b["at"]
     d = c.get(f"/api/sg/appeals/{a['id']}", headers=tma(SG))
     # nothing of the anonymous author anywhere SG reads: name, ids, student ID, Telegram
     ann = con.execute("SELECT u.id, u.tg_id FROM users u WHERE tg_id = ?", (ANN,)).fetchone()

@@ -124,6 +124,49 @@ def test_memo(env, monkeypatch):
     assert upd.status_code == 200 and con.execute("SELECT COUNT(*) FROM bot_outbox WHERE kind = 'event_changed'").fetchone()[0] == before
 
 
+def test_memo_reminder_excludes_memo_only_and_deleted_events(env, monkeypatch):
+    c, cfg = env
+    uid = login(c, 20, "pres")["id"]
+    con = db.connect(cfg.db_path)
+    oid = logic.create_org(con, None, "Chess", "CH", "crown_3d", True)
+    logic.set_role(con, None, uid, oid, "president", "test")
+    monday = logic._next_week()
+    set_clock(monkeypatch, lambda: monday - 5 * 86400 + 10 * 3600)
+    con.executemany("""INSERT INTO events (id, org_id, title, starts_at, memo, memo_only, created_at, updated_at)
+        VALUES (?, ?, 'Quiz', ?, '{"room":{}}', ?, 0, 0)""", [(1, oid, monday, 1), (2, oid, monday, 0)])
+    con.execute("INSERT INTO meta (key, value) VALUES ('evdel:2', '{}')")
+    logic.memo_week(con)
+    assert not con.execute("SELECT 1 FROM bot_outbox WHERE kind = 'memo_ready'").fetchone()
+    queued = {"kind": "memo_ready", "user_id": uid, "lang": "en", "ref": f"memo:{oid}:{monday}"}
+    assert outbox._render(con, queued) is None
+    con.execute("DELETE FROM meta WHERE key = 'evdel:2'")
+    assert outbox._render(con, queued) == (*texts.bot_message("en", "memo_ready", org="Chess", n=1), f"memo_{oid}")
+
+
+def test_place_reminder_skips_online_and_santa_events(env, monkeypatch):
+    c, cfg = env
+    uid = login(c, 20, "pres")["id"]
+    con = db.connect(cfg.db_path)
+    oid = logic.create_org(con, None, "Chess", "CH", "crown_3d", True)
+    morning = logic.core.day_start(logic.core.now()) + 10 * 3600
+    set_clock(monkeypatch, lambda: morning)
+    starts = morning + 86400 + 3600
+    sql = """INSERT INTO events (id, org_id, title, status, starts_at, online, created_by, created_at, updated_at)
+        VALUES (?, ?, ?, 'published', ?, ?, ?, 0, 0)"""
+    con.executemany(sql, [(1, oid, "Webinar", starts, "https://example.com", uid),
+                         (2, oid, "Stream", starts, "", uid), (3, oid, "Secret Santa", starts, None, uid)])
+    con.execute("INSERT INTO santa_events (event_id) VALUES (3)")
+    logic.tba_day(con)
+    assert not con.execute("SELECT 1 FROM bot_outbox WHERE kind = 'place_tba'").fetchone()
+
+    con.execute(sql, (4, oid, "Quiz", starts, None, uid))
+    set_clock(monkeypatch, lambda: morning + 86400)
+    logic.tba_day(con)
+    row = con.execute("SELECT b.*, u.lang FROM bot_outbox b JOIN users u ON u.id = b.user_id WHERE kind = 'place_tba'").fetchone()
+    text, _, link = outbox._render(con, row)
+    assert link == "ev_4" and "Quiz" in text and all(title not in text for title in ("Webinar", "Stream", "Secret Santa"))
+
+
 def test_memo_v2(env, monkeypatch):
     """Memo v2: one memo for the week with every request, a meeting's own line, the signature in
     kk, ru, en with the Latin name (fixed once); the secretary's "memo" right; sent events leave it until an edit;

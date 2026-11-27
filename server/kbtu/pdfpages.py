@@ -1,6 +1,7 @@
 """An event's document (organizing.render_doc): its PDF's pages rendered to PNGs in a child process, so a crafted PDF
 (a page of a million paths took 135 s in PDFium) or a PDFium crash costs only that child: the whole document has
-`seconds` of wall time and CPU, `memory` bytes of address space, and no lock the receipts wait on. The child is this
+`seconds` of wall time and CPU, `memory` bytes of address space, and no lock. Kaspi receipts' PDFs (receipt.py)
+render here too. The child is this
 file run by path with -I (stdlib, pypdfium2 and Pillow only; nothing of kbtu is imported there)."""
 from __future__ import annotations
 
@@ -11,11 +12,13 @@ from pathlib import Path
 TOO_MANY = 3  # the child's exit code for "more pages than allowed"
 
 
-def run(data: bytes, out: Path, most: int, side: int, seconds: int, memory: int) -> list[Path]:
-    """The pages as PNG files in `out` (the caller's temp directory), in order. ValueError("too_many_pages" |
-    "not_a_pdf"): refused, broken, locked, too slow, too big, or the child died."""
+def run(data: bytes, out: Path, most: int, side: int, seconds: int, memory: int, cut: bool = False) -> list[Path]:
+    """The pages as PNG files in `out` (the caller's temp directory), in order. cut: only the first `most` pages, the
+    rest ignored (a receipt), instead of refusing the file. ValueError("too_many_pages" | "not_a_pdf"): refused,
+    broken, locked, too slow, too big, or the child died."""
     try:
-        r = subprocess.run([sys.executable, "-I", __file__, str(out), str(most), str(side), str(seconds), str(memory)],
+        r = subprocess.run([sys.executable, "-I", __file__, str(out), str(most), str(side), str(seconds), str(memory),
+                            str(int(cut))],
                            input=data, capture_output=True, timeout=seconds)
     except subprocess.TimeoutExpired:  # run() has killed it
         raise ValueError("not_a_pdf") from None
@@ -29,7 +32,7 @@ def run(data: bytes, out: Path, most: int, side: int, seconds: int, memory: int)
 
 def _child() -> None:
     import resource
-    out, most, side, seconds, memory = sys.argv[1], *map(int, sys.argv[2:6])
+    out, most, side, seconds, memory, cut = sys.argv[1], *map(int, sys.argv[2:7])
     resource.setrlimit(resource.RLIMIT_CPU, (seconds, seconds))       # SIGXCPU kills it
     resource.setrlimit(resource.RLIMIT_AS, (memory, memory))          # a huge bitmap fails instead of swapping
     resource.setrlimit(resource.RLIMIT_FSIZE, (64 << 20, 64 << 20))   # no PNG grows past 64 MB
@@ -40,7 +43,9 @@ def _child() -> None:
         sys.exit(2)
     n = len(pdf)
     if n > most:
-        sys.exit(TOO_MANY)
+        if not cut:
+            sys.exit(TOO_MANY)
+        n = most
     for i in range(n):
         page = pdf[i]
         w, h = (abs(x) for x in page.get_size())

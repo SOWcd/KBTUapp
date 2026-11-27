@@ -87,7 +87,7 @@ def test_translations(env):
     with pytest.raises(ai.Busy):
         call({"m1": httpx.Response(503), "m2": httpx.Response(503), "gq": httpx.Response(503),
               "cf": httpx.Response(400, json={"errors": [{"code": 4006}]})})
-    assert llm._rest["cf:model-a"] > time.time() + 3600                                  # Cloudflare's day spent: rests for hours
+    assert "cf:model-a" not in llm._rest                                                # HTTP 400 is request-specific
     llm._rest.clear()
     busy = {k: httpx.Response(503) for k in ("cf", "m1", "m2", "gq")}
     with pytest.raises(ai.Busy):

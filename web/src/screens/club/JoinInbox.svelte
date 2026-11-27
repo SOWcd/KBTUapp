@@ -11,6 +11,7 @@
   import { sheets } from '../../lib/state/sheets';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { t, tn } from '../../lib/i18n/index.svelte';
+  import { sw } from '../../lib/i18n/staff';
   import { relDay } from '../../lib/time';
   import { haptic, openLink } from '../../lib/tg';
   import Sheet from '../../ui/Sheet.svelte';
@@ -23,14 +24,16 @@
   import Group from '../../ui/Group.svelte';
   import Row from '../../ui/Row.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
+  import Skeleton from '../../ui/Skeleton.svelte';
+  import { readState } from '../../lib/state/readState.svelte';
   import { session } from '../../lib/state/session.svelte';
   import { may } from '../../lib/perms';
   import { schoolShort } from '../../lib/short';
 
   let { overlay, org }: { overlay: Overlay; org: Id } = $props();
 
-  let list = $state<JoinRequest[] | null>(null);
-  $effect(() => { api.joinRequests(org).then((l) => (list = l)).catch(() => (list = [])); });
+  const { state: rs, load } = readState(() => api.joinRequests(org));
+  $effect(() => { void load(); });
   const o = $derived(data.orgs.find((x) => x.id === org));
   const casting = $derived(may(session.me?.memberships.find((x) => x.org.id === org), 'casting'));
   let round = $state<Round | null>(null);
@@ -40,7 +43,7 @@
 
   async function decide(r: JoinRequest, accept: boolean) {
     if (!accept && !(await sheets.ask({ title: t('jr.declineAsk'), text: t('jr.declineText'), ok: t('jr.decline'), cancel: t('join.keep'), danger: true }))) return;
-    list = list!.filter((x) => x.id !== r.id);
+    rs.value = rs.value!.filter((x) => x.id !== r.id);
     accept ? haptic.ok() : haptic.warn();
     try {
       await api.decideJoin(r.id, accept);
@@ -48,9 +51,9 @@
       studioChanged(); // member counts and the Studio row
     } catch (e) {
       if (e instanceof ApiErr && e.code === 'conflict') {
-        say(t('adm.decidedAnon'), 'warning_3d'); studioChanged(); return;
+        say(sw('adm.decidedAnon'), 'warning_3d'); studioChanged(); return;
       }
-      list = [r, ...list!].sort((a, b) => a.id - b.id);
+      rs.value = [r, ...rs.value!].sort((a, b) => a.id - b.id);
       haptic.error(); say(t('common.error'), 'warning_3d');
     }
   }
@@ -79,8 +82,10 @@
         {#if o.recruiting}<Row icon={ClipboardPen} title={t('cast.questions')} value={o.joinQuestions?.length ? String(o.joinQuestions.length) : t('jr.qsNone')} accessory="chevron" onclick={() => sheets.joinQuestions(org)} />{/if}
       </Group>
     {/if}
-    {#if list}
-      {#each list as r (r.id)}
+    {#if rs.status === 'error' && !rs.value}<EmptyState onretry={load} />
+    {:else if !rs.value}<Skeleton n={2} />
+    {:else}
+      {#each rs.value as r (r.id)}
         {#snippet write()}<Button kind="secondary" size="s" onclick={() => openLink('https://t.me/' + r.username)}>{#snippet icon()}<TelegramMark size={15} />{/snippet}{t('jr.write')}</Button>{/snippet}
         <!-- engine: Row needs content under it (the answer's buttons): one Group per applicant until then -->
         <Group>

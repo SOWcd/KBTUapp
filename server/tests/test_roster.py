@@ -64,6 +64,12 @@ def test_roster_name_match():
     assert [roster.classify(p) for p in ("member", "President", "Vice president", "Head of SMM", "HR", "ex president")] == [
         ("member", None, None), ("president", None, None), ("vice", None, None), ("head", "Head of SMM", "SMM"), ("member", "HR", None),
         ("member", "ex president", None)]
+    assert roster.classify("Executive Head") == ("head", "Executive Head", "Executive")
+    assert roster.classify("Expert") == ("member", "Expert", None)
+    for p in ("Ex Head", "Ex. Head", "Ex-Head"):
+        assert roster.classify(p) == ("member", p, None)
+    dept = "\u0426\u0438\u0444\u0440\u043e\u0432\u0430\u044f \u0433\u0440\u0443\u043f\u043f\u0430"
+    assert roster.classify(f"Vice Head of {dept}") == ("member", f"Vice Head of {dept}", dept)
     assert (roster.course_of("23BD", 2026), roster.course_of("3rd year"), roster.tg_of("@Some_User"), roster.tg_of("+77001234567")) == (4, 3, "some_user", None)
 
 
@@ -118,6 +124,40 @@ def test_roster_load_and_join(env):
     me = c.get("/api/me", headers=h(72)).json()  # A handle alone requires the President's confirmation.
     assert not me["memberships"] and me["city"] is None
     assert roster.asks(con, bek["id"]) and not con.execute("SELECT phone FROM students WHERE user_id = ?", (bek["id"],)).fetchone()[0]
+
+
+def test_roster_claim_decisions(env):
+    c, cfg = env
+    pres, ann, bek, cal = (login(c, tg, name)["id"] for tg, name in ((70, "pres"), (71, "ann"), (72, "bek"), (73, "cal")))
+    con = db.connect(cfg.db_path)
+    oid = logic.create_org(con, None, "Chess", "CH", "crown_3d", True)
+    logic.set_role(con, None, pres, oid, "president", "test")
+    rid = con.execute("""INSERT INTO roster_pending (key, org_id, sheet, role, tg, created_at)
+        VALUES ('k1', ?, 's', 'member', 'old_handle', 0)""", (oid,)).lastrowid
+    claim, decide = f"/api/roster/{rid}/claim", f"/api/roster/requests/{rid}"
+
+    def handle(tg):
+        return {"Authorization": "tma " + auth.sign_init_data({"id": tg, "first_name": "X", "username": "old_handle"}, BOT)}
+
+    for tg in (71, 72):  # the handle passes from one student to another
+        assert c.post(claim, headers=handle(tg)).status_code == 204
+        assert c.post(decide, headers=tma(70), json={"ok": False}).status_code == 204
+    for tg in (71, 72):
+        assert c.post(claim, headers=handle(tg)).status_code == 404
+    assert [r[0] for r in con.execute("SELECT user_id FROM roster_rejections WHERE row_id = ? ORDER BY user_id", (rid,))] == [ann, bek]
+
+    assert c.post(claim, headers=handle(73)).status_code == 204
+    con.execute("INSERT INTO org_bans (org_id, user_id, created_at) VALUES (?, ?, 0)", (oid, cal))
+    decision = c.post(decide, headers=tma(70), json={"ok": True})
+    assert decision.status_code == 403 and decision.json()["message"] == "banned"
+    assert not con.execute("SELECT 1 FROM audit_log WHERE action = 'roster_ok'").fetchone()
+    assert not con.execute("SELECT 1 FROM org_members WHERE user_id = ?", (cal,)).fetchone()
+
+    con.execute("DELETE FROM org_bans WHERE org_id = ? AND user_id = ?", (oid, cal))
+    assert c.post(decide, headers=tma(70), json={"ok": True}).status_code == 204
+    assert con.execute("SELECT role FROM org_members WHERE org_id = ? AND user_id = ?", (oid, cal)).fetchone()[0] == "member"
+    assert con.execute("SELECT COUNT(*) FROM audit_log WHERE action = 'roster_ok'").fetchone()[0] == 1
+    assert not con.execute("SELECT 1 FROM roster_rejections WHERE row_id = ?", (rid,)).fetchone()
 
 
 def test_roster_app_wins(env):

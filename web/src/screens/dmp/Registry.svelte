@@ -35,7 +35,9 @@
   import Skeleton from '../../ui/Skeleton.svelte';
 
   // top: nothing stands over the registry (its keys are its own only then)
-  let { inSheet = false, wide = false, top = true }: { inSheet?: boolean; wide?: boolean; top?: boolean } = $props();
+  let { inSheet = false, wide = false, top = true, focus }: { inSheet?: boolean; wide?: boolean; top?: boolean; focus?: 'memos' } = $props();
+  // opened from Studio's Memos row: the week's memos in view once they come
+  const toMemos = (n: HTMLElement) => { if (focus === 'memos') requestAnimationFrame(() => n.scrollIntoView({ block: 'start', behavior: 'smooth' })); };
   // the month: this one (loaded with the app, so the page opens full), or up to a year back (the numbers DMP used to
   // collect as monthly reports)
   let back = $state(0);
@@ -152,14 +154,14 @@
 {/snippet}
 
 {#snippet sent()}
-  <Group caption={t('reg.memos')} footnote={t('reg.memoNote')}>
+  <div use:toMemos><Group caption={t('reg.memos')} footnote={t('reg.memoNote')}>
     {#each memos as m (`${m.org.id}:${m.sentAt}`)}
       <Row dense title={nameOf(m.org)} subtitle={t('reg.memoSent', { who: m.by ?? '—', when: `${relDay(m.sentAt)} ${time(m.sentAt)}` })}>
         {#snippet lead()}<OrgLogo org={m.org} size={36} />{/snippet}
       </Row>
       {#each m.events as e (e.id)}<Row dense title={e.title} value={relDay(e.startsAt)} accessory="chevron" onclick={() => sheets.event(e.id)} />{/each}
     {/each}
-  </Group>
+  </Group></div>
 {/snippet}
 
 {#if wide}

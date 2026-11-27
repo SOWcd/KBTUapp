@@ -163,6 +163,9 @@ Ideas and fixes are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Security is
 - `FORUM=1`: the find-people forum for the app's staff (`founder`: the creator alone).
 - `BOARD=1`: the assistant, sign-up questions, the map's flaws for every student; `BOARD=staff`: admins and
   moderators only. Its old in-app forum is off for good.
+  Assistant questions and event fills share 30 attempts per student in 24 hours and 1,000 across all students per
+  UTC day, reserved before AI calls. The global count lives in `meta` across restarts; failures still count, and
+  an exhausted or unreadable allowance blocks calls even when a provider key is billed.
 - `NEWS_CHANNEL`: the news channel (default `@KBTUevents`; the old name `EVENTS_CHANNEL` still read).
 - `FORUM_CHANNEL=<chat id>`: the forum channel: students post from the app, the bot publishes (`logic/fchannel.py`).
   `FORUM_GROUP`: its discussion group.
@@ -176,6 +179,9 @@ Ideas and fixes are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Security is
   link; never logged.
 - `IG_USER_ID` + `IG_TOKEN`: the clubs' Instagram posts in their news through the app's own Instagram account
   (`kbtu/instagram.py`, "Clubs' Instagram posts" above). Either unset: off, nothing is requested.
+- `CF_ZONE_ID` + `CF_PURGE_TOKEN` (a Cloudflare token with Zone > Cache Purge only): a photo removed from the disk
+  (moderation, a deleted account, an avatar or Gallery photo) is purged from Cloudflare's cache too (`media.drop`), as
+  `/media/` is cached for a year. Either unset: no purge.
 - `REPORTS=1`: clubs' event reports in Studio and the member's own log in their profile (`logic/evreports.py`). Off by default. Separate consent covers attendance marks and comments under section 3 of the privacy policy.
 - `LIBRARY=1`: library seats (`logic/library.py`): a QR sticker per table, scan and sit for 3 hours, "nobody here"
   with 10 minutes to answer; Profile → Library, Admin → Library (rooms, tables, the sticker PDF, the big screen

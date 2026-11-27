@@ -298,7 +298,7 @@ async def post_tick(cfg: Config, http: httpx.AsyncClient, con) -> None:
                 e = await _upload(cfg, http, "editMessageMedia", {"chat_id": cfg.forum_channel, "message_id": u["msg_id"],
                                                                   "media": json.dumps({"type": "photo", "media": "attach://x", "caption": text})}, {"x": media.blank_jpg()})
             else:
-                e = await _call(cfg, http, "editMessageText", {"chat_id": cfg.forum_channel, "message_id": u["msg_id"], "text": text})
+                e = await _call(cfg, http, "editMessageText", {"chat_id": cfg.forum_channel, "message_id": u["msg_id"], "text": text, "parse_mode": "HTML"})
             if not (e.get("ok") or _gone(e) or "not modified" in str(e.get("description"))):
                 F.unpost_later(con, u["msg_id"])  # still public: tried again in 10 minutes (the warning is in the log)
                 continue
@@ -319,7 +319,7 @@ async def post_tick(cfg: Config, http: httpx.AsyncClient, con) -> None:
             break  # the network, a flood wait: next round
     for pid, mark, msg, body, sign, pics in F.edits_due(con):  # an edited post: its message changed in place, comments and all
         text = f"{html.escape(body)}\n\n<i>— {html.escape(sign)}</i>"
-        done, lost, carried = [], False, False  # carried: the first photo's edit put the words in as its caption
+        done, lost, refused, carried = [], False, False, False  # carried: the first photo's edit put the words in as its caption
         for x, n, m, path, sync in pics:  # a new photo into its own album message (the caption rides on the first)
             f = pics_dir / f"{path}.jpg"
             if not sync or not m or not f.exists():  # nothing to put in (a lost message, a file gone): the words below still go
@@ -329,15 +329,16 @@ async def post_tick(cfg: Config, http: httpx.AsyncClient, con) -> None:
             r = await _upload(cfg, http, "editMessageMedia", {"chat_id": cfg.forum_channel, "message_id": m, "media": json.dumps(
                 {"type": "photo", "media": "attach://x", **({"caption": text, "parse_mode": "HTML"} if n == 0 else {})})}, {"x": f.read_bytes()})
             if not (r.get("ok") or "not modified" in str(r.get("description"))):
-                if r.get("error_code") != 400:
-                    lost = True
-                    break
-                log.warning("forum channel: photo edit of message %s refused: %s", m, str(r.get("description"))[:200])  # not tried forever
-            else:
-                carried = carried or n == 0
+                lost, refused = r.get("error_code") != 400, r.get("error_code") == 400
+                break
+            carried = carried or n == 0
             done.append(x)
         if lost:
             break  # the network, a flood wait: next round, from the start
+        if refused:  # the channel would keep the old picture: out, to a moderator as a refused send
+            log.warning("forum channel: photo edit of post %s refused: %s", pid, str(r.get("description"))[:200])
+            await asyncio.to_thread(F.edit_refused, con, pid, mark)
+            continue
         if not carried:  # the words: the caption, or the message itself
             r = await _call(cfg, http, "editMessageCaption", {"chat_id": cfg.forum_channel, "message_id": msg, "parse_mode": "HTML", "caption": text}) if pics else \
                 await _call(cfg, http, "editMessageText", {"chat_id": cfg.forum_channel, "message_id": msg, "parse_mode": "HTML",
@@ -406,7 +407,7 @@ async def _replies(cfg: Config, http: httpx.AsyncClient, con) -> None:
     for rid, mid, why in F.reply_drops(con):
         r = await _call(cfg, http, "deleteMessage", {"chat_id": cfg.tgc_chat, "message_id": mid})
         if r.get("error_code") == 400 and not _gone(r):  # too old to delete: its words edited away
-            r = await _call(cfg, http, "editMessageText", {"chat_id": cfg.tgc_chat, "message_id": mid,
+            r = await _call(cfg, http, "editMessageText", {"chat_id": cfg.tgc_chat, "message_id": mid, "parse_mode": "HTML",
                                                            "text": texts.bot_message("ru", "fch_reply_removed" if why == "moderator" else "fch_reply_deleted")[0]})
             if not (r.get("ok") or _gone(r) or "not modified" in str(r.get("description"))):
                 F.reply_drop_later(con, rid, mid)
@@ -443,7 +444,8 @@ async def edit_first(cfg: Config, http: httpx.AsyncClient, con, m, body: dict) -
     won't (too old, deleted by him, blocked): the postman sends it new then (a block: the app's card, take_saved)."""
     if m["kind"] not in ("tgc_confirmed", "tgc_back"):
         return None
-    mid = (one(con, "SELECT dm_id FROM tgc_comments WHERE id = ? AND author_id = ?", int(m["ref"].split(":")[1]), m["user_id"]) or [None])[0]
+    mid = (one(con, "SELECT dm_id FROM tgc_comments WHERE id = ? AND author_id = ? AND dm_chat_id = ?",
+               int(m["ref"].split(":")[1]), m["user_id"], body["chat_id"]) or [None])[0]
     if not mid:
         return None
     r = await http.post(f"https://api.telegram.org/bot{cfg.bot_token}/editMessageText",
@@ -452,9 +454,10 @@ async def edit_first(cfg: Config, http: httpx.AsyncClient, con, m, body: dict) -
 
 
 def sent(con, m, answer: dict) -> None:
-    """The message to the author went out: its id, for the verdict to edit; he knows, so the app's card doesn't repeat it."""
+    """The message to the author went out: its chat and id, for the verdict to edit; the app's card doesn't repeat it."""
     if m["kind"] in AUTHOR and isinstance(answer.get("result"), dict) and answer["result"].get("message_id"):
-        con.execute("UPDATE tgc_comments SET dm_id = ?, shown = 1 WHERE id = ? AND author_id = ?", (answer["result"]["message_id"], int(m["ref"].split(":")[1]), m["user_id"]))
+        con.execute("UPDATE tgc_comments SET dm_id = ?, dm_chat_id = ?, shown = 1 WHERE id = ? AND author_id = ?",
+                    (answer["result"]["message_id"], m["tg_id"], int(m["ref"].split(":")[1]), m["user_id"]))
 
 
 def render(con, m, lang: str) -> tuple[str, str | None, str] | None:

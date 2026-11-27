@@ -96,13 +96,13 @@ def test_dmp_one_person_and_revoke(env, monkeypatch):
     assert count() == 0 and not con.execute("SELECT 1 FROM students WHERE user_id = ?", (u["id"],)).fetchone()
     admin.main(["dmp", "add", "94"])
     staff_signed(con, u["id"])
-    admin.main(["unlink", "94"])                                          # unlink: no grant left to make it again
+    admin.main(["unlink", "94", "--yes"])                                          # unlink: no grant left to make it again
     assert count() == 0
 
     # moving the account takes its grant to its new Telegram
     admin.main(["dmp", "add", "94"])
     c.get("/api/me", headers=tma(95))
-    admin.main(["move", "94", "95"])
+    admin.main(["move", "94", "95", "--yes"])
     assert [r[0] for r in con.execute("SELECT tg_id FROM dmp_list")] == [95]
     assert "msOnly" not in c.get("/api/me", headers=tma(94)).json()
 

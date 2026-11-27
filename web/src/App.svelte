@@ -72,7 +72,8 @@
   // sheets.consent), and may be declined. Staff and students added by hand have no consent of theirs; a deletion
   // pending is exempt. Only on the server's word (boardKnown): the launch copy's policy is the default, not the one in force.
   let asked = $state(false);
-  const consentGate = () => import('./screens/ConsentGate.svelte');
+  // offline, its chunk fails: the gate steps back (the app stays usable) and asks again on the next held action
+  const consentGate = () => import('./screens/ConsentGate.svelte').catch((e) => { asked = false; say(t('common.error'), 'warning_3d'); throw e; });
   const gated = $derived.by(() => {
     const s = session.me?.student;
     return !!s && session.boardKnown && !session.me?.deleteAt && asked && !['staff', 'admin', session.policy, session.policy + CONSENT_VOL].includes(s.consent);
@@ -138,7 +139,7 @@
   const rosterWelcome = () => import('./screens/sheets/RosterWelcome.svelte'), rosterAsk = () => import('./screens/sheets/RosterAsk.svelte');
   sheets.consent = () => { asked = true; void loadMe(); };
   let registryOpened = false; // in this launch, by any path: the desk's auto-open stays off after it (lib/desk.ts)
-  sheets.registry = () => { registryOpened = true; return lazy(() => import('./screens/dmp/RegistrySheet.svelte'), {}); };
+  sheets.registry = (focus?: 'memos') => { registryOpened = true; return lazy(() => import('./screens/dmp/RegistrySheet.svelte'), { focus }); };
   sheets.celebrate = () => void celebrate();
   setLoginHook((after, lock) => sheets.login(after, lock));
 
@@ -545,13 +546,21 @@
   // ---- a new achievement level the app hasn't celebrated yet: one moment at a time, once the app has settled ----
   // (and after signing in later: a returning student may bring one)
   let booted = $state(false), wasStudent = false;
+  // the launch's Afisha load answered (loadAfisha never rejects); set in onMount below
+  let afishaDone!: () => void;
+  const afishaIn = new Promise<void>((r) => (afishaDone = r));
   $effect(() => {
     const st = !!session.me?.student;
     if (st !== wasStudent) untrack(() => {
-      // known to be a student (the stored copy, the server, a sign-in): Profile's and the club tab's pages fill at once
-      loadMine();
-      void loadGallery();
-      void loadInbox(true); // staff only (it checks)
+      // known to be a student (the stored copy, the server, a sign-in): Profile's and the club tab's pages fill ahead of a
+      // tap. The stories now (StoryRow); the other 10-15 requests wait for the Afisha's answer and an idle moment, so
+      // they never compete with the first screen's request
+      void loadNews(true);
+      void afishaIn.then(() => idle(() => {
+        loadMine();
+        void loadGallery();
+        void loadInbox(true); // staff only (it checks)
+      }));
     });
     if (st && !wasStudent && booted) { moment(tgComment); moment(celebrate); } // signed in just now: his comment first
     wasStudent = st;
@@ -576,7 +585,7 @@
     void loginSheet().catch(() => {}); void askSheet().catch(() => {});
     warm(chunks.person); warm(chunks.club);
     if (inTelegram && session.me && !session.me.canDm) warm(dmSheet);
-    for (const tab of tabs) void loadPage(tab).catch(() => {});
+    // (the tabs' chunks: prebuild and warmChannel fetch them one per idle moment, not all in the first frame)
   }
   // my own comment the bot deleted in the forum channel's Telegram group (the server knows me by the signed initData,
   // not by the bot's button, startapp=cm): the first launch moment, the others wait behind it (owner, Nov 1)
@@ -682,14 +691,17 @@
     }
     const account = inTelegram ? loadMe(false, true) : Promise.resolve();
     const afisha = loadAfisha();
+    void afisha.then(afishaDone);
     // Warm the first event while the lists are on their way.
     warm(chunks.event);
     void account.then(() => {
       // Made together: Profile's row and its screen, ahead of any tap. Something of mine there and never answered:
       // the "show your name?" sheet once on this phone (owner, Nov 20: few open that screen, so ask at the door)
-      const credits = loadCredits();
+      // (after the Afisha's answer, in an idle moment: never beside the first screen's request)
+      const settled = afishaIn.then(() => new Promise<void>((r) => idle(r)));
+      const credits = settled.then(() => loadCredits());
       if (session.banned || session.revoked) return;
-      void loadSupport();
+      void settled.then(() => { if (!session.banned && !session.revoked) void loadSupport(); });
       requestAnimationFrame(() => setTimeout(warmNavigation));
       // A Microsoft return without a start parameter can still carry a verified pending claim.
       const microsoftReturn = !!session.me?.msPending;
@@ -764,7 +776,7 @@
     {#if StandaloneBar && !gated}<StandaloneBar back={showBack} tint={capOf?.tint} />{/if}
 
     {#if gated}
-      {#await consentGate() then m}<m.default oncancel={() => (asked = false)} />{/await}
+      {#await consentGate() then m}<m.default oncancel={() => (asked = false)} />{:catch}{/await}
     {:else}
       <!-- Keep exiting entries mounted until their animation calls removeOverlay. -->
       {#each overlays as o (o.id)}<o.component {...o.props} overlay={o} />{/each}
