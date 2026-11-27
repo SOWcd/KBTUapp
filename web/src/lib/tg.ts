@@ -15,6 +15,7 @@ interface WebApp {
   platform: string;
   colorScheme: 'light' | 'dark';
   isFullscreen?: boolean;
+  viewportStableHeight?: number;
   safeAreaInset?: Inset;
   contentSafeAreaInset?: Inset;
   isVersionAtLeast(v: string): boolean;
