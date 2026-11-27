@@ -109,6 +109,11 @@ def _text(x: object) -> str:
     return t
 
 
+def _day(t: int) -> int:
+    """The Almaty midnight of t's day."""
+    return int(dt.datetime.fromtimestamp(t, ALMATY).replace(hour=0, minute=0, second=0).timestamp())
+
+
 def _shape(a, t: int) -> dict:
     return {"id": a["id"], "topic": a["topic"], "text": a["body"], "anon": bool(a["anon"]), "status": a["status"], "answer": a["answer"],
             "at": a["created_at"], "due": a["due_at"], "answeredAt": a["answered_at"], "closedAt": a["closed_at"],
@@ -223,7 +228,9 @@ def _sg(con, v: Viewer, desk: str = "sg") -> None:
 def _for_sg(con, a, t: int) -> dict:
     """An appeal as SG sees it: a named one's author as a short name only (no id, profile or contact); an anonymous one, nothing."""
     out = _shape(a, t)
-    if not a["anon"]:
+    if a["anon"]:  # when it was written only to the Almaty day (due_at keeps its time of day: the day too); overdue is still exact
+        out["at"], out["due"] = _day(a["created_at"]), _day(a["due_at"])
+    else:
         p = one(con, PERSON + " JOIN appeal_authors w ON w.user_id = u.id WHERE w.appeal_id = ?", a["id"])
         out["author"] = short_name(p) if p else None
     return out

@@ -161,10 +161,12 @@ const query = (q: Record<string, number | string | undefined>) => {
 // an event's video in 8 MB pieces (Cloudflare refuses a request over 100 MB; a dropped connection resends one piece):
 // a piece whose answer got lost is answered with where the file stands, and the next one starts there
 const PIECE = 8 * 1024 * 1024;
-async function uploadVideo(file: Blob, progress: (done: number) => void, wide = false): Promise<Video> {
+// signal: the editor closed; stops before the next piece (the server drops an unfinished upload by itself)
+async function uploadVideo(file: Blob, progress: (done: number) => void, wide = false, signal?: AbortSignal): Promise<Video> {
   const { id } = await call<{ id: Id }>('POST', '/videos', wide ? { size: file.size, wide } : { size: file.size });
   let at = 0, fails = 0;
   while (at < file.size) {
+    if (signal?.aborted) throw new ApiErr('unavailable', 'aborted');
     try {
       at = (await call<{ at: number }>('PUT', `/videos/${id}?at=${at}`, file.slice(at, at + PIECE))).at;
       fails = 0;

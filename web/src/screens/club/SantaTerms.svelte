@@ -31,6 +31,7 @@
   // event's own start, changed in the editor). Dates as the event editor's: the app's own words in a pill, the
   // phone's picker under it. The deadline follows the gifts day until a hand sets it.
   import { t, money } from '../../lib/i18n/index.svelte';
+  import { sw } from '../../lib/i18n/staff';
   import { haptic } from '../../lib/tg';
   import { dayMonthShort } from '../../lib/time';
 
@@ -65,14 +66,14 @@
     <div class="row" class:bad={r.badUntil && !r.badStarts} onchange={() => (f.touched = true)}>
       <b>{t('santa.until')}</b>
       <label class="tv">{day(r.until)}<input type="date" bind:value={f.day} min={dateInput(nowTs())} max={fixed ? f.gDay : undefined} aria-label={t('santa.until')} /></label>
-      <label class="tv">{f.hm || '—'}<input type="time" bind:value={f.hm} aria-label={t('ed.time')} /></label>
+      <label class="tv">{f.hm || '—'}<input type="time" bind:value={f.hm} aria-label={sw('ed.time')} /></label>
     </div>
     <div class="row" class:bad={r.badStarts} onchange={follow}>
       <b>{t('santa.day')}</b>
       {#if fixed}<span class="val">{day(r.starts)}, {f.gHm}</span>
       {:else}
         <label class="tv">{day(r.starts)}<input type="date" bind:value={f.gDay} min={dateInput(nowTs())} aria-label={t('santa.day')} /></label>
-        <label class="tv">{f.gHm || '—'}<input type="time" bind:value={f.gHm} aria-label={t('ed.time')} /></label>
+        <label class="tv">{f.gHm || '—'}<input type="time" bind:value={f.gHm} aria-label={sw('ed.time')} /></label>
       {/if}
     </div>
   </div>

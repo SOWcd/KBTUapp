@@ -13,6 +13,7 @@
   import { data } from '../../lib/state/data.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t } from '../../lib/i18n/index.svelte';
+  import { sw } from '../../lib/i18n/staff';
   import { haptic } from '../../lib/tg';
   import { menu } from '../../ui/menu';
   import Chip from '../../ui/Chip.svelte';
@@ -51,7 +52,7 @@
   }
   async function take(code: Code) {
     const uid = person.id;
-    if (!(await sheets.ask({ title: t('adm.takeBackAsk', { award: manualName(code), name: person.name }), ok: t('adm.takeBack'), cancel: t('common.cancel'), danger: true }))) return;
+    if (!(await sheets.ask({ title: sw('adm.takeBackAsk', { award: manualName(code), name: person.name }), ok: sw('adm.takeBack'), cancel: t('common.cancel'), danger: true }))) return;
     if (busy || person.id !== uid) return;
     busy = true;
     const was = held ?? [];
@@ -62,7 +63,7 @@
         mine = r.has;
         if (code === 'honor') removed = { reason: r.reason ?? undefined };
       }
-      haptic.soft(); say(t('adm.takenBack'), 'waving_hand_3d_default');
+      haptic.soft(); say(sw('adm.takenBack'), 'waving_hand_3d_default');
     } catch {
       if (person.id === uid) set(was);
       haptic.error(); say(t('common.error'), 'warning_3d');
@@ -90,7 +91,7 @@
     if (!held?.includes(code)) give(code);
     else if (addsUp(code)) menu(e.currentTarget as Element, [
       { label: t('aw.oneMore'), onselect: () => give(code) },
-      { label: t('adm.takeBack'), destructive: true, onselect: () => take(code) },
+      { label: sw('adm.takeBack'), destructive: true, onselect: () => take(code) },
     ]);
     else take(code);
   }

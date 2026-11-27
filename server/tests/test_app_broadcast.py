@@ -116,6 +116,7 @@ def test_broadcast_to_one_platform(audience, capsys):
     admin.main(["broadcast", NAME, URL, "--platform", "ios"])
     assert capsys.readouterr().out.strip() == "queued 1"             # 12; 11 already has it
     assert [r[0] for r in con.execute("SELECT u.tg_id FROM bot_outbox b JOIN users u ON u.id = b.user_id ORDER BY u.tg_id")] == [10, 11, 12]
+    assert {json.loads(r[0]).get("p") for r in con.execute("SELECT payload FROM bot_outbox")} == {1}  # marked for the 90-day sweep
     for bad in (["--platform", "linux"], ["--platform"], ["--platform", "--dry"], ["--platform", "ios", "--platform", "web"]):
         with pytest.raises(SystemExit):
             admin.main(["broadcast", NAME, URL, *bad])
