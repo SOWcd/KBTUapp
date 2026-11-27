@@ -2,6 +2,8 @@
 public events searched by title; never a draft, hidden, members-only or initiative-only event; a stranger gets one button."""
 from __future__ import annotations
 
+import pytest
+
 from kbtu import bot, db, logic
 from test_afisha import EV, INIT, MEMBER, OFF, OTHER, _event, _setup
 from test_core import env, tma  # noqa: F401  (env is a fixture)
@@ -58,3 +60,20 @@ def test_inline_answer(env):
     ids = _ids(_ask(cfg, MEMBER, "hackath"))
     assert ids == [f"ev-{public}"]
     assert "startapp=ev_" in _ask(cfg, OTHER, "chess")["results"][0]["reply_markup"]["inline_keyboard"][0][0]["url"]
+
+
+@pytest.mark.parametrize("post", ["Unrelated forum text", "Chess"])
+def test_own_forum_post_does_not_change_the_empty_event_query(env, post):
+    c, cfg = env
+    con, _, off = _setup(c, cfg)
+    events = [_event(c, off, OFF, f"Chess round {i}") for i in range(bot.INLINE_EVENTS + 2)]
+    uid = logic.one(con, "SELECT id FROM users WHERE tg_id = ?", OTHER)["id"]
+    pid = con.execute("""INSERT INTO fchan_posts (user_id, body, status, tg_msg, created_at)
+        VALUES (?, ?, 'live', 42, 0)""", (uid, post)).lastrowid
+
+    body = _ask(cfg, OTHER)
+    cards = {r["id"]: r for r in body["results"]}
+    assert cards[f"fp-{pid}"]["description"] == post
+    assert "rf" in cards
+    assert [rid for rid in cards if rid.startswith("ev-")] == [f"ev-{eid}" for eid in events[:bot.INLINE_EVENTS]]
+    assert _ids(_ask(cfg, OTHER, "Chess")) == [f"ev-{eid}" for eid in events]
