@@ -81,7 +81,7 @@ test('Clubs', async ({ open }) => {
 test('Clubs, every club in its list', async ({ open }) => {
   const p = await ali(open);
   await nav(p.page).getByRole('button', { name: tr('page.clubs'), exact: true }).click();
-  await p.page.getByRole('heading', { name: new RegExp(`^${tr('clubs.allClubs')}`) }).evaluate((el) => el.scrollIntoView({ block: 'start' }));
+  await p.page.getByRole('heading', { name: new RegExp(`^${tr('clubs.allClubs')}`) }).evaluate((el) => el.closest('section')!.scrollIntoView({ block: 'start' })); // the card's top clear of the capsule (its scroll margin)
   await shot(p, 'clubs-list');
 });
 

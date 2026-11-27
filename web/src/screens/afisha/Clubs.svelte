@@ -14,7 +14,7 @@
   import Trophy from '@lucide/svelte/icons/trophy';
   import type { Membership, Org, OrgCategory, OrgRef, Post } from '../../lib/api';
   import { clubLook, lookVars, skinOf } from '../../lib/awards';
-  import { byWeight, clubSub, daysLeft, friendsIn, hit, nextByOrg, roundDue, service, waitsDmp } from '../../lib/clubs';
+  import { byWeight, clubSub, daysLeft, hit, nextByOrg, roundDue, service, waitsDmp } from '../../lib/clubs';
   import { artOf, coverOf } from '../../lib/covers';
   import { t, tn } from '../../lib/i18n/index.svelte';
   import { byRank, canLeave, roleLabel } from '../../lib/perms';
@@ -58,14 +58,15 @@
   const castings = $derived(currentCastings().filter((p) => !memberOf.has(p.org.id)));
   const rounds = $derived(data.orgs.filter((o) => o.round && outside(o)).sort((a, b) => +!a.official - +!b.official || b.members - a.members || a.round!.closesAt - b.round!.closesAt));
   const always = $derived(clubs.filter((o) => o.recruiting && !o.round && outside(o)).sort(byWeight));
-  type Call = { key: string; org: OrgRef; tag: string; when: string; soon?: boolean; live?: boolean; sub: string; open: () => void; cta?: { label: string; done: boolean; off?: boolean; run: () => void } };
-  const people = (o: Org) => (o.friendsN ? friendsIn(o) : tn('club.members', o.members));
+  // a badge: the club, what it is in caps (its interest; a casting says to come), its people with my friends' faces, when
+  type Call = { key: string; org: OrgRef; tag?: string; when: string; soon?: boolean; live?: boolean; sub: string; faces?: Org['friends']; open: () => void; cta?: { label: string; done: boolean; off?: boolean; run: () => void } };
+  const kind = (o: Org) => (o.category ? t(`clubs.cat.${o.category}`) : undefined);
   const story = (p: Post) => sheets.stories([{ org: p.org, items: [{ post: p }], unread: false, cast: false }], 0);
   const calls = $derived<Call[]>([
     ...castings.map((p) => ({ key: `c${p.id}`, org: p.org, tag: t('casting.come'), when: castingStatus(p.casting!), live: castingState(p.casting!) === 'open', sub: p.casting!.place, open: () => story(p) })),
-    ...rounds.map((o) => ({ key: `r${o.id}`, org: o, tag: t('clubs.recruitingNow'), when: roundDue(o.round!.closesAt), soon: daysLeft(o.round!.closesAt) <= 3, sub: people(o), open: () => sheets.club(o.id),
+    ...rounds.map((o) => ({ key: `r${o.id}`, org: o, tag: kind(o), when: roundDue(o.round!.closesAt), soon: daysLeft(o.round!.closesAt) <= 3, sub: tn('club.members', o.members), faces: o.friends, open: () => sheets.club(o.id),
       cta: { label: t(o.round!.applied ? 'clubs.applied' : 'join.apply'), done: o.round!.applied, run: () => sheets.roundApply(o.id, 'join') } })),
-    ...always.map((o) => ({ key: `a${o.id}`, org: o, tag: t('clubs.recruitingNow'), when: t('clubs.openNow'), sub: people(o), open: () => sheets.club(o.id),
+    ...always.map((o) => ({ key: `a${o.id}`, org: o, tag: kind(o), when: t('clubs.openNow'), sub: tn('club.members', o.members), faces: o.friends, open: () => sheets.club(o.id),
       cta: { label: t(o.myRequest === 'rejected' ? 'join.notNow' : o.myRequest === 'pending' ? 'join.sent' : 'join.apply'), done: !!o.myRequest, off: o.myRequest === 'rejected', run: () => toggleJoin(o.id) } })),
   ]);
   const SHOWN = 10;
@@ -95,14 +96,20 @@
     : filter === 'schools' ? schools : live.filter((o) => o.category === filter).sort((a, b) => b.rank - a.rank));
   const quiet = $derived(filter === 'all' ? clubs.filter((o) => o.quiet).sort(byWeight) : []);
 
-  // a row's one line: a school's full name; an open round and its deadline; else what's next or latest there
-  function line(o: Org): { text: string; hot: boolean } {
-    if (SCHOOLISH.has(o.kind)) return { text: o.abbr && o.abbr !== nameOf(o) ? o.name : '', hot: false };
-    if (o.round && outside(o) && !waitsDmp(o)) return { text: `${t('clubs.recruitingNow')} · ${roundDue(o.round.closesAt)}`, hot: true };
-    return { text: clubSub(o, next), hot: !waitsDmp(o) && next.has(o.id) };
+  // a row's one line: a school's full name; else the club's life (what's next or latest there, its people), a green dot
+  // when something is coming up. Recruiting is the badges' to say: a row says it only where the badges aren't, in the
+  // Recruiting filter and in search, any kind of it in the same words and colour
+  function line(o: Org): { text: string; hot: boolean; dot: boolean } {
+    if (SCHOOLISH.has(o.kind)) return { text: o.abbr && o.abbr !== nameOf(o) ? o.name : '', hot: false, dot: false };
+    const dot = !waitsDmp(o) && next.has(o.id);
+    if ((filter === 'recruit' || searching) && outside(o) && !waitsDmp(o) && (o.round || o.recruiting))
+      return { text: o.round ? `${t('clubs.openNow')} · ${roundDue(o.round.closesAt)}` : t('clubs.openNow'), hot: true, dot };
+    return { text: clubSub(o, next), hot: false, dot };
   }
 
-  let dir = $state<HTMLElement>();
+  let dir = $state<HTMLElement>(), shelf = $state<HTMLElement>();
+  // castings come in after the rounds, at the shelf's start: back to it, or scroll snap keeps the card it had and hides them
+  $effect(() => { void castings.length; if (shelf) shelf.scrollLeft = 0; });
   const allCalls = () => { pick('recruit'); dir?.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
 
   const chatFaces = $derived(data.chats ? (data.chats.forYou.length ? data.chats.forYou : data.chats.all).slice(0, 3) : []);
@@ -113,12 +120,12 @@
   {@const cta = filter === 'recruit' && !searching ? ctaOf.get(o.id) : undefined}
   <div class="row">
     <button class="rt" onclick={() => sheets.club(o.id)}>
-      <span class="lg"><OrgLogo org={o} size={46} />{#if l.hot}<i class="dot"></i>{/if}</span>
+      <span class="lg"><OrgLogo org={o} size={46} />{#if l.dot}<i class="dot"></i>{/if}</span>
       <span class="tx">
         <b><span class="ellipsis">{nameOf(o)}</span>{#if o.official && o.kind === 'club'}<OfficialMark size={15} />{/if}{#if o.gov}<GovMark size={14} />{/if}{#if service(o)}<OfficeMark size={14} />{/if}</b>
-        {#if l.text}<small class={['ellipsis', { hot: l.hot }]}>{l.text}</small>{/if}
+        <!-- my friends there: their faces lead the line (at the row's end they read as unread marks) -->
+        {#if l.text || o.friends.length}<small class={{ hot: l.hot }}>{#if o.friends.length}<span class="faces">{#each o.friends as p (p.id)}<Avatar person={p} size={18} tappable={false} />{/each}</span>{/if}<span class="ellipsis">{l.text || tn('club.members', o.members)}</span></small>{/if}
       </span>
-      {#if o.friends.length && !cta}<span class="faces">{#each o.friends as p (p.id)}<Avatar person={p} size={24} tappable={false} />{/each}</span>{/if}
     </button>
     {#if cta}<Button kind={cta.done ? 'neutral' : 'primary'} size="s" disabled={cta.off} onclick={cta.run}>{cta.label}</Button>{/if}
   </div>
@@ -133,8 +140,7 @@
     </section>
   {:else}
     {#if calls.length}
-      <!-- keyed: castings come in after the rounds, and scroll snap would stay on the card it had, hiding them -->
-      {#key castings.length}<section class={['calls', 'hscroll', { one: calls.length === 1 }]} aria-label={t('clubs.recruitingNow')}>
+      <section class={['calls', 'hscroll', { one: calls.length === 1 }]} aria-label={t('clubs.recruitingNow')} bind:this={shelf}>
         {#each calls.slice(0, SHOWN) as c (c.key)}
           {@const art = artOf(c.org)}
           {@const look = skinOf(c.org)}
@@ -142,14 +148,14 @@
           <!-- a template lanyard's picture is see-through: its ground and ink are the look's colours, as on its ticket -->
           <div class={['call', { look: tpl, paper: tpl?.ink }]} style={look && tpl ? lookVars(look) : undefined} style:background={tpl ? undefined : coverOf(c.org)}>
             {#if art}<img class="art" src={art} alt="" loading="lazy" decoding="async" draggable="false" />{/if}
-            <i class="shade"></i>
+            <i class="lit"></i>
             <button class="open" onclick={c.open} aria-label={c.org.name}></button>
             <span class="who">
               <span class="ph"><OrgLogo org={c.org} size={64} /></span>
               <span class="id">
                 <b class="clamp-2">{nameOf(c.org)}</b>
-                <i>{c.tag}</i>
-                <small class="ellipsis">{c.sub}</small>
+                {#if c.tag}<i>{c.tag}</i>{/if}
+                <small>{#if c.faces?.length}<span class="faces">{#each c.faces as p (p.id)}<Avatar person={p} size={18} tappable={false} />{/each}</span>{/if}<span class="ellipsis">{c.sub}</span></small>
               </span>
             </span>
             <span class="strip">
@@ -159,7 +165,7 @@
           </div>
         {/each}
         {#if calls.length > SHOWN}<button class="call rest press" onclick={allCalls}>{t('clubs.allN', { n: recruiting.length })}</button>{/if}
-      </section>{/key}
+      </section>
     {/if}
 
     {#if mine.length}
@@ -169,7 +175,7 @@
           {#each mine as m (m.org.id)}
             <button class="me press" onclick={() => openMine(m)} {@attach canLeave(m) && longPress(hold(m))}>
               <span class={['ring', { hot: next.has(m.org.id) }]}><OrgLogo org={m.org} size={56} /></span>
-              <b class="ellipsis">{shortOf(m.org)}</b>
+              <b class="clamp-2">{shortOf(m.org)}</b>
               <small class="ellipsis">{roleLabel(m)}</small>
             </button>
           {/each}
@@ -227,50 +233,58 @@
   /* a shelf runs to the card's (or the screen's) edges and starts on its padding */
   .hscroll { gap: 10px; padding-inline: var(--s-4); scroll-padding-inline: var(--s-4); }
 
-  /* recruiting: a club's badge, as mine on the Profile. Its lanyard's colours (else its cover), its mark framed where my
-     photo is, its name and what it calls for; the strip at its foot holds the deadline and the one button */
+  /* recruiting: a club's badge, as mine on the Profile. Its lanyard's colours lit from a corner in its own accent, its
+     picture whole, its mark framed where my photo is, its name; the foot is one flat band across the card, the deadline
+     and the one button on it */
   .calls { margin-inline: calc(-1 * var(--gutter)); padding-inline: var(--gutter); scroll-padding-inline: var(--gutter); gap: var(--s-3); }
-  .call { position: relative; flex: none; width: min(318px, 88%); height: 172px; overflow: hidden; border-radius: var(--r-xl); color: var(--on-accent); scroll-snap-align: start;
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1); transition: transform 450ms var(--ease-bounce); }
+  .call { position: relative; flex: none; width: 88%; height: 168px; overflow: hidden; border-radius: var(--r-xl); color: var(--on-accent); scroll-snap-align: start;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12); transition: transform 450ms var(--ease-bounce); }
   .one .call { width: 100%; }
   .call:has(.open:active) { transform: scale(0.98); transition-duration: 80ms; }
-  .art, .shade { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-  .art { object-position: right center; opacity: 0.9; }
-  .shade { background: linear-gradient(100deg, rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.12) 60%, rgba(0, 0, 0, 0)), linear-gradient(180deg, rgba(0, 0, 0, 0) 55%, rgba(0, 0, 0, 0.3)); }
+  .art, .lit { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .art { object-fit: cover; object-position: right center; }
+  /* light on the card: a cover's own colours under a white gleam and a soft shade behind the words */
+  .lit { background: radial-gradient(80% 110% at 100% 0%, rgba(255, 255, 255, 0.34), transparent 62%), linear-gradient(90deg, rgba(0, 0, 0, 0.22), transparent 60%); }
   .open { position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
   .open:active { transform: none; opacity: 1; } /* the press is the whole card's */
   .who { position: absolute; inset: var(--s-4) var(--s-4) auto; display: flex; align-items: center; gap: 14px; }
-  .ph { flex: none; display: flex; padding: 3px; border-radius: var(--r-l); background: rgba(255, 255, 255, 0.24); box-shadow: 0 8px 18px -8px rgba(0, 0, 0, 0.5); }
-  .id { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .ph { flex: none; display: flex; padding: 3px; border-radius: var(--r-l); background: rgba(255, 255, 255, 0.28); box-shadow: 0 8px 18px -8px rgba(0, 0, 0, 0.5); }
+  .id { min-width: 0; display: flex; flex-direction: column; gap: var(--s-1); }
   .id b { font: 700 var(--fs-t3)/1.1 var(--font-display); letter-spacing: -0.02em; text-shadow: 0 1px 10px rgba(0, 0, 0, 0.28); }
   .id i { font: 700 var(--fs-micro)/1.2 var(--font-text); font-style: normal; letter-spacing: 0.1em; text-transform: uppercase; opacity: 0.86; }
-  .id small { font: 500 var(--fs-sub)/1.3 var(--font-text); opacity: 0.86; }
-  .strip { position: absolute; inset: auto var(--s-3) var(--s-3); display: flex; align-items: center; justify-content: space-between; gap: var(--s-3);
-    height: var(--ctl-m); padding: 0 6px 0 14px; border-radius: var(--r-m); background: rgba(0, 0, 0, 0.36); box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.14); color: var(--on-accent); }
+  .id small { display: flex; align-items: center; gap: 6px; font: 500 var(--fs-sub)/1.3 var(--font-text); }
+  .strip { position: absolute; inset: auto 0 0; display: flex; align-items: center; justify-content: space-between; gap: var(--s-3);
+    height: calc(var(--ctl-s) + var(--s-4)); padding: 0 var(--s-3) 0 var(--s-4); background: rgba(0, 0, 0, 0.24); box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.16); color: var(--on-accent); }
   .when { display: flex; align-items: center; gap: 6px; min-width: 0; font: 600 var(--fs-sub)/1 var(--font-text); letter-spacing: 0.01em; }
   .when.soon { color: var(--warning); }
   .when.live::before { content: ''; flex: none; width: 7px; height: 7px; border-radius: var(--r-full); background: var(--success); }
-  .go { position: relative; z-index: 2; flex: none; height: 32px; padding: 0 14px; border-radius: var(--r-full); background: var(--on-accent); color: var(--ink); font: 600 var(--fs-sub)/1 var(--font-text); }
-  .go::after { content: ''; position: absolute; inset: -6px 0; } /* 44 to the finger */
+  .go { position: relative; z-index: 2; flex: none; height: var(--ctl-s); padding: 0 var(--s-4); border-radius: var(--r-full); background: var(--on-accent); color: var(--ink); font: 600 var(--fs-sub)/1 var(--font-text); }
+  .go::after { content: ''; position: absolute; inset: -4px 0; } /* 44 to the finger */
   .go.done { background: rgba(255, 255, 255, 0.22); color: var(--on-accent); }
   .go:disabled { opacity: 0.6; }
-  /* a club's lanyard as the ground (lookVars, the ticket's .club): its colours and ink; a light paper is washed in the
-     paper under the words instead of shaded dark, so the dark ink reads */
+  /* a club's lanyard as the ground (lookVars, the ticket's .club): its colours and ink, lit in its strap's and its
+     hologram's colours instead of white */
   .call.look { background: linear-gradient(155deg, var(--c1), var(--c2) 55%, var(--c3)); color: var(--ink); }
+  .look .lit { background: radial-gradient(85% 120% at 100% 0%, var(--h1), transparent 64%), radial-gradient(70% 90% at 0% 100%, var(--s2), transparent 70%); opacity: 0.42; }
   .look .id b { text-shadow: var(--tsh); }
   /* lookVars' --ink shadows the app's: a dark look's white button takes the look's colour */
   .look:not(.paper) .go:not(.done) { color: var(--c2); }
-  .paper .shade { background: linear-gradient(100deg, var(--c1), transparent 70%); opacity: 0.8; }
-  .paper .id small { color: var(--ink2); opacity: 1; }
+  /* a light paper: dark ink all the way, the band a shade of the paper, the button in ink */
+  .paper .lit { opacity: 0.2; }
+  .paper .id small { color: var(--ink2); }
   .paper .ph { background: rgba(0, 0, 0, 0.1); }
-  .paper .strip { background: rgba(0, 0, 0, 0.72); }
+  .paper .strip { background: rgba(0, 0, 0, 0.06); box-shadow: inset 0 0.5px 0 rgba(0, 0, 0, 0.12); color: var(--ink); }
+  .paper .when.soon { color: var(--ink); }
+  .paper .go { background: var(--ink); color: var(--c1); }
+  .paper .go.done { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ink2); color: var(--ink); }
   /* past the first ten: the rest, in the list below */
-  .call.rest { width: 104px; display: grid; place-items: center; background: var(--surface); box-shadow: var(--card-rim, var(--shadow-card)); color: var(--accent-text); font: 600 var(--fs-body)/1.2 var(--font-text); }
+  .call.rest { width: calc(var(--ctl-l) * 2); display: grid; place-items: center; background: var(--surface); box-shadow: var(--card-rim, var(--shadow-card)); color: var(--accent-text); font: 600 var(--fs-body)/1.2 var(--font-text); }
 
-  /* my clubs: a shelf of marks in its card, as the medals in Awards; a green ring when something is coming up there */
-  .dock { gap: var(--s-1); padding: var(--s-3) 10px 14px; scroll-padding-inline: 10px; }
-  .me { flex: none; width: 88px; display: flex; flex-direction: column; align-items: center; gap: 3px; scroll-snap-align: start; color: var(--text); }
-  .ring { display: flex; padding: 3px; border-radius: var(--r-l); box-shadow: inset 0 0 0 2px var(--line-2); }
+  /* my clubs: a shelf of marks in its card, as the medals in Awards, each name whole on two lines; a green ring only
+     where something is coming up (a grey one on the rest was noise in light and nothing in dark) */
+  .dock { gap: var(--s-1); padding: var(--s-3) 10px 14px; scroll-padding-inline: 10px; align-items: flex-start; }
+  .me { flex: none; width: calc(var(--ctl-m) * 2); display: flex; flex-direction: column; align-items: center; gap: 3px; scroll-snap-align: start; color: var(--text); text-align: center; }
+  .ring { display: flex; padding: 3px; border-radius: var(--r-l); }
   .ring.hot { box-shadow: inset 0 0 0 2px var(--success); }
   .me b { max-width: 100%; margin-top: 3px; font: 600 var(--fs-cap)/1.2 var(--font-text); }
   .me small { max-width: 100%; font: 500 var(--fs-micro)/1.2 var(--font-text); color: var(--text-3); }
@@ -279,7 +293,9 @@
   .list { overflow: hidden; }
   .dir { scroll-margin-top: var(--page-top); }
   .pulse { padding: 3px var(--s-4) 0; font: 500 var(--fs-sub)/1.3 var(--font-text); color: var(--text-3); }
-  .chips { gap: var(--s-2); padding-block: var(--s-3) var(--s-1); }
+  /* the row runs on under the card's edge: it fades out there instead of being cut mid-word */
+  .chips { gap: var(--s-2); padding-block: var(--s-3) var(--s-1); padding-right: var(--s-8);
+    -webkit-mask-image: linear-gradient(90deg, black calc(100% - var(--s-8)), transparent); mask-image: linear-gradient(90deg, black calc(100% - var(--s-8)), transparent); }
   .chip { flex: none; display: flex; align-items: center; gap: 6px; height: var(--ctl-s); padding: 0 14px; border-radius: var(--r-full); background: var(--fill); font: 600 var(--fs-sub)/1 var(--font-text); color: var(--text-2); white-space: nowrap; scroll-snap-align: start; }
   .chip.on { background: var(--text); color: var(--bg); }
   .chip i { font-style: normal; font-variant-numeric: tabular-nums; color: var(--text-3); }
@@ -295,10 +311,11 @@
   .dot { position: absolute; right: -2px; bottom: -2px; width: 12px; height: 12px; border-radius: var(--r-full); background: var(--success); box-shadow: 0 0 0 2.5px var(--surface-solid); }
   .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
   .tx b { display: flex; align-items: center; gap: var(--s-1); font: 600 var(--fs-body)/1.25 var(--font-text); letter-spacing: -0.01em; }
-  .tx small { font: 450 var(--fs-sub)/1.3 var(--font-text); color: var(--text-2); }
+  .tx small { display: flex; align-items: center; gap: 6px; font: 450 var(--fs-sub)/1.3 var(--font-text); color: var(--text-2); }
   .tx small.hot { font-weight: 500; color: var(--accent-text); }
   .faces { flex: none; display: flex; }
-  .faces > :global(* + *) { margin-left: -7px; }
+  small > .ellipsis { min-width: 0; }
+  .faces > :global(* + *) { margin-left: -6px; }
   .row:last-child { padding-bottom: var(--s-1); }
   .found .row:first-child { padding-top: var(--s-1); }
   .cap { margin-top: var(--s-2); padding: var(--s-3) var(--s-4) var(--s-1); border-top: 0.5px solid var(--separator); font: 600 var(--fs-sub)/1 var(--font-text); color: var(--text-3); }
