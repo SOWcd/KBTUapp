@@ -43,8 +43,6 @@
   // after lib/map: imported before it, the map's place names (i18n/spots) became a chunk of their own at the start
   import { chunks, dropLazy, lazy, openCheckin, openDeepLink, warm } from './lib/state/openers';
   import { count, crashed, launchedFrom, painted, timed } from './lib/stats';
-  import { offerDue } from './lib/androidTest';
-
   let { standaloneBar: StandaloneBar }: { standaloneBar?: Component<{ back: boolean; tint?: string | null }> } = $props();
   setLucideProps({ size: 22, strokeWidth: 2 }); // stroke 2 everywhere (the design system, Oct 30; was 1.9)
 
@@ -705,9 +703,11 @@
       // the owner: Android people are offered the Google Play closed test on entry (no broadcast), once more 3 days on
       // if they closed it (lib/androidTest.ts); never once they've opened the installed app. Profile's row stays.
       if (onAndroid && inTelegram && !ui.gate && !session.me?.androidApp) {
-        const due = offerDue();
-        if (due === 'again') count('andr.again');
-        if (due) moment(() => void lazy(() => import('./screens/sheets/AndroidTestSheet.svelte'), {}));
+        void import('./lib/androidTest').then(({ offerDue }) => {  // lazy: Android only, never on the start's path
+          const due = offerDue();
+          if (due === 'again') count('andr.again');
+          if (due) moment(() => void lazy(() => import('./screens/sheets/AndroidTestSheet.svelte'), {}));
+        });
       }
       setTimeout(chunks.ticket, 1500); setTimeout(warmPages, 3000); setTimeout(warmChannel, 1800); setTimeout(warmSubjects, 3500); setTimeout(prebuild, 2500);
       if (!inTelegram && session.me && !session.me.student?.ms) sheets.login();

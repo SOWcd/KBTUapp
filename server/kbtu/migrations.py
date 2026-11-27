@@ -2623,7 +2623,7 @@ MIGRATIONS: list[tuple[int, str]] = [
     # who opened the installed Android app (the Google Play TWA reports itself on /api/me): Profile's "KBTU App in
     # Google Play" row and the tester sheet stop for them. The device kind the policy already names, kept 90 days
     # like user_platforms (whose CHECK can't take a fifth kind)
-    (254, """CREATE TABLE android_app (
+    (254, """CREATE TABLE IF NOT EXISTS android_app (
       user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
       seen_at INTEGER NOT NULL
     ) STRICT;"""),
