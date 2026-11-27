@@ -107,3 +107,26 @@ test('the assistant\'s welcome', async ({ open }) => {
   await expect(p.page.getByRole('dialog', { name: tr('as.title') })).toBeVisible();
   await shot(p, 'assistant');
 });
+
+test('the campus map', async ({ open }) => {
+  const p = await ali(open);
+  // the map's "free now" rooms are off on this server: it answers 404 by design (client.ts mapRooms)
+  p.allow(/\/api\/map\/rooms 404$/);
+  p.allow(/status of 404 \(Not Found\)$/);
+  await p.page.getByRole('button', { name: tr('map.open'), exact: true }).click();
+  await expect(p.page.getByRole('group', { name: tr('map.floors') })).toBeVisible();
+  await shot(p, 'map');
+});
+
+test('a club\'s Studio', async ({ open }) => {
+  const p = await settled(await open('Dana')); // Dana runs the Open Mic Club
+  await nav(p.page).getByRole('button', { name: tr('page.clubs'), exact: true }).click();
+  await p.page.getByRole('button', { name: /^Open Mic Club\b/ }).first().click();
+  await expect(p.page.getByRole('region', { name: 'Open Mic Club' })).toBeVisible();
+  await shot(p, 'studio');
+});
+
+test('Afisha on the smallest phone', async ({ open, page }) => {
+  await page.setViewportSize({ width: 320, height: 568 }); // the one 320 px picture: what fits at 375 may not here
+  await shot(await ali(open), 'afisha-320');
+});
