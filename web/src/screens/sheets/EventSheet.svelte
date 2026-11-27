@@ -83,10 +83,11 @@
   let detail = $state<EventFull | null>(null);
   // a school's own event opened by another school's student (its link): whose it is, nothing else (server seats._event)
   // unset: a verified student with no school known, sent to Settings; the school picked there asks again (the read below)
-  let onlyFor = $state(''), unset = $state(false);
+  // missing: deleted, or a draft (an old bot link, a forwarded one): said so, never a blank sheet
+  let onlyFor = $state(''), unset = $state(false), missing = $state(false);
   $effect(() => {
     void session.me?.student?.school;
-    if (!preview) eventDetails(id).then((d) => (detail = d)).catch((x) => { detail = null; if (x instanceof ApiErr && x.message === 'school') { onlyFor = String(x.data.school ?? ''); unset = !!x.data.unset; } });
+    if (!preview) eventDetails(id).then((d) => (detail = d)).catch((x) => { detail = null; missing = x instanceof ApiErr && x.code === 'not_found'; if (x instanceof ApiErr && x.message === 'school') { onlyFor = String(x.data.school ?? ''); unset = !!x.data.unset; } });
   });
 
   // the shared card is the live source (it changes when you tap Going); details add the text
@@ -660,6 +661,8 @@
     {@const gone = t('event.schoolOnlyGone', { school: schoolName(onlyFor) })}
     {#if unset}<EmptyState icon={Lock} title={gone} text={t('event.schoolUnset')} action={{ label: t('event.schoolUnsetGo'), onclick: () => sheets.settings('school') }} />
     {:else}<EmptyState icon={Lock} text={gone} />{/if}
+  {:else if missing}
+    <EmptyState icon={CalendarHeart} text={t('event.gone')} />
   {/if}
 
   {#snippet footer()}
