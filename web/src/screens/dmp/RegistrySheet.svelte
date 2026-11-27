@@ -9,7 +9,7 @@
   import Ask from '../../ui/Ask.svelte';
   import Library from '@lucide/svelte/icons/library';
   import Registry from './Registry.svelte';
-  let { overlay }: { overlay: Overlay } = $props();
+  let { overlay, focus }: { overlay: Overlay; focus?: 'memos' } = $props();
   const mq = new MediaQuery(WIDE);
   const above = $derived(overlays.filter((o) => o.id > overlay.id && !o.closing));
   // wide while nothing but a question (the short name, taking the check back) stands over it: another screen opened from
@@ -24,4 +24,4 @@
   });
 </script>
 
-<Sheet {overlay} icon={Library} full title={t('reg.title')}><Registry inSheet {wide} top={!above.length} /></Sheet>
+<Sheet {overlay} icon={Library} full title={t('reg.title')}><Registry inSheet {wide} {focus} top={!above.length} /></Sheet>

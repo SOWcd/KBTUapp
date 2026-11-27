@@ -75,7 +75,7 @@ const own = {
   consent: () => {},
   /** a new achievement level just earned in a sheet that stays open (the anthem's): its unlock moment now, over it */
   celebrate: () => {},
-  registry: () => {}, // DMP's whole registry in a sheet (for the admin); App notes it opened in this launch (lib/desk.ts)
+  registry: (_focus?: 'memos') => {}, // DMP's whole registry in a sheet (for the admin); App notes it opened in this launch (lib/desk.ts)
   /** In-app confirmation (never a system dialog); resolves true on "ok". */
   ask: (_q: Ask): Promise<boolean> => Promise.resolve(false),
   /** the same with a few words to write (a meeting's "Can't make it": why); null = cancelled. tel: a phone number instead,

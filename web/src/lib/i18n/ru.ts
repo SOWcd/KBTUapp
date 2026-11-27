@@ -2419,7 +2419,7 @@ const ru = {
   'studio.todoPresMe': "Президент — я",
   'studio.invitePres': "Позвать президента",
   'studio.invitePresGo': "Отправить ссылку",
-  'studio.noUserHow': "Настройки → Имя пользователя",
+  'studio.noUserHow': "Настройки → Имя пользователя, затем открой приложение заново",
   'studio.upcoming': "Скоро",
   'studio.drafts': "Черновики",
   'studio.past': "Прошли",

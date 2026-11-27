@@ -306,8 +306,8 @@ export function loadNews(join = false): Promise<void> {
 
 /** A club's events for Studio and its people for Team, kept per club; the club in view loads with the app, the others
  * the first time they're picked; every visit refreshes quietly. */
-export async function loadStudio(org: Id): Promise<void> {
-  try { data.studio[org] = await api.orgEvents(org); } catch { /* the last copy stays */ }
+export async function loadStudio(org: Id): Promise<boolean> {
+  try { data.studio[org] = await api.orgEvents(org); return true; } catch { return false; /* the last copy stays */ }
 }
 export async function loadTeam(org: Id): Promise<void> {
   try { data.team[org] = await api.team(org); } catch { data.team[org] ??= []; /* the last copy stays; never an endless placeholder */ }
