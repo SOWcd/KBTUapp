@@ -538,8 +538,9 @@ WELCOME = "android_welcome"  # meta key: 'on' once the creator approved the text
 
 
 def _play_seen(con, uid: int, first: bool) -> None:
-    """The installed Android app's day, and on its first launch the bot's one thanks (bot_outbox's unique row, kept
-    after the 90-day sweep of android_app: once per account). Nobody is thanked before the creator turned it on."""
+    """The installed Android app's day, and on its first launch the bot's one thanks (bot_outbox's unique row; the nightly
+    sweep deletes it after 90 days with android_app, so a comeback later may be thanked again). Nobody is thanked before
+    the creator turned it on."""
     con.execute("""INSERT INTO android_app (user_id, seen_at) VALUES (?, ?)
         ON CONFLICT (user_id) DO UPDATE SET seen_at = excluded.seen_at""", (uid, core.now()))
     if first and one(con, "SELECT 1 FROM meta WHERE key = ? AND value = 'on'", WELCOME):
