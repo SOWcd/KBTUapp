@@ -4,7 +4,6 @@
 import { openLink } from './tg';
 import { count } from './stats';
 import { i18n } from './i18n/index.svelte';
-import { PLAY_PAGE } from './feedback';
 
 const AGAIN_AFTER = 3 * 86400_000;
 
@@ -20,10 +19,9 @@ export function offerDue(now = Date.now()): 'first' | 'again' | null {
   } catch { return null; }
 }
 
-/** The steps' page in the phone's own browser, where the Google account lives; the sheet won't come back.
- *  (Profile's row does the same inline, AppCard.svelte: this module stays off the start's path.) */
+/** The steps' page in the phone's own browser, where the Google account lives; the sheet won't come back. */
 export function openPlayPage(from: 'andr.go' | 'andr.rowgo'): void {
   count(from);
   try { localStorage.setItem('andr.went', '1'); } catch { /* the sheet may come once more: fine */ }
-  openLink(PLAY_PAGE + i18n.lang, true);
+  openLink('https://kbtu.sow.kz/android.html?lang=' + i18n.lang, true);
 }

@@ -16,8 +16,8 @@
   import Avatar from '../../ui/Avatar.svelte';
   import Group from '../../ui/Group.svelte';
   import Row from '../../ui/Row.svelte';
-  import { t, i18n } from '../../lib/i18n/index.svelte';
-  import { PLAY_PAGE } from '../../lib/feedback';
+  import { t } from '../../lib/i18n/index.svelte';
+  import { openPlayPage } from '../../lib/androidTest';
   import { haptic, inPlayApp, onAndroid, openLink } from '../../lib/tg';
   import { CODE, TALK } from '../../lib/feedback';
   import { session } from '../../lib/state/session.svelte';
@@ -37,12 +37,7 @@
   // the installed app (here: inPlayApp; in Telegram: the account's androidApp); counted drawn once a launch, and tapped
   const play = $derived(onAndroid && !inPlayApp && !!session.me && !session.me.androidApp);
   $effect(() => { if (play && !drawn) { drawn = true; count('andr.row'); } });
-  // lib/androidTest.ts's openPlayPage, inline: that module stays off the start's path, and the link opens in the tap itself
-  const playRow = () => {
-    haptic.tap(); count('andr.rowgo');
-    try { localStorage.setItem('andr.went', '1'); } catch { /* the sheet may come once more: fine */ }
-    openLink(PLAY_PAGE + i18n.lang, true);
-  };
+  const playRow = () => { haptic.tap(); openPlayPage('andr.rowgo'); };
 </script>
 
 <script module lang="ts">

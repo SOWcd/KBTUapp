@@ -7,9 +7,6 @@ export const OWNER = 'Sowers';
 export const CODE = 'https://github.com/SOWcd/KBTUapp';
 /** the app's topics group in Telegram (BUGS / IDEAS / QUESTIONS) */
 export const TALK = 'https://t.me/KBTUappTop';
-/** the Google Play tester steps' page, opened in the phone's browser (AndroidTestSheet, Profile's row); its ?lang= */
-export const PLAY_PAGE = 'https://kbtu.sow.kz/android.html?lang=';
-
 /** The same chat with a draft of the screen's own (e.g. DMP's list has me wrong, PLAN 95). */
 export function writeSupport(draft: string): void {
   openLink(`https://t.me/${OWNER}?text=${encodeURIComponent(draft)}`);
