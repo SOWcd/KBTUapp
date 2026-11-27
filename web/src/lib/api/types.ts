@@ -170,7 +170,8 @@ export interface ReportItem { target: 'comment' | 'post' | 'event' | 'user' | 'p
   // a Telegram comment (tgc): removed on the reports and the AI (confirm or restore), the AI's word, each reporter as
   // accuracy and days since Microsoft verified them, never a name
   removed?: boolean; ai?: 'ok' | 'flag' | 'none' | null; rule?: TgcRule | null /* the AI's guess at the clause broken */; reporters?: { right: number; wrong: number; days: number | null }[]
-  photos?: Media[] /* fpost: its photos (two people's reports take such a post out of the channel at once) */ }
+  photos?: Media[] /* fpost: its photos (two people's reports take such a post out of the channel at once) */
+  was?: string | null /* fpost: its words when reported, if edited since */ }
 
 /** DMP's view of a leaders meeting: per club, who said yes, who no, who hasn't answered. */
 export interface LeadersAnswer { org: OrgRef; people: { person: PersonRef; fullName: string; role: OrgRole; answer: 'yes' | 'no' | 'none' }[] }

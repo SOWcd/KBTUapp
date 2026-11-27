@@ -12,7 +12,7 @@
   import KbtuMark from '../ui/KbtuMark.svelte';
   import { QR_TONE } from '../lib/awards';
   import { screenPoll, screenView, type ScreenState } from '../lib/screen';
-  import { t } from '../lib/i18n/index.svelte';
+  import { sw } from '../lib/i18n/staff';
 
   let st = $state<ScreenState | null>(null);
   let now = $state(Date.now());
@@ -34,15 +34,15 @@
 <div class="screen">
   <div class="glow" aria-hidden="true"></div>
   {#if !st || !view.fresh}
-    <p class="sub">{t('scr.reconnecting')}</p>
-    {#if st?.session != null}<div class="corner"><button class="again" onclick={again}>{t('scr.again')}</button></div>{/if}
+    <p class="sub">{sw('scr.reconnecting')}</p>
+    {#if st?.session != null}<div class="corner"><button class="again" onclick={again}>{sw('scr.again')}</button></div>{/if}
   {:else if st.session == null}
     <section class="pair" in:fade>
-      <h1>{t('scr.pairTitle')}</h1>
+      <h1>{sw('scr.pairTitle')}</h1>
       <!-- a new code redraws in place (no key, no fade): the swap is seamless -->
       <div class="code small"><Qr text={view.pair} tone={QR_TONE}><span class="appmark"><KbtuMark /></span></Qr></div>
-      <p class="hint">{t('scr.pairHint')}</p>
-      <p class="sub">{t('scr.pairWho')}</p>
+      <p class="hint">{sw('scr.pairHint')}</p>
+      <p class="sub">{sw('scr.pairWho')}</p>
     </section>
   {:else}
     <header><h1>{st.title}</h1></header>
@@ -52,33 +52,33 @@
         <aside>
           {#if st.phase === 'out'}
             <!-- the way out: the same QR marks leaving (the organizer switched it in the app) -->
-            <p class="hint outh">{t('scr.outScan')}</p>
+            <p class="hint outh">{sw('scr.outScan')}</p>
             <p class="count"><b>{st.departed}</b><span> / {view.arrivals}</span></p>
-            <p class="sub">{t('scr.outDone')}</p>
+            <p class="sub">{sw('scr.outDone')}</p>
           {:else if st.param?.startsWith('tk_')}
-            <p class="hint">{t('scr.ticket')}</p>
+            <p class="hint">{sw('scr.ticket')}</p>
           {:else}
-            <p class="hint">{t('scr.scan')}</p>
+            <p class="hint">{sw('scr.scan')}</p>
             <p class="count"><b>{view.arrivals}</b></p>
-            <p class="sub">{t('scr.done')}</p>
+            <p class="sub">{sw('scr.done')}</p>
           {/if}
-          {#if st.pending}<p class="sub" transition:fade>{t('scr.joining', { n: st.pending })}</p>{/if}
+          {#if st.pending}<p class="sub" transition:fade>{sw('scr.joining', { n: st.pending })}</p>{/if}
         </aside>
       </section>
     {:else}
       <section class="idle" in:scale={{ start: 0.96 }}>
         {#if st.ended}
           <p class="count"><b>{view.arrivals}</b></p>
-          <p class="sub">{t('scr.closed')}</p>
-          <p class="sub">{t('scr.listInApp')}</p>
+          <p class="sub">{sw('scr.closed')}</p>
+          <p class="sub">{sw('scr.listInApp')}</p>
         {:else}
-          <p class="hint">{t('scr.pressStart')}</p>
+          <p class="hint">{sw('scr.pressStart')}</p>
         {/if}
       </section>
     {/if}
     <!-- the same pairing code: another organizer's way to the controls; anyone else's scan changes nothing -->
-    <div class="corner"><div class="mini"><Qr text={view.pair} tone={QR_TONE}><span class="appmark"><KbtuMark /></span></Qr></div><span>{t('scr.organizers')}</span>
-      <button class="again" onclick={again}>{t('scr.again')}</button></div>
+    <div class="corner"><div class="mini"><Qr text={view.pair} tone={QR_TONE}><span class="appmark"><KbtuMark /></span></Qr></div><span>{sw('scr.organizers')}</span>
+      <button class="again" onclick={again}>{sw('scr.again')}</button></div>
   {/if}
 </div>
 

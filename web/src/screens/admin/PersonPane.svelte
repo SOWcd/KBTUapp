@@ -8,6 +8,7 @@
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { session } from '../../lib/state/session.svelte';
   import { t } from '../../lib/i18n/index.svelte';
+  import { sw } from '../../lib/i18n/staff';
   import { haptic, openLink } from '../../lib/tg';
   import TelegramMark from '../../ui/TelegramMark.svelte';
   import { fold } from '../../ui/fold';
@@ -66,7 +67,7 @@
         menu={touchable && iOwn && !banned ? roles.map((r) => ({ label: t(`staff.role.${r}`), checked: p.role === r, onselect: () => setRole(r) })) : undefined} />
     </Group>
 
-    <Group caption={t('adm.awards')}>
+    <Group caption={sw('adm.awards')}>
       <div class="aw">{#key p.person.id}<PersonAwards person={p.person} />{/key}</div>
     </Group>
 

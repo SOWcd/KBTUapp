@@ -9,6 +9,7 @@
   import { sheets } from '../../lib/state/sheets';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { t, tn, i18n } from '../../lib/i18n/index.svelte';
+  import { sw } from '../../lib/i18n/staff';
   import { haptic, openLink } from '../../lib/tg';
   import { fold } from '../../ui/fold';
   import Pane from '../../ui/Pane.svelte';
@@ -45,7 +46,7 @@
   const dayName = (day: number) => new Intl.DateTimeFormat(i18n.lang, { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(day * 864e5));
 </script>
 
-<Pane {overlay} title={t('adm.stats')}>
+<Pane {overlay} title={sw('adm.stats')}>
   {#if st}
     <div class="page stagger">
       <div class="tiles">

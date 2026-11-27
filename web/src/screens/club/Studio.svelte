@@ -28,6 +28,7 @@
   import { untrack } from 'svelte';
   import { sheets, registration } from '../../lib/state/sheets';
   import { t, tn, placeOf } from '../../lib/i18n/index.svelte';
+  import { sw, swn } from '../../lib/i18n/staff';
   import { relDay, time, nowTs, dayNo, dayMonth, duration, at as tsAt } from '../../lib/time';
   import Clock from '@lucide/svelte/icons/clock';
   import { may, byRank, roleName, roleLabel, titleOf } from '../../lib/perms';
@@ -129,7 +130,7 @@
   const presVice = $derived(m?.role === 'president' || m?.role === 'vice');
   // the volunteers ledger's club (server logic/vol.py): the list for its President and whom she grants, my own hours for each volunteer
   const vol = $derived(session.me?.vol && session.me.vol.org === m?.org.id ? session.me.vol : null);
-  const volLine = (x: { minutes: number; misses: number; unmarked: number }) => duration(x.minutes * 60) + (x.misses ? ' · ' + tn('ledg.misses', x.misses) : '') + (x.unmarked ? ' · ' + t('ledg.unmarkedN', { n: x.unmarked }) : '');
+  const volLine = (x: { minutes: number; misses: number; unmarked: number }) => duration(x.minutes * 60) + (x.misses ? ' · ' + swn('ledg.misses', x.misses) : '') + (x.unmarked ? ' · ' + sw('ledg.unmarkedN', { n: x.unmarked }) : '');
   // its ladder and the ask for the ✓ on a page of their own; a row here says the level
   const level = $derived(path ? (['profile', 'round', 'channel', 'collab', 'top'] as const).filter((k) => path!.steps[k]).length : 0);
   const openAscent = () => { if (m && path) { haptic.tap(); open(AscentPane, { org: m.org.id, path, presVice }); } };
@@ -403,8 +404,8 @@
       {#if staff}<Row icon={Gift} title={t('santa.title')} value={santa ? tn('santa.playing', santa.taken) : undefined} accessory="chevron" onclick={startSanta} />{/if}
       {#if path}<Row icon={MountainSnow} title={t('op.title')} value={path.steps.top ? t('op.atTop') : t('op.level', { n: level })} accessory="chevron" onclick={openAscent} />{/if}
       {#if may(m, 'profile')}<Row icon={Pencil} title={t('ce.title')} accessory="chevron" onclick={() => sheets.clubEdit(m.org.id)} />{/if}
-      {#if vol?.ledger}<Row icon={HandHeart} title={t('ledg.title')} value={data.vol ? tn('ledg.count', data.vol.people.length) : undefined} accessory="chevron" onclick={() => sheets.volLedger()} />{/if}
-      {#if vol?.mine}{@const mine = vol.mine}<Row icon={Clock} title={t('ledg.mine')} value={volLine(mine)} accessory="chevron" onclick={() => sheets.volPerson(mine.id, true)} />{/if}
+      {#if vol?.ledger}<Row icon={HandHeart} title={sw('ledg.title')} value={data.vol ? swn('ledg.count', data.vol.people.length) : undefined} accessory="chevron" onclick={() => sheets.volLedger()} />{/if}
+      {#if vol?.mine}{@const mine = vol.mine}<Row icon={Clock} title={sw('ledg.mine')} value={volLine(mine)} accessory="chevron" onclick={() => sheets.volPerson(mine.id, true)} />{/if}
     </Group></div>
 
     {#if canReport}
@@ -423,7 +424,7 @@
         </div>
       </div>
     {:else}<!-- a club with no event yet: its first one is the screen's one main button (a member's: a draft for approval) -->
-      <Button kind="primary" size="l" full onclick={() => sheets.editor(m.org.id)}>{#snippet icon()}<Plus size={20} />{/snippet}{t('ed.new')}</Button>
+      <Button kind="primary" size="l" full onclick={() => sheets.editor(m.org.id)}>{#snippet icon()}<Plus size={20} />{/snippet}{sw('ed.new')}</Button>
     {/if}
 
     <!-- a club made by mistake: shown only while it can go (nobody else in it, no event out; the server checks too) -->

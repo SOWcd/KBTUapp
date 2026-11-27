@@ -37,6 +37,28 @@ it('serializes polls and ignores an old pairing response after reconnect', async
   }
 });
 
+it('re-pairs before the pairing code expires, keeping the old QR up meanwhile', async () => {
+  vi.useFakeTimers();
+  const fetch = vi.fn()
+    .mockResolvedValueOnce(reply(200, { code: 'one', bot, secret: 's1', ttl: 120 }))
+    .mockResolvedValueOnce(reply(200, { code: 'one', bot, left: 4 }))
+    .mockResolvedValueOnce(reply(200, { code: 'two', bot, secret: 's2', ttl: 120 }));
+  vi.stubGlobal('fetch', fetch);
+  const storage = { getItem: () => null, setItem: vi.fn(), removeItem: vi.fn() };
+  vi.stubGlobal('sessionStorage', storage);
+  vi.stubGlobal('localStorage', storage);
+  const receive = vi.fn(), screen = screenPoll(receive);
+  try {
+    await vi.advanceTimersByTimeAsync(4500);
+    expect(fetch).toHaveBeenLastCalledWith('/api/screen/pair', expect.objectContaining({ method: 'POST' }));
+    const states = receive.mock.calls.map(([state]) => state);
+    expect(states.map((state) => state.code)).toEqual(['one', 'one', 'two']);
+    expect(screenView(states[1], 4000).fresh).toBe(true); // 'one' still shown when 'two' is asked for (at 4 s)
+  } finally {
+    screen.stop();
+  }
+});
+
 it('hides both QR links when the screen lease or pairing code expires', () => {
   const pairing = { code: 'one', bot, expires: 15_000 };
   const live = { ...pairing, session: 1, param: 'ci_one' };
