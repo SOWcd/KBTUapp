@@ -15,14 +15,14 @@
   "enableNotifications": false,
   "startUrl": "/",
   "iconUrl": "https://kbtu.sow.kz/icon-512.png",
-  "maskableIconUrl": "https://kbtu.sow.kz/icon-512.png",
+  "maskableIconUrl": "https://kbtu.sow.kz/icon-maskable-512.png",
   "splashScreenFadeOutDuration": 300,
   "signingKey": {
     "path": "./android.keystore",
     "alias": "upload"
   },
-  "appVersionName": "1.0.0",
-  "appVersionCode": 1,
+  "appVersionName": "1.0.1",
+  "appVersionCode": 2,
   "shortcuts": [],
   "generatorApp": "bubblewrap-cli",
   "webManifestUrl": "https://kbtu.sow.kz/manifest.json",
