@@ -589,7 +589,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         logic.sync_levels(con)  # a new achievement or level counts what students already did
         logic.name_slugs(con)
         logic.fill_abbrs(con)
-        logic.oversight.reconcile_erased_admins(con, cfg.admins)
+        logic.oversight.drop_stale_admins(con, cfg.admins)
         logic.refill(con)  # Fill waitlist places made available by startup migrations.
         if cfg.seed:
             logic.seed_schools(con, Path(cfg.db_path).resolve().parent / "media")  # KBTU's schools, once
@@ -1017,8 +1017,6 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             raise ApiError("bad_input")
         if not ms:
             raise ApiError("forbidden", "ms_first")
-        if STUDENT_ID.fullmatch(ms.get("employeeId") or "") and ms["employeeId"] != sid:
-            raise ApiError("conflict", "sid_mismatch")  # Check the directory ID when KBTU supplies it.
         now = logic.now()
         with db.tx(con):
             if logic.one(con, "SELECT 1 FROM students WHERE user_id = ?", v.id):

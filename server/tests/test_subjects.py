@@ -474,7 +474,7 @@ def test_tokenless_offers_never_answer(subj):
     cid, tok = _ann_offer(c, con, sid, 2)
     assert logic.decide_contact(con, p["ann"], cid, True, None) is None
     con.execute("UPDATE users SET role = 'admin' WHERE id = ?", (p["ann"],))
-    forum = TestClient(server.create(dataclasses.replace(c.app.state.cfg, forum=True)))
+    forum = TestClient(server.create(dataclasses.replace(c.app.state.cfg, forum=True, admins=frozenset({1}))))
     assert forum.post(f"/api/forum/contacts/{cid}", headers=tma(1), json={"yes": True}).status_code == 404  # the app, no token
     assert outbox._render(con, {"kind": "contact_ask", "ref": f"ct:{cid}", "lang": "en", "user_id": p["ann"]}) is None
     assert logic.decide_contact(con, p["ann"], cid, True, tok) == "accepted"
