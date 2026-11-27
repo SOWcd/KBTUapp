@@ -27,7 +27,6 @@
   import { ago } from '../../lib/time';
   import { castingOn, tagName } from '../../lib/posts';
   import { focusPos } from '../../lib/photo';
-  import { screenful } from '../../lib/screenful.svelte';
   import { haptic, openLink } from '../../lib/tg';
   import { compact } from '../../lib/chats';
   import OrgLogo from '../../ui/OrgLogo.svelte';
@@ -133,15 +132,11 @@
     catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   // by time only: a club's pin holds on its own page, not over everyone's news
-  // up to 100 posts: the first screen's few in the tap's frame, the rest after it paints, 10 ms of them a frame (all at
-  // once kept every open of this sheet over half a second, stats tti.sheet.news; the other 95 in one go 360 ms in were
-  // one long freeze on a mid Android, issue #71)
-  const sorted = $derived<Post[] | null>(posts && [...posts].sort((a, b) => b.createdAt - a.createdAt));
-  const draw = screenful(() => sorted?.length ?? 0, 5);
-  const feed = $derived(sorted?.slice(0, draw.n) ?? null);
-  // only the first screen rises in, one after another; a post drawn later is below it and just there when scrolled to
-  // (each at its index's delay hid the 100th for 6 s)
-  const RISE = 6;
+  // up to 100 posts: the first screen's few in the tap's frame, the rest once the sheet has slid in (all at once kept
+  // every open of this sheet over half a second, stats tti.sheet.news, and stuttered the slide)
+  let rest = $state(false);
+  onMount(() => { const k = setTimeout(() => (rest = true), 360); return () => clearTimeout(k); });
+  const feed = $derived<Post[] | null>(posts && [...posts].sort((a, b) => b.createdAt - a.createdAt).slice(0, rest ? undefined : 5));
   // "your club" / "you follow"; anyone else's post says only when
   const why = (p: Post) => (me?.memberships.some((m) => m.org.id === p.org.id) ? t('news.yourClub') + ' · ' : data.orgs.some((o) => o.id === p.org.id && o.subscribed) ? t('news.following') + ' · ' : '');
 </script>
@@ -207,11 +202,11 @@
   {#if casts && posts}
     {#if casts.length}
       <Section title={t('news.broadcasts', { dmp: t('tab.dmp') })}>
-        <div class="list">{#each casts as p, i (p.id)}<div class:in={i < RISE} style:--i={i}>{@render card(p, true)}</div>{/each}</div>
+        <div class="list">{#each casts as p, i (p.id)}<div class="in" style="--i:{i}">{@render card(p, true)}</div>{/each}</div>
       </Section>
     {/if}
     {#if feed?.length}
-      {#snippet clubs()}<div class="list">{#each feed as p, i (p.id)}<div class:in={i < RISE} style:--i={i + (casts.length ? 2 : 0)}>{@render card(p, false)}</div>{/each}</div>{/snippet}
+      {#snippet clubs()}<div class="list">{#each feed as p, i (p.id)}<div class="in" style="--i:{i + (casts.length ? 2 : 0)}">{@render card(p, false)}</div>{/each}</div>{/snippet}
       {#if casts.length}<Section title={t('news.clubs')}>{@render clubs()}</Section>{:else}{@render clubs()}{/if}
     {:else if !casts.length}
       <EmptyState icon={Newspaper} title={t('news.emptyTitle')} text={t('news.emptyText')} />
