@@ -175,9 +175,8 @@
   let draft = $state(untrack(() => keyboard?.value ?? ''));
   const busy = $derived(chat.busy);
   let list = $state<HTMLDivElement>();
-  // The opening (as Gemini opens): the light in the middle
-  // of the air, and at the foot, set left like a headline, the greeting (the name in the heavier weight) and one
-  // starter under it that keeps changing: a text link with the accent on its arrow
+  // The opening: the light in the middle of the air and, on its axis at the foot, the greeting (the name in the
+  // heavier weight) and one starter under it that keeps changing: a text link with the accent on its arrow
   const SUGGEST = $derived(chat.ctx?.kind === 'event' ? ['as.e1', 'as.e2', 'as.e3'] as const
     : chat.ctx?.kind === 'club' ? ['as.c1', 'as.c2'] as const : ['as.s1', 'as.s2', 'as.s3', 'as.s4'] as const);
   let qi = $state(0); // the question on show
@@ -317,10 +316,11 @@
 <Sheet {overlay} {opener} icon={Sparkles} tall shut title={t('as.title')}>
   <div class="list" class:flown={!!from} bind:this={list}>
     {#if !chat.turns.length || wait}
-      <div class={['mid', { up: kb > 0, tight }]} style:--kb="{kb}px">
+      <!-- --n: the greeting's word count, the beat the starter line (and, in the footer, the tiles) come in after -->
+      <div class={['mid', { up: kb > 0, tight }]} style:--kb="{kb}px" style:--n={words.length}>
         <i class="lt" class:hid={flying} class:land={!from} class:gl={live} bind:this={orb} aria-hidden="true"><Orb size={168}><span class="glyph"><Sparkles strokeWidth={2} /></span></Orb><LiveOrb
           start={!flying} energy={busy ? 1 : draft.trim() ? 0.5 : 0} hold={tight || overlays.some((o) => o.id > overlay.id && !o.closing)} bind:on={live} /></i>
-        <h2 class="greeting clamp-2" class:named={!!first && !chat.ctx} style:--n={words.length}>{#each words as w, i (i)}{i ? ' ' : ''}<span class="w" style:--w={i}><span>{#each w as p, k (k)}{#if p.b}<b>{p.s}</b>{:else}{p.s}{/if}{/each}</span></span>{/each}</h2>
+        <h2 class="greeting clamp-2" class:named={!!first && !chat.ctx}>{#each words as w, i (i)}{i ? ' ' : ''}<span class="w" style:--w={i}><span>{#each w as p, k (k)}{#if p.b}<b>{p.s}</b>{:else}{p.s}{/if}{/each}</span></span>{/each}</h2>
         <!-- every question in one cell: the tallest holds the height, a change moves nothing. The one on show goes up
              out of the line as the next rises into it; asked, "thinking" rises in its place (a tap then does nothing: busy) -->
         <button class="rot" onclick={() => pick(SUGGEST[qi])}>
@@ -388,8 +388,9 @@
     {#if flying}<i class="lt fly" bind:this={fly} aria-hidden="true"><Orb size={168}><span class="glyph"><Sparkles strokeWidth={2} /></span></Orb></i>{/if}
     {#if !chat.turns.length || wait}
       <!-- the starters in the footer: they ride over the keyboard with the field, nothing of the body has to scroll.
-           Asked: they fade but keep their room while the light thinks, so nothing over them moves -->
-      <div class="over" class:wait inert={wait}>
+           Asked: they fade but keep their room while the light thinks, so nothing over them moves.
+           flown and --n: the same clock as the words in the body, so the tiles come in after them -->
+      <div class="over" class:wait class:flown={!!from} inert={wait} style:--n={words.length}>
         {#if offer}
           <div class="gem" class:out={!asking} inert={!asking}>
             <p class="gt">{t('kri.gT')}</p>
@@ -400,7 +401,7 @@
             </div>
           </div>
         {/if}
-        <div class="eg" class:out={asking} inert={asking}>{#each SUGGEST as k (k)}<button onclick={() => pick(k)}>{t(k)}</button>{/each}</div>
+        <div class="eg" class:out={asking} inert={asking}>{#each SUGGEST as k, i (k)}<button style:--t={i} onclick={() => pick(k)}>{t(k)}</button>{/each}</div>
       </div>
     {/if}
     <div class="bar">
@@ -415,30 +416,42 @@
 <style>
   .list { display: flex; flex-direction: column; gap: var(--s-3); min-height: 100%; padding: 6px 0 4px; }
   .list:has(> .mid) { padding: 0; }
-  /* empty: the light in the middle of the air, the words at the foot, set left in display type (two weights). The
-     keyboard: Sheet raises the footer over the body, the words ride up with it and the light moves to the middle of
-     what is left, smaller (transforms, no layout) or, with no room, the middle fades */
-  .mid { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; padding: 0 var(--s-2) var(--s-5); transition: opacity 180ms ease-out; }
+  /* empty: one axis. The light in the middle of the air, the words under it at the foot in display type (two
+     weights), all centred. The keyboard: Sheet raises the footer over the body, the words ride up with it and the
+     light moves to the middle of what is left, smaller (transforms, no layout) or, with no room, the middle fades */
+  .mid { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; text-align: center;
+    padding: 0 var(--s-2) var(--s-5); transition: opacity 180ms ease-out; }
   .mid.tight { opacity: 0; pointer-events: none; }
   .lt, .greeting, .rot { transition: transform 250ms cubic-bezier(.2, .8, .3, 1); }
   .mid.up .lt { transform: translateY(calc(var(--kb) / -2)) scale(0.45); }
   .mid.up .greeting, .mid.up .rot { transform: translateY(calc(var(--kb) * -1)); }
-  .greeting { max-width: 100%; font: var(--fw-light) var(--fs-title)/1.06 var(--font-display); letter-spacing: -0.045em; overflow-wrap: anywhere; }
+
+  /* The entrance, one clock for the body and the footer: the light, then the greeting word by word, then the starter
+     line, then the tiles one by one. --land: the wait for a light that is flying in; --n: the greeting's words (at
+     most 5 count: a long title must not hold the tiles back). Long ease-outs, no overshoot. The entrances use the
+     separate translate/scale properties, so they add to the keyboard's transform instead of overriding it */
+  .mid, .over { --calm: cubic-bezier(.16, 1, .3, 1); --after: calc(var(--land, 0ms) + min(var(--n, 2), 5) * 70ms); }
+  .mid { --io: cubic-bezier(.65, 0, .35, 1); } /* the ticker's even glide */
+  .flown { --land: 380ms; } /* the light is flying in: the rest waits until it is over them, not on them; no flight, no wait */
+  @keyframes soft { from { opacity: 0; translate: 0 8px; } }
+  @keyframes down { from { opacity: 0; transform: translateY(-12px); } }
+
+  .greeting { max-width: 100%; font: var(--fw-light) var(--fs-title)/1.06 var(--font-display); letter-spacing: -0.045em; overflow-wrap: anywhere; text-wrap: balance; }
   .greeting b { font-weight: 600; }
-  /* Fable's two tones: the words round the name quieter, the name itself in full */
+  /* two tones: the words round the name quieter, the name itself in full */
   .greeting.named { color: var(--text-2); }
   .greeting.named .w:has(b) { color: var(--text); } /* the name's whole word, its "!" with it */
-  /* the greeting's calm entrance (Fable's): each word rises out of its own mask on a long ease-out, a slow beat after
-     the last, no overshoot (the padding keeps descenders and the bold's side bearings inside the mask; the margins take it back) */
+  /* each word rises out of its own mask (the padding keeps descenders and the bold's side bearings inside the mask;
+     the margins take it back) */
   .greeting .w { display: inline-block; overflow: hidden; vertical-align: top; max-width: 100%; padding: 0 0.06em 0.14em; margin: 0 -0.06em -0.14em; }
-  .greeting .w > span { display: inline-block; animation: mask 1250ms var(--calm) calc(var(--land, 0ms) + 120ms + var(--w) * 120ms) backwards; }
+  .greeting .w > span { display: inline-block; animation: mask 1000ms var(--calm) calc(var(--land, 0ms) + 80ms + var(--w) * 70ms) backwards; }
   @keyframes mask { from { transform: translateY(118%); } }
-  .rot { display: grid; justify-items: start; max-width: 100%; margin-top: var(--s-1); padding: var(--s-1) 0; color: var(--text-3); text-align: left;
+  .rot { display: grid; justify-items: center; max-width: 100%; margin-top: var(--s-1); padding: var(--s-1) 0; color: var(--text-3); text-align: center;
     font: var(--fw-light) var(--fs-sec)/1.2 var(--font-display); letter-spacing: -0.03em;
-    animation: soft 900ms var(--calm) calc(var(--land, 0ms) + 420ms + var(--n, 2) * 120ms) backwards; transition: opacity var(--t-fast), transform 250ms cubic-bezier(.2, .8, .3, 1);
+    animation: soft 800ms var(--calm) calc(var(--after) + 220ms) backwards; transition: opacity var(--t-fast), transform 250ms cubic-bezier(.2, .8, .3, 1);
     overflow: hidden; }
   .rot:active { opacity: 0.6; }
-  /* Fable's ticker in its clipped line: the one on show goes up and out as the next rises in from under it. The rest
+  /* the ticker in its clipped line: the one on show goes up and out as the next rises in from under it. The rest
      wait below unseen, with no transition (the one that left drops back there without crossing the line) */
   .rot span { grid-area: 1 / 1; align-self: center; opacity: 0; transform: translateY(100%); }
   .rot span.on { opacity: 1; transform: none; transition: opacity 850ms var(--io), transform 850ms var(--io); }
@@ -450,17 +463,13 @@
   :global(html.lowfx) .rot .tk { animation: none; }
   /* the screen's one accent: the link's arrow */
   .rot :global(svg) { display: inline; margin-left: 6px; vertical-align: -1px; color: var(--accent-text); }
-  .flown { --land: 380ms; } /* the light is flying in: the words wait until it is over them, not on them; no flight, no wait */
-  .mid { --calm: cubic-bezier(.16, 1, .3, 1); --io: cubic-bezier(.65, 0, .35, 1); } /* the opening's curves: a long, quiet settle; the ticker's even glide */
-  @keyframes soft { from { opacity: 0; transform: translateY(8px); } }
-  @keyframes down { from { opacity: 0; transform: translateY(-12px); } }
   .ctx { align-self: center; display: inline-flex; align-items: center; gap: 6px; max-width: 86%; height: 28px; padding: 0 12px; border-radius: var(--r-full);
     background: var(--fill); color: var(--text-2); font: 600 var(--fs-cap)/1 var(--font-text); }
 
   /* the light of the opening: the orb (ui/Orb) in a box of its own, which is what flies, lands and hides */
   .lt { position: relative; flex: none; display: block; align-self: center; width: 168px; height: 168px; margin: auto; }
-  .lt.land { animation: land 1100ms var(--calm) backwards; } /* no button to fly from: it comes up in its place */
-  @keyframes land { from { opacity: 0; transform: scale(0.86); } }
+  .lt.land { animation: land 1000ms var(--calm) backwards; } /* no button to fly from: it comes up in its place, first */
+  @keyframes land { from { opacity: 0; scale: 0.9; } }
   /* the shader's light over the CSS one (LiveOrb): the CSS one goes once the other is nearly in, and is back at once
      when it leaves (it fades out over it) */
   .lt.gl > :global(.orb) { opacity: 0; transition: opacity 500ms 400ms; }
@@ -483,17 +492,22 @@
   .over.wait { opacity: 0; }
   .over > * { grid-area: 1 / 1; transition: opacity 220ms var(--ease), visibility 0s; }
   .over > .out { opacity: 0; visibility: hidden; transition: opacity 160ms ease-out, visibility 0s 160ms; }
-  .gem { align-self: end; display: flex; flex-direction: column; gap: 4px; padding: var(--s-3); border-radius: var(--r-m); background: var(--fill); }
+  /* the card comes in on the first tile's beat */
+  .gem { align-self: end; display: flex; flex-direction: column; gap: 4px; padding: var(--s-3); border-radius: var(--r-m); background: var(--fill);
+    animation: soft 700ms var(--calm) calc(var(--after) + 320ms) backwards; }
   .gt { font: 600 var(--fs-body)/1.25 var(--font-text); }
   .gx { font: 450 var(--fs-sub)/1.35 var(--font-text); color: var(--text-2); text-wrap: pretty; }
   .gb { display: flex; gap: var(--s-2); margin-top: var(--s-2); }
-  /* the starters over the field, two by two, the words on two lines; an odd last one takes the row. One family with
-     the app's small buttons: the lens glass (tokens.css --lg-*) on the --fill body, not flat grey tiles */
+  /* the starters over the field, two by two, the words centred on two lines; an odd last one takes the row. One
+     family with the app's small buttons: the lens glass (tokens.css --lg-*) on the --fill body. They close the
+     entrance, one after another (--t: the tile's place in the row of beats) */
   .eg { align-self: end; display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-2); }
-  .eg button { display: flex; align-items: center; min-height: var(--ctl-l); padding: var(--s-2) var(--s-3); border-radius: var(--r-m); color: var(--text-2);
+  .eg button { display: flex; align-items: center; justify-content: center; min-height: var(--ctl-l); padding: var(--s-2) var(--s-3); border-radius: var(--r-m); color: var(--text-2);
     background: linear-gradient(180deg, var(--lg-sheen), transparent 60%), var(--fill); box-shadow: var(--lg-bevel), var(--lg-lift);
-    font: 500 var(--fs-sub)/1.25 var(--font-text); text-align: left; text-wrap: balance; overflow-wrap: anywhere; transition: transform var(--t-fast); }
-  .eg button:active { transform: scale(0.96); }
+    font: 500 var(--fs-sub)/1.25 var(--font-text); text-align: center; text-wrap: balance; overflow-wrap: anywhere;
+    transition: transform var(--t-fast), opacity var(--t-fast);
+    animation: soft 700ms var(--calm) calc(var(--after) + 320ms + var(--t, 0) * 60ms) backwards; }
+  .eg button:active { transform: scale(0.97); opacity: 0.7; }
   .eg button:last-child:nth-child(odd) { grid-column: 1 / -1; }
 
   .help p { font: 450 var(--fs-body)/1.45 var(--font-text); white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -522,11 +536,12 @@
   .think .orb { animation: breathe 1.5s ease-in-out infinite alternate; }
   @keyframes up { from { opacity: 0; transform: translateY(10px); } }
   @keyframes breathe { from { transform: scale(0.82); } to { transform: scale(1.08); } }
-  /* power saving: nothing moves without end; less motion asked: nothing moves at all, everything is in its place */
+  /* power saving: nothing moves without end; less motion asked: nothing moves at all, everything is in its place
+     (the footer's tiles and card too: they are not inside .list) */
   :global(html.lowfx) .orb::before, :global(html.lowfx) .think .orb { animation: none; }
   @media (prefers-reduced-motion: reduce) {
-    .list *, .orb, .orb::before { animation: none !important; }
-    .mid, .lt, .greeting, .rot, .rot span, .over > * { transition: none !important; }
+    .list *, .gem, .eg button, .orb, .orb::before { animation: none !important; }
+    .mid, .lt, .greeting, .rot, .rot span, .over, .over > *, .eg button { transition: none !important; }
   }
 
   .bar { display: flex; align-items: flex-end; gap: var(--s-2); }
