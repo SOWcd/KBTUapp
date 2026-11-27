@@ -11,8 +11,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
  *  Studio's news-from-a-group-topic strings (PR 441: the ru dictionary ships with the start); +2,150 for library seats'
  *  strings (PR 449, the ru dictionary again; the screens themselves are lazy chunks); +300 for KBTU's official service
  *  mark on Afisha's cards and rows (PR 452: OfficeMark, its icon and string, shown from the first frame); +200 for the
- *  tab switch's crossfade and the lens's stretch on one spring (PR 456: the shell and Nav are the start). */
-const MAX_START_GZIP = 226_800;
+ *  tab switch's crossfade and the lens's stretch on one spring (PR 456: the shell and Nav are the start); +100 for the
+ *  receipt fixes' strings (PR 465: Match with Kaspi, a resent receipt, the unchecked cap; the ru dictionary again). */
+const MAX_START_GZIP = 226_900;
 
 const gzipped = async (code: string) => (await new Response(new Blob([code]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer()).byteLength;
 

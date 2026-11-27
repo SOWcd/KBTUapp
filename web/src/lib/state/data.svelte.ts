@@ -665,6 +665,7 @@ export function errorText(e: unknown): string {
     if (team) return t(team);
     if (e.code === 'closed') return e.message === 'deadline' ? t('event.regClosed') : t('event.closed');
     if (e.code === 'full') return t('event.full');
+    if (e.code === 'rate_limited' && e.message === 'unchecked') return t('pay.queue'); // a paid event's receipts wait for the organizer
     if (e.code === 'guest_list') return t('event.guestList'); // tickets only from the organizers' list
     if (e.code === 'forbidden' && e.message === 'team') return t('event.team');
     if (e.code === 'conflict' && e.message === 'answers') { void loadAfisha(); return t('qs.changed'); } // the questions changed meanwhile

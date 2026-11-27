@@ -44,6 +44,7 @@
   import Skeleton from '../../ui/Skeleton.svelte';
   import IconButton from '../../ui/IconButton.svelte';
   import X from '@lucide/svelte/icons/x';
+  import Check from '@lucide/svelte/icons/check';
   import Gift from '@lucide/svelte/icons/gift';
   import MapPin from '@lucide/svelte/icons/map-pin';
   import Field from '../../ui/Field.svelte';
@@ -83,9 +84,19 @@
   const paying = $derived(going.filter((a) => !a.free).length);
   const byReceipts = $derived(going.reduce((n, a) => n + (a.receipt?.amount ?? 0), 0));
   const unread = $derived(going.filter((a) => a.receipt && a.receipt.amount == null).length);
-  // receipts the app checked by itself (no person looked): one total to find in Kaspi instead of every receipt
-  const auto = $derived(going.filter((a) => a.receipt?.auto));
-  const autoSum = $derived(auto.reduce((n, a) => n + (a.receipt?.amount ?? 0), 0));
+  // the receipts no person has matched with the club's Kaspi history yet: the ones the app passed by itself and the
+  // spot-checked ones (OCR can't tell a well-made fake from a real one). Each row: sum, minute, number; one tap ticks
+  // it off (a person's review), so before the event every ticket the app let through has been seen in Kaspi
+  let kaspiOpen = $state(false);
+  let found = $state<Id[]>([]); // ticked, the review on its way: the row leaves at once
+  const kaspi = $derived(going.filter((a) => a.receipt && !found.includes(a.receipt.id) && (a.receipt.auto || !a.receipt.reviewed && a.receipt.flags.includes('spot'))));
+  const kaspiSum = $derived(kaspi.reduce((n, a) => n + (a.receipt?.amount ?? 0), 0));
+  async function inKaspi(rid: Id) {
+    haptic.tap();
+    found = [...found, rid];
+    try { await api.reviewReceipt(rid, false); haptic.ok(); studioChanged(); }
+    catch { found = found.filter((x) => x !== rid); haptic.error(); say(t('common.error'), 'warning_3d'); }
+  }
   // the event's Telegram group: open it; "Create chat" adds our bot to a group the organizer picks (it lets in only
   // those going), or "Paste the group's link" names one the organizers already have (no bot)
   let chat = $state<string | null>(null);
@@ -430,7 +441,18 @@
           <Row title={t('mg.byReceipts')} subtitle={unread ? t('mg.unread', { n: unread }) : undefined}>
             {#snippet detail()}<span class="sum num" class:short={byReceipts < paying * price}>{money(byReceipts)}</span>{/snippet}
           </Row>
-          {#if auto.length}<Row title={t('mg.auto', { n: auto.length })} subtitle={t('mg.autoHint')} value={money(autoSum)} />{/if}
+          {#if kaspi.length}
+            <Row title={t('mg.kaspi', { n: kaspi.length })} subtitle={t('mg.kaspiHint')} value={money(kaspiSum)} accessory="disclosure" open={kaspiOpen}
+              onclick={() => { haptic.tap(); kaspiOpen = !kaspiOpen; }} />
+            {#if kaspiOpen}
+              {#each kaspi as a (a.receipt!.id)}
+                {@const r = a.receipt!}
+                <Row dense title={money(r.amount ?? 0)} subtitle={[r.paidAt && until(r.paidAt), r.sender, r.no && `№ ${r.no}`].filter(Boolean).join(' · ')}>
+                  {#snippet trailing()}<IconButton icon={Check} size="s" kind="tinted" label={t('rc.ok')} onclick={() => inKaspi(r.id)} />{/snippet}
+                </Row>
+              {/each}
+            {/if}
+          {/if}
         </Group>
       {/if}
 
