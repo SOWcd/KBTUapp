@@ -44,7 +44,9 @@ def worth(text: str) -> bool:
 
 NOT_ONE = """
 First decide whether this is an announcement of one upcoming event people can come to. If it is not (a report on a past
-event, news, a recruitment call, a list of several events, an ad), reply {"event": false} and nothing else."""
+event, news, a recruitment call, a list of several events, an ad), reply {"event": false} and nothing else. The same
+announcement repeated in several languages (Russian, Kazakh, English) in one post is ONE event, never a list (lang and
+tr above say how to fill it)."""
 
 
 def answered(text: str) -> bool:
