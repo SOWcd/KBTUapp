@@ -235,7 +235,7 @@ def test_post_take_down_old_and_race(env, monkeypatch):
     con.execute("UPDATE tg_unpost SET at = 0")                                                   # the undo minute passed
     tick(cfg, tg, con)
     edit = tg.of("editMessageText")
-    assert edit == [{"chat_id": CH, "message_id": mid, "text": texts.bot_message("ru", "fch_removed")[0]}]
+    assert edit == [{"chat_id": CH, "message_id": mid, "text": texts.bot_message("ru", "fch_removed")[0], "parse_mode": "HTML"}]
     assert not con.execute("SELECT 1 FROM tg_unpost").fetchone()
     assert c.get("/api/forum-posts", headers=tma(1)).json()[0]["status"] == "hidden"
     # the race: sent, but deleted (or taken down) before the id was kept: the message goes back out, rightly labelled
@@ -352,7 +352,7 @@ def test_post_republish(env, monkeypatch):
     tg.old = "Bad Request: message can't be deleted"
     assert c.post(f"/api/forum-posts/{p['id']}/republish", headers=M).status_code == 204
     tick(cfg, tg, con)
-    assert tg.of("editMessageText")[-1] == {"chat_id": CH, "message_id": new, "text": texts.bot_message("ru", "fch_moved")[0]}
+    assert tg.of("editMessageText")[-1] == {"chat_id": CH, "message_id": new, "text": texts.bot_message("ru", "fch_moved")[0], "parse_mode": "HTML"}
     assert not con.execute("SELECT 1 FROM meta WHERE key LIKE 'fchmoved:%'").fetchone()
     acts = [r[0] for r in con.execute("SELECT action FROM audit_log WHERE target = ?", (f"fchan:{p['id']}",))]
     assert acts == ["fchan_republish", "fchan_republish"]

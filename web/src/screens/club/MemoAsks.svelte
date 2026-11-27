@@ -15,6 +15,7 @@
   import Button from '../../ui/Button.svelte';
   import IconButton from '../../ui/IconButton.svelte';
   import { t } from '../../lib/i18n/index.svelte';
+  import { sw } from '../../lib/i18n/staff';
 
   let { memo = $bindable(), seats, date, only, flat = false }: { memo: MemoAsks; seats: string; date: string; only?: keyof MemoAsks; flat?: boolean } = $props();
   // flat: the editor's own panel: the switches in sight, no header to fold them
@@ -83,10 +84,10 @@
           bind:value={() => str(memo.room!.capacity), (v) => (memo.room!.capacity = num(v))} />
       {/if}
       {#each memo.room.slots ?? [] as sl, i (i)}
-        <label class="fl"><span>{t('ed.date')}</span><input type="date" bind:value={sl.date} /></label>
+        <label class="fl"><span>{sw('ed.date')}</span><input type="date" bind:value={sl.date} /></label>
         <div class="two">
-          <label class="fl"><span>{t('ed.start')}</span><input type="time" bind:value={sl.from} /></label>
-          <label class="fl"><span>{t('ed.end')}</span><input type="time" bind:value={sl.to} /></label>
+          <label class="fl"><span>{sw('ed.start')}</span><input type="time" bind:value={sl.from} /></label>
+          <label class="fl"><span>{sw('ed.end')}</span><input type="time" bind:value={sl.to} /></label>
         </div>
         <span class="lone"><Button kind="plain" size="s" onclick={() => memo.room!.slots!.splice(i, 1)}>{#snippet icon()}<X size={15} />{/snippet}{t('memo.drop')}</Button></span>
       {/each}
@@ -125,14 +126,14 @@
     <div class="sub">
       <Field label={t('memo.where')} bind:value={memo.promo.place} maxlength={120} placeholder={t('memo.promoPh')} />
       {#each memo.promo.dates ?? [] as _, i (i)}
-        <div class="day"><label class="fl"><span>{t('ed.date')}</span><input type="date" bind:value={memo.promo.dates![i]} /></label>
+        <div class="day"><label class="fl"><span>{sw('ed.date')}</span><input type="date" bind:value={memo.promo.dates![i]} /></label>
           {#if (memo.promo.dates?.length ?? 0) > 1}<IconButton icon={X} kind="plain" size="s" label={t('memo.drop')} onclick={() => memo.promo!.dates!.splice(i, 1)} />{/if}</div>
       {/each}
       {#if (memo.promo.dates?.length ?? 0) < 31}<span class="lone"><Button kind="tinted" size="s" onclick={() => memo.promo!.dates!.push(memo.promo!.dates!.at(-1) ?? date)}>
         {#snippet icon()}<Plus size={16} />{/snippet}{t('memo.addDay')}</Button></span>{/if}
       <div class="two">
-        <label class="fl"><span>{t('ed.start')}</span><input type="time" bind:value={memo.promo.from} /></label>
-        <label class="fl"><span>{t('ed.end')}</span><input type="time" bind:value={memo.promo.to} /></label>
+        <label class="fl"><span>{sw('ed.start')}</span><input type="time" bind:value={memo.promo.from} /></label>
+        <label class="fl"><span>{sw('ed.end')}</span><input type="time" bind:value={memo.promo.to} /></label>
       </div>
       <Field label={t('memo.extras')} bind:value={memo.promo.extras} maxlength={200} placeholder={t('memo.extrasPh')} />
     </div>
@@ -186,10 +187,10 @@
   {@render ask('film')}
   {#if memo.film}
     <div class="sub">
-      <label class="fl"><span>{t('ed.date')}</span><input type="date" bind:value={memo.film.date} /></label>
+      <label class="fl"><span>{sw('ed.date')}</span><input type="date" bind:value={memo.film.date} /></label>
       <div class="two">
-        <label class="fl"><span>{t('ed.start')}</span><input type="time" bind:value={memo.film.from} /></label>
-        <label class="fl"><span>{t('ed.end')}</span><input type="time" bind:value={memo.film.to} /></label>
+        <label class="fl"><span>{sw('ed.start')}</span><input type="time" bind:value={memo.film.from} /></label>
+        <label class="fl"><span>{sw('ed.end')}</span><input type="time" bind:value={memo.film.to} /></label>
       </div>
       <Field label={t('memo.note')} bind:value={memo.film.note} maxlength={200} placeholder={t('memo.filmPh')} />
     </div>

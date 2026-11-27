@@ -50,18 +50,22 @@ function fill(s: string, vars?: Record<string, string | number>): string {
   return vars ? s.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? String(vars[k]) : m)) : s;
 }
 
+/** One entry as t() shows it (no n) or tn() (a count): also the staff words' (./staff). */
+export function show(e: string | Plural, n?: number, vars?: Record<string, string | number>): string {
+  if (n === undefined) return fill(typeof e === 'string' ? e : e.other, vars);
+  if (typeof e === 'string') return fill(e, { n, ...vars });
+  const cat = rules[i18n.lang].select(n) as keyof Plural;
+  return fill(e[cat] ?? e.other, { n: fmtNum(n), ...vars });
+}
+
 /** Plain string. Plural entries need tn(). */
 export function t(key: Key, vars?: Record<string, string | number>): string {
-  const e = DICTS[i18n.lang]?.[key] ?? ru[key];
-  return fill(typeof e === 'string' ? e : e.other, vars);
+  return show(DICTS[i18n.lang]?.[key] ?? ru[key], undefined, vars);
 }
 
 /** Counted string: picks one / few / many / other by the language's own rules; {n} is the count. */
 export function tn(key: Key, n: number, vars?: Record<string, string | number>): string {
-  const e = DICTS[i18n.lang]?.[key] ?? ru[key];
-  if (typeof e === 'string') return fill(e, { n, ...vars });
-  const cat = rules[i18n.lang].select(n) as keyof Plural;
-  return fill(e[cat] ?? e.other, { n: fmtNum(n), ...vars });
+  return show(DICTS[i18n.lang]?.[key] ?? ru[key], n, vars);
 }
 
 const nums: Partial<Record<Lang, Intl.NumberFormat>> = {};

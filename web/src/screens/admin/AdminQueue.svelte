@@ -4,7 +4,7 @@
   // the queue is, keeps it on the sheet itself.
   import { staffOnly } from '../../lib/state/staffGate.svelte';
   import type { Overlay } from '../../lib/state/ui.svelte';
-  import { t } from '../../lib/i18n/index.svelte';
+  import { sw } from '../../lib/i18n/staff';
   import Pane from '../../ui/Pane.svelte';
   import AdminInbox from './AdminInbox.svelte';
 
@@ -12,7 +12,7 @@
   staffOnly(() => overlay, 'staff');
 </script>
 
-<Pane {overlay} title={t('adm.queue')}>
+<Pane {overlay} title={sw('adm.queue')}>
   <div class="page"><AdminInbox /></div>
 </Pane>
 

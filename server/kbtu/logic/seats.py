@@ -207,6 +207,7 @@ def channel_due(con, bot: str = "", limit: int = 3) -> list[tuple[sqlite3.Row, s
     there (its official co-host left or lost the ✓, its club is archived or hidden) is deleted; it comes back with a
     new yes."""
     out = []
+    t = core.now()
     for e in rows(con, """SELECT e.*, o.name AS org_name, o.official AS h_off, o.kind AS h_kind, o.status AS h_status,
             c.id AS co_id, c.name AS co_name, c.official AS co_off, f.path AS cover,
             e.starts_at > ? AND e.visibility = 'public' AND e.meeting = 0 AND e.hidden_at IS NULL AND e.school IS NULL
@@ -218,7 +219,7 @@ def channel_due(con, bot: str = "", limit: int = 3) -> list[tuple[sqlite3.Row, s
             LEFT JOIN orgs c ON c.id = x.org_id AND c.status = 'active' AND c.kind = 'club'
             LEFT JOIN files f ON f.id = e.cover_file_id
             WHERE e.starts_at > ? AND (e.status != 'draft' OR e.channel_msg IS NOT NULL) OR e.channel_via IS NOT NULL
-            ORDER BY e.published_at""", core.now(), core.now()):
+            ORDER BY e.published_at""", t, t):
         on = e["h_status"] == "active"
         own = on and (e["h_off"] or e["h_kind"] != "club")
         kept = on and e["channel_msg"] and e["channel_via"] is None
@@ -227,7 +228,9 @@ def channel_due(con, bot: str = "", limit: int = 3) -> list[tuple[sqlite3.Row, s
             # one still to come that may not be there, or a past one that hung on a co-host now gone
             # (a collab a moderator hid goes too: the official club's name stays on nothing taken down)
             # a school's own event never: one posted before it was made so goes too
-            if e["channel_msg"] and (e["live"] or e["school"] or e["channel_via"] is not None and (e["hidden_at"] or not (own or vouch and e["co_id"] == e["channel_via"]))):
+            upcoming = e["starts_at"] is not None and e["starts_at"] > t
+            if e["channel_msg"] and (upcoming or e["school"] or e["channel_via"] is not None
+                                     and (e["hidden_at"] or not (own or vouch and e["co_id"] == e["channel_via"]))):
                 _unpost(con, e)
             continue
         via = None if own or kept else e["co_id"]
@@ -784,6 +787,8 @@ def register(con, v: Viewer, eid: int, ref: object = None, phone: object = None,
         is_full = e["seats"] is not None and taken(con, eid) >= e["seats"]
         free = not is_full and _free_seat(con, e, v.id)
         status = "waitlist" if is_full else "hold" if e["price"] and not free else "going"
+        if status == "hold" and _unchecked(con, eid) >= max(UNCHECKED_CAP, (e["seats"] or 0) // 4):
+            raise ApiError("rate_limited", "unchecked")  # before anyone pays: the organizer catches up on receipts first
         hold = min(core.now() + HOLD, end_of(e)) if status == "hold" else None
         wait = core.now() if status == "waitlist" else None
         if r:
@@ -865,13 +870,16 @@ def add_receipt(con, v: Viewer, eid: int, saved: dict, read: dict | None = None,
         got = read or {}
         flags = _receipt_flags(con, e, saved["sha256"], read, r["id"])
         # a clean one is checked by the app, but 1 in AUDIT waits for the organizer flagged 'spot' (their "Check receipts"),
-        # so a forgery that beats OCR gets seen. The draw is once per seat: a seat that had any receipt before (replaced,
-        # or before a cancel; one row per person and event) is always picked, so neither re-rolls it. Not clean and no
-        # warning either (a field unread): 'partial', in "Check receipts" too, and held at the door until reviewed.
+        # so a forgery that beats OCR gets seen. Not clean and no warning either (a field unread): 'partial'. A seat that
+        # had any receipt before (a flagged one replaced, a rejected one before a new sign-up; one row per person and
+        # event) is never the app's to pass, however clean the new one looks: 'partial' plus 'resent', so the organizer
+        # sees a receipt came in place of another. All of these are held at the door until reviewed (organizing.flagged).
         # A payment predating this hold also needs review: deleted accounts erase duplicate evidence. Kaspi prints minutes.
         clean = _receipt_clean(con, e, saved["sha256"], read, flags) and got["paid_at"] >= r["created_at"] // 60 * 60
-        if clean and (_audit() or one(con, """SELECT 1 FROM receipts WHERE registration_id = ?
-                UNION ALL SELECT 1 FROM receipt_replaced WHERE registration_id = ?""", r["id"], r["id"])):
+        if one(con, """SELECT 1 FROM receipts WHERE registration_id = ?
+                UNION ALL SELECT 1 FROM receipt_replaced WHERE registration_id = ?""", r["id"], r["id"]):
+            flags, clean = ",".join(x for x in (flags or PARTIAL, RESENT) if x), False
+        elif clean and _audit():
             flags, clean = SPOT, False
         elif not clean and not flags:
             flags = PARTIAL
@@ -926,6 +934,20 @@ def _receipt_flags(con, e: sqlite3.Row, sha: str, read: dict | None, rid: int = 
 AUDIT = 5
 SPOT = "spot"  # the only flag a clean receipt carries: picked for a person's look, nothing wrong found
 PARTIAL = "partial"  # payment not fully verified: a person must check before admission
+RESENT = "resent"  # the seat had a receipt before this one (replaced, or rejected before a new sign-up)
+# any picture OCR reads a sum or a number off turns a hold into a ticket: with this many such tickets nobody reviewed
+# (or a quarter of the seats), the event takes no new paid holds until the organizer catches up, so junk can't take
+# every seat for good. Checked at the hold, never at the receipt: nobody pays into a refusal.
+UNCHECKED_CAP = 20
+
+
+def _unchecked(con, eid: int) -> int:
+    """This event's tickets not yet at the door whose receipt warns or is read in part and nobody reviewed it (a spot
+    one is clean; OCR down is our outage, not a junk picture)."""
+    return one(con, """SELECT COUNT(*) FROM registrations r JOIN receipts c ON c.id = (SELECT MAX(id) FROM receipts
+            WHERE registration_id = r.id AND status = 'accepted' AND created_at >= r.created_at)
+        WHERE r.event_id = ? AND r.status = 'going' AND r.checked_in_at IS NULL AND c.reviewed_at IS NULL
+        AND c.flags NOT IN ('', 'spot') AND c.flags NOT LIKE '%ocr_unavailable%'""", eid)[0]
 
 
 def _audit() -> bool:

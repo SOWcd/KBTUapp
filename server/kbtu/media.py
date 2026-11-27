@@ -9,6 +9,7 @@ import functools
 import hashlib
 import html
 import io
+import logging
 import re
 import threading
 import time
@@ -19,6 +20,8 @@ import httpx
 from PIL import Image, ImageDraw, ImageFilter, ImageOps
 
 from . import download
+
+log = logging.getLogger("kbtu.media")
 
 MAX_BYTES = 15 * 1024 * 1024
 MAX_PIXELS = 50_000_000          # what a header may claim (Pillow refuses past twice this, warns between): a 48 MP iPhone JPEG, read smaller below (draft)
@@ -43,11 +46,37 @@ def _fit(im: Image.Image, side: int) -> Image.Image:
     return out
 
 
+# /media/ is served cacheable for a year (app.py), so Cloudflare's edge would keep a removed photo (moderation, a deleted
+# account, an avatar or a Gallery photo taken down) for anyone holding its link: drop() purges what it removes there.
+# Set by app.py from CF_ZONE_ID + CF_PURGE_TOKEN (a token with Zone > Cache Purge only); either unset: no purge.
+PURGE: tuple[Path, str, str, str] | None = None   # (the served folder, its public URL prefix, zone id, token)
+PURGE_BATCH = 30                                   # URLs per purge request (Cloudflare's per-call cap)
+
+
 def drop(root: Path, paths) -> None:
     """A saved picture's files (store: the picture, its thumbnail, a JPEG) gone from disk; one already gone, or None, is fine."""
+    gone = []
     for rel in filter(None, paths):
         for ext in (".webp", ".t.webp", ".jpg"):
-            (root / f"{rel}{ext}").unlink(missing_ok=True)
+            try:
+                (root / f"{rel}{ext}").unlink()
+                gone.append(f"{rel}{ext}")
+            except FileNotFoundError:
+                pass
+    if gone and PURGE and root.resolve() == PURGE[0]:
+        threading.Thread(target=_purge, args=(gone,), daemon=True).start()  # never holds the caller (often in a tx)
+
+
+def _purge(rels: list[str]) -> None:
+    _, base, zone, token = PURGE
+    for i in range(0, len(rels), PURGE_BATCH):
+        try:
+            r = httpx.post(f"https://api.cloudflare.com/client/v4/zones/{zone}/purge_cache", timeout=15,
+                           headers={"Authorization": f"Bearer {token}"}, json={"files": [base + p for p in rels[i:i + PURGE_BATCH]]})
+            if r.status_code != 200:
+                log.warning("cdn purge: HTTP %s", r.status_code)
+        except httpx.HTTPError as exc:
+            log.warning("cdn purge: %s", type(exc).__name__)
 
 
 def save(data: bytes, root: Path, key: bytes | None = None, trim: bool = False, logo: bool = False) -> dict:

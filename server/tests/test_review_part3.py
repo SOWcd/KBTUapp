@@ -294,7 +294,7 @@ def test_userbot_reconnect_closes_resources_after_tasks(env, monkeypatch, failur
                 await asyncio.sleep(0)
 
     class Work:
-        def __init__(self, cfg, client, con, me):
+        def __init__(self, cfg, client, con, me, *, retry=None):
             client.work = self
             self.con, self.looks, self.http = con, set(), self
 

@@ -538,8 +538,9 @@ WELCOME = "android_welcome"  # meta key: 'on' once the creator approved the text
 
 
 def _play_seen(con, uid: int, first: bool) -> None:
-    """The installed Android app's day, and on its first launch the bot's one thanks (bot_outbox's unique row, kept
-    after the 90-day sweep of android_app: once per account). Nobody is thanked before the creator turned it on."""
+    """The installed Android app's day, and on its first launch the bot's one thanks (bot_outbox's unique row; the nightly
+    sweep deletes it after 90 days with android_app, so a comeback later may be thanked again). Nobody is thanked before
+    the creator turned it on."""
     con.execute("""INSERT INTO android_app (user_id, seen_at) VALUES (?, ?)
         ON CONFLICT (user_id) DO UPDATE SET seen_at = excluded.seen_at""", (uid, core.now()))
     if first and one(con, "SELECT 1 FROM meta WHERE key = ? AND value = 'on'", WELCOME):
@@ -1385,7 +1386,8 @@ _DEL_GONE = {
     ("students", "user_id"), ("staff_ok", "user_id"), ("santa_people", "user_id"), ("santa_msgs", "giver_id"), ("santa_msgs", "to_id"), ("santa_sends", "user_id"), ("schedule_classes", "user_id"), ("org_members", "user_id"), ("join_requests", "user_id"),
     ("club_applications", "user_id"), ("subscriptions", "user_id"), ("registrations", "user_id"), ("saved_events", "user_id"),
     ("post_reactions", "user_id"), ("post_reads", "user_id"), ("achievement_grants", "user_id"),
-    ("achievement_levels", "user_id"), ("chat_opens", "user_id"), ("chat_waits", "user_id"), ("bot_outbox", "user_id"), ("event_ratings", "user_id"), ("roster_toasts", "user_id"),
+    ("achievement_levels", "user_id"), ("chat_opens", "user_id"), ("chat_waits", "user_id"), ("bot_outbox", "user_id"), ("event_ratings", "user_id"),
+    ("roster_toasts", "user_id"), ("roster_rejections", "user_id"),
     ("member_tags", "user_id"), ("removal_requests", "user_id"), ("comment_reads", "user_id"), ("visits", "user_id"),
     ("volunteers", "user_id"), ("qr_marks", "user_id"), ("round_apps", "user_id"), ("round_votes", "user_id"), ("comments", "user_id"),
     ("friendships", "a"), ("friendships", "b"), ("friend_requests", "from_id"), ("friend_requests", "to_id"),
@@ -1546,7 +1548,6 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
                 RETURNING key""", v.id, v.id, v.id):
             con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES (?, ?)", (f"roster_done:{key}", str(core.now())))
         con.execute("UPDATE roster_pending SET claimed_by = NULL WHERE claimed_by = ?", (v.id,))
-        con.execute("UPDATE roster_pending SET rejected_by = NULL WHERE rejected_by = ?", (v.id,))
         # what a moderator took down of mine, kept for an undo: gone now with its files, no 30 days
         kept = [r[0] for r in rows(con, "DELETE FROM takedowns WHERE user_id = ? RETURNING file_id", v.id)]
         photos = [p for f in mine + uploads + kept for p in _drop_unused(con, f)]

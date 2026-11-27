@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import sqlite3
 import time
+from contextlib import contextmanager
 
 import pytest
 
@@ -52,6 +53,62 @@ def test_results_sent_mid_decision_stand(env, monkeypatch, call):
     a = con.execute("SELECT stage, sent_at FROM round_apps WHERE id = ?", (apps[ANN],)).fetchone()
     member = con.execute("SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ?", (oid, ids[ANN])).fetchone() is not None
     assert not a["sent_at"] or (a["stage"] in ("yes", "no") and member == (a["stage"] == "yes"))
+
+
+@pytest.mark.parametrize("action", ["save", "close", "reopen"])
+def test_settings_cannot_undo_a_concurrent_final_send(env, monkeypatch, action):
+    con, boss, rid, apps, oid, ids = _round(env)
+    body = {"title": "Winter", "closesAt": int(time.time()) + 86400, "departments": []}
+    if action == "close":
+        body = {"close": True}
+    elif action == "reopen":
+        body["close"] = False
+    other = db.connect(env[1].db_path)
+
+    @contextmanager
+    def finish_before_lock(current):
+        monkeypatch.setattr(casting, "tx", db.tx)
+        casting.send(other, boss, rid, final=True)
+        with db.tx(current):
+            yield
+
+    monkeypatch.setattr(casting, "tx", finish_before_lock)
+    with pytest.raises(logic.ApiError) as no:
+        casting.update_round(con, boss, rid, body)
+    assert no.value.code == "closed"
+    r = con.execute("SELECT * FROM rounds WHERE id = ?", (rid,)).fetchone()
+    assert r["status"] == "done" and r["title"] == "Fall" and r["sent_at"]
+    assert casting.view(con, boss, oid) is None
+    assert all(a["stage"] == "no" and a["sent_at"] for a in con.execute("SELECT * FROM round_apps WHERE round_id = ?", (rid,)))
+    other.close()
+
+
+@pytest.mark.parametrize("stage", ["yes", "no"])
+@pytest.mark.parametrize("verdict", ["no", "maybe", "next"])
+def test_votes_keep_decisions_until_explicitly_changed(env, stage, verdict):
+    con, boss, rid, apps, oid, ids = _round(env)
+    app_id = apps[ANN]
+    casting.decide(con, boss, app_id, {"stage": stage})
+    assert casting.vote(con, boss, app_id, {"verdict": verdict, "stars": 4, "note": "Review"}) == {"stage": stage}
+    a = next(a for a in casting.apps(con, boss, rid) if a["id"] == app_id)
+    assert a["stage"] == stage and a["votes"][0]["verdict"] == verdict and a["votes"][0]["note"] == "Review"
+    casting.decide(con, boss, app_id, {"stage": "new"})
+    assert casting.vote(con, boss, app_id, {"verdict": verdict}) == {"stage": verdict}
+    assert con.execute("SELECT stage FROM round_apps WHERE id = ?", (app_id,)).fetchone()[0] == verdict
+
+
+def test_a_no_vote_is_not_a_decision(env):
+    """A "no" vote sets the stage, but the next vote still moves it: only a decided "no" stands."""
+    con, boss, rid, apps, oid, ids = _round(env)
+    app_id = apps[ANN]
+    assert casting.vote(con, boss, app_id, {"verdict": "no"}) == {"stage": "no"}
+    assert casting.vote(con, boss, app_id, {"verdict": "next"}) == {"stage": "next"}
+    assert casting.vote(con, boss, app_id, {"verdict": "no"}) == {"stage": "no"}
+    assert casting.vote(con, boss, app_id, {"verdict": "maybe"}) == {"stage": "maybe"}
+    casting.decide(con, boss, app_id, {"stage": "no"})
+    con.execute("UPDATE round_apps SET updated_at = updated_at - 5 WHERE id = ?", (app_id,))  # decided a moment before the votes
+    assert casting.vote(con, boss, app_id, {"verdict": "no"}) == {"stage": "no"}
+    assert casting.vote(con, boss, app_id, {"verdict": "next"}) == {"stage": "no"}  # a later "no" vote doesn't undo the decision
 
 
 def test_the_group_link_leaves_with_the_member(env):

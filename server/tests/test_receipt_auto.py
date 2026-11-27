@@ -186,11 +186,13 @@ def test_replacement_rechecks_all_fields(paid, monkeypatch):
     del partial["recipient"]
     _unchecked(paid, tg, _send(paid, monkeypatch, tg, partial, 241))
     clean = _send(paid, monkeypatch, tg, _fields(now, "323456789012345678"), 242)
-    assert clean["flags"] == "spot"  # clean, but the seat had receipts before: a person looks (one draw per seat)
+    # clean, but in place of flagged ones: never the app's to pass, held at the door, the organizer told it was resent
+    assert clean["flags"] == "partial,resent"
     _unchecked(paid, tg, clean)
+    assert logic.organizing.flagged(con, clean["registration_id"])
+    assert _attendee(paid, tg)["flags"] == ["partial", "resent"]
+    assert c.get(f"/api/events/{eid}", headers=tma(tg)).json()["my"]["receiptFlags"] == []  # the student sees no warning
     assert con.execute("SELECT COUNT(*) FROM receipt_replaced").fetchone()[0] == 2
-    # a spot one is as final as a checked one: the student cannot replace it
-    assert c.post(f"/api/events/{eid}/receipt", headers=tma(tg), content=_shot(243)).json()["error"] == "closed"
 
 
 @pytest.mark.parametrize("same_file", [False, True])
@@ -210,7 +212,7 @@ def test_replaced_number_never_clean_even_for_same_seat(paid, monkeypatch):
     _go(c, eid, a)
     _send(paid, monkeypatch, a, {**_fields(now), "amount": 1500})
     row = _send(paid, monkeypatch, a, _fields(now), 241)
-    assert row["flags"] == "partial"  # existing flags exempt this seat's replaced receipts; not clean either
+    assert row["flags"] == "partial,resent"  # existing flags exempt this seat's replaced receipts; not clean either
     _unchecked(paid, a, row)
     _send(paid, monkeypatch, a, {**_fields(now, "223456789012345678"), "amount": 1500}, 242)
     _go(c, eid, b)
@@ -242,9 +244,11 @@ def test_old_unreviewed_receipt_cannot_replace_latest_checked_receipt(paid, monk
     assert c.delete(f"/api/events/{eid}/registration", headers=tma(tg)).status_code == 200
     _go(c, eid, tg)
     latest = _send(paid, monkeypatch, tg, _fields(now), 241)
-    assert latest["id"] > old["id"] and latest["flags"] == "spot"  # a receipt from before the cancel: always picked
-    assert c.post(f"/api/events/{eid}/receipt", headers=tma(tg), content=_shot(242)).json()["error"] == "closed"
+    assert latest["id"] > old["id"] and latest["flags"] == "partial,resent"  # a receipt from before the cancel: a person looks
+    assert logic.organizing.flagged(con, latest["registration_id"])
+    assert _up(c, eid, tg, 242).status_code == 200  # the new seat's own receipt may be replaced; the old seat's never
     assert con.execute("SELECT COUNT(*) FROM receipts").fetchone()[0] == 2
+    assert con.execute("SELECT 1 FROM receipts WHERE id = ?", (old["id"],)).fetchone()
 
 
 def test_own_replaced_file_is_not_clean_with_a_new_ocr_number(paid, monkeypatch):
@@ -252,7 +256,7 @@ def test_own_replaced_file_is_not_clean_with_a_new_ocr_number(paid, monkeypatch)
     _go(c, eid, tg)
     _send(paid, monkeypatch, tg, {**_fields(now), "amount": 1500})
     row = _send(paid, monkeypatch, tg, _fields(now, "223456789012345678"))
-    assert row["flags"] == "partial"  # existing flags exempt this seat's replaced files; not clean either
+    assert row["flags"] == "partial,resent"  # existing flags exempt this seat's replaced files; not clean either
     _unchecked(paid, tg, row)
 
 
@@ -312,7 +316,7 @@ def test_account_deletion_cascades_app_marker(paid, monkeypatch):
 
 def test_spot_check_sends_one_clean_receipt_in_five_to_the_organizer(paid, monkeypatch):
     # (b) the 1 in 5 is seats._audit: the picked one waits flagged 'spot' (the organizer's "Check receipts"); the
-    # student sees a receipt awaiting a check, no warning, and the door lets them in
+    # student sees a receipt awaiting a check, no warning, and the door holds them until an organizer looks
     c, con, eid, (a, b, _), now = paid
     draws = iter([True, False])
     monkeypatch.setattr(seats, "_audit", lambda: next(draws))
@@ -325,7 +329,7 @@ def test_spot_check_sends_one_clean_receipt_in_five_to_the_organizer(paid, monke
     assert picked["flags"] == "spot"
     _unchecked(paid, a, picked)
     assert _attendee(paid, a)["flags"] == ["spot"]
-    assert logic.organizing.flagged(con, picked["registration_id"]) is False  # not held at the door
+    assert logic.organizing.flagged(con, picked["registration_id"]) is True  # a forgery that beats OCR: held at the door
     assert con.execute("SELECT COUNT(*) FROM receipt_auto_checks").fetchone()[0] == 0
     passed = _send(paid, monkeypatch, b, _fields(now, "223456789012345678"), 241)
     assert passed["reviewed_at"] == now and passed["flags"] == "" and _attendee(paid, b)["auto"] is True
@@ -407,7 +411,7 @@ def test_cancel_and_sign_up_again_never_rerolls(paid, monkeypatch):
     _go(c, eid, a)
     monkeypatch.setattr(receipt, "read", lambda im: _fields(now, "222222222222222222"))
     assert _up(c, eid, a, 241).status_code == 200
-    assert _attendee(paid, a)["flags"] == ["spot"] and _attendee(paid, a)["auto"] is False
+    assert _attendee(paid, a)["flags"] == ["partial", "resent"] and _attendee(paid, a)["auto"] is False
     assert _tocheck(c, eid) == 1
 
 
@@ -467,3 +471,52 @@ def test_friends_paying_in_one_minute(paid, monkeypatch, second, flag):
     assert row["flags"] == flag
     _unchecked(paid, b, row)
     assert logic.organizing.flagged(con, row["registration_id"])
+
+
+def test_rejected_then_signed_up_again_is_held(paid, monkeypatch):
+    # money review: rejected, a new sign-up, a forged "clean" receipt: never auto-accepted, held at the door, resent
+    c, con, eid, (a, _, _), now = paid
+    _go(c, eid, a)
+    first = _send(paid, monkeypatch, a, None)
+    assert c.post(f"/api/receipts/{first['id']}/review", headers=tma(20), json={"reject": True}).status_code == 204
+    _go(c, eid, a)
+    row = _send(paid, monkeypatch, a, _fields(now, "923456789012345678"), 241)
+    assert row["flags"] == "partial,resent" and row["reviewed_at"] is None
+    assert logic.organizing.flagged(con, row["registration_id"])
+    assert con.execute("SELECT COUNT(*) FROM receipt_auto_checks").fetchone()[0] == 0
+
+
+def test_kaspi_list_ticks_off_auto_and_spot(paid, monkeypatch):
+    # EventManage's "Match with Kaspi": auto: true and unreviewed spot rows; a tick is a person's review, the row leaves
+    c, con, eid, (a, b, _), now = paid
+    draws = iter([True, False])
+    monkeypatch.setattr(seats, "_audit", lambda: next(draws))
+    for i, tg in enumerate((a, b)):
+        _go(c, eid, tg)
+        _send(paid, monkeypatch, tg, _fields(now, str(723456789012345678 + i)), 240 + i)
+    att = {tg: _attendee(paid, tg) for tg in (a, b)}
+    assert att[a]["flags"] == ["spot"] and att[b]["auto"] is True and att[b]["no"] and att[b]["paidAt"] and att[b]["amount"]
+    for tg in (a, b):
+        assert c.post(f"/api/receipts/{att[tg]['id']}/review", headers=tma(20), json={"reject": False}).status_code == 204
+        assert _attendee(paid, tg)["reviewed"] is True and _attendee(paid, tg)["auto"] is False
+        assert not logic.organizing.flagged(con, _rid_reg(con, eid, tg))
+
+
+def test_unchecked_receipts_capped_per_event(paid, monkeypatch):
+    # any picture with a sum turns a hold into a ticket: past the cap of unreviewed ones the event takes no new paid
+    # holds (before anyone pays); OCR down and people already at the door don't count; a review frees it
+    c, con, eid, (a, b, d), now = paid
+    monkeypatch.setattr(seats, "UNCHECKED_CAP", 1)
+    _go(c, eid, a)
+    row = _send(paid, monkeypatch, a, {**_fields(now), "amount": 1500})
+    r = _go(c, eid, b)
+    assert (r.status_code, r.json()["error"], r.json()["message"]) == (429, "rate_limited", "unchecked")
+    assert c.get(f"/api/events/{eid}", headers=tma(b)).json()["my"] is None
+    con.execute("UPDATE registrations SET checked_in_at = ? WHERE id = ?", (now, row["registration_id"]))
+    assert _go(c, eid, b).json()["my"]["status"] == "hold"
+    con.execute("UPDATE registrations SET checked_in_at = NULL WHERE id = ?", (row["registration_id"],))
+    assert _go(c, eid, d).status_code == 429
+    assert c.post(f"/api/receipts/{row['id']}/review", headers=tma(20), json={"reject": False}).status_code == 204
+    assert _go(c, eid, d).json()["my"]["status"] == "hold"
+    _send(paid, monkeypatch, b, None, 241)  # ocr_unavailable: our outage, not counted
+    assert seats._unchecked(con, eid) == 0

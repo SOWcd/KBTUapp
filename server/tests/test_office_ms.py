@@ -81,7 +81,7 @@ def test_staff_ok_sign_in(env, monkeypatch, capsys):
     assert "msOnly" not in sign_in(82, "oid-d")
     # ... a row typed by the creator (`staff`, consent 'staff') stays on revoke
     f = uid(84)
-    admin.main(["staff", "84", "Typed", "Staff"])
+    admin.main(["staff", "84", "Typed", "Staff", "--yes"])
     admin.main(["staff-ok", "84"])
     admin.main(["staff-ok", "revoke", "84"])
     assert row(f)["consent_version"] == "staff"
@@ -103,7 +103,7 @@ def test_staff_ok_sign_in(env, monkeypatch, capsys):
     # unlink and deleting the account clear the grant
     h = uid(86)
     admin.main(["staff-ok", "86"])
-    admin.main(["unlink", "86"])
+    admin.main(["unlink", "86", "--yes"])
     assert not granted(h)
     admin.main(["staff-ok", "86"])
     logic.account.delete_me(con, Viewer(h, "user", True))
