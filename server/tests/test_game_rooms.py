@@ -8,7 +8,7 @@ import uuid
 from pathlib import Path
 
 from kbtu import db, logic
-from test_core import delete_now, env, tma  # noqa: F401  (env: the fixture)
+from test_core import delete_now, env, login, tma  # noqa: F401  (env: the fixture)
 
 T0 = 1_800_000_000
 
@@ -183,6 +183,7 @@ def test_one_room_at_a_time_and_deletion(env, monkeypatch):
     """Opening or joining another room leaves the one I was in; deleting my account takes my seats and my rooms."""
     c, cfg = env
     t = [T0]; _clock(monkeypatch, t)
+    login(c, 901, "pone")  # a student: their account may be deleted
     rid, hs = _room(c, 3)
     other = c.post("/api/rooms", json={"game": "spy"}, headers=hs[2]).json()
     assert [p["seat"] for p in _get(c, rid, hs[1]).json()["players"]] == [0, 2]
@@ -206,8 +207,9 @@ def test_share_card(env, monkeypatch):
 
 def test_every_place_has_its_name():
     """Each location id the server deals has its name in all three languages of the web."""
-    i18n = Path(__file__).parents[2] / "web/src/lib/i18n"
+    text = (Path(__file__).parents[2] / "web/src/lib/i18n/spyPlaces.ts").read_text()
     for lang in ("ru", "kk", "en"):
-        text = (i18n / f"{lang}.ts").read_text()
-        missing = [x for x in logic.spy.LOCATIONS if f"'spy.loc.{x}'" not in text]
+        part = text[text.index(f"  {lang}: {{"):]
+        part = part[:part.index("\n  },")]
+        missing = [x for x in logic.spy.LOCATIONS if f"\n    {x}: " not in part]
         assert not missing, (lang, missing)

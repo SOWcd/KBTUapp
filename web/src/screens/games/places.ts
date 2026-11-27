@@ -1,15 +1,6 @@
-// Spy's places, the server's ids (server/kbtu/logic/spy.py LOCATIONS, the same order: places.test.ts checks); each
-// one's name is t(`spy.loc.<id>`) in ru/kk/en. The spy names one of these to win.
-import type { Key } from '../../lib/i18n/ru';
+// Spy's places: the server's ids (lib/i18n/spyPlaces.ts, the games' chunk only) and a place's name in my language.
+import { i18n } from '../../lib/i18n/index.svelte';
+import { PLACE_NAMES, PLACES, type Place } from '../../lib/i18n/spyPlaces';
 
-export const PLACES = [
-  'kbtu_canteen', 'kbtu_library', 'kbtu_dorm', 'kbtu_lecture', 'kbtu_gym', 'kbtu_deans', 'kbtu_lab', 'kbtu_atrium',
-  'kbtu_graduation', 'kbtu_exam', 'kbtu_hackathon', 'kbtu_club_fair',
-  'medeu', 'shymbulak', 'kok_tobe', 'green_bazaar', 'metro', 'mountain_lake', 'toi',
-  'airport', 'train', 'hospital', 'bank', 'cinema', 'theatre', 'beach', 'restaurant', 'supermarket', 'hotel',
-  'police', 'school', 'museum', 'zoo', 'space_station', 'submarine', 'circus', 'concert', 'pirate_ship',
-  'film_set', 'barbershop', 'gas_station', 'coffee_shop', 'embassy', 'polar_station',
-] as const;
-
-export type Place = (typeof PLACES)[number];
-export const placeKey = (id: string): Key => `spy.loc.${id}` as Key;
+export { PLACES, type Place };
+export const placeName = (id: string): string => PLACE_NAMES[i18n.lang][id as Place] ?? id;

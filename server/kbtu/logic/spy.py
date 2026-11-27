@@ -5,7 +5,7 @@ still win by naming the place; anyone else caught, or a tie, and the spy wins. T
 time while they talk: right, they win; wrong, they lose. One round; the host may start another.
 
 The place's id never leaves the server before the round ends, except on the cards of those who aren't the spy (view).
-The names are the web's (web/src/lib/i18n: spy.loc.<id>, ru/kk/en; a test checks every id has one)."""
+The names are the web's (web/src/lib/i18n/spyPlaces.ts, ru/kk/en; its test checks the ids are these)."""
 from __future__ import annotations
 
 import secrets
