@@ -88,6 +88,21 @@ for (const [name, svg] of Object.entries(POSTER)) test(`Afisha, the hero over a 
   await shot(p, `afisha-${name}`); // the whole first screen: the card among the circles and the list
 });
 
+// TEMP (r4): the other two directions, for the owner's pick
+for (const v of [2, 3]) for (const name of ['cover', 'none']) test(`Afisha, direction ${v} (${name})`, async ({ open }) => {
+  const p = await open('Ali');
+  const cover = name === 'none' ? null : { url: 'fx/cover.svg', thumb: 'fx/cover.svg', w: 900, h: 1200, blur: '', color: '#c2185b' };
+  await p.page.route((u) => u.pathname.endsWith('/fx/cover.svg'), (route) => route.fulfill({ contentType: 'image/svg+xml', body: POSTER.cover }));
+  await p.page.route((u) => u.pathname === '/api/events', async (route) => {
+    const r = await route.fetch();
+    await route.fulfill({ response: r, json: ((await r.json()) as object[]).map((e) => (cover ? { ...e, cover } : e)) });
+  });
+  await p.page.evaluate((n) => localStorage.setItem('kbtu.afv', String(n)), v);
+  await p.page.reload();
+  await settled(p);
+  await shot(p, `afisha-alt${v}-${name}`);
+});
+
 test('an event', async ({ open }) => {
   const p = await ali(open);
   await p.page.getByRole('button', { name: 'Open Mic: stand-up and music', exact: true }).first().click();

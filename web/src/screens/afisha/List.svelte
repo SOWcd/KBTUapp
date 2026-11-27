@@ -70,6 +70,9 @@
     try { localStorage.setItem(TIMETABLE, showClasses ? 'shown' : 'hidden'); } catch { /* blocked */ }
   }
 
+  // TEMP (r4): the three directions side by side for the owner's pick; 1 stays
+  const dir = (() => { try { return Number(localStorage.getItem('kbtu.afv')) || 1; } catch { return 1; } })();
+
   let openPost = $state(false);
 
   // the clock: a minute is enough for "21 min left", so it is rounded to one and changes once a minute at most; it moves
@@ -357,7 +360,7 @@
     <!-- an event: my ticket and the way there, else what it is and one tap to go -->
     {@const art = coverFor(e.cover, 'card') ?? e.video?.poster ?? null}
     {@const pic = !!art}
-    <section class="hero theme-dark" class:tix={mine && i === 0} class:nopic={!pic} style:--c={e.cover?.color ?? e.video?.poster?.color ?? e.color ?? e.tint} onclickcapture={() => tap(c)}>
+    <section class="hero" class:theme-dark={dir !== 3} class:tix={mine && i === 0} class:nopic={!pic} style:--c={e.cover?.color ?? e.video?.poster?.color ?? e.color ?? e.tint} onclickcapture={() => tap(c)}>
       <button class="hit" onpointerdown={(ev) => touchAhead(ev, () => prefetchEvent(e.id))} onclick={(ev) => sheets.event(e.id, ev.currentTarget.parentElement?.querySelector('.poster'))} aria-label={e.title}></button>
       <span class="art"><HeroArt pic={art} emoji={e.emoji} color={e.color ?? e.tint} first={i === 0} /></span>
       <div class="shade"></div>
@@ -372,11 +375,11 @@
         <span class="foot">
           <span class="hsub">{@render status(e)}</span>
           {#if mine}
-            <span class="acts"><Button onmedia size="m" onclick={() => sheets.ticket(e.id)}>{#snippet icon()}<QrCode size={17} />{/snippet}{t('event.ticket')}</Button></span>
+            <span class="acts"><Button onmedia={dir !== 3} size="m" onclick={() => sheets.ticket(e.id)}>{#snippet icon()}<QrCode size={17} />{/snippet}{t('event.ticket')}</Button></span>
           {:else if e.my?.status === 'hold'}
-            <span class="acts"><Button onmedia size="m" onclick={() => sheets.pay(e.id)}>{t('event.pay', { price: money(e.price ?? 0) })}</Button></span>
+            <span class="acts"><Button onmedia={dir !== 3} size="m" onclick={() => sheets.pay(e.id)}>{t('event.pay', { price: money(e.price ?? 0) })}</Button></span>
           {:else if canGo(e)}
-            <span class="acts"><Button onmedia size="m" loading={goingBusy.has(e.id)} onclick={() => toggleGoing(e.id, () => sheets.pay(e.id))}>{e.price ? e.freeLeft && session.me?.student?.freeFirst ? t('event.goFree') : t('event.goPrice', { price: money(e.price) }) : t('event.go')}</Button></span>
+            <span class="acts"><Button onmedia={dir !== 3} size="m" loading={goingBusy.has(e.id)} onclick={() => toggleGoing(e.id, () => sheets.pay(e.id))}>{e.price ? e.freeLeft && session.me?.student?.freeFirst ? t('event.goFree') : t('event.goPrice', { price: money(e.price) }) : t('event.go')}</Button></span>
           {/if}
         </span>
       </div>
@@ -384,7 +387,7 @@
   {:else}
     {@const v = look(c)}
     <!-- news, a forum post, my next class: the same card, its picture or a 3D mark, the title and one line -->
-    <section class="hero theme-dark" class:nopic={!v.item.cover} style:--c={v.color} onclickcapture={() => tap(c)}>
+    <section class="hero" class:theme-dark={dir !== 3} class:nopic={!v.item.cover} style:--c={v.color} onclickcapture={() => tap(c)}>
       <button class="hit" onclick={v.open} aria-label={v.title}></button>
       <span class="art"><HeroArt pic={v.item.cover} emoji={v.item.emoji} color={v.color} first={i === 0} /></span>
       <div class="shade"></div>
@@ -394,13 +397,13 @@
           <b class="clamp-2">{v.title}</b>
           <span class="where"><span class="ellipsis">{#if v.lead}<b class="num">{v.lead}</b> · {/if}{v.line}</span>{#if v.by}<span class="by ellipsis">&nbsp;· {v.by}</span>{/if}</span>
         </span>
-        {#if v.room}{@const room = v.room}<span class="foot"><span class="acts"><Button onmedia size="m" onclick={() => sheets.map(room)}>{#snippet icon()}<MapPin size={17} />{/snippet}{room}</Button></span></span>{/if}
+        {#if v.room}{@const room = v.room}<span class="foot"><span class="acts"><Button onmedia={dir !== 3} size="m" onclick={() => sheets.map(room)}>{#snippet icon()}<MapPin size={17} />{/snippet}{room}</Button></span></span>{/if}
       </div>
     </section>
   {/if}
 {/snippet}
 
-<div class="page scroll stagger">
+<div class="page scroll stagger v{dir}">
   <PullSearch bind:value={q} placeholder={t('list.search')} />
   <!-- no headline (owner, Nov 27): the clubs' circles, then the one big card. The screen's name stays for a reader and for
        the capsule, which shows it once this has scrolled away -->
@@ -551,10 +554,9 @@
   .page { position: absolute; inset: 0; padding: var(--page-top) var(--gutter) 0; background: var(--bg); color: var(--text); }
   .ttl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .offline { margin-bottom: var(--s-6); }
-  /* the rating: the app's card surface as one capsule row, no tiles inside it; the stars are bare gold outlines, each a
-     44 px tall target, and a pressed one fills */
-  .rate { display: flex; align-items: center; gap: var(--s-1); min-height: var(--row-h2); margin-top: var(--s-5); padding: 0 var(--s-1) 0 var(--s-4);
-    border-radius: var(--r-l); background: var(--surface); box-shadow: var(--card-rim); }
+  /* the rating: one bare line on the ground between the card and the list (no surface of its own: the hero is the
+     card here); the stars are gold outlines, each a 44 px tall target, and a pressed one fills */
+  .rate { display: flex; align-items: center; gap: var(--s-1); min-height: var(--row-h); margin: var(--s-4) calc(-1 * var(--s-2)) 0 var(--s-1); }
   .rate-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; font: 450 var(--fs-cap)/1.3 var(--font-text); color: var(--text-3); }
   .rate-tx b { font: 600 var(--fs-body)/1.25 var(--font-text); color: var(--text); white-space: nowrap; }
   .rate-stars { flex: none; display: flex; }
@@ -569,8 +571,8 @@
   .past { display: flex; flex-direction: column; gap: 8px; }
   .lnk { align-self: center; }
 
-  .sec { margin: var(--s-7) var(--s-1) var(--s-3); font: var(--fw-light) var(--fs-t1)/1.1 var(--font-display); letter-spacing: -0.04em; }
-  .events-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); min-height: var(--tap); margin: var(--s-7) var(--s-1) 0; padding-top: var(--s-5); box-shadow: inset 0 0.5px 0 var(--separator); } /* a hairline, then the section's light title */
+  .sec { margin: var(--s-7) var(--s-1) var(--s-3); font: 700 var(--fs-sec)/1.15 var(--font-display); letter-spacing: -0.03em; } /* the hero title's own voice, a step smaller */
+  .events-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); min-height: var(--tap); margin: var(--s-5) var(--s-1) 0; padding-top: var(--s-4); box-shadow: inset 0 0.5px 0 var(--separator); } /* a hairline, then the section's title */
   .sec.two { min-width: 0; margin: 0; }
   /* the filters: one row of chips under the heading, scrolled sideways edge to edge; types, a hairline, schools */
   .chips { display: flex; align-items: center; gap: var(--s-2); overflow-x: auto; margin: var(--s-2) calc(-1 * var(--gutter)) 0; padding: var(--s-1) var(--gutter); scrollbar-width: none; }
@@ -595,7 +597,7 @@
   /* (owner, Nov 27) the hero is the screen's one big card, most of the first screen: the cover tall and whole, and the words
      on a slab of Liquid Glass at its foot. The card is media, so it is dark in both themes (.theme-dark: white words, the
      dark tags and buttons): the glass is clear and takes its colour from the cover, not from the page */
-  .hero { --halo: 0.62; position: relative; isolation: isolate; display: flex; flex-direction: column; justify-content: flex-end; height: var(--hh); padding: 6px;
+  .hero { --halo: 0.62; position: relative; isolation: isolate; display: flex; flex-direction: column; justify-content: flex-end; height: var(--hh);
     border-radius: var(--r-xl); background: var(--media); color: var(--text); transition: transform var(--t-fast) var(--ease); }
   .hero:has(> .hit:active) { transform: scale(0.985); }
   /* the hero's cards side by side, one in view, snapped; edge to edge so the next one waits just past the gutter. A
@@ -637,24 +639,39 @@
   .art, .shade { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; }
   .art { overflow: hidden; }
   /* the cover clear at the top (it is the screen's one picture), deeper toward the slab: the glass has something calm to sit on */
-  .shade { background: linear-gradient(rgba(0, 0, 0, 0.02) 40%, rgba(0, 0, 0, 0.42)); }
+  .shade { background: linear-gradient(rgba(0, 0, 0, 0) 36%, rgba(0, 0, 0, 0.5)); box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.14); }
   /* (the card has no lit rim of its own: the glass is the one lit object on it; two rims 6px apart read as nested boxes) */
   @media (prefers-reduced-motion: reduce) { .hero::before { animation: none; } }
+  /* (r4) the words lie on the cover itself, no box inside the card: under them the picture goes soft and dark by
+     degrees (the lens: the cover's thumb again, blurred and dimmed, let in through a gradient mask, so there is no edge
+     where it starts). A still layer, drawn once: nothing blurs live */
+  .slab { position: relative; z-index: 2; /* over the card's own tap */ isolation: isolate; display: flex; flex-direction: column; padding: 96px 18px var(--s-4);
+    border-radius: 0 0 var(--r-xl) var(--r-xl); color: var(--text); pointer-events: none; }
+  .lens { position: absolute; inset: 0; z-index: -2; overflow: hidden; border-radius: inherit; pointer-events: none;
+    -webkit-mask-image: linear-gradient(transparent, rgba(0, 0, 0, 0.55) 56px, black 112px); mask-image: linear-gradient(transparent, rgba(0, 0, 0, 0.55) 56px, black 112px); }
+  .lens img { position: absolute; left: 0; bottom: 0; width: 100%; height: var(--hh); object-fit: cover;
+    transform: scale(1.12); transform-origin: 50% 100%; filter: blur(20px) saturate(1.7) brightness(0.6); }
+  /* TEMP-R4-BEGIN: directions 2 (the glass slab, r3) and 3 (the poster bare, the words under it) */
+  .v2 .hero { padding: 6px; }
+  .v2 .shade { background: linear-gradient(rgba(0, 0, 0, 0.02) 40%, rgba(0, 0, 0, 0.42)); box-shadow: none; }
+  .v2 .hero-tx > b { margin-bottom: 2px; font: 700 var(--fs-sec)/1.14 var(--font-display); letter-spacing: -0.03em; }
+  .v2 .sec { font: var(--fw-light) var(--fs-t1)/1.1 var(--font-display); letter-spacing: -0.04em; }
+  .v2 .events-head { margin-top: var(--s-7); padding-top: var(--s-5); }
   /* the slab: Liquid Glass, its own recipe (the sheets' glass is a frosted body; this one is a lens over one still
      picture). What it shows of the cover is the lens layer below, so nothing here blurs live. A dimmed body so white
      words read on any cover, a white poster too; depth from a soft shadow onto the picture and a dark foot inside;
      light from a top sheen, a specular rim bright on the arc facing the light and on the one opposite (it follows the
      phone's tilt, --gx), and the warm and cool fringes at the sides */
-  .slab { position: relative; z-index: 2; /* over the card's own tap */ isolation: isolate; display: flex; flex-direction: column; padding: 14px var(--s-4) var(--s-3);
+  .v2 .slab { position: relative; z-index: 2; /* over the card's own tap */ isolation: isolate; display: flex; flex-direction: column; padding: 14px var(--s-4) var(--s-3);
     border-radius: var(--r-l); color: var(--text); pointer-events: none;
     background: linear-gradient(rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0) 46%), rgba(10, 12, 20, 0.34);
     box-shadow: 0 10px 24px -14px rgba(0, 0, 0, 0.5); }
-  .slab::before, .slab::after { content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none; }
-  .slab::before {
+  .v2 .slab::before, .v2 .slab::after { content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none; }
+  .v2 .slab::before {
     background: radial-gradient(70% 90% at calc(16% + var(--gx, 0) * 40%) -18%, rgba(255, 255, 255, 0.24), transparent 62%);
     box-shadow: inset 0 1px 0.5px rgba(255, 255, 255, 0.5), inset 0 10px 18px -12px rgba(255, 255, 255, 0.36), inset 0 -18px 24px -16px rgba(0, 0, 0, 0.42),
       inset 2px 0 2px -1px rgba(255, 120, 200, 0.3), inset -2px 0 2px -1px rgba(90, 190, 255, 0.34), inset 0 0 16px rgba(255, 255, 255, 0.06); }
-  .slab::after { z-index: 0; padding: 1.2px;
+  .v2 .slab::after { z-index: 0; padding: 1.2px;
     background:
       radial-gradient(ellipse 48% 150% at calc(22% + var(--gx, 0) * 38%) 0%, rgba(255, 255, 255, 0.98), rgba(255, 255, 255, 0.34) 42%, transparent 74%),
       radial-gradient(ellipse 40% 140% at calc(80% - var(--gx, 0) * 38%) 100%, rgba(255, 255, 255, 0.62), transparent 72%),
@@ -663,15 +680,31 @@
     mask: linear-gradient(black 0 0) content-box, linear-gradient(black 0 0); mask-composite: exclude; }
   /* the lens: laid over the card's whole box from inside the slab (6px in on three sides), so it lines up with the
      cover, then a step larger about the slab, as thick glass magnifies */
-  .lens { position: absolute; inset: 0; z-index: -2; overflow: hidden; border-radius: inherit; pointer-events: none; background: var(--media); }
-  .lens img { position: absolute; left: -6px; bottom: -6px; width: calc(100% + 12px); height: var(--hh); object-fit: cover;
+  .v2 .lens { background: var(--media); -webkit-mask-image: none; mask-image: none; }
+  .v2 .lens img { position: absolute; left: -6px; bottom: -6px; width: calc(100% + 12px); height: var(--hh); object-fit: cover;
     transform: scale(1.14); transform-origin: 50% 86%; filter: blur(18px) saturate(1.8) brightness(0.58); }
+  /* the rating: the app's card surface as one capsule row, no tiles inside it; the stars are bare gold outlines, each a
+     44 px tall target, and a pressed one fills */
+  .v2 .rate { display: flex; align-items: center; gap: var(--s-1); min-height: var(--row-h2); margin: var(--s-5) 0 0; padding: 0 var(--s-1) 0 var(--s-4);
+    border-radius: var(--r-l); background: var(--surface); box-shadow: var(--card-rim); }
+  .v3 .hero { background: none; color: var(--text); }
+  .v3 .hero::before, .v3 .shade, .v3 .lens { display: none; }
+  .v3 .art { position: relative; inset: auto; flex: 1; min-height: 0; border-radius: var(--r-xl); box-shadow: var(--shadow-card), var(--card-rim); }
+  .v3 .slab { padding: var(--s-3) var(--s-1) 0; border-radius: 0; }
+  .v3 .hero-tx { text-shadow: none; }
+  .v3 .hero-tx > b { font: 700 var(--fs-sec)/1.14 var(--font-display); letter-spacing: -0.03em; }
+  .v3 .hsub :global(.chip) { background: var(--fill); color: var(--text-2); }
+  .v3 .heroes > .hero, .v3 .lead { flex-basis: calc(100% - var(--gutter) - var(--s-7)); }
+  .v3 .rate { min-height: var(--row-h2); margin: var(--s-5) 0 0; padding: 0 var(--s-1) 0 var(--s-4); border-radius: var(--r-l); background: var(--surface); box-shadow: var(--card-rim); }
+  .v3 .sec { font: 600 var(--fs-micro)/1.2 var(--font-text); letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3); }
+  .v3 .events-head { box-shadow: none; padding-top: 0; }
+  /* TEMP-R4-END */
   /* over media the tags are white on a clear chip (the accent's blue on a blue cover was 2:1), the place has no underline
      (the whole card opens the event; the pin says it is a place) */
   .hsub :global(.chip) { background: rgba(255, 255, 255, 0.18); color: var(--on-accent); }
   .hsub .fr { color: var(--text-2); }
   .hero-place :global(.place) { text-decoration: none; }
-  .foot { display: flex; align-items: center; gap: 10px; min-height: var(--ctl-m); margin-top: var(--s-2); }
+  .foot { display: flex; align-items: center; gap: 10px; min-height: var(--ctl-m); margin-top: var(--s-3); }
   .foot:not(:has(.acts, .hsub *)) { display: none; }
   .acts { position: relative; z-index: 2; flex: none; display: flex; gap: 8px; max-width: 60%; margin-left: auto; pointer-events: auto; }
   .acts :global(.btn) { min-width: 0; }
@@ -679,7 +712,7 @@
   /* contain: the words take the width that is left and never ask for more. Without it the one-line meta's full width
      (nowrap) is the card's min-content, and a flex card grows to it: the root of the card past the right edge (PRs 324, 328) */
   .hero-tx { flex: none; display: flex; flex-direction: column; gap: 3px; min-width: 0; contain: inline-size; text-shadow: 0 1px 8px rgba(0, 0, 0, 0.28); }
-  .hero-tx > b { margin-bottom: 2px; font: 700 var(--fs-sec)/1.14 var(--font-display); letter-spacing: -0.03em; }
+  .hero-tx > b { margin-bottom: var(--s-1); font: 700 var(--fs-t1)/1.08 var(--font-display); letter-spacing: -0.035em; }
   .where, .hero-place { min-width: 0; font: 500 var(--fs-body)/1.3 var(--font-text); color: var(--text-2); }
   .where { display: flex; flex-wrap: wrap; max-height: 1.3em; overflow: hidden; }
   .where > span { flex: 0 1 auto; min-width: 0; }
