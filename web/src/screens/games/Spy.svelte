@@ -7,7 +7,8 @@
   // version comes back not applied with the fresh room, and goes once more on that one.
   import { onDestroy, onMount } from 'svelte';
   import { api, ApiErr, type Id, type Room, type RoomMove } from '../../lib/api';
-  import { t, type Key } from '../../lib/i18n/index.svelte';
+  import { t } from '../../lib/i18n/index.svelte';
+  import { gw, type GameKey } from '../../lib/i18n/games';
   import { SPY_LOCATIONS, roomLink } from '../../lib/games/spy';
   import { haptic, tgShare } from '../../lib/tg';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
@@ -20,7 +21,7 @@
   let typed = $state(''), minutes = $state(5), shown = $state(false), busy = $state(false);
   let skew = 0, clock = $state(Date.now() / 1000), timer: ReturnType<typeof setTimeout> | undefined, alive = true;
 
-  const place = (id: string) => t(`spy.loc.${id}` as Key);
+  const place = (id: string) => gw(`spy.loc.${id}` as GameKey);
   const nameOf = (id: Id | null | undefined) => room?.players.find((p) => p.id === id)?.name ?? '';
   const left = $derived(room?.deadline ? Math.max(0, Math.ceil(room.deadline - clock - skew)) : 0);
   const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
@@ -33,14 +34,14 @@
   async function poll() {
     if (!room) return;
     try { const r = await api.room(room.id, room.v); if (r) take(r); }
-    catch (e) { if (e instanceof ApiErr && e.code === 'not_found') { room = null; say(t('spy.gone'), 'pleading_face_3d'); return; } }
+    catch (e) { if (e instanceof ApiErr && e.code === 'not_found') { room = null; say(gw('spy.gone'), 'pleading_face_3d'); return; } }
     schedule();
   }
   function fail(e: unknown) {
     haptic.error();
-    const why = !(e instanceof ApiErr) ? 'common.error' : e.code === 'not_found' ? 'spy.err.code' : e.code === 'closed' ? 'spy.err.started'
-      : e.code === 'full' ? 'spy.err.full' : e.code === 'rate_limited' ? 'spy.err.limit' : 'common.error';
-    say(t(why), 'pleading_face_3d');
+    const why = !(e instanceof ApiErr) ? null : e.code === 'not_found' ? 'spy.err.code' : e.code === 'closed' ? 'spy.err.started'
+      : e.code === 'full' ? 'spy.err.full' : e.code === 'rate_limited' ? 'spy.err.limit' : null;
+    say(why ? gw(why) : t('common.error'), 'pleading_face_3d');
   }
   async function enter(p: Promise<Room>) {
     busy = true;
@@ -66,58 +67,58 @@
   onDestroy(() => { alive = false; clearTimeout(timer); });
 </script>
 
-<Sheet {overlay} title={t('spy.title')}>
+<Sheet {overlay} title={gw('spy.title')}>
   {#if !room}
-    <p>{t('spy.about')}</p>
-    <button disabled={busy} onclick={() => enter(api.roomCreate('spy'))}>{t('spy.create')}</button>
-    <input inputmode="numeric" maxlength="4" placeholder={t('spy.codePh')} bind:value={typed} />
-    <button disabled={busy || !/^\d{4}$/.test(typed)} onclick={() => enter(api.roomJoin(typed))}>{t('spy.join')}</button>
+    <p>{gw('spy.about')}</p>
+    <button disabled={busy} onclick={() => enter(api.roomCreate('spy'))}>{gw('spy.create')}</button>
+    <input inputmode="numeric" maxlength="4" placeholder={gw('spy.codePh')} bind:value={typed} />
+    <button disabled={busy || !/^\d{4}$/.test(typed)} onclick={() => enter(api.roomJoin(typed))}>{gw('spy.join')}</button>
   {:else}
     {@const r = room}
     {#if r.phase === 'lobby'}
-      <p>{t('spy.code', { code: r.code })}</p>
+      <p>{gw('spy.code', { code: r.code })}</p>
       <div style:width="160px"><Qr text={roomLink(r.code)} /></div>
-      <button onclick={() => tgShare(roomLink(r.code), t('spy.shareText'))}>{t('spy.share')}</button>
-      <p>{t('spy.players', { n: r.players.length })}</p>
-      <ul>{#each r.players as p (p.id)}<li>{p.name}{p.id === r.host ? ` · ${t('spy.host')}` : ''}</li>{/each}</ul>
+      <button onclick={() => tgShare(roomLink(r.code), gw('spy.shareText'))}>{gw('spy.share')}</button>
+      <p>{gw('spy.players', { n: r.players.length })}</p>
+      <ul>{#each r.players as p (p.id)}<li>{p.name}{p.id === r.host ? ` · ${gw('spy.host')}` : ''}</li>{/each}</ul>
       {#if r.me === r.host}
-        <label>{t('spy.minutes')} <input type="number" min="1" max="15" bind:value={minutes} /></label>
-        {#if r.players.length < 3 || r.players.length > 12}<p>{t('spy.needMore')}</p>{/if}
-        <button disabled={r.players.length < 3 || r.players.length > 12} onclick={() => move({ type: 'start', minutes })}>{t('spy.start')}</button>
+        <label>{gw('spy.minutes')} <input type="number" min="1" max="15" bind:value={minutes} /></label>
+        {#if r.players.length < 3 || r.players.length > 12}<p>{gw('spy.needMore')}</p>{/if}
+        <button disabled={r.players.length < 3 || r.players.length > 12} onclick={() => move({ type: 'start', minutes })}>{gw('spy.start')}</button>
       {:else}
-        <p>{t('spy.waitHost')}</p>
+        <p>{gw('spy.waitHost')}</p>
       {/if}
-      <button onclick={() => move({ type: 'leave' })}>{t('spy.leave')}</button>
+      <button onclick={() => move({ type: 'leave' })}>{gw('spy.leave')}</button>
     {:else if r.phase === 'reveal' && r.result}
-      <h2>{t(r.result.winner === 'spy' ? 'spy.winSpy' : 'spy.winLocals')}</h2>
-      <p>{t(`spy.why.${r.result.why}` as Key)}</p>
-      <p>{t('spy.wasSpy', { name: nameOf(r.result.spy) })}</p>
-      <p>{t('spy.wasPlace', { place: place(r.location ?? '') })}</p>
-      {#if r.result.guess}<p>{t('spy.guessed', { place: place(r.result.guess) })}</p>{/if}
+      <h2>{gw(r.result.winner === 'spy' ? 'spy.winSpy' : 'spy.winLocals')}</h2>
+      <p>{gw(`spy.why.${r.result.why}`)}</p>
+      <p>{gw('spy.wasSpy', { name: nameOf(r.result.spy) })}</p>
+      <p>{gw('spy.wasPlace', { place: place(r.location ?? '') })}</p>
+      {#if r.result.guess}<p>{gw('spy.guessed', { place: place(r.result.guess) })}</p>{/if}
       <ul>{#each r.result.votes as v (v.from)}<li>{nameOf(v.from)} → {nameOf(v.to)}</li>{/each}</ul>
     {:else}
       <!-- hold-to-reveal: the role shows only while a finger is on it -->
       <button onpointerdown={() => (shown = true)} onpointerup={() => (shown = false)} onpointerleave={() => (shown = false)} onpointercancel={() => (shown = false)}>
-        {#if !shown}{t('spy.hold')}{:else if r.role === 'spy'}{t('spy.youSpy')} · {t('spy.spyHint')}{:else}{t('spy.youLocal', { place: place(r.location ?? '') })}{/if}
+        {#if !shown}{gw('spy.hold')}{:else if r.role === 'spy'}{gw('spy.youSpy')} · {gw('spy.spyHint')}{:else}{gw('spy.youLocal', { place: place(r.location ?? '') })}{/if}
       </button>
-      {#if r.deadline}<p>{t('spy.left', { time: mmss(left) })}</p>{/if}
+      {#if r.deadline}<p>{gw('spy.left', { time: mmss(left) })}</p>{/if}
       {#if r.phase === 'play'}
-        {#if r.first}<p>{t('spy.first', { name: nameOf(r.first) })}</p>{/if}
-        {#if r.me === r.host}<button onclick={() => move({ type: 'vote_now' })}>{t('spy.voteNow')}</button>{/if}
+        {#if r.first}<p>{gw('spy.first', { name: nameOf(r.first) })}</p>{/if}
+        {#if r.me === r.host}<button onclick={() => move({ type: 'vote_now' })}>{gw('spy.voteNow')}</button>{/if}
       {:else if r.phase === 'vote'}
-        <h2>{t('spy.vote')}</h2>
-        <p>{t('spy.voted', { n: r.voted?.length ?? 0, total: r.players.length })}</p>
+        <h2>{gw('spy.vote')}</h2>
+        <p>{gw('spy.voted', { n: r.voted?.length ?? 0, total: r.players.length })}</p>
         <ul>{#each r.players.filter((p) => p.id !== r.me) as p (p.id)}
           <li><button aria-pressed={r.myVote === p.id} onclick={() => move({ type: 'vote', target: p.id })}>{p.name}{r.voted?.includes(p.id) ? ' ✓' : ''}</button></li>
         {/each}</ul>
       {:else if r.phase === 'guess'}
-        <p>{r.accused === r.me ? t('spy.caughtMe') : t('spy.caught', { name: nameOf(r.accused) })}</p>
+        <p>{r.accused === r.me ? gw('spy.caughtMe') : gw('spy.caught', { name: nameOf(r.accused) })}</p>
       {/if}
       {#if r.role === 'spy' && (r.phase === 'play' || r.phase === 'guess')}
-        <h3>{t('spy.guess')}</h3>
+        <h3>{gw('spy.guess')}</h3>
         <ul>{#each SPY_LOCATIONS as l (l)}<li><button onclick={() => move({ type: 'guess', location: l })}>{place(l)}</button></li>{/each}</ul>
       {:else}
-        <h3>{t('spy.places')}</h3>
+        <h3>{gw('spy.places')}</h3>
         <ul>{#each SPY_LOCATIONS as l (l)}<li>{place(l)}</li>{/each}</ul>
       {/if}
     {/if}

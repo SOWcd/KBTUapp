@@ -89,6 +89,11 @@ def test_spy_never_gets_the_place(env, monkeypatch):
     for i, tg in enumerate(others):
         room = _get(c, tg, room["id"]).json()
         assert _act(c, tg, room, f"vote-000{i}", type="vote", target=s["spy"]).json()["applied"]
+    room = _get(c, spy, room["id"]).json()
+    assert room["phase"] == "vote" and len(room["voted"]) == 3  # everyone votes before the count, the spy too
+    assert _act(c, spy, room, "vote-spy-01", type="vote", target=room["me"]).status_code == 400  # not for oneself
+    target = next(p["id"] for p in room["players"] if p["id"] != room["me"])
+    assert _act(c, spy, room, "vote-spy-02", type="vote", target=target).json()["applied"]
     mine = check("guess")
     assert mine["accused"] == s["spy"] and 0 < mine["deadline"] - mine["now"] <= logic.spy.GUESS_S
     wrong = next(x for x in logic.spy.LOCATIONS if x != s["loc"])
@@ -96,7 +101,7 @@ def test_spy_never_gets_the_place(env, monkeypatch):
     end = _act(c, spy, mine, "guess-0002", type="guess", location=wrong).json()["room"]
     assert end["phase"] == "reveal" and end["location"] == s["loc"] and not end["live"]
     assert end["result"] == {"spy": s["spy"], "accused": s["spy"], "guess": wrong, "winner": "locals", "why": "wrong_guess",
-                             "votes": end["result"]["votes"]} and len(end["result"]["votes"]) == 3
+                             "votes": end["result"]["votes"]} and len(end["result"]["votes"]) == 4
 
 
 def test_stale_and_duplicate_moves(env):
@@ -184,6 +189,5 @@ def test_locations_match_the_app():
     web = Path(__file__).parents[2] / "web/src/lib"
     listed = re.findall(r"'([a-z_]+)'", (web / "games/spy.ts").read_text().split("SPY_LOCATIONS", 1)[1].split("]", 1)[0])
     assert tuple(listed) == logic.spy.LOCATIONS
-    for lang in ("ru", "kk", "en"):
-        text = (web / f"i18n/{lang}.ts").read_text()
-        assert all(f"'spy.loc.{x}':" in text for x in listed), lang
+    words = (web / "i18n/games.ts").read_text()  # ru, kk, en in one file
+    assert all(words.count(f"'spy.loc.{x}':") == 3 for x in listed)
