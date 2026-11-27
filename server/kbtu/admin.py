@@ -9,7 +9,7 @@
   .venv/bin/python -m kbtu.admin office <slug> <short> <emoji> "<ru>" "<kk>" "<en>" <https://t.me/channel>   a KBTU service
                                 (kind office): official, its name in the three languages as typed, its public channel the
                                 main chat with the mirror on; who goes to its events never shows to other students
-                                (guests_private). Its found events stay drafts until auto-publish
+                                (org_flags.guests_private). Its found events stay drafts until auto-publish
   .venv/bin/python -m kbtu.admin auto-publish <slug> on | off   an org's events found in its channel published at once
                                 (logic/autoev.py: a clear future date and time, a few a day; the rest drafts), audited
   .venv/bin/python -m kbtu.admin org-award <id | slug | "exact name"> <year> "<title>"   a KBTU Awards nomination it won,
@@ -317,8 +317,9 @@ def _office(con, slug: str, short: str, emoji: str, ru: str, kk: str, en: str, c
     p.pop("image", None)  # its avatar comes with the chats' daily look
     with db.tx(con):
         oid = create_org(con, None, names[0], short, emoji, True, slug, "office")
-        con.execute("UPDATE orgs SET name = ?, i18n = ?, lang = 'ru', guests_private = 1 WHERE id = ?",
+        con.execute("UPDATE orgs SET name = ?, i18n = ?, lang = 'ru' WHERE id = ?",
                     (names[0], json.dumps({"kk": {"name": names[1]}, "en": {"name": names[2]}}, ensure_ascii=False), oid))
+        con.execute("INSERT INTO org_flags (org_id, guests_private) VALUES (?, 1)", (oid,))
         try:
             add_org_chat(con, Viewer(boss["id"], "admin", True), oid, url, p)
         except ApiError as exc:
@@ -840,7 +841,8 @@ def main(args: list[str]) -> None:
         _office(con, *args[1:])
     elif cmd == "auto-publish" and len(args) == 3 and args[2] in ("on", "off"):
         o = one(con, "SELECT id FROM orgs WHERE slug = ?", args[1]) or sys.exit(f"{args[1]}: no such org")
-        con.execute("UPDATE orgs SET auto_publish = ? WHERE id = ?", (int(args[2] == "on"), o["id"]))
+        con.execute("""INSERT INTO org_flags (org_id, auto_publish) VALUES (?, ?)
+            ON CONFLICT (org_id) DO UPDATE SET auto_publish = excluded.auto_publish""", (o["id"], int(args[2] == "on")))
         log_action(con, None, "org_auto_publish", f"org:{o['id']}", json.dumps({"on": args[2] == "on"}))
         print(f"{args[1]}: auto-publish {args[2]}")
     elif cmd == "logos-trim" and args[1:] in ([], ["--apply"]):

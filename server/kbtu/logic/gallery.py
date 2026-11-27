@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 
 from ..db import tx
-from .core import ApiError, Viewer, media_shape, now, one, rows
+from .core import GUESTS_SEEN, ApiError, Viewer, media_shape, now, one, rows
 
 MODE = ""                # app.create sets it from GALLERY: "all", "staff" or "" (off)
 PAGE = 60
@@ -43,7 +43,7 @@ def _shape(f, v: Viewer) -> dict:
 def _open() -> str:
     """SQL: the event `e` of the club `o` shows its album in the Gallery (args: on_afisha_args, my id)."""
     return f"""e.status = 'published' AND e.hidden_at IS NULL AND e.visibility = 'public' AND e.meeting = 0 AND o.status != 'hidden'
-            AND e.school IS NULL AND {on_afisha()} AND (e.first_year = 0 OR (SELECT hide_first_year FROM users WHERE id = ?) = 0)"""
+            AND e.school IS NULL AND {on_afisha()} AND {GUESTS_SEEN.format(e='e.id')} AND (e.first_year = 0 OR (SELECT hide_first_year FROM users WHERE id = ?) = 0)"""
 
 
 def albums(con, v: Viewer) -> list[dict]:

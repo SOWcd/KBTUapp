@@ -197,10 +197,10 @@ def deleting(con, eid: int) -> bool:
 
 # an orgs row with an official club's tools: official, KBTU's own office or school, or a club at the Ascent's top (clubs.py)
 FULL_TOOLS = "(official = 1 OR kind != 'club' OR top_at IS NOT NULL)"
-# an event (its id: {e}) whose guests friends may see: never one hosted or co-hosted by an org with guests_private (a
+# an event (its id: {e}) whose guests friends may see: never one hosted or co-hosted by an org with org_flags.guests_private (a
 # psychological service: who goes there is nobody's business); the organizers' own list is not this
-GUESTS_SEEN = """NOT EXISTS (SELECT 1 FROM events gx JOIN orgs go ON go.id IN (gx.org_id, gx.co_org_id) AND go.guests_private = 1 WHERE gx.id = {e})
-    AND NOT EXISTS (SELECT 1 FROM event_cohosts gc JOIN orgs go ON go.id = gc.org_id AND go.guests_private = 1 WHERE gc.event_id = {e})"""
+GUESTS_SEEN = """(NOT EXISTS (SELECT 1 FROM events gx JOIN org_flags gf ON gf.org_id IN (gx.org_id, gx.co_org_id) AND gf.guests_private = 1 WHERE gx.id = {e})
+    AND NOT EXISTS (SELECT 1 FROM event_cohosts gc JOIN org_flags gf ON gf.org_id = gc.org_id AND gf.guests_private = 1 WHERE gc.event_id = {e}))"""
 
 
 # the staff's decisions on what waits (Admin → Inbox), and their undos: the audit lines Done shows and decided() reads

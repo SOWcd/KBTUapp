@@ -1453,6 +1453,8 @@ def _album_room(con, v: Viewer, e: sqlite3.Row) -> int:
     """How many more photos I may add to this event's album now."""
     if not v.student or e["status"] != "published" or not e["starts_at"] <= core.now() <= end_of(e) + ALBUM_FOR:
         return 0
+    if not one(con, f"SELECT {core.GUESTS_SEEN.format(e='?')}", e["id"], e["id"])[0]:
+        return 0  # a private-guests org's (a psychological service): no album, its faces and names would say who came
     co = one(con, ACCEPTED, e["id"])
     team = at_least(role_in(con, v, e["org_id"]), "member") or bool(co and at_least(role_in(con, v, co["org_id"]), "member"))
     # any student, not only the checked-in: whoever dropped by adds theirs (owner: a gallery with few limits lives)

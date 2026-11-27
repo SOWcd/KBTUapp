@@ -904,7 +904,8 @@ def friends(con, v: Viewer) -> dict:
         JOIN users u ON u.id = CASE WHEN f.a = ? THEN f.b ELSE f.a END JOIN students s ON s.user_id = u.id
         WHERE f.a = ? OR f.b = ?
         ORDER BY (SELECT COUNT(*) FROM registrations r1 JOIN registrations r2 ON r2.event_id = r1.event_id
-                  WHERE r1.user_id = ? AND r2.user_id = u.id AND r1.status = 'going' AND r2.status = 'going')
+                  WHERE r1.user_id = ? AND r2.user_id = u.id AND r1.status = 'going' AND r2.status = 'going'
+                  AND {core.GUESTS_SEEN.format(e='r1.event_id')})
                + 2 * (SELECT COUNT(*) FROM org_members a JOIN org_members b ON b.org_id = a.org_id WHERE a.user_id = ? AND b.user_id = u.id) DESC,
                f.created_at DESC, s.first_name""", v.id, v.id, v.id, v.id, v.id)]
     incoming = [_friend_row(p, p["at"], False) for p in rows(con, f"""SELECT {cols}, r.created_at AS at FROM friend_requests r

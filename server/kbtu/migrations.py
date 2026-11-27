@@ -2693,8 +2693,11 @@ MIGRATIONS: list[tuple[int, str]] = [
       version TEXT NOT NULL,
       at      INTEGER NOT NULL
     ) STRICT;"""),
-    # an org the creator trusts (admin auto-publish): an event its channel announces goes out at once, not as a draft
-    # (logic/autoev.py); guests_private: who goes to its events is never shown to other students (a psychological service)
-    (257, """ALTER TABLE orgs ADD COLUMN auto_publish INTEGER NOT NULL DEFAULT 0 CHECK (auto_publish IN (0, 1));
-    ALTER TABLE orgs ADD COLUMN guests_private INTEGER NOT NULL DEFAULT 0 CHECK (guests_private IN (0, 1));"""),
+    # an org's switches only the creator sets (admin): auto_publish, an event its channel announces goes out at once, not
+    # as a draft (logic/autoev.py); guests_private, who goes to its events never shows to other students (core.GUESTS_SEEN)
+    (257, """CREATE TABLE IF NOT EXISTS org_flags (  -- IF NOT EXISTS: tests rewind user_version
+      org_id         INTEGER PRIMARY KEY REFERENCES orgs(id) ON DELETE CASCADE,
+      auto_publish   INTEGER NOT NULL DEFAULT 0 CHECK (auto_publish IN (0, 1)),
+      guests_private INTEGER NOT NULL DEFAULT 0 CHECK (guests_private IN (0, 1))
+    ) STRICT;"""),
 ]
