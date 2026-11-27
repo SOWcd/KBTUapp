@@ -1,4 +1,4 @@
-"""Event and club texts in three languages (PLAN 9): the AI chain (llm.py) translates what the organizer typed into the
+"""Event and club texts in three languages: the AI chain (llm.py) translates what the organizer typed into the
 other two. The source language is read from the letters, not asked of the model (Kazakh and Russian share Cyrillic;
 short titles fool it). Models that "think" before they answer get room for that on top of the translation."""
 import json

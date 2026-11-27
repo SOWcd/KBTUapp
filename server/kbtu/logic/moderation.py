@@ -10,7 +10,7 @@ from .core import (ApiError, PERSON, PERSON_COLS, Viewer, _org, can, deleting, l
     person_ref, rows, shown_name)
 
 
-# ---------------------------------------------------------------- comments and reports (§4.10)
+# ---------------------------------------------------------------- comments and reports
 
 COMMENTS_A_MINUTE, REPORTS_A_DAY = 10, 20
 
@@ -42,7 +42,7 @@ def _moderates(con, v: Viewer, org: int) -> bool:
 
 def comments(con, v: Viewer, kind: str, tid: int) -> dict:
     """Comments under a post or an event: questions to the organizer ("where's the entrance?"). Students read and write
-    (short names, §3); the club's Head+ answer as the club, take any down and turn the thread off; authors take theirs."""
+    (short names); the club's Head+ answer as the club, take any down and turn the thread off; authors take theirs."""
     need_student(v)
     t = _thread(con, v, kind, tid)
     # the flags are the club's own (Head+ with posts): the app's staff see the thread as any student does; they act in

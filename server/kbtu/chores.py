@@ -52,7 +52,7 @@ async def refresh_chats(cfg: Config, http: httpx.AsyncClient, con) -> None:
 
 
 async def chat_card(cfg: Config, http: httpx.AsyncClient, con, cid: int, tg_chat: int) -> bool:
-    """An org's chat our bot sits in (PLAN 86): its card from Telegram (getChat: title, about, avatar; getChatMemberCount),
+    """An org's chat our bot sits in: its card from Telegram (getChat: title, about, avatar; getChatMemberCount),
     never a message. False when Telegram won't say (the bot was removed: the t.me page again)."""
     try:
         r = (await _tg(cfg, http, "getChat", {"chat_id": tg_chat})).json()

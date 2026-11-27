@@ -1,4 +1,4 @@
-"""Photos (SPEC §9): whatever a phone sends is decoded, checked and re-encoded, never stored or served as it
+"""Photos: whatever a phone sends is decoded, checked and re-encoded, never stored or served as it
 came. That also strips EXIF (a phone photo carries the GPS spot where it was taken) and anything hidden in
 the file; only the time it was taken is read first (taken: an album's order), nothing else of it is kept. Three
 files per photo, named by the content hash so they can be cached forever: the cover (WebP, longest side 1600 px), a

@@ -12,19 +12,19 @@ from .core import (ApiError, Viewer, _org, _qs, can, card, log_action, need_stud
 from . import chatmod
 
 
-# ---------------------------------------------------------------- the chats directory (§4.11)
+# ---------------------------------------------------------------- the chats directory
 
 def _chat(c: sqlite3.Row, opened: set[int], orgs: dict | None = None) -> dict:
-    """orgs: org id -> its ref, for the catalog's chip of whose chat it is (PLAN 86)."""
+    """orgs: org id -> its ref, for the catalog's chip of whose chat it is."""
     return {"id": c["id"], "title": c["title"], "kind": "forum" if c["forum"] else c["kind"], "url": c["url"], "members": c["members"],
             "photo": f"media/{c['photo']}.t.webp" if c["photo"] else None, "school": c["school"], "course": c["course"], "opened": c["id"] in opened,
             "org": (orgs or {}).get(c["org_id"]), "section": c["section"], "sectionAi": bool(c["section_ai"])}
 
 
 def chats(con, v: Viewer) -> dict:
-    """Curated Telegram chats (§4.11), the biggest first (A8); "for you" are the ones aimed at my school and
+    """Curated Telegram chats, the biggest first (A8); "for you" are the ones aimed at my school and
     course plus those for everyone (my school and course first, by size within); a club's or school's chat says whose
-    (PLAN 86; no tick on the ones I opened: it isn't clear what one means)."""
+    (no tick on the ones I opened: it isn't clear what one means)."""
     st = one(con, "SELECT school, course FROM students WHERE user_id = ?", v.id) if v.student else None
     opened = {r[0] for r in rows(con, "SELECT chat_id FROM chat_opens WHERE user_id = ?", v.id)} if v.student else set()
     # a closed chat's invite link (t.me/+…) only to signed-in students: it lets anyone in (any chat)
@@ -419,7 +419,7 @@ def main_org_chat(con, v: Viewer, oid: int, cid: int) -> list[dict]:
 
 
 def mirror_org_chat(con, v: Viewer, oid: int, cid: int, on: object) -> list[dict]:
-    """Studio's switch under the main channel (PLAN 86 part 2): its posts in the club's news, or not. The posts already
+    """Studio's switch under the main channel: its posts in the club's news, or not. The posts already
     mirrored stay the club's news; off, the userbot leaves the channel."""
     if not isinstance(on, bool):
         raise ApiError("bad_input")

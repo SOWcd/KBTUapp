@@ -61,7 +61,7 @@ def _memo_sender(con, v: Viewer, oid: int) -> dict:
 
 
 def memo(con, v: Viewer, oid: int, later: bool = False) -> dict:
-    """The week's memo for DMP (PLAN stage 2): one memo of next week's events that ask DMP for something (drafts too:
+    """The week's memo for DMP: one memo of next week's events that ask DMP for something (drafts too:
     rooms are booked before the poster), with `later` the later ones too, signed once by the caller; events already
     sent are left out (listed in `sent`). The app opens it in Outlook to youth_policy@kbtu.kz or copies it. `without`: next
     week's events that ask for nothing, to check."""
@@ -272,8 +272,8 @@ def stats_day(con) -> None:
 
 
 def admin_stats(con, v: Viewer) -> dict:
-    """The admin panel's numbers (PLAN "Admin stats"): online now (opened in the last 10 minutes: seen_at is refreshed
-    at most every 10), active in a day / week / month, students (DMP staff aside, §1), new today; the last 30 days from the nightly rows."""
+    """The admin panel's numbers: online now (opened in the last 10 minutes: seen_at is refreshed
+    at most every 10), active in a day / week / month, students (DMP staff aside), new today; the last 30 days from the nightly rows."""
     _admin(v)
     t = core.now()
     since = lambda s: one(con, "SELECT COUNT(*) FROM users WHERE seen_at >= ?", t - s)[0]  # noqa: E731
