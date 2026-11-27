@@ -273,6 +273,7 @@ export const server = {
   acceptInvite: (token: string): Promise<Org> => call('POST', `/invites/${token}`),
   teamLink: (org: Id): Promise<{ token: string; expiresAt: Ts }> => call('POST', `/orgs/${org}/team-link`), // the link for the whole team, 7 days: the live one, else a new one
   teamLinkOff: (org: Id): Promise<void> => call('DELETE', `/orgs/${org}/team-link`),
+  teamLinkBack: (org: Id): Promise<{ expiresAt: Ts }> => call('POST', `/orgs/${org}/team-link/back`), // Undo of off: the same link
   removeMember: (org: Id, user: Id): Promise<void> => call('DELETE', `/orgs/${org}/members/${user}`), // my own id = leave; a President: conflict/'president'
   transfer: (org: Id, user: Id): Promise<TeamMember[]> => call('POST', `/orgs/${org}/transfer`, { userId: user }),
   // Team 2.0 (§2b): the club's own roles (Vice+) and tags (Head+), probation, removal by request, bans

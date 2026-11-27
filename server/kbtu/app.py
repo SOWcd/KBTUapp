@@ -2088,6 +2088,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def team_link_off(oid: int, con: Con, v: Me):
         logic.team_link_off(con, v, oid)
 
+    @app.post("/api/orgs/{oid}/team-link/back")  # Undo of turning it off: the same link again, moments later
+    def team_link_back(oid: int, con: Con, v: Me):
+        return logic.team_link_back(con, v, oid)
+
     @app.post("/api/invites/{token}")
     def accept_invite(token: str, con: Con, v: Me):
         return logic.accept_invite(con, v, token)
