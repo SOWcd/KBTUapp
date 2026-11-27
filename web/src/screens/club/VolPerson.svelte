@@ -4,7 +4,7 @@
   // each change with a reason; hours come from scans alone. `mine`: my own record, from Studio's "My hours".
   import { api, type Id, type VolPerson, type VolShift } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
-  import { data, loadVol, volGone } from '../../lib/state/data.svelte';
+  import { data, loadTeam, loadVol, volGone } from '../../lib/state/data.svelte';
   import { loadMe, session } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t, type Key } from '../../lib/i18n/index.svelte';
@@ -19,20 +19,29 @@
   import Field from '../../ui/Field.svelte';
   import Group from '../../ui/Group.svelte';
   import Row from '../../ui/Row.svelte';
+  import EmptyState from '../../ui/EmptyState.svelte';
+  import Skeleton from '../../ui/Skeleton.svelte';
 
   let { overlay, id, mine = false }: { overlay: Overlay; id: Id; mine?: boolean; vol?: boolean /* App: closes with the ledger */ } = $props();
   // the list's row shows at once; the rest (shifts, misses) as it comes
   const seed = data.vol?.people.find((x) => x.id === id);
   let p = $state<VolPerson | null>(seed ? { ...seed, balance: 0, shifts: [], missed: [], manual: [] } : null);
   // no longer mine to see: nothing of it stays on screen
-  $effect(() => { (mine ? api.volMine() : api.volPerson(id)).then((x) => (p = x)).catch((e) => { if (volGone(e)) p = null; }); });
+  // nothing to show yet: placeholders; the read failed with nothing on screen: Retry
+  let failed = $state(false);
+  const read = () => { failed = false; (mine ? api.volMine() : api.volPerson(id)).then((x) => (p = x)).catch((e) => { if (volGone(e)) p = null; else if (!p) failed = true; }); };
+  $effect(read);
   const edit = $derived(!!session.me?.vol?.edit && !mine);
 
   // the President's and Vice's form: one at a time. Nobody types hours or times (hours come from scans alone, server vol.py)
   type Mode = { k: 'miss'; n: 1 | -1 } | { k: 'link' };
   let mode = $state<Mode | null>(null);
   let reason = $state('');
-  function open(m: Mode) { haptic.tap(); mode = m; reason = ''; }
+  function open(m: Mode) {
+    haptic.tap(); mode = m; reason = '';
+    const org = session.me?.vol?.org;
+    if (m.k === 'link' && org && !data.team[org]) void loadTeam(org); // the picker's people, if the app hasn't them yet
+  }
   const okReason = $derived(reason.trim().length >= 2);
 
   async function done(f: () => Promise<VolPerson>) {
@@ -104,6 +113,8 @@
             <Row dense title={m.name} onclick={() => link(m.id)}>
               {#snippet lead()}<Avatar person={m} size={32} tappable={false} />{/snippet}
             </Row>
+          {:else}
+            {#if data.team[session.me?.vol?.org ?? 0]}<EmptyState inline text={sw('ledg.nobody')} />{:else}<Skeleton n={2} />{/if}
           {/each}
         </Group>
       {:else if mode}
@@ -150,6 +161,8 @@
         </Group>
       {/if}
     </div>
+  {:else if failed}<EmptyState onretry={read} />
+  {:else}<Skeleton kind="lines" n={4} />
   {/if}
 </Sheet>
 

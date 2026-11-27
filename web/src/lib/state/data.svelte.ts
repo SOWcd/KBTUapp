@@ -352,8 +352,8 @@ export async function loadHelpq(): Promise<void> {
   try { data.helpq = await api.helpQueue(); } catch (e) { if (e instanceof ApiErr && e.code !== 'unavailable') data.helpq = null; }
 }
 
-export async function loadVol(): Promise<void> {
-  try { data.vol = await api.volLedger(); } catch (e) { volGone(e); }
+export async function loadVol(): Promise<boolean> {
+  try { data.vol = await api.volLedger(); return true; } catch (e) { volGone(e); return false; }
 }
 
 export async function loadRegistry(): Promise<boolean> {
