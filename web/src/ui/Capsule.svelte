@@ -38,9 +38,17 @@
   const mode = $derived(title ? 'title' : mark && icon ? 'mark' : live ? 'live' : 'none');
 
   onMount(() => {
-    const tick = setInterval(() => { if (live) now = Date.now() / 1000; }, 1000);
     const boot = booting ? setTimeout(() => (booting = false), BOOT_MS - performance.now()) : undefined;
-    return () => { clearInterval(tick); clearTimeout(boot); };
+    return () => clearTimeout(boot);
+  });
+  // the seconds tick only while an event's countdown shows them: every other label comes made (App's 30 s clock, the
+  // anthem's from its player), so a class or a check-in in the capsule ticked every second for nothing
+  const counting = $derived(live?.kind === 'event' && live.at > now);
+  $effect(() => {
+    if (!counting) return;
+    now = Date.now() / 1000;
+    const tick = setInterval(() => (now = Date.now() / 1000), 1000);
+    return () => clearInterval(tick);
   });
 
   // a title shrinks to fit before it is cut (the award title was cut on a narrow capsule); 11 px is the floor. Every
