@@ -1,5 +1,6 @@
 <script lang="ts">
-  // Clubs' stories only; News has its own header action and Gallery its card in List.
+  // Clubs' stories, and at the row's end one more circle, "More": the campus map, the Feed, the Gallery and the News in
+  // one menu (owner, Nov 27: four round buttons had no place of their own; a menu at a circle works in Telegram and on the web alike).
   import { untrack } from 'svelte';
   import { SvelteSet } from 'svelte/reactivity';
   import type { OrgRef } from '../../lib/api';
@@ -9,6 +10,19 @@
   import { nowTs } from '../../lib/time';
   import { storyGroups, seenEv } from '../../lib/posts';
   import OrgLogo from '../../ui/OrgLogo.svelte';
+  import MapIcon from '@lucide/svelte/icons/map';
+  import Play from '@lucide/svelte/icons/play';
+  import Images from '@lucide/svelte/icons/images';
+  import Newspaper from '@lucide/svelte/icons/newspaper';
+  import Ellipsis from '@lucide/svelte/icons/ellipsis';
+  import { menu } from '../../ui/menu';
+  import { kriCorner } from '../../lib/state/session.svelte';
+  import { openMapFrom, irisFrom } from '../../lib/state/sheets';
+  import { t } from '../../lib/i18n/index.svelte';
+  import { haptic } from '../../lib/tg';
+
+  // feed: there are events to show in a row
+  let { feed = false }: { feed?: boolean } = $props();
   import { nameOf } from '../../lib/short'; // a school by its abbreviation, a club in full ("EC" looked like a bug)
 
   // fresh each time List comes into view, quietly (the last copy shows meanwhile)
@@ -29,9 +43,20 @@
   const groups = $derived(storyGroups(data.news?.casts ?? [], data.news?.posts ?? [], nowTs(), data.events.filter((e) => reach.has(e.org.id)), seenEv).filter((g) => g.org.kind === 'club'));
   // one or two stories: small pills in one line, not a 100 px row for a lone circle (the hero starts higher)
   const few = $derived(groups.length < 3);
+  // the map only once KRI took the bar's corner (a guest's corner is the map itself). Each opens out of this circle (the iris)
+  const more = $derived([
+    ...(kriCorner() ? [{ icon: MapIcon, label: t('map.open'), go: (e: MouseEvent) => openMapFrom(e) }] : []),
+    ...(feed ? [{ icon: Play, label: t('list.inRow'), go: (e: MouseEvent) => { irisFrom(e); sheets.feed(); } }] : []),
+    { icon: Images, label: t('gallery.title'), go: (e: MouseEvent) => { irisFrom(e); sheets.gallery(); } },
+    { icon: Newspaper, label: t('page.news'), go: (e: MouseEvent) => { irisFrom(e); sheets.news(); } },
+  ]);
+  function openMore(ev: MouseEvent) {
+    haptic.select();
+    const from = { currentTarget: ev.currentTarget } as MouseEvent; // the menu's pick has no event of its own: the circle is where it opens from
+    menu(ev.currentTarget as Element, more.map((m) => ({ label: m.label, icon: m.icon, onselect: () => m.go(from) })), 'end');
+  }
 </script>
 
-{#if groups.length}
 <div class={['row hscroll', { few }]}>
   {#each groups as g, i (g.org.id)}
     <button class="s" class:new={g.unread} onclick={() => sheets.stories(groups, i)}>
@@ -39,8 +64,11 @@
       <b class="ellipsis" use:fit={g.org}>{!few && tight.has(g.org.id) ? g.org.abbr : nameOf(g.org)}</b>
     </button>
   {/each}
+  <button class="s more" aria-haspopup="menu" onclick={openMore}>
+    <span class="ring"><span class="in">{#if few}<Ellipsis size={18} />{:else}<span class="four">{#each more as m (m.label)}<m.icon size={15} strokeWidth={2} />{/each}</span>{/if}</span></span>
+    <b class="ellipsis">{t('common.more')}</b>
+  </button>
 </div>
-{/if}
 
 <style>
   .row { display: flex; gap: 12px; margin: 0 calc(-1 * var(--gutter)) 16px; padding: 2px var(--gutter); overflow-x: auto; scrollbar-width: none; }
@@ -56,4 +84,8 @@
   .few .ring { width: var(--ctl-s); height: var(--ctl-s); padding: 2px; }
   .few .in { border-width: 2px; }
   .few b { font-size: var(--fs-sub); }
+  /* "More": the same circle, a quiet fill in place of a logo, what is inside it drawn small */
+  .more .in { background: var(--fill); color: var(--text-2); }
+  .four { display: grid; grid-template-columns: repeat(2, auto); gap: 5px; }
+  .four:has(> :nth-child(3):last-child) > :last-child { grid-column: span 2; justify-self: center; }
 </style>

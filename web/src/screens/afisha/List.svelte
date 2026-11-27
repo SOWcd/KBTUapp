@@ -3,11 +3,8 @@
   import Clock from '@lucide/svelte/icons/clock';
   import MapPin from '@lucide/svelte/icons/map-pin';
   import MapIcon from '@lucide/svelte/icons/map';
-  import Play from '@lucide/svelte/icons/play';
   import QrCode from '@lucide/svelte/icons/qr-code';
   import Sparkles from '@lucide/svelte/icons/sparkles';
-  import Images from '@lucide/svelte/icons/images';
-  import Newspaper from '@lucide/svelte/icons/newspaper';
   import CalendarPlus from '@lucide/svelte/icons/calendar-plus';
   import Bookmark from '@lucide/svelte/icons/bookmark';
   import UsersRound from '@lucide/svelte/icons/users-round';
@@ -23,10 +20,10 @@
   import { lead as leadHero, load as loadHero, rank as rankHero, save as saveHero, shown as heroShown, stale as heroStale, tapped as heroTapped, type Pick as HeroPick } from '../../lib/hero';
   import { data, skipped, classKey, skipClass, prefetchEvent, canAskRating, dismissEventRating, loadMyPast, ratingBusy, rateFromPrompt, toggleGoing, goingBusy } from '../../lib/state/data.svelte';
   import { touchAhead } from '../../lib/touch';
-  import { session, kriCorner } from '../../lib/state/session.svelte';
-  import { sheets, openMapFrom, irisFrom } from '../../lib/state/sheets';
+  import { session } from '../../lib/state/session.svelte';
+  import { sheets } from '../../lib/state/sheets';
   import { ui, toTickets, goTab } from '../../lib/state/ui.svelte';
-  import { t, tn, money, subjectOf, friendsLine } from '../../lib/i18n/index.svelte';
+  import { t, money, subjectOf, friendsLine } from '../../lib/i18n/index.svelte';
   import EventPlace from '../../ui/EventPlace.svelte';
   import { lessonKind } from '../../lib/i18n/subjects';
   import { dayNo, nowTs, parts, weekday, weekdayShort, dayMonth, dayMonthShort, OFFSET, soon, time, dateInput, multiDay, daySpan } from '../../lib/time';
@@ -49,7 +46,7 @@
   import CastingBlock from '../../ui/CastingBlock.svelte';
   import TwoGisMark from '../../ui/TwoGisMark.svelte';
   import EventRow from '../../ui/EventRow.svelte';
-  import { fitTitle, largeTitle } from '../../ui/title';
+  import { largeTitle } from '../../ui/title';
   import Button from '../../ui/Button.svelte';
   import IconButton from '../../ui/IconButton.svelte';
   import Card from '../../ui/Card.svelte';
@@ -57,6 +54,7 @@
   import ActionCard from '../../ui/ActionCard.svelte';
   import StoryRow from './StoryRow.svelte';
   import PullSearch from '../../ui/PullSearch.svelte';
+  import { glass } from '../../ui/glass';
   import Everything from './Everything.svelte';
   import GalleryCard from './GalleryCard.svelte';
   import Chip from '../../ui/Chip.svelte';
@@ -156,7 +154,6 @@
     const id = requestIdleCallback(() => (upto += STEP), { timeout: 1000 });
     return () => cancelIdleCallback(id);
   });
-  const weekCount = $derived(shown.filter((e) => endOf(e) > now && dayNo(e.startsAt) < today + 7).length);
   // a day off by the academic calendar on a class day: say why the classes are gone
   const offToday = $derived(noClasses(dateInput(now)) && data.schedule.some((c) => c.weekday === (parts(now).wd || 7)));
 
@@ -363,43 +360,47 @@
     {@const e = c.e}
     {@const mine = e.my?.status === 'going'}
     <!-- an event: my ticket and the way there, else what it is and one tap to go -->
-    <section class="hero" class:tix={mine && i === 0} class:nopic={!(e.cover || e.video?.poster)} style:--c={e.cover?.color ?? e.video?.poster?.color ?? e.color ?? e.tint} onclickcapture={() => tap(c)}>
+    {@const pic = !!(e.cover || e.video?.poster)}
+    <section class="hero theme-dark" class:tix={mine && i === 0} class:nopic={!pic} style:--c={e.cover?.color ?? e.video?.poster?.color ?? e.color ?? e.tint} onclickcapture={() => tap(c)}>
       <button class="hit" onpointerdown={(ev) => touchAhead(ev, () => prefetchEvent(e.id))} onclick={(ev) => sheets.event(e.id, ev.currentTarget.parentElement?.querySelector('.poster'))} aria-label={e.title}></button>
       <span class="art"><Poster item={e} big radius={0} /></span>
       <div class="shade"></div>
-      <div class="slab glass glass-sheet">
+      <div class="slab" use:glass>
+        <!-- the glass bends the cover at its edge: the same picture, a little larger, seen through a thin band along the rim -->
+        {#if pic}<span class="bend" aria-hidden="true"><span><Poster item={e} big radius={0} /></span></span>{/if}
         <span class="hero-tx">
           <b class="clamp-2">{e.title}</b>
           <span class="where"><span class="ellipsis"><b class="num">{multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : time(e.startsAt)}</b> · {soon(e.startsAt, now)}</span><span class="by ellipsis">&nbsp;· {shortOf(e.org)}{#if e.coHost} × {shortOf(e.coHost)}{/if}</span></span>
           <span class="hero-place"><EventPlace {e} pin /></span>
-          {#if !mine}<span class="hsub">{@render status(e)}</span>{/if}
         </span>
-        <!-- under the thumb, at the slab's end: my ticket, or one tap to sign up -->
-        {#if mine}
-          <span class="acts">
-            <IconButton kind="tinted" size="s" icon={QrCode} label={t('event.ticket')} onclick={() => sheets.ticket(e.id)} />
-          </span>
-        {:else if e.my?.status === 'hold'}
-          <span class="acts"><Button kind="tinted" size="s" onclick={() => sheets.pay(e.id)}>{t('event.pay', { price: money(e.price ?? 0) })}</Button></span>
-        {:else if canGo(e)}
-          <span class="acts"><Button kind="tinted" size="s" loading={goingBusy.has(e.id)} onclick={() => toggleGoing(e.id, () => sheets.pay(e.id))}>{e.price ? e.freeLeft && session.me?.student?.freeFirst ? t('event.goFree') : t('event.goPrice', { price: money(e.price) }) : t('event.go')}</Button></span>
-        {/if}
+        <!-- the slab's foot: who goes and what it is, and under the thumb my ticket or the one tap to sign up -->
+        <span class="foot">
+          <span class="hsub">{@render status(e)}</span>
+          {#if mine}
+            <span class="acts"><Button kind="glass" size="m" onclick={() => sheets.ticket(e.id)}>{#snippet icon()}<QrCode size={17} />{/snippet}{t('event.ticket')}</Button></span>
+          {:else if e.my?.status === 'hold'}
+            <span class="acts"><Button onmedia size="m" onclick={() => sheets.pay(e.id)}>{t('event.pay', { price: money(e.price ?? 0) })}</Button></span>
+          {:else if canGo(e)}
+            <span class="acts"><Button onmedia size="m" loading={goingBusy.has(e.id)} onclick={() => toggleGoing(e.id, () => sheets.pay(e.id))}>{e.price ? e.freeLeft && session.me?.student?.freeFirst ? t('event.goFree') : t('event.goPrice', { price: money(e.price) }) : t('event.go')}</Button></span>
+          {/if}
+        </span>
       </div>
       <span class="rim" aria-hidden="true"></span>
     </section>
   {:else}
     {@const v = look(c)}
     <!-- news, a forum post, my next class: the same card, its picture or a 3D mark, the title and one line -->
-    <section class="hero" class:nopic={!v.item.cover} style:--c={v.color} onclickcapture={() => tap(c)}>
+    <section class="hero theme-dark" class:nopic={!v.item.cover} style:--c={v.color} onclickcapture={() => tap(c)}>
       <button class="hit" onclick={v.open} aria-label={v.title}></button>
       <span class="art"><Poster item={v.item} big radius={0} /></span>
       <div class="shade"></div>
-      <div class="slab">
+      <div class="slab" use:glass>
+        {#if v.item.cover}<span class="bend" aria-hidden="true"><span><Poster item={v.item} big radius={0} /></span></span>{/if}
         <span class="hero-tx">
           <b class="clamp-2">{v.title}</b>
           <span class="where"><span class="ellipsis">{#if v.lead}<b class="num">{v.lead}</b> · {/if}{v.line}</span>{#if v.by}<span class="by ellipsis">&nbsp;· {v.by}</span>{/if}</span>
         </span>
-        {#if v.room}{@const room = v.room}<span class="acts"><IconButton kind="secondary" size="s" icon={MapPin} label={t('route.open')} onclick={() => sheets.map(room)} /></span>{/if}
+        {#if v.room}{@const room = v.room}<span class="foot"><span class="acts"><Button kind="glass" size="m" onclick={() => sheets.map(room)}>{#snippet icon()}<MapPin size={17} />{/snippet}{room}</Button></span></span>{/if}
       </div>
       <span class="rim" aria-hidden="true"></span>
     </section>
@@ -408,39 +409,14 @@
 
 <div class="page scroll stagger">
   <PullSearch bind:value={q} placeholder={t('list.search')} />
-  <header class="hd">
-    <span><h1 class="ttl" use:fitTitle use:largeTitle={'afisha'}>{t('common.today')}</h1></span>
-    <!-- the map (its home here once KRI took the bar's corner; a guest's corner is the map itself), the Feed full screen, the Gallery, the clubs' news -->
-    <span class="tools">
-      {#if kriCorner()}<IconButton icon={MapIcon} size="s" label={t('map.open')} onclick={openMapFrom} />{/if}
-      {#if shown.length}<IconButton icon={Play} size="s" label={t('list.inRow')} onclick={(e) => { irisFrom(e); sheets.feed(); }} />{/if}
-      <IconButton icon={Images} size="s" label={t('gallery.title')} onclick={(e) => { irisFrom(e); sheets.gallery(); }} />
-      <IconButton icon={Newspaper} size="s" label={t('page.news')} onclick={(e) => { irisFrom(e); sheets.news(); }} />
-    </span>
-  </header>
-  <p class="date" use:fitTitle={20}>{weekday(dayTs(today) + 12 * 3600)}, {dayMonth(dayTs(today) + 12 * 3600)}</p>
-  {#if data.eventsReady && weekCount}<p class="kick">{tn('list.week', weekCount)}</p>{/if}
+  <!-- no headline (owner, Nov 27): the clubs' circles, then the one big card. The screen's name stays for a reader and for
+       the capsule, which shows it once this has scrolled away -->
+  <h1 class="ttl" use:largeTitle={'afisha'}>{t('common.today')}</h1>
   {#if kept.length}{#await import('../../ui/OfflineTickets.svelte') then m}<div class="offline"><m.default tickets={kept} /></div>{/await}{/if}
   {#if searching}
     <Everything {q} events={searchable} />
   {:else}
-  {#if ratePrompt && !ratingBusy.has(ratePrompt.id)}
-    {@const e = ratePrompt}
-    <div class="rate-prompt">
-      <Card>
-        <div class="rate-head">
-          <div><h2 class="t-body">{t('rate.ask')}</h2><p class="t-foot clamp-2">{e.title}</p></div>
-          <IconButton icon={X} label={t('rate.dismiss')} kind="plain" onclick={() => void dismissEventRating(e.id)} />
-        </div>
-        <div class="rate-stars" role="group" aria-label={t('rate.ask')}>
-          {#each [1, 2, 3, 4, 5] as score (score)}
-            <button type="button" aria-label={t('rate.score', { n: score })} onclick={() => void rateFromPrompt(e.id, score)}><Star size={23} /></button>
-          {/each}
-        </div>
-      </Card>
-    </div>
-  {/if}
-  <StoryRow />
+  <StoryRow feed={shown.length > 0} />
   {#if showClasses && offToday}<p class="off t-foot">{t('list.dayOff')}</p>{/if}
 
   {#if cards.length}
@@ -467,6 +443,22 @@
     </nav>
   {/if}
 
+  {#if ratePrompt && !ratingBusy.has(ratePrompt.id)}
+    {@const e = ratePrompt}
+    <div class="rate-prompt">
+      <Card>
+        <div class="rate-head">
+          <div><h2 class="t-body">{t('rate.ask')}</h2><p class="t-foot clamp-2">{e.title}</p></div>
+          <IconButton icon={X} label={t('rate.dismiss')} kind="plain" onclick={() => void dismissEventRating(e.id)} />
+        </div>
+        <div class="rate-stars" role="group" aria-label={t('rate.ask')}>
+          {#each [1, 2, 3, 4, 5] as score (score)}
+            <button type="button" aria-label={t('rate.score', { n: score })} onclick={() => void rateFromPrompt(e.id, score)}><Star size={23} /></button>
+          {/each}
+        </div>
+      </Card>
+    </div>
+  {/if}
   {#if rest.length}
     <!-- the rest of my week (all of it when another card leads): one grouped card, a ticket pill at each row's end -->
     <h2 class="sec">{t('list.yours')}</h2>
@@ -576,19 +568,9 @@
 <style>
   /* Opal (design-spec-opal.md): black first, one hero, big left title, near-black cards with a hair rim, grey caps */
   .page { position: absolute; inset: 0; padding: var(--page-top) var(--gutter) 0; background: var(--bg); color: var(--text); }
-  .hd > span:first-child { min-width: 0; }
-  /* the date yields: too narrow for it beside the buttons (320 px, four of them), the buttons take their own line above,
-     at the right (wrap-reverse: the second line goes on top, and flex-start is the line's bottom) */
-  .hd { display: flex; flex-wrap: wrap-reverse; align-items: center; justify-content: space-between; gap: var(--s-3); }
-  .hd > span:first-child { flex: 1 0 120px; }
-  /* a headline of two lines in two weights (display type): the day, then its date, light; the week's count is a quiet line under them */
-  .ttl { font: 600 var(--fs-title)/1.06 var(--font-display); letter-spacing: -0.045em; }
-  .date { margin-bottom: var(--s-5); white-space: nowrap; font: var(--fw-light) var(--fs-title)/1.1 var(--font-display); letter-spacing: -0.045em; color: var(--text-3); }
-  .date:has(+ .kick) { margin-bottom: var(--s-1); }
-  .kick { margin: 0 0 var(--s-5); font: 450 var(--fs-sub)/1.3 var(--font-text); color: var(--text-3); }
+  .ttl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .offline { margin-bottom: var(--s-6); }
-  .tools { flex: none; display: flex; gap: var(--s-3); margin-left: auto; }
-  .rate-prompt { margin-bottom: var(--s-3); }
+  .rate-prompt { margin-top: var(--s-5); }
   .rate-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); }
   .rate-head > div { min-width: 0; }
   .rate-head h2 { font-weight: 600; }
@@ -625,8 +607,11 @@
      a low slab of the app's own sheet glass along the bottom (base.css .glass-sheet: the sheets' and menus' family; it
      follows the theme and stays legible whatever the cover is): the title, one line of when and where, and my ticket and the way
      there as two round icons at its end. No drop shadow of its own: the halo is the card's light */
-  .hero { --halo: 0.62; position: relative; isolation: isolate; display: flex; flex-direction: column; justify-content: flex-end; min-height: 196px; padding: 72px 6px 6px; /* the picture always keeps its strip, a two-line title under it too */
-    border-radius: var(--r-xl); background: var(--media); transition: transform var(--t-fast) var(--ease); }
+  /* (owner, Nov 27) the hero is the screen's one big card, most of the first screen: the cover tall and whole, and the words
+     on a slab of Liquid Glass at its foot. The card is media, so it is dark in both themes (.theme-dark: white words, the
+     dark tags and buttons): the glass is clear and takes its colour from the cover, not from the page */
+  .hero { --halo: 0.62; --hh: clamp(340px, 60vh, 540px); position: relative; isolation: isolate; display: flex; flex-direction: column; justify-content: flex-end; height: var(--hh); padding: 6px;
+    border-radius: var(--r-xl); background: var(--media); color: var(--text); transition: transform var(--t-fast) var(--ease); }
   .hero:has(> .hit:active) { transform: scale(0.985); }
   /* the hero's cards side by side, one in view, snapped; edge to edge so the next one waits just past the gutter. A
      scroller clips, so it leaves room around the cards for their light (the glow reaches 44px under a card) and takes it
@@ -667,12 +652,12 @@
   .art, .shade, .rim { border-radius: inherit; pointer-events: none; }
   .art { overflow: hidden; }
   /* the cover clear at the top (it is the screen's one picture), deeper toward the slab: the glass has something calm to sit on */
-  .shade { background: linear-gradient(rgba(0, 0, 0, 0.04), rgba(0, 0, 0, 0.38)); }
+  .shade { background: linear-gradient(rgba(0, 0, 0, 0.02) 40%, rgba(0, 0, 0, 0.42)); }
   /* no cover: the club's colour lit from the top left and deep at the far corner, the event's 3D mark large and
      tilted at the right, its foot behind the frost (the title's side stays clean) */
   .nopic .shade { background: radial-gradient(90% 130% at 0% 0%, rgba(255, 255, 255, 0.2), transparent 60%), linear-gradient(155deg, transparent 35%, rgba(0, 0, 0, 0.5)); }
-  .nopic .art :global(.poster) { align-items: flex-start; justify-content: flex-end; padding: var(--s-1) var(--s-5) 0 0; }
-  .nopic .art :global(.poster > *) { transform: rotate(9deg) scale(1.2); transform-origin: 50% 0; }
+  .nopic .art :global(.poster) { align-items: flex-start; justify-content: center; padding: 9% 0 0; }
+  .nopic .art :global(.poster > *) { transform: rotate(7deg) scale(1.75); transform-origin: 50% 0; filter: drop-shadow(0 14px 18px rgba(0, 0, 0, 0.32)); }
   /* the rim: a hair of white lit at the top left in the cover's colour, as neon glass is. The light comes round once as the card arrives and rests
      there: a big conic square turning under a ring mask, transform only (and no @property: Button owns --rim) */
   .rim { z-index: 1; overflow: hidden; padding: 1px;
@@ -684,23 +669,53 @@
     animation: arrive 1.8s var(--ease-spring) 0.25s backwards; }
   @keyframes arrive { from { transform: rotate(-200deg); } }
   @media (prefers-reduced-motion: reduce) { .hero::before, .rim::before { animation: none; } }
-  /* the slab: the shared sheet glass (body, blur, rim and fringes all from base.css, by theme), a static blur over a
-     still picture; 6px in, so its corners follow the card's */
-  .slab { position: relative; z-index: 2; /* over the card's own tap: its blur makes it a stacking context, so the buttons' own z-index never left it */ display: flex; align-items: center; gap: 10px; padding: 9px 10px 10px 14px;
-    border-radius: var(--r-l); color: var(--text); pointer-events: none; }
-  .acts { position: relative; z-index: 2; flex: none; display: flex; gap: 8px; max-width: 55%; pointer-events: auto; }
+  /* the slab: Liquid Glass, its own recipe (the sheets' glass is a frosted body; this one is a clear lens over one still
+     picture). A light blur and more colour of what is behind; a clear, slightly dimmed body so white words read on any cover; depth from a shadow onto the
+     picture and a dark foot inside; light from a top sheen, a specular rim that is bright on the arc facing the light and
+     on the one opposite (it follows the phone's tilt, --gx), and the warm and cool fringes at the sides. All static
+     paint over a picture that doesn't move: nothing here repaints while the list scrolls */
+  .slab { position: relative; z-index: 2; /* over the card's own tap */ isolation: isolate; display: flex; flex-direction: column; padding: 14px var(--s-4) var(--s-3);
+    border-radius: var(--r-l); color: var(--text); pointer-events: none;
+    background: linear-gradient(rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0) 46%), rgba(14, 16, 26, 0.24);
+    -webkit-backdrop-filter: blur(16px) saturate(190%) brightness(1.04); backdrop-filter: blur(16px) saturate(190%) brightness(1.04);
+    box-shadow: 0 14px 30px -12px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.18); }
+  .slab::before, .slab::after { content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none; }
+  .slab::before {
+    background: radial-gradient(70% 90% at calc(16% + var(--gx, 0) * 40%) -18%, rgba(255, 255, 255, 0.26), transparent 62%);
+    box-shadow: inset 0 1px 0.5px rgba(255, 255, 255, 0.5), inset 0 10px 18px -12px rgba(255, 255, 255, 0.4), inset 0 -18px 24px -16px rgba(0, 0, 0, 0.42),
+      inset 2px 0 2px -1px rgba(255, 120, 200, 0.3), inset -2px 0 2px -1px rgba(90, 190, 255, 0.34), inset 0 0 16px rgba(255, 255, 255, 0.06); }
+  .slab::after { z-index: 0; padding: 1.2px;
+    background:
+      radial-gradient(ellipse 48% 150% at calc(22% + var(--gx, 0) * 38%) 0%, rgba(255, 255, 255, 0.98), rgba(255, 255, 255, 0.34) 42%, transparent 74%),
+      radial-gradient(ellipse 40% 140% at calc(80% - var(--gx, 0) * 38%) 100%, rgba(255, 255, 255, 0.62), transparent 72%),
+      rgba(255, 255, 255, 0.13);
+    -webkit-mask: linear-gradient(black 0 0) content-box, linear-gradient(black 0 0); -webkit-mask-composite: xor;
+    mask: linear-gradient(black 0 0) content-box, linear-gradient(black 0 0); mask-composite: exclude; }
+  /* the lens's edge on every engine (WebKit can't bend a backdrop): the cover again, a little larger about the slab's
+     foot, shown only through a thin band along the rim, so the picture steps outward there as it does through thick
+     glass. The same decoded picture, drawn once */
+  .bend { position: absolute; inset: 0; z-index: -1; overflow: hidden; padding: 7px; border-radius: inherit; pointer-events: none; opacity: 0.85;
+    -webkit-mask: linear-gradient(black 0 0) content-box, linear-gradient(black 0 0); -webkit-mask-composite: xor;
+    mask: linear-gradient(black 0 0) content-box, linear-gradient(black 0 0); mask-composite: exclude; }
+  .bend > span { position: absolute; left: -6px; right: -6px; bottom: -6px; height: var(--hh); transform: scale(1.14); transform-origin: 50% 100%; filter: saturate(1.35) brightness(1.12); }
+  @media (prefers-reduced-transparency: reduce) { .slab { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--glass-solid); } .bend { display: none; } }
+  :global(:root.lowfx) .slab { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--glass-solid); }
+  :global(:root.lowfx) .bend { display: none; }
+  .foot { display: flex; align-items: center; gap: 10px; min-height: var(--ctl-m); margin-top: var(--s-2); }
+  .foot:not(:has(.acts, .hsub *)) { display: none; }
+  .acts { position: relative; z-index: 2; flex: none; display: flex; gap: 8px; max-width: 60%; margin-left: auto; pointer-events: auto; }
   .acts :global(.btn) { min-width: 0; }
   .acts :global(.btn.round)::before { inset: -4px; } /* 36 seen, 44 to the finger on every side; 8px apart, so two meet and never overlap */
   /* contain: the words take the width that is left and never ask for more. Without it the one-line meta's full width
      (nowrap) is the card's min-content, and a flex card grows to it: the root of the card past the right edge (PRs 324, 328) */
-  .hero-tx { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; contain: inline-size; }
-  .hero-tx > b { font: 700 var(--fs-t3)/1.18 var(--font-display); letter-spacing: -0.02em; }
-  .where, .hero-place { min-width: 0; font: 500 var(--fs-sub)/1.3 var(--font-text); color: var(--text-2); }
+  .hero-tx { flex: none; display: flex; flex-direction: column; gap: 3px; min-width: 0; contain: inline-size; text-shadow: 0 1px 8px rgba(0, 0, 0, 0.28); }
+  .hero-tx > b { margin-bottom: 2px; font: 700 var(--fs-sec)/1.14 var(--font-display); letter-spacing: -0.03em; }
+  .where, .hero-place { min-width: 0; font: 500 var(--fs-body)/1.3 var(--font-text); color: var(--text-2); }
   .where { display: flex; flex-wrap: wrap; max-height: 1.3em; overflow: hidden; }
   .where > span { flex: 0 1 auto; min-width: 0; }
   @media (max-width: 340px) { .where > .by { display: none; } }
   .where b { font-weight: 600; color: var(--text); }
-  .hsub { display: flex; align-items: center; gap: 8px; min-width: 0; margin-top: 5px; }
+  .hsub { flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; }
   .hsub:not(:has(*)) { display: none; } /* nothing to say: no line (:empty misses it, the snippet leaves white space) */
   /* the week: seven even columns on the bare ground (no card: the hero above and the days below are the cards); today
      on the one selected pill (the tab bar's lens), a day with events bold with a dot under it, a quiet day dimmed and
