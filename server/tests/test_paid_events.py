@@ -15,7 +15,7 @@ from test_core import INTAKE, delete_now, env, login, tma  # noqa: F401  (env: t
 
 
 def test_paid_events(env):
-    """§4.3: an official club's Vice+ sets the price and the Kaspi details; "Going" holds a seat for 30 min; the receipt
+    """Paid events: an official club's Vice+ sets the price and the Kaspi details; "Going" holds a seat for 30 min; the receipt
     turns it into a ticket at once; the same file twice is flagged and comes first for the organizer (and at the door);
     a rejected receipt ends the ticket and the seat goes on; the image is private; the details lock once someone paid;
     deleting my data deletes my receipts' images."""
@@ -90,7 +90,7 @@ def test_paid_events(env):
 
 
 def test_receipt_reading(env, monkeypatch):
-    """§4.3, Oct 11: Kaspi's PDF is taken like a screenshot (in the app and by the bot); what OCR reads off a receipt
+    """Kaspi's PDF is taken like a screenshot (in the app and by the bot); what OCR reads off a receipt
     becomes the organizer's flags, never a rejection: a smaller sum, another recipient (Tesseract reads a Latin name
     with Russian shapes), a receipt older than the event, the same receipt number again, nothing readable."""
     import io

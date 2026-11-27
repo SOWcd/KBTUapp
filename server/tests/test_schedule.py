@@ -88,7 +88,7 @@ def portal_page(lang: str = "en") -> str:
 
 
 def test_portal_schedule(env, monkeypatch):
-    """The week from the portal's schedule page saved on the phone (PLAN 26): a Web Archive or an .mht sent to the bot.
+    """The week from the portal's schedule page saved on the phone: a Web Archive or an .mht sent to the bot.
     A made-up page (tests/fixtures/portal_week.html): the phone's one-day layout ignored, the days by name, times as
     written or from the pixels, no label: over 1 h 40 a lecture. Only a page with the student's own name is taken; the
     file isn't kept and the student ID on it is never stored."""

@@ -12,7 +12,7 @@ from test_core import env, login, set_clock, tma  # noqa: F401  (env: the fixtur
 
 
 def test_admin_stats(env, monkeypatch):
-    """The admin's stats (PLAN): online in 10 minutes, active day/week/month, students, new today; a row a night
+    """The admin's stats: online in 10 minutes, active day/week/month, students, new today; a row a night
     just after midnight from seen_at, none later in the day; counts only."""
     import dataclasses
     c, cfg = env
@@ -35,7 +35,7 @@ def test_admin_stats(env, monkeypatch):
 
 
 def test_memo(env, monkeypatch):
-    """PLAN "Memo in one tap": next week's events that ask DMP for something become DMP's complex memos in one
+    """The memo in one tap: next week's events that ask DMP for something become DMP's complex memos in one
     email, signed by whoever opens it; Wednesday morning the President and Vices hear it's ready. A place may be left
     to be confirmed: the memo then asks for any room, the organizer hears 7/3/1/0 days before, and typing the room in
     later sends nobody a message (the 2-hour reminder says it)."""
@@ -97,7 +97,7 @@ def test_memo(env, monkeypatch):
 
 
 def test_memo_v2(env, monkeypatch):
-    """Memo v2 (PLAN stage 2): one memo for the week with every request, a meeting's own line, the signature in
+    """Memo v2: one memo for the week with every request, a meeting's own line, the signature in
     kk, ru, en with the Latin name (fixed once); the secretary's "memo" right; sent events leave it until an edit;
     later events behind a switch; Wednesday's message to everyone with the right."""
     c, cfg = env
@@ -213,7 +213,7 @@ def test_nightly_backup(env, monkeypatch):
 
 
 def test_offsite_backup(env, monkeypatch):
-    """The off-site copy (PLAN item 22): SigV4 as AWS's own example signs it; after the night's copy, it and the receipts
+    """The off-site copy: SigV4 as AWS's own example signs it; after the night's copy, it and the receipts
     go up once (Sundays the media too), a failure is tried again an hour later, never while one is running."""
     from kbtu import offsite
     auth = offsite.sign("GET", "https://examplebucket.s3.amazonaws.com/test.txt",

@@ -144,7 +144,7 @@ def test_chat_claims_respect_other_clubs(env):
 
 
 def test_chats_directory(env, monkeypatch):
-    """The chats directory (§4.11): the admin adds t.me links; "for you" = aimed at my school and course, then those for
+    """The chats directory: the admin adds t.me links; "for you" = aimed at my school and course, then those for
     everyone; a tick once opened; a bad link is refused. The avatar, members and (if left empty) the title come from the
     chat's t.me page; a topics group is its own kind."""
     import dataclasses
@@ -242,7 +242,7 @@ def test_event_chat_paste(env):
 
 
 def test_suggest_chat(env, monkeypatch):
-    """Any student suggests a chat through the bot (PLAN item 45): picked in Telegram's picker or sent as @name; public
+    """Any student suggests a chat through the bot: picked in Telegram's picker or sent as @name; public
     only, a person or a bot refused, nothing twice, 3 a day; waiting it shows nowhere but the admin's list; approved,
     it joins the catalog and its suggester hears so."""
     from kbtu import media
@@ -314,7 +314,7 @@ def test_suggest_chat(env, monkeypatch):
 
 
 def test_org_chats(env, monkeypatch):
-    """An org's own Telegram chats (PLAN 86): its Vice+ link them in Studio by @name, a t.me link or an invite link; the
+    """An org's own Telegram chats: its Vice+ link them in Studio by @name, a t.me link or an invite link; the
     first public channel is the main one; a closed chat shows on the page without its invite link; another org's chat
     is refused, a catalog chat becomes the org's and stays in the catalog with whose it is; the admin links any catalog
     chat; our bot, added by someone who may edit the club, keeps the card, and a suggestion or a catalog delete never

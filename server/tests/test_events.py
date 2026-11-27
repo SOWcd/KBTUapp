@@ -15,7 +15,7 @@ from test_core import _board_on, _club_runs, delete_now, env, login, set_clock, 
 
 
 def test_walk_in(env):
-    """A badge QR at the door (§4.4): free events register and check in on the spot; made-up or paid: no."""
+    """A badge QR at the door: free events register and check in on the spot; made-up or paid: no."""
     c, cfg = env
     pres, ali, zhan = login(c, 20, "pres"), login(c, 21, "ali"), login(c, 22, "zhan")
     con = db.connect(cfg.db_path)
@@ -40,7 +40,7 @@ def test_walk_in(env):
 
 
 def test_attendees_csv(env):
-    """The attendee file (SPEC §6): the club's Head+ only, Excel-friendly (BOM, ';'), a cell a spreadsheet would run
+    """The attendee file: the club's Head+ only, Excel-friendly (BOM, ';'), a cell a spreadsheet would run
     as a formula defused, every export in the audit log."""
     import codecs
     c, cfg = env
@@ -64,7 +64,7 @@ def test_attendees_csv(env):
 
 
 def test_checkin_by_name(env):
-    """No QR at the door (a dead phone, §4.4): a Member checks a going person in from the door list (short names only),
+    """No QR at the door (a dead phone): a Member checks a going person in from the door list (short names only),
     marked "by hand" for the organizer and the CSV; a wrong tap is taken back within 10 minutes; not going: refused."""
     c, cfg = env
     pres, mem, ali, zhan = login(c, 70, "pres"), login(c, 71, "mem"), login(c, 72, "ali"), login(c, 73, "zhan")
@@ -226,7 +226,7 @@ def test_bring_a_friend(env):
 
 
 def test_comments(env):
-    """Comments under events and posts (§4.10): students write (500 characters, 10 a minute), the club's Head+ answer
+    """Comments under events and posts: students write (500 characters, 10 a minute), the club's Head+ answer
     as the club, take any down and turn the thread off; reports go to the admin's queue, once per person and thing."""
     import dataclasses
     c, cfg = env
@@ -279,7 +279,7 @@ def test_comments(env):
     assert c.post(f"/api/admin/reports/comment/{first}", headers=B, json={"remove": True}).status_code == 204
     assert c.get("/api/admin/reports", headers=B).json() == [] and c.get("/api/me", headers=B).json()["counters"]["inbox"] == 0
     assert first not in [x["id"] for x in c.get("/api/events/1/comments", headers=A).json()["items"]]
-    # a wrong call undone (§2): the admin's take-downs of the last 30 days, and Restore
+    # a wrong call undone: the admin's take-downs of the last 30 days, and Restore
     assert c.post(f"/api/admin/taken-down/comment/{first}/restore", headers=P).status_code == 403
     assert c.post(f"/api/admin/taken-down/comment/{first}/restore", headers=B).status_code == 204
     assert first in [x["id"] for x in c.get("/api/events/1/comments", headers=A).json()["items"]]
@@ -397,7 +397,7 @@ def test_calendar_feed(env):
 
 
 def test_team_only_event(env):
-    """A team-only event (§4.10): the club's members see it and sign up; nobody else finds it; subscribers aren't told."""
+    """A team-only event: the club's members see it and sign up; nobody else finds it; subscribers aren't told."""
     c, cfg = env
     pres, mem, ali = login(c, 70, "pres"), login(c, 71, "mem"), login(c, 72, "ali")
     con = db.connect(cfg.db_path)
@@ -444,7 +444,7 @@ def test_shared_cards_never_leak(env):
 
 
 def test_teambuilding_thunder(env):
-    """"Teambuilding thunder" (§4.11): a club's own events count (a public one doesn't), with no top: the count goes on.
+    """"Teambuilding thunder": a club's own events count (a public one doesn't), with no top: the count goes on.
     A new achievement or level is recorded at start for whoever already reached it, without a bot message; the app's
     unlock moment shows it. The reminder before a club's own event has no ticket in it."""
     c, cfg = env
@@ -512,7 +512,7 @@ def test_message_teammate(env):
 
 
 def test_add_seats(env):
-    """"+N seats" (§4.2): the club's Head+ only; the waitlist moves in at once, in order."""
+    """"+N seats": the club's Head+ only; the waitlist moves in at once, in order."""
     c, cfg = env
     pres, ali, zhan, dana = login(c, 70, "pres"), login(c, 71, "ali"), login(c, 72, "zhan"), login(c, 73, "dana")
     con = db.connect(cfg.db_path)
@@ -531,7 +531,7 @@ def test_add_seats(env):
 
 
 def test_place_changes(env, monkeypatch):
-    """PLAN "Place and time": one KBTU room for another tells only those with reminders off (the 2-hour reminder
+    """A moved event: one KBTU room for another tells only those with reminders off (the 2-hour reminder
     shows it); another venue tells everyone, edits within 10 minutes in one message; within 2 hours of the start, at
     once and only to who isn't checked in; Studio's "Change room" during the event; each new place a line in Updates."""
     c, cfg = env
@@ -576,7 +576,7 @@ def test_place_changes(env, monkeypatch):
 
 
 def test_comment_replies(env):
-    """Comment replies (PLAN): a reply quotes the comment it answers (only one still up in the same thread), and
+    """Comment replies: a reply quotes the comment it answers (only one still up in the same thread), and
     its author hears it once an hour per thread; not for answering oneself, not twice for an asker the club answers."""
     c, cfg = env
     for tg, name in ((20, "pres"), (10, "ali"), (11, "zhan")):

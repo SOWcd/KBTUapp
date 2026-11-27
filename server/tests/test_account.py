@@ -17,7 +17,7 @@ from test_core import BOT, delete_now, env, login, set_clock, tma  # noqa: F401 
 
 
 def test_delete_my_data(env):
-    """§4.8 / H2: a week, then the student's data goes; the Telegram account stays a guest. What is over moves to a
+    """Deleting an account (H2): a week, then the student's data goes; the Telegram account stays a guest. What is over moves to a
     nameless placeholder, so every count stays; free text, receipts, names go; a President's club passes on."""
     c, cfg = env
     pres, ali, zhan = login(c, 20, "pres"), login(c, 21, "ali"), login(c, 22, "zhan")
@@ -242,7 +242,7 @@ def test_nick_and_photo(env):
     assert (who["name"], who["realName"]) == ("Ali the Great", real)  # everyone: the nick first, the short name beside it
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'vice', 0)", (ali["id"],))
     lead = lambda h: next(x["person"] for x in c.get("/api/orgs/1", headers=h).json()["leaders"] if x["person"]["id"] == ali["id"])  # noqa: E731
-    assert lead(tma(96, "Guest"))["name"] == "Ali the Great" and "realName" not in lead(tma(96, "Guest"))  # a visitor who isn't a student: the nick alone (§8)
+    assert lead(tma(96, "Guest"))["name"] == "Ali the Great" and "realName" not in lead(tma(96, "Guest"))  # a visitor who isn't a student: the nick alone
     assert lead(P)["realName"] == real
     con.execute("DELETE FROM org_members WHERE user_id = ?", (ali["id"],))
     login(c, 95, "zed")
@@ -618,7 +618,7 @@ def test_dm_on(env):
 
 
 def test_phone_asked_at_signup(env):
-    """PLAN 71: no up-front "My data" step. An event that needs a phone asks for it at sign-up and keeps it, so the next
+    """No up-front "My data" step. An event that needs a phone asks for it at sign-up and keeps it, so the next
     such sign-up is one tap; Settings changes or deletes it, and then it's asked again."""
     c, cfg = env
     pres, ali = login(c, 20, "pres"), login(c, 10, "ali")
