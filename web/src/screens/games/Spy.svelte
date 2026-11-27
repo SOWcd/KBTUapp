@@ -320,6 +320,8 @@
   .tile { display: grid; place-items: center; width: 56px; height: 68px; border-radius: var(--r-m); background: var(--fill);
     font: 700 var(--fs-title)/1 var(--font-display); letter-spacing: -0.02em; color: var(--text); transition: box-shadow var(--t-fast) var(--ease); }
   .code input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; font-size: var(--fs-row); text-align: center; }
+  .code .tile:empty::before { content: ''; width: 6px; height: 6px; border-radius: var(--r-full); background: var(--fill-2); }
+  .code:focus-within .tile.at::before { display: none; }
   .code:focus-within .tile.at { box-shadow: inset 0 0 0 2px var(--accent); }
   .code:focus-within .tile.at::after { content: ''; width: 2px; height: 28px; border-radius: var(--r-full); background: var(--accent); animation: blink 1.1s steps(1) infinite; }
   .code.wait .tile { animation: wait 1s var(--ease) calc(var(--i) * 120ms) infinite alternate; }

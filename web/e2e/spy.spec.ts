@@ -25,9 +25,12 @@ test('a round of Spy: a room, three players, the role, the vote, the reveal', as
     return r.json();
   };
   const others = [call('Ali'), call('Bota')];
-  const rooms = () => Promise.all(others.map((c) => c('/join', { code }))); // a player already in gets the room back
-  const [first] = await rooms();
-  const move = (c: (typeof others)[number], r: Room, m: object) => c(`/${r.id}`, { id: Math.random().toString(36).slice(2), v: r.v, ...m });
+  // a player already in gets the room back: its version now, for the move
+  const act = async (c: (typeof others)[number], m: (r: Room) => object | null) => {
+    const r = await c('/join', { code }), move = m(r);
+    if (move) await c(`/${r.id}`, { id: Math.random().toString(36).slice(2), v: r.v, ...move });
+  };
+  for (const c of others) await act(c, () => null);
 
   await sheet.locator('.ft .btn').first().click(); // Start, once her phone has seen the three
   const secret = sheet.locator('.secret');
@@ -47,8 +50,8 @@ test('a round of Spy: a room, three players, the role, the vote, the reveal', as
   await dana.look('spy vote');
   await expect(sheet.locator('.ballot .sh')).toContainText('1'); // her vote is in before the others' end the vote
   // each of the others votes for Dana; whoever the spy is, the round then ends in a guess or at once
-  for (const [i, r] of (await rooms()).entries()) await move(others[i], r, { type: 'vote', target: first.players[0].id });
-  for (const [i, r] of (await rooms()).entries()) if (r.phase === 'guess' && r.role === 'spy') await move(others[i], r, { type: 'guess', location: 'library' });
+  for (const c of others) await act(c, (r) => ({ type: 'vote', target: r.players[0].id }));
+  for (const c of others) await act(c, (r) => (r.phase === 'guess' && r.role === 'spy' ? { type: 'guess', location: 'library' } : null));
   const mine = await dana.api<Room>('/api/rooms/join', { code });
   if (mine.phase === 'guess') await dana.api(`/api/rooms/${mine.id}`, { id: 'g1', v: mine.v, type: 'guess', location: 'library' });
   await expect(sheet.locator('.end')).toBeVisible();
