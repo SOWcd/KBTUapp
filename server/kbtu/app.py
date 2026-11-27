@@ -34,6 +34,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
+from starlette.background import BackgroundTask
 from starlette.middleware.gzip import GZipMiddleware
 
 from . import ai, auth, bot, bot_dm, bot_groups, calpage, casting, checkin as qr, config, db, docs, llm, logic, media, mirror, msauth, receipt, roster, texts, video, wallet
@@ -3671,7 +3672,7 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
     @app.post("/api/ako/a/files")
     async def ako_file(request: Request, con: Con, doc: str = ""):
         token = ako_token(request)
-        await run_in_threadpool(logic.ako.view, con, token)  # a stranger's body is never read
+        await run_in_threadpool(logic.ako.may_add, con, token, doc)  # a stranger's body, or one with no room, is never read
         data = await read_upload(request, logic.ako.FILE_BYTES)
         return await run_in_threadpool(logic.ako.add_file, con, token, doc, data)
 
@@ -3725,7 +3726,7 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
 
     @app.get("/api/ako/f/{fid}")
     def ako_file_get(fid: int, con: Con, e: str = "", s: str = ""):
-        logic.ako.signed("f", fid, e, s, cfg.token_key)
+        logic.ako.signed(con, "f", fid, e, s, cfg.token_key)
         path, mime, name = logic.ako.file_for(con, fid)
         if not path.is_file():
             raise ApiError("not_found")
@@ -3734,10 +3735,10 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
 
     @app.get("/api/ako/z/{aid}")
     def ako_zip(aid: int, con: Con, e: str = "", s: str = ""):
-        logic.ako.signed("z", aid, e, s, cfg.token_key)
-        data, name = logic.ako.zip_of(con, aid)
-        return Response(data, media_type="application/zip", headers={"Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer",
-                                                                      "Content-Disposition": _attachment(name)})
+        logic.ako.signed(con, "z", aid, e, s, cfg.token_key)
+        path, name = logic.ako.zip_of(con, aid)
+        return FileResponse(path, media_type="application/zip", background=BackgroundTask(path.unlink, missing_ok=True),
+                            headers={"Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer", "Content-Disposition": _attachment(name)})
 
     @app.post("/api/orgs/{oid}/ako/slots", status_code=204)
     def ako_slots(oid: int, con: Con, v: Me, body: dict = Body(...)):

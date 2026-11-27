@@ -43,16 +43,22 @@ def _setup(env, monkeypatch):
     with db.tx(con):
         oid = con.execute("""INSERT INTO orgs (slug, kind, name, short, emoji, official, created_at)
             VALUES ('ako', 'office', 'AKO', 'A', 'briefcase_3d', 1, ?)""", (t0,)).lastrowid
-        con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, 'head', ?), (?, ?, 'member', ?)",
-                    (oid, ids[HEAD], t0, oid, ids[MEMBER], t0))
+        con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, 'head', ?), (?, ?, 'member', ?), (?, ?, 'member', ?)",
+                    (oid, ids[HEAD], t0, oid, ids[MEMBER], t0, oid, ids[STRANGER], t0))
+        con.execute("INSERT INTO ako_reviewers (org_id, user_id) VALUES (?, ?)", (oid, ids[MEMBER]))  # a member alone reads nothing
     ako.seed(con, oid)
     return c, cfg, con, oid, t0
 
 
-def _new(c, oid, program="emba", name="Erlan S", phone="8 701 234 56 71") -> str:
+def _new(c, oid, program="emba", name="Erlan S", phone="8 701 234 56 71", ready=False) -> str:
     r = c.post(f"/api/orgs/{oid}/ako/apps", headers=tma(HEAD), json={"program": program, "name": name, "phone": phone})
     assert r.status_code == 200, r.text
-    return r.json()["token"]
+    tok = r.json()["token"]
+    if ready:  # agreed and the first documents in: what a seat asks for
+        c.patch("/api/ako/a", headers={"X-Ako": tok}, json={"consent": True})
+        for doc in ("cv", "diploma"):
+            assert c.post(f"/api/ako/a/files?doc={doc}", headers={"X-Ako": tok}, content=_jpeg(300, 400)).status_code == 200
+    return tok
 
 
 def _slots(c, oid, t0, times=("10:00", "10:30"), days=3, cap=1):
@@ -72,12 +78,18 @@ def test_public_link_makes_a_draft_only_on_a_post(env, monkeypatch):
     r = c.get("/ako/whatever")
     assert r.headers["referrer-policy"] == "no-referrer" and "no-store" in r.headers["cache-control"] and r.headers["x-robots-tag"] == "noindex"
     tok = c.post("/api/ako/o/ako", json={"program": "dba", "lang": "en"}).json()["token"]
-    row = con.execute("SELECT token, status, lang, ip FROM ako_apps").fetchone()
+    row = con.execute("SELECT token, status, lang FROM ako_apps").fetchone()
     assert row["token"] == hashlib.sha256(tok.encode()).digest() and tok.encode() not in bytes(row["token"])
-    assert (row["status"], row["lang"]) == ("draft", "en") and row["ip"] and "testclient" not in row["ip"]
+    assert (row["status"], row["lang"]) == ("draft", "en") and "testclient" not in con.execute("SELECT ip FROM ako_starts").fetchone()[0]
     assert c.post("/api/ako/o/ako", json={"program": "nope"}).status_code == 404
+    assert c.post("/api/ako/o/ako", json={"program": ["dba"]}).status_code == 404
     monkeypatch.setattr(ako, "STARTS_A_DAY", 2)
     assert c.post("/api/ako/o/ako", json={"program": "dba"}).status_code == 200
+    # a sent or deleted draft still counts for its day
+    con.execute("DELETE FROM ako_apps")
+    assert c.post("/api/ako/o/ako", json={"program": "dba"}).status_code == 429
+    monkeypatch.setattr(ako, "STARTS_A_DAY", 99)
+    monkeypatch.setattr(ako, "ORG_STARTS_A_DAY", 3)
     assert c.post("/api/ako/o/ako", json={"program": "dba"}).status_code == 429
 
 
@@ -97,7 +109,10 @@ def test_the_link_is_the_credential(env, monkeypatch):
     assert f["mime"] == "image/jpeg"
     path = Path(cfg.db_path).parent / "ako" / con.execute("SELECT path FROM ako_files WHERE id = ?", (f["id"],)).fetchone()[0]
     assert max(Image.open(path).size) == ako.SIDE  # re-encoded: no byte of the upload survives
-    assert c.post("/api/ako/a/files?doc=diploma", headers={"X-Ako": tok}, content=_pdf()).json()["mime"] == "application/pdf"
+    pdf = c.post("/api/ako/a/files?doc=diploma", headers={"X-Ako": tok}, content=_pdf()).json()
+    assert pdf["mime"] == "application/pdf"
+    kept = (Path(cfg.db_path).parent / "ako" / con.execute("SELECT path FROM ako_files WHERE id = ?", (pdf["id"],)).fetchone()[0]).read_bytes()
+    assert kept[:5] == b"%PDF-" and kept != _pdf()  # rebuilt from its pages' pictures
     assert c.post("/api/ako/a/files?doc=diploma", headers={"X-Ako": tok}, content=b"%PDF-1.4 broken").status_code == 400
     assert c.post("/api/ako/a/files?doc=diploma", headers={"X-Ako": tok}, content=b"<html>").status_code == 400
     assert c.post("/api/ako/a/files?doc=passport", headers={"X-Ako": tok}, content=_jpeg()).status_code == 400
@@ -134,20 +149,28 @@ def test_documents_reach_the_team_alone(env, monkeypatch):
     assert c.get(url).status_code == 404
     set_clock(monkeypatch, lambda: t0)
     for path in (f"/api/orgs/{oid}/ako", f"/api/orgs/{oid}/ako/apps/{aid}", f"/api/orgs/{oid}/ako/files/{fid}/link", f"/api/orgs/{oid}/ako/apps/{aid}/link"):
-        assert c.get(path, headers=tma(STRANGER)).status_code == 403
+        assert c.get(path, headers=tma(STRANGER)).status_code == 403  # an org member, not named a reviewer
         assert c.get(path, headers={"X-Ako": tok}).status_code in (401, 403)
     # a reviewer reads, never changes
     assert c.patch(f"/api/orgs/{oid}/ako/apps/{aid}", headers=tma(MEMBER), json={"note": "x"}).status_code == 403
     assert c.post(f"/api/orgs/{oid}/ako/apps", headers=tma(MEMBER), json={"program": "mba"}).status_code == 403
     me = {m["org"]["id"]: m.get("ako") for m in c.get("/api/me", headers=tma(MEMBER)).json()["memberships"]}
     assert me[oid] == "review"
+    assert {m["org"]["id"]: m.get("ako") for m in c.get("/api/me", headers=tma(STRANGER)).json()["memberships"]}[oid] is None
+    # a link names its one file: a later file that takes a removed one's id is not served by it
+    url = c.get(f"/api/orgs/{oid}/ako/files/{fid}/link", headers=tma(HEAD)).json()["url"]
+    con.execute("UPDATE ako_files SET path = 'other/x.jpg' WHERE id = ?", (fid,))
+    assert c.get(url).status_code == 404
+    assert c.get(url.replace("&s=", "&s=\u00e9")).status_code == 404
     assert {m["org"]["id"]: m.get("ako") for m in c.get("/api/me", headers=tma(HEAD)).json()["memberships"]}[oid] == "manage"
 
 
 def test_one_seat_one_person(env, monkeypatch):
     c, cfg, con, oid, t0 = _setup(env, monkeypatch)
     s1, s2 = _slots(c, oid, t0)
-    a, b = _new(c, oid), _new(c, oid, name="Gulnara A")
+    assert c.post("/api/ako/a/slot", headers={"X-Ako": _new(c, oid)}, json={"slot": s1}).status_code == 400  # no documents yet
+    a, b = _new(c, oid, ready=True), _new(c, oid, name="Gulnara A", ready=True)
+    assert c.post("/api/ako/a/slot", headers={"X-Ako": a}, json={"slot": 10 ** 30}).status_code == 404
     v = c.post("/api/ako/a/slot", headers={"X-Ako": a}, json={"slot": s1}).json()
     assert v["slot"]["id"] == s1 and v["slot"]["teams"] == TEAMS
     assert c.post("/api/ako/a/slot", headers={"X-Ako": b}, json={"slot": s1}).status_code == 409
@@ -160,7 +183,7 @@ def test_one_seat_one_person(env, monkeypatch):
     # the cutoff: inside it, neither booking nor giving back by hand
     first = min(x["at"] for x in c.get(f"/api/orgs/{oid}/ako", headers=tma(HEAD)).json()["slots"])
     set_clock(monkeypatch, lambda: first - ako.CUTOFF + 60)
-    late = _new(c, oid, name="Late")
+    late = _new(c, oid, name="Late", ready=True)
     for slot in (s1, s2):
         assert c.post("/api/ako/a/slot", headers={"X-Ako": late}, json={"slot": slot}).status_code in (409,)
     assert c.post("/api/ako/a/slot", headers={"X-Ako": a}, json={"slot": None}).status_code == 409
@@ -169,7 +192,7 @@ def test_one_seat_one_person(env, monkeypatch):
 def test_a_removed_time_asks_its_people_to_pick_again(env, monkeypatch):
     c, cfg, con, oid, t0 = _setup(env, monkeypatch)
     s1, s2 = _slots(c, oid, t0)
-    a = _new(c, oid)
+    a = _new(c, oid, ready=True)
     c.post("/api/ako/a/slot", headers={"X-Ako": a}, json={"slot": s1})
     r = c.delete(f"/api/orgs/{oid}/ako/slots/{s1}", headers=tma(HEAD))
     assert r.status_code == 409 and r.json()["error"] == "conflict"
@@ -205,8 +228,12 @@ def test_sending_asks_only_for_the_first_documents(env, monkeypatch):
     c.post("/api/ako/a/slot", headers=h, json={"slot": s1})
     v = c.post("/api/ako/a/submit", headers=h).json()
     assert v["status"] == "sent" and v["sentAt"] == t0
-    assert con.execute("SELECT ip FROM ako_apps").fetchone()[0] is None
-    # later documents come by the same link; a sent package keeps its program
+    # later documents come by the same link; what was sent stays, a page added since may be replaced
+    sent = con.execute("SELECT id FROM ako_files WHERE doc = 'cv'").fetchone()[0]
+    assert c.delete(f"/api/ako/a/files/{sent}", headers=h).status_code == 409
+    set_clock(monkeypatch, lambda: t0 + 60)
+    med = c.post("/api/ako/a/files?doc=med", headers=h, content=_jpeg()).json()["id"]
+    assert c.delete(f"/api/ako/a/files/{med}", headers=h).status_code == 204
     assert c.post("/api/ako/a/files?doc=med", headers=h, content=_jpeg()).status_code == 200
     assert c.patch("/api/ako/a", headers=h, json={"program": "dba"}).status_code == 409
     ics = c.get("/api/ako/a/ics", headers=h)

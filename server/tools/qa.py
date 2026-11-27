@@ -222,6 +222,7 @@ def ako(con, path: str, now: int) -> None:
                 ("\u0410\u043a\u0430\u0434\u0435\u043c\u0438\u044f \u043a\u043e\u0440\u043f\u043e\u0440\u0430\u0442\u0438\u0432\u043d\u043e\u0433\u043e \u043e\u0431\u0440\u0430\u0437\u043e\u0432\u0430\u043d\u0438\u044f \u041a\u0411\u0422\u0423", now - 400 * 86400,
                  json.dumps({"kk": {"name": "\u049a\u0411\u0422\u0423 \u041a\u043e\u0440\u043f\u043e\u0440\u0430\u0442\u0438\u0432\u0442\u0456\u043a \u0431\u0456\u043b\u0456\u043c \u0431\u0435\u0440\u0443 \u0430\u043a\u0430\u0434\u0435\u043c\u0438\u044f\u0441\u044b"}, "en": {"name": "KBTU Academy of Corporate Education"}})))
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (2, 1, 'head', ?), (2, 3, 'member', ?)", (now, now))
+    con.execute("INSERT INTO ako_reviewers (org_id, user_id) VALUES (2, 3)")
     admissions.seed(con, 2)
     pid = {r[0]: r[1] for r in con.execute("SELECT key, id FROM ako_programs WHERE org_id = 2")}
     base = (now + 5 * 3600) // 86400 * 86400 - 5 * 3600  # today 00:00 in Almaty

@@ -493,7 +493,7 @@ def _membership(con, m, mains: dict, logos: dict) -> dict:
     return {"org": org_ref(con, m, logos), "role": m["role"], **core.titled(m), "rights": _ordered(core.club_rights(m["role"], m["rights"], m)),
             "oversee": bool(m["can_oversee"] and m["role"] != "member"),
             # admissions (logic/ako.py): the org takes applications; head and up run them, a member reviews
-            **({"ako": a} if (a := ako.manages(con, m["id"], m["role"])) else {}),
+            **({"ako": a} if (a := ako.manages(con, m["id"], m["role"], m["user_id"] if "user_id" in m.keys() else None)) else {}),
             **({"channel": _channel(mains.get(m["id"]))} if "profile" in _rights_from(m["role"], m["rights"]) else {}),
             # the composer's locked state (clubs.stories_open): read only for a writer of a student initiative
             **({"storiesLocked": True} if "posts" in _rights_from(m["role"], m["rights"]) and not m["official"]
@@ -560,7 +560,7 @@ def me(con, v: Viewer) -> dict:
     relink = bool(s and s["manual"])  # typed in before Microsoft only: signed out until Microsoft confirms
     s = None if relink else s
     dmp = dmp_listed(con, v.id) if not s and not relink else None
-    members = rows(con, f"""SELECT m.role, {core.TITLES}, t.rights, o.* FROM org_members m JOIN orgs o ON o.id = m.org_id
+    members = rows(con, f"""SELECT m.role, m.user_id, {core.TITLES}, t.rights, o.* FROM org_members m JOIN orgs o ON o.id = m.org_id
         LEFT JOIN org_roles t ON t.id = m.role_id WHERE m.user_id = ? AND o.status = 'active'""", v.id) if s else []
     # Studio's "Channel → news" tile (Vice+, who link chats): each org's main chat, one read for all of them
     mains = {c["org_id"]: c for c in rows(con, f"SELECT org_id, title, kind, url, mirror, tg_chat_id FROM chats WHERE main = 1 AND org_id IN ({','.join('?' * len(members))})",
@@ -1411,6 +1411,7 @@ _DEL_GONE = {
     ("fchan_comments", "user_id"),  # my face under channel posts (the comments stay in Telegram, Telegram's own)
     ("fchan_reply_reports", "user_id"),  # my /report on an anonymous author's reply
     ("staff_mutes", "user_id"),  # the staff notifications I muted
+    ("ako_reviewers", "user_id"),  # my reading of an org's admissions (logic/ako.py)
     ("research_requests", "user_id"),  # signed research proposals
     ("research_answers", "user_id"),  # delete signed answer contents; anonymous answers have no account link
     ("research_participants", "user_id"),  # only the fact that I answered, never a link to an answer

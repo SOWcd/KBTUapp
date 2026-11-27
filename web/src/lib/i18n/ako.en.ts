@@ -196,6 +196,19 @@ const en: AkoDict = {
   'akd.noSlotsLead': "Add a day and times: applicants see them at once.",
   'akd.cutoff': "Booking closes {n} h before the start",
   'akd.saved': "Saved",
+  'ako.lang.ru': "RU",
+  'ako.lang.kk': "ҚАЗ",
+  'ako.lang.en': "EN",
+  'ako.needProgram': "Choose a program",
+  'ako.keep': "Keep",
+  'akd.more': "More",
+  'akd.search': "Search by name",
+  'akd.noneHere': "No applications here",
+  'akd.missShort': { one: "{n} missing", other: "{n} missing" },
+  'akd.teamsRow': "Teams link",
+  'akd.slotTeams': "Own Teams link",
+  'akd.teamsBad': "Use a link like https://teams.microsoft.com/…",
+  'akd.save': "Save",
 };
 
 export default en;

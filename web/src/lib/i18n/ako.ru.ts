@@ -200,6 +200,19 @@ const ru = {
   'akd.noSlotsLead': "Добавьте день и время — абитуриенты увидят их сразу.",
   'akd.cutoff': "Запись закрывается за {n} ч до начала",
   'akd.saved': "Сохранено",
+  'ako.lang.ru': "RU",
+  'ako.lang.kk': "ҚАЗ",
+  'ako.lang.en': "EN",
+  'ako.needProgram': "Выберите программу",
+  'ako.keep': "Оставить",
+  'akd.more': "Ещё",
+  'akd.search': "Поиск по имени",
+  'akd.noneHere': "Таких заявок нет",
+  'akd.missShort': { one: "нет {n} док.", few: "нет {n} док.", many: "нет {n} док.", other: "нет {n} док." },
+  'akd.teamsRow': "Ссылка Teams",
+  'akd.slotTeams': "Своя ссылка Teams",
+  'akd.teamsBad': "Нужна ссылка вида https://teams.microsoft.com/…",
+  'akd.save': "Сохранить",
 } as const;
 
 type Shape<T> = { [K in keyof T]: T[K] extends string ? string : Plural };

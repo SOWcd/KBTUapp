@@ -2785,7 +2785,6 @@ MIGRATIONS: list[tuple[int, str]] = [
       consent      TEXT,                            -- the notice's version agreed to (CONSENT), before any document
       consent_at   INTEGER,
       note         TEXT NOT NULL DEFAULT '',        -- the managers' own
-      ip           TEXT,                            -- a keyed hash of a public link's starter, for its daily cap; gone in a day
       created_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
       created_at   INTEGER NOT NULL,
       updated_at   INTEGER NOT NULL,
@@ -2793,7 +2792,22 @@ MIGRATIONS: list[tuple[int, str]] = [
     ) STRICT;
     CREATE INDEX IF NOT EXISTS ako_apps_by_org ON ako_apps(org_id, status, updated_at);
     CREATE INDEX IF NOT EXISTS ako_apps_by_slot ON ako_apps(slot_id) WHERE slot_id IS NOT NULL;
-    CREATE INDEX IF NOT EXISTS ako_apps_by_ip ON ako_apps(ip, created_at) WHERE ip IS NOT NULL;
+    -- the public link's starts, for its daily caps (one address, one org): a keyed hash of the address (an IPv6 /64), a day
+    CREATE TABLE IF NOT EXISTS ako_starts (
+      org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      ip     TEXT NOT NULL,
+      at     INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS ako_starts_by_ip ON ako_starts(ip, at);
+    CREATE INDEX IF NOT EXISTS ako_starts_by_org ON ako_starts(org_id, at);
+    -- who reads packages without running them (the Academic Programs department): named by the admin, never by a role
+    -- (an org's members join in many ways; documents hold health data)
+    CREATE TABLE IF NOT EXISTS ako_reviewers (
+      org_id  INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (org_id, user_id)
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS ako_reviewers_by_user ON ako_reviewers(user_id);
     CREATE TABLE IF NOT EXISTS ako_files (
       id         INTEGER PRIMARY KEY,
       app_id     INTEGER NOT NULL REFERENCES ako_apps(id) ON DELETE CASCADE,

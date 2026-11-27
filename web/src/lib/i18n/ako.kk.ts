@@ -196,6 +196,19 @@ const kk: AkoDict = {
   'akd.noSlotsLead': "Күн мен уақыт қосыңыз — талапкерлер оларды бірден көреді.",
   'akd.cutoff': "Жазылу басталуға {n} сағат қалғанда жабылады",
   'akd.saved': "Сақталды",
+  'ako.lang.ru': "RU",
+  'ako.lang.kk': "ҚАЗ",
+  'ako.lang.en': "EN",
+  'ako.needProgram': "Бағдарламаны таңдаңыз",
+  'ako.keep': "Қалдыру",
+  'akd.more': "Тағы",
+  'akd.search': "Аты бойынша іздеу",
+  'akd.noneHere': "Мұндай өтінім жоқ",
+  'akd.missShort': { one: "{n} құжат жоқ", other: "{n} құжат жоқ" },
+  'akd.teamsRow': "Teams сілтемесі",
+  'akd.slotTeams': "Жеке Teams сілтемесі",
+  'akd.teamsBad': "Сілтеме https://teams.microsoft.com/… түрінде болуы керек",
+  'akd.save': "Сақтау",
 };
 
 export default kk;

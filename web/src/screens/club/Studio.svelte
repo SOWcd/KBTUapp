@@ -3,6 +3,7 @@
   // menu); the event of the day with the door, the screen's one main button; what waits for me; the club's places as
   // plain rows (the Ascent's ladder and the club's profile among them, a tap deeper); then the events by tabs.
   import Plus from '@lucide/svelte/icons/plus';
+  import GraduationCap from '@lucide/svelte/icons/graduation-cap';
   import Gift from '@lucide/svelte/icons/gift';
   import ScanLine from '@lucide/svelte/icons/scan-line';
   import QrCode from '@lucide/svelte/icons/qr-code';
@@ -404,6 +405,7 @@
         {#snippet detail()}<span class="faces" aria-hidden="true">{#each faces as r (r.person.id)}<Avatar person={r.person} size={28} tappable={false} />{/each}</span>
           <span class="n num">{data.team[m.org.id]?.length ?? members}</span>{/snippet}
       </Row>
+      {#if m.ako}<Row icon={GraduationCap} title={t('studio.ako')} accessory="chevron" onclick={() => { haptic.tap(); void import('./AkoDesk.svelte').then((x) => open(x.default, { org: m.org.id, slug: m.org.slug })); }} />{/if}
       {#if recruitTile}<Row icon={UserPlus} title={t('cast.card')} value={fresh ? undefined : round?.open ? t('cast.until', { when: dayMonth(round.closesAt) }) : t(round ? 'cast.intakeClosed' : recruiting ? 'jr.always' : 'studio.recruitClosed')} count={fresh} accessory="chevron" onclick={openRecruit} />{/if}
       {#if may(m, 'memo')}<Row icon={Mail} title={t('studio.memoShort')} accessory="chevron" onclick={() => sheets.memo(m.org.id)} />{/if}
       {#if staff || m.role === 'head' || m.role === 'vice' || m.role === 'president'}<Row icon={QrCode} title={t('scr.page')} accessory="chevron" onclick={() => { haptic.tap(); sheets.screens(undefined, undefined, undefined, m.org.id); }} />{/if}

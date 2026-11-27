@@ -29,7 +29,6 @@ CREATE TABLE ako_apps (
       consent      TEXT,                            -- the notice's version agreed to (CONSENT), before any document
       consent_at   INTEGER,
       note         TEXT NOT NULL DEFAULT '',        -- the managers' own
-      ip           TEXT,                            -- a keyed hash of a public link's starter, for its daily cap; gone in a day
       created_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
       created_at   INTEGER NOT NULL,
       updated_at   INTEGER NOT NULL,
@@ -65,6 +64,11 @@ CREATE TABLE ako_programs (  -- IF NOT EXISTS: tests rewind user_version
       open      INTEGER NOT NULL DEFAULT 1 CHECK (open IN (0, 1)),
       UNIQUE (org_id, key)
     ) STRICT;
+CREATE TABLE ako_reviewers (
+      org_id  INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (org_id, user_id)
+    ) STRICT;
 CREATE TABLE ako_slots (
       id         INTEGER PRIMARY KEY,
       org_id     INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
@@ -76,6 +80,11 @@ CREATE TABLE ako_slots (
       created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
       created_at INTEGER NOT NULL,
       UNIQUE (org_id, starts_at, who)
+    ) STRICT;
+CREATE TABLE ako_starts (
+      org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      ip     TEXT NOT NULL,
+      at     INTEGER NOT NULL
     ) STRICT;
 CREATE TABLE android_app (
       user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -1719,11 +1728,13 @@ CREATE TABLE yt_videos (
     ) STRICT;
 CREATE INDEX grants_by_batch ON achievement_grants(batch) WHERE batch IS NOT NULL;
 CREATE INDEX grants_by_user ON achievement_grants(user_id, code);
-CREATE INDEX ako_apps_by_ip ON ako_apps(ip, created_at) WHERE ip IS NOT NULL;
 CREATE INDEX ako_apps_by_org ON ako_apps(org_id, status, updated_at);
 CREATE INDEX ako_apps_by_slot ON ako_apps(slot_id) WHERE slot_id IS NOT NULL;
 CREATE INDEX ako_files_by_app ON ako_files(app_id, doc, id);
+CREATE INDEX ako_reviewers_by_user ON ako_reviewers(user_id);
 CREATE INDEX ako_slots_by_time ON ako_slots(org_id, starts_at);
+CREATE INDEX ako_starts_by_ip ON ako_starts(ip, at);
+CREATE INDEX ako_starts_by_org ON ako_starts(org_id, at);
 CREATE INDEX anon_feedback_by_day ON anon_feedback(day);
 CREATE INDEX appeal_authors_user ON appeal_authors(user_id);
 CREATE INDEX appeal_sends_user ON appeal_sends(user_id, at);

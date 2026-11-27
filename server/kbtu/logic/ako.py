@@ -16,8 +16,10 @@ import hmac
 import io
 import json
 import re
+import ipaddress
 import secrets
 import tempfile
+import threading
 import time
 import zipfile
 from pathlib import Path
@@ -37,7 +39,11 @@ MAX_FILES = 24              # an application's files: ~9 documents, a few with s
                             # unlimited within it; a per-day cap on uploads if a link is ever abused)
 FILE_BYTES = 10 * 1024 * 1024
 SIDE = 2400                 # a photographed page is kept at most this long: a diploma's small print stays readable
-STARTS_A_DAY = 20           # drafts one address may start from the public link in a day
+STARTS_A_DAY = 20           # drafts one address (an IPv6 /64) may start from the public link in a day
+ORG_STARTS_A_DAY = 300      # and everyone together, for one org: a flood can't bury the real ones
+PDF_PAGES, PDF_SIDE = 15, 1700  # a PDF is rebuilt from its pages' pictures: nothing of the upload but what it shows
+_pdf = threading.BoundedSemaphore(2)  # two PDFs at a time (a child each, up to 1 GB)
+BIG = 1 << 53
 CUTOFF = 6 * 3600           # a slot closes for booking this long before it starts
 DRAFT_KEEP = 7 * 86400      # a draft nobody sent, from its last change
 KEEP = 365 * 86400          # a sent package, from sending: ponytail, a year flat; the upgrade is N months after the intake starts
@@ -57,6 +63,15 @@ DATA = Path(__file__).resolve().parents[1] / "i18n" / "ako.json"
 
 def _line(x: object, most: int) -> str:
     return " ".join(_CTRL.sub(" ", x).split())[:most] if isinstance(x, str) else ""
+
+
+def _id(x: object) -> int | None:
+    """A JSON id: an int in SQLite's range, never a bool."""
+    return x if isinstance(x, int) and not isinstance(x, bool) and 0 < x < BIG else None
+
+
+def _key(x: object) -> str | None:
+    return x if isinstance(x, str) and len(x) <= 40 else None
 
 
 def _digest(token: str) -> bytes:
@@ -140,17 +155,25 @@ def public(con, slug: str) -> dict:
 def start(con, slug: str, body: dict, ip: str, key: bytes) -> dict:
     """The public link's first real step: a draft with the program picked. The secret goes back once, here."""
     o = one(con, "SELECT id FROM orgs WHERE slug = ? AND status = 'active'", slug) if isinstance(slug, str) and len(slug) <= 40 else None
-    p = one(con, "SELECT id FROM ako_programs WHERE org_id = ? AND key = ? AND open = 1", o["id"], body.get("program")) if o else None
+    p = one(con, "SELECT id FROM ako_programs WHERE org_id = ? AND key = ? AND open = 1", o["id"], _key(body.get("program"))) if o else None
     if not p:
         raise ApiError("not_found")
     lang = body.get("lang") if body.get("lang") in LANGS else "ru"
+    try:  # an IPv6 address counts by its /64: one ordinary allocation holds 2^64 of them
+        a = ipaddress.ip_address(ip)
+        ip = str(ipaddress.ip_network(f"{a}/64", strict=False).network_address) if a.version == 6 else str(a)
+    except ValueError:
+        pass
     who = hmac.new(key, f"ako-ip:{ip}".encode(), hashlib.sha256).hexdigest()[:24]
     token, digest = new_token()
-    with tx(con):
-        if one(con, "SELECT COUNT(*) FROM ako_apps WHERE ip = ? AND created_at > ?", who, core.now() - 86400)[0] >= STARTS_A_DAY:
+    t = core.now()
+    with tx(con):  # the starts' own rows: a draft that is sent or deleted still counts for its day
+        if one(con, "SELECT COUNT(*) FROM ako_starts WHERE ip = ? AND at > ?", who, t - 86400)[0] >= STARTS_A_DAY \
+                or one(con, "SELECT COUNT(*) FROM ako_starts WHERE org_id = ? AND at > ?", o["id"], t - 86400)[0] >= ORG_STARTS_A_DAY:
             raise ApiError("rate_limited", "ako_starts")
-        con.execute("""INSERT INTO ako_apps (org_id, token, program_id, lang, ip, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)""", (o["id"], digest, p["id"], lang, who, core.now(), core.now()))
+        con.execute("INSERT INTO ako_starts (org_id, ip, at) VALUES (?, ?, ?)", (o["id"], who, t))
+        con.execute("""INSERT INTO ako_apps (org_id, token, program_id, lang, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)""", (o["id"], digest, p["id"], lang, t, t))
     return {"token": token}
 
 
@@ -194,7 +217,7 @@ def patch(con, token: str, body: dict) -> None:
         _editable(a)
         sets: dict[str, object] = {}
         if "program" in body:
-            p = one(con, "SELECT id, interview FROM ako_programs WHERE org_id = ? AND key = ? AND open = 1", a["org_id"], body["program"])
+            p = one(con, "SELECT id, interview FROM ako_programs WHERE org_id = ? AND key = ? AND open = 1", a["org_id"], _key(body["program"]))
             if not p:
                 raise ApiError("bad_input", "program")
             if a["status"] != "draft" and p["id"] != a["program_id"]:
@@ -225,13 +248,18 @@ def patch(con, token: str, body: dict) -> None:
 
 def _picture(data: bytes) -> tuple[bytes, str]:
     """A document as kept: a photo upright as a JPEG (no other bytes of the upload survive), or a PDF that opens."""
-    if data[:5] == b"%PDF-":
-        with tempfile.TemporaryDirectory(prefix="ako-pdf-") as out:
+    if data[:5] == b"%PDF-":  # rebuilt from its pages' pictures (a child with limits): no script, action or attachment survives
+        with _pdf, tempfile.TemporaryDirectory(prefix="ako-pdf-") as out:
             try:
-                pdfpages.run(data, Path(out), 1, 200, 10, 1 << 30, cut=True)  # a real, unlocked PDF, in a child with limits
-            except ValueError:
-                raise ApiError("bad_input", "bad_file") from None
-        return data, "application/pdf"
+                pages = pdfpages.run(data, Path(out), PDF_PAGES, PDF_SIDE, 20, 1 << 30)
+            except ValueError as exc:
+                raise ApiError("bad_input", "too_many_pages" if str(exc) == "too_many_pages" else "bad_file") from None
+            ims = [Image.open(p).convert("RGB") for p in pages]
+            if not ims:
+                raise ApiError("bad_input", "bad_file")
+            buf = io.BytesIO()
+            ims[0].save(buf, "PDF", save_all=True, append_images=ims[1:], resolution=150)
+        return buf.getvalue(), "application/pdf"
     try:
         im = media.decode(data)
     except media.BadImage:
@@ -242,14 +270,22 @@ def _picture(data: bytes) -> tuple[bytes, str]:
     return out.getvalue(), "image/jpeg"
 
 
-def add_file(con, token: str, doc: str, data: bytes) -> dict:
-    """One page or file of a document. The page is converted before the write lock; a refused write leaves no file."""
+def may_add(con, token: str, doc: str):
+    """Before an upload's body is read: the link, its document, the notice agreed to, room for one more file."""
     if doc not in DOCS:
         raise ApiError("bad_input", "doc")
     a = _app(con, token)
     if a["consent"] != CONSENT:
         raise ApiError("forbidden", "ako_consent")
     _editable(a)
+    if one(con, "SELECT COUNT(*) FROM ako_files WHERE app_id = ?", a["id"])[0] >= MAX_FILES:
+        raise ApiError("rate_limited", "ako_files")
+    return a
+
+
+def add_file(con, token: str, doc: str, data: bytes) -> dict:
+    """One page or file of a document. The page is converted before the write lock; a refused write leaves no file."""
+    may_add(con, token, doc)
     body, mime = _picture(data)
     root = root_of(con)
     name = secrets.token_hex(16)
@@ -275,9 +311,11 @@ def drop_file(con, token: str, fid: int) -> None:
     with tx(con):
         a = _app(con, token)
         _editable(a)
-        f = one(con, "SELECT path FROM ako_files WHERE id = ? AND app_id = ?", fid, a["id"])
+        f = one(con, "SELECT path, created_at FROM ako_files WHERE id = ? AND app_id = ?", _id(fid), a["id"])
         if not f:
             raise ApiError("not_found")
+        if a["sent_at"] is not None and f["created_at"] <= a["sent_at"]:
+            raise ApiError("closed", "ako_sent")  # what was sent stays for the team; a page added since may be replaced
         con.execute("DELETE FROM ako_files WHERE id = ?", (fid,))
         con.execute("UPDATE ako_apps SET updated_at = ? WHERE id = ?", (core.now(), a["id"]))
     _unlink(root_of(con), [f["path"]])
@@ -285,8 +323,7 @@ def drop_file(con, token: str, fid: int) -> None:
 
 def _take(con, a, slot: object) -> None:
     """Book (or move to) a slot in this transaction: a seat must be left, from CUTOFF on; the old one frees in the same write."""
-    s = one(con, "SELECT id, starts_at, cap FROM ako_slots WHERE id = ? AND org_id = ?", slot, a["org_id"]) \
-        if isinstance(slot, int) and not isinstance(slot, bool) else None
+    s = one(con, "SELECT id, starts_at, cap FROM ako_slots WHERE id = ? AND org_id = ?", _id(slot), a["org_id"]) if _id(slot) else None
     if not s:
         raise ApiError("not_found", "ako_slot")
     if s["id"] == a["slot_id"]:
@@ -303,9 +340,12 @@ def book(con, token: str, slot: object) -> dict:
     with tx(con):
         a = _app(con, token)
         _editable(a)
-        _, interview = _needs(con, a)
+        program, interview = _needs(con, a)
         if not interview:
             raise ApiError("bad_input", "ako_no_interview")
+        have = {r[0] for r in rows(con, "SELECT DISTINCT doc FROM ako_files WHERE app_id = ?", a["id"])}
+        if slot is not None and (a["consent"] != CONSENT or any(d not in have for d in program["first"])):
+            raise ApiError("bad_input", "ako_docs_first")  # a seat is held only by a package with its first documents
         if slot is None:
             cur = one(con, "SELECT starts_at FROM ako_slots WHERE id = ?", a["slot_id"]) if a["slot_id"] else None
             if cur and cur["starts_at"] <= core.now() + CUTOFF:
@@ -334,7 +374,7 @@ def submit(con, token: str) -> dict:
             raise ApiError("bad_input", "ako_incomplete", {"missing": missing})
         if interview and not a["slot_id"] and _free(con, a):
             raise ApiError("bad_input", "ako_slot_needed")
-        con.execute("UPDATE ako_apps SET status = 'sent', sent_at = ?, updated_at = ?, ip = NULL WHERE id = ?", (core.now(), core.now(), a["id"]))
+        con.execute("UPDATE ako_apps SET status = 'sent', sent_at = ?, updated_at = ? WHERE id = ?", (core.now(), core.now(), a["id"]))
     return view(con, token)
 
 
@@ -362,18 +402,29 @@ def ics(con, token: str) -> str:
 
 # ---------------------------------------------------------------- the org's people (Studio)
 
+def _access(con, v: Viewer, oid: int) -> str | None:
+    """"manage" (the org's head and up), "review" (named in ako_reviewers: Academic Programs), or None. Never the
+    creator's lent Studio (X-Staff-Org): the documents hold health data, and only the org's own people see them."""
+    if v.lent_full and v.staff_org == oid or not one(con, "SELECT 1 FROM ako_programs WHERE org_id = ? LIMIT 1", oid):
+        return None
+    if at_least(role_in(con, v, oid), "head"):
+        return "manage"
+    return "review" if v.student and one(con, "SELECT 1 FROM ako_reviewers WHERE org_id = ? AND user_id = ?", oid, v.id) else None
+
+
 def _team(con, v: Viewer, oid: int, manage: bool = False) -> None:
-    """Head and up run admissions; any member reads them (a reviewer from Academic Programs)."""
-    r = role_in(con, v, oid)
-    if r is None or manage and not at_least(r, "head") or not one(con, "SELECT 1 FROM ako_programs WHERE org_id = ? LIMIT 1", oid):
+    a = _access(con, v, oid)
+    if a is None or manage and a != "manage":
         raise ApiError("forbidden")
 
 
-def manages(con, oid: int, role: str) -> str | None:
-    """/api/me's membership: "manage" or "review" when the org takes applications."""
+def manages(con, oid: int, role: str, uid: int | None) -> str | None:
+    """/api/me's membership: "manage" or "review" when the org takes applications and I run or review them."""
     if not one(con, "SELECT 1 FROM ako_programs WHERE org_id = ? LIMIT 1", oid):
         return None
-    return "manage" if at_least(role, "head") else "review"
+    if at_least(role, "head"):
+        return "manage"
+    return "review" if uid and one(con, "SELECT 1 FROM ako_reviewers WHERE org_id = ? AND user_id = ?", oid, uid) else None
 
 
 def _row(a, have: set[str], program: dict | None, slot) -> dict:
@@ -402,7 +453,7 @@ def desk(con, v: Viewer, oid: int) -> dict:
         if a["slot_id"]:
             taken.setdefault(a["slot_id"], []).append(a["id"])
     days = {r["day"]: r["teams"] for r in rows(con, "SELECT day, teams FROM ako_days WHERE org_id = ?", oid)}
-    return {"manage": role_in(con, v, oid) is not None and at_least(role_in(con, v, oid), "head"),
+    return {"manage": _access(con, v, oid) == "manage",
             "programs": list(programs.values()),
             "apps": [_row(a, have.get(a["id"], set()), programs.get(a["program_id"]), by_id.get(a["slot_id"])) for a in apps],
             "slots": [{"id": s["id"], "at": s["starts_at"], "minutes": s["minutes"], "cap": s["cap"], "who": s["who"], "teams": s["teams"],
@@ -444,6 +495,12 @@ def _sig(key: bytes, what: str, exp: int) -> str:
     return hmac.new(key, f"ako-dl:{what}:{exp}".encode(), hashlib.sha256).hexdigest()[:40]
 
 
+def _bound(con, what: str, xid: int) -> str | None:
+    """What a link names besides the id: the file's own path, the package's birth (an id reused later is another thing)."""
+    r = one(con, "SELECT path FROM ako_files WHERE id = ?", xid) if what == "f" else one(con, "SELECT created_at FROM ako_apps WHERE id = ?", xid)
+    return f"{what}{xid}:{r[0]}" if r else None
+
+
 def link(con, v: Viewer, oid: int, what: str, xid: int, key: bytes) -> dict:
     """A download link for one file ("f") or a whole package ("z") of this org: signed, five minutes, no session in it
     (Telegram's webview and a browser tab can't send our headers on a download)."""
@@ -454,12 +511,13 @@ def link(con, v: Viewer, oid: int, what: str, xid: int, key: bytes) -> dict:
         raise ApiError("not_found")
     exp = core.now() + LINK_TTL
     core.log_action(con, v.id, "ako_download", f"ako:{what}{xid}")
-    return {"url": f"/api/ako/{what}/{xid}?e={exp}&s={_sig(key, f'{what}{xid}', exp)}"}
+    return {"url": f"/api/ako/{what}/{xid}?e={exp}&s={_sig(key, _bound(con, what, xid), exp)}"}
 
 
-def signed(what: str, xid: int, e: object, s: object, key: bytes) -> None:
-    if not (isinstance(e, str) and e.isdigit() and len(e) < 12 and isinstance(s, str)
-            and hmac.compare_digest(s, _sig(key, f"{what}{xid}", int(e))) and int(e) >= core.now()):
+def signed(con, what: str, xid: int, e: object, s: object, key: bytes) -> None:
+    b = _bound(con, what, xid)
+    if not (b and isinstance(e, str) and e.isascii() and e.isdigit() and len(e) < 12 and isinstance(s, str) and s.isascii()
+            and hmac.compare_digest(s, _sig(key, b, int(e))) and int(e) >= core.now()):
         raise ApiError("not_found")
 
 
@@ -473,28 +531,32 @@ def file_for(con, fid: int) -> tuple[Path, str, str]:
     return root_of(con) / f["path"], f["mime"], f"{base} - {f['doc']}-{n}.{'pdf' if f['mime'] == 'application/pdf' else 'jpg'}"
 
 
-def zip_of(con, aid: int) -> tuple[bytes, str]:
-    """The whole package (its link checked by signed()) as one ZIP, each file named by its document and page."""
+def zip_of(con, aid: int) -> tuple[Path, str]:
+    """The whole package (its link checked by signed()) as one ZIP in a temporary file (the caller removes it once
+    sent: a full package is a few hundred MB, never in memory), each file named by its document and page."""
     a = one(con, "SELECT * FROM ako_apps WHERE id = ?", aid)
     if not a:
         raise ApiError("not_found")
     base, _ = _names(con, a)
-    out, root, seen = io.BytesIO(), root_of(con), {}
-    with zipfile.ZipFile(out, "w", zipfile.ZIP_STORED) as z:  # JPEGs and PDFs are compressed already
+    root, seen = root_of(con), {}
+    root.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix=".zip-", dir=root)
+    out = Path(tmp)
+    with open(fd, "wb") as fh, zipfile.ZipFile(fh, "w", zipfile.ZIP_STORED) as z:  # JPEGs and PDFs are compressed already
         for f in rows(con, "SELECT doc, path, mime FROM ako_files WHERE app_id = ? ORDER BY doc, id", aid):
             seen[f["doc"]] = seen.get(f["doc"], 0) + 1
             try:
-                z.writestr(f"{f['doc']}-{seen[f['doc']]}.{'pdf' if f['mime'] == 'application/pdf' else 'jpg'}", (root / f["path"]).read_bytes())
+                z.write(root / f["path"], f"{f['doc']}-{seen[f['doc']]}.{'pdf' if f['mime'] == 'application/pdf' else 'jpg'}")
             except FileNotFoundError:
                 continue
-    return out.getvalue(), f"{base}.zip"
+    return out, f"{base}.zip"
 
 
 def new_app(con, v: Viewer, oid: int, body: dict) -> dict:
     """After a consultation: a package prefilled with the program, name and phone, and its link to send in WhatsApp.
     The secret is shown once; a lost one is replaced (update_app newLink)."""
     _team(con, v, oid, manage=True)
-    p = one(con, "SELECT id FROM ako_programs WHERE org_id = ? AND key = ?", oid, body.get("program"))
+    p = one(con, "SELECT id FROM ako_programs WHERE org_id = ? AND key = ?", oid, _key(body.get("program")))
     if not p:
         raise ApiError("bad_input", "program")
     name, phone = _line(body.get("name"), 120), str(body.get("phone") or "").strip()
@@ -525,7 +587,7 @@ def update_app(con, v: Viewer, oid: int, aid: int, body: dict) -> dict:
         if "note" in body:
             con.execute("UPDATE ako_apps SET note = ? WHERE id = ?", (str(body["note"] or "")[:2000].replace("\r", ""), aid))
         if "program" in body:
-            p = one(con, "SELECT id, interview FROM ako_programs WHERE org_id = ? AND key = ?", oid, body["program"])
+            p = one(con, "SELECT id, interview FROM ako_programs WHERE org_id = ? AND key = ?", oid, _key(body["program"]))
             if not p:
                 raise ApiError("bad_input", "program")
             con.execute("UPDATE ako_apps SET program_id = ?, slot_id = CASE WHEN ? THEN slot_id END, updated_at = ? WHERE id = ?",
@@ -538,8 +600,7 @@ def update_app(con, v: Viewer, oid: int, aid: int, body: dict) -> dict:
                 con.execute("UPDATE ako_apps SET slot_id = NULL, rebook = ?, updated_at = ? WHERE id = ?",
                             (reason or None if a["slot_id"] else a["rebook"], core.now(), aid))
             else:
-                s = one(con, "SELECT id, cap FROM ako_slots WHERE id = ? AND org_id = ?", body["slot"], oid) \
-                    if isinstance(body["slot"], int) and not isinstance(body["slot"], bool) else None
+                s = one(con, "SELECT id, cap FROM ako_slots WHERE id = ? AND org_id = ?", _id(body["slot"]), oid) if _id(body["slot"]) else None
                 if not s:
                     raise ApiError("not_found", "ako_slot")
                 if s["id"] != a["slot_id"] and one(con, "SELECT COUNT(*) FROM ako_apps WHERE slot_id = ?", s["id"])[0] >= s["cap"]:
@@ -684,7 +745,26 @@ def sweep(con) -> None:
         paths = [r[0] for r in rows(con, f"SELECT path FROM ako_files WHERE app_id IN ({core._qs(ids)})", *ids)] if ids else []
         if ids:
             con.execute(f"DELETE FROM ako_apps WHERE id IN ({core._qs(ids)})", ids)
-        con.execute("UPDATE ako_apps SET ip = NULL WHERE ip IS NOT NULL AND created_at < ?", (t - IP_KEEP,))
+        con.execute("DELETE FROM ako_starts WHERE at < ?", (t - IP_KEEP,))
+        # a draft holds a seat a day at most without a change: a seat is for people who send
+        con.execute("UPDATE ako_apps SET slot_id = NULL WHERE status = 'draft' AND slot_id IS NOT NULL AND updated_at < ?", (t - 86400,))
         con.execute("""DELETE FROM ako_slots WHERE starts_at < ? AND id NOT IN (SELECT slot_id FROM ako_apps WHERE slot_id IS NOT NULL)""",
                     (t - 30 * 86400,))
     _unlink(root_of(con), paths)
+    _orphans(con)
+
+
+def _orphans(con) -> None:
+    """Files nothing points to (a crash between the write and the commit, a ZIP never sent): gone after a day."""
+    root = root_of(con)
+    if not root.is_dir():
+        return
+    known = {r[0] for r in rows(con, "SELECT path FROM ako_files")}
+    old = time.time() - 86400  # the disk's clock, not the rules'
+    for f in [*root.glob("*/*"), *root.glob(".zip-*")]:
+        rel = f.relative_to(root).as_posix()
+        try:
+            if f.is_file() and rel not in known and f.stat().st_mtime < old:
+                f.unlink()
+        except FileNotFoundError:
+            pass
