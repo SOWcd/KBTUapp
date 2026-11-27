@@ -204,7 +204,8 @@ async def chat(cfg, http: httpx.AsyncClient, messages: list[dict], *, max_tokens
             # A bad key or missing model affects every request to this link. A request error skips one attempt.
             if r.status_code in (401, 402, 403, 404):
                 _rest_until(link.name, time.time() + REST_BROKEN)
-            log.warning("ai %s: http %d", link.name, r.status_code)
+            said = "(withheld: it repeats the key)" if link.token in r.text else r.text[:160].replace("\n", " ")  # never headers
+            log.warning("ai %s: http %d: %s", link.name, r.status_code, said)
             await asyncio.to_thread(_count, path, link.name, False)
             return None
         try:
