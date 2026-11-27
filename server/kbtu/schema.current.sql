@@ -14,6 +14,69 @@ CREATE TABLE achievement_levels (                    -- last notified level, so 
   reached_at INTEGER NOT NULL, seen INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (user_id, code)
 ) STRICT;
+CREATE TABLE ako_apps (
+      id           INTEGER PRIMARY KEY,
+      org_id       INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      token        BLOB NOT NULL UNIQUE,            -- SHA-256 of the link's secret, never the secret
+      program_id   INTEGER REFERENCES ako_programs(id) ON DELETE SET NULL,
+      name         TEXT NOT NULL DEFAULT '',
+      phone        TEXT NOT NULL DEFAULT '',
+      email        TEXT NOT NULL DEFAULT '',
+      lang         TEXT NOT NULL DEFAULT 'ru' CHECK (lang IN ('ru', 'kk', 'en')),
+      status       TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'sent', 'review', 'accepted', 'declined')),
+      slot_id      INTEGER REFERENCES ako_slots(id) ON DELETE SET NULL,
+      rebook       TEXT,                            -- the managers took the booked time away: their reason, until a new pick
+      consent      TEXT,                            -- the notice's version agreed to (CONSENT), before any document
+      consent_at   INTEGER,
+      note         TEXT NOT NULL DEFAULT '',        -- the managers' own
+      ip           TEXT,                            -- a keyed hash of a public link's starter, for its daily cap; gone in a day
+      created_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at   INTEGER NOT NULL,
+      updated_at   INTEGER NOT NULL,
+      sent_at      INTEGER
+    ) STRICT;
+CREATE TABLE ako_days (
+      org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      day    TEXT NOT NULL,                         -- YYYY-MM-DD in Almaty
+      teams  TEXT NOT NULL,
+      PRIMARY KEY (org_id, day)
+    ) STRICT;
+CREATE TABLE ako_files (
+      id         INTEGER PRIMARY KEY,
+      app_id     INTEGER NOT NULL REFERENCES ako_apps(id) ON DELETE CASCADE,
+      doc        TEXT NOT NULL,
+      path       TEXT NOT NULL UNIQUE,              -- under the private ako/ folder
+      mime       TEXT NOT NULL CHECK (mime IN ('image/jpeg', 'application/pdf')),
+      bytes      INTEGER NOT NULL,
+      created_at INTEGER NOT NULL
+    ) STRICT;
+CREATE TABLE ako_programs (  -- IF NOT EXISTS: tests rewind user_version
+      id        INTEGER PRIMARY KEY,
+      org_id    INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      key       TEXT NOT NULL,
+      kind      TEXT NOT NULL CHECK (kind IN ('degree', 'short')),
+      info      TEXT NOT NULL,                      -- {"ru": {"title", "sub", "price", "length", "format"}, "kk": ..., "en": ...}
+      url       TEXT NOT NULL DEFAULT '',          -- the program's page on the org's site, the source of the info
+      interview INTEGER NOT NULL DEFAULT 0 CHECK (interview IN (0, 1)),
+      first     TEXT NOT NULL DEFAULT '',          -- document keys asked before sending, comma-separated
+      later     TEXT NOT NULL DEFAULT '',          -- needed for enrolment, may come after sending
+      optional  TEXT NOT NULL DEFAULT '',          -- welcome, never asked for
+      sort      INTEGER NOT NULL DEFAULT 0,
+      open      INTEGER NOT NULL DEFAULT 1 CHECK (open IN (0, 1)),
+      UNIQUE (org_id, key)
+    ) STRICT;
+CREATE TABLE ako_slots (
+      id         INTEGER PRIMARY KEY,
+      org_id     INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      starts_at  INTEGER NOT NULL,
+      minutes    INTEGER NOT NULL CHECK (minutes BETWEEN 5 AND 240),
+      cap        INTEGER NOT NULL DEFAULT 1 CHECK (cap BETWEEN 1 AND 50),
+      who        TEXT NOT NULL DEFAULT '',          -- the interviewer, for the managers
+      teams      TEXT,                              -- this slot's own meeting link, else its day's
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at INTEGER NOT NULL,
+      UNIQUE (org_id, starts_at, who)
+    ) STRICT;
 CREATE TABLE android_app (
       user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
       seen_at INTEGER NOT NULL
@@ -1656,6 +1719,11 @@ CREATE TABLE yt_videos (
     ) STRICT;
 CREATE INDEX grants_by_batch ON achievement_grants(batch) WHERE batch IS NOT NULL;
 CREATE INDEX grants_by_user ON achievement_grants(user_id, code);
+CREATE INDEX ako_apps_by_ip ON ako_apps(ip, created_at) WHERE ip IS NOT NULL;
+CREATE INDEX ako_apps_by_org ON ako_apps(org_id, status, updated_at);
+CREATE INDEX ako_apps_by_slot ON ako_apps(slot_id) WHERE slot_id IS NOT NULL;
+CREATE INDEX ako_files_by_app ON ako_files(app_id, doc, id);
+CREATE INDEX ako_slots_by_time ON ako_slots(org_id, starts_at);
 CREATE INDEX anon_feedback_by_day ON anon_feedback(day);
 CREATE INDEX appeal_authors_user ON appeal_authors(user_id);
 CREATE INDEX appeal_sends_user ON appeal_sends(user_id, at);

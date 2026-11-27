@@ -21,6 +21,9 @@ export type Qa = {
   db: string;
   /** the signed link that opens the app as this person */
   link: (who: Who, extra?: Record<string, string>) => string;
+  /** with qa.py --ako (test.use({ qaArgs: ['--ako'] })): the applicant pages' paths: a manager's prefilled link, a sent
+   *  package, the website's start */
+  ako: { link?: string; sent?: string; start?: string };
 };
 
 const freePort = () => new Promise<number>((ok, fail) => {
@@ -30,18 +33,20 @@ const freePort = () => new Promise<number>((ok, fail) => {
   s.listen(0, '127.0.0.1', () => { const p = (s.address() as { port: number }).port; s.close(() => ok(p)); });
 });
 
-async function startQa(now?: number): Promise<Qa & { stop: () => void }> {
+async function startQa(now?: number, args: string[] = []): Promise<Qa & { stop: () => void }> {
   const port = await freePort();
   const dir = mkdtempSync(join(tmpdir(), 'kbtu-e2e-'));
   const db = join(dir, 'qa.db');
-  const proc: ChildProcess = spawn(PYTHON, ['tools/qa.py', '--port', String(port), '--db', db, ...(now ? ['--now', String(now)] : [])], {
+  const proc: ChildProcess = spawn(PYTHON, ['tools/qa.py', '--port', String(port), '--db', db, ...(now ? ['--now', String(now)] : []), ...args], {
     cwd: SERVER, env: { ...process.env, PYTHONUNBUFFERED: '1' }, stdio: ['ignore', 'pipe', 'pipe'], detached: true,
   });
   const links: Partial<Record<Who, string>> = {};
+  const ako: Qa['ako'] = {};
   let log = '';
   proc.stdout!.on('data', (b: Buffer) => {
     log += b;
     for (const m of b.toString().matchAll(/^(Dana|Ali|Bota): (\S+)$/gm)) links[m[1] as Who] = m[2];
+    for (const m of b.toString().matchAll(/^AKO (link|sent|start): (\S+)$/gm)) ako[m[1] as keyof Qa['ako']] = m[2];
   });
   proc.stderr!.on('data', (b: Buffer) => { log += b; });
   const url = `http://127.0.0.1:${port}`;
@@ -56,7 +61,7 @@ async function startQa(now?: number): Promise<Qa & { stop: () => void }> {
     await new Promise((r) => setTimeout(r, 100));
   }
   return {
-    url, db, stop,
+    url, db, stop, ako,
     link: (who, { path = '/', ...extra } = {}) => {
       const p = new URLSearchParams(links[who]!.split('#')[1]);
       for (const [k, v] of Object.entries(extra)) p.set(k, v);
@@ -191,10 +196,10 @@ export async function look(page: Page, info: TestInfo, step: string): Promise<vo
   expect.soft(found.spill, `${step}: text spills out of a button`).toEqual([]);
 }
 
-export const test = base.extend<{ qa: Qa; open: (who: Who, opts?: OpenOpts) => Promise<Phone>; faults: Faults }>({
-  // eslint-disable-next-line no-empty-pattern
-  qa: async ({}, use, info) => {
-    const qa = await startQa(clock(info));
+export const test = base.extend<{ qaArgs: string[]; qa: Qa; open: (who: Who, opts?: OpenOpts) => Promise<Phone>; faults: Faults }>({
+  qaArgs: [[], { option: true }], // qa.py's extra flags for a file's tests (test.use({ qaArgs: ['--ako'] }))
+  qa: async ({ qaArgs }, use, info) => {
+    const qa = await startQa(clock(info), qaArgs);
     try { await use(qa); } finally { qa.stop(); }
   },
   faults: async ({}, use) => { // eslint-disable-line no-empty-pattern

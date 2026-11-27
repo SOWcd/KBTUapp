@@ -10,6 +10,8 @@
                                 (kind office): official, its name in the three languages as typed, its public channel the
                                 main chat with the mirror on; who goes to its events never shows to other students
                                 (org_flags.guests_private). Its found events stay drafts until auto-publish
+  .venv/bin/python -m kbtu.admin ako <slug>                     the org takes applications (logic/ako.py): its programs from
+                                i18n/ako.json added or updated; its head and up run them in Studio, a member reviews
   .venv/bin/python -m kbtu.admin auto-publish <slug> on | off   an org's events found in its channel published at once
                                 (logic/autoev.py: a clear future date and time, a few a day; the rest drafts), audited
   .venv/bin/python -m kbtu.admin org-award <id | slug | "exact name"> <year> "<title>"   a KBTU Awards nomination it won,
@@ -963,6 +965,10 @@ def main(args: list[str]) -> None:
         print(f"created {slug}")
     elif cmd == "office" and len(args) == 8:
         _office(con, *args[1:])
+    elif cmd == "ako" and len(args) == 2:
+        from .logic import ako
+        o = one(con, "SELECT id FROM orgs WHERE slug = ?", args[1]) or sys.exit(f"{args[1]}: no such org")
+        print(f"{args[1]}: {ako.seed(con, o['id'])} programs")
     elif cmd == "auto-publish" and len(args) == 3 and args[2] in ("on", "off"):
         with db.tx(con):
             o = one(con, "SELECT id FROM orgs WHERE slug = ?", args[1]) or sys.exit(f"{args[1]}: no such org")

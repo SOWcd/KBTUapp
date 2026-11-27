@@ -492,6 +492,8 @@ def _membership(con, m, mains: dict, logos: dict) -> dict:
     """One of /api/me's memberships (and the creator's lent one, lent_studio)."""
     return {"org": org_ref(con, m, logos), "role": m["role"], **core.titled(m), "rights": _ordered(core.club_rights(m["role"], m["rights"], m)),
             "oversee": bool(m["can_oversee"] and m["role"] != "member"),
+            # admissions (logic/ako.py): the org takes applications; head and up run them, a member reviews
+            **({"ako": a} if (a := ako.manages(con, m["id"], m["role"])) else {}),
             **({"channel": _channel(mains.get(m["id"]))} if "profile" in _rights_from(m["role"], m["rights"]) else {}),
             # the composer's locked state (clubs.stories_open): read only for a writer of a student initiative
             **({"storiesLocked": True} if "posts" in _rights_from(m["role"], m["rights"]) and not m["official"]
@@ -1795,7 +1797,7 @@ def drop_my_schedule(con, v: Viewer) -> None:
 
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
-from . import chatlist, core, credits, guests, inbox, profiles, santa  # noqa: E402
+from . import ako, chatlist, core, credits, guests, inbox, profiles, santa  # noqa: E402
 from .clubs import TRANSLIT, stories_open  # noqa: E402
 from .newsfeed import unread_broadcasts  # noqa: E402
 from .organizing import kz_phone, link_door_guests  # noqa: E402

@@ -2,6 +2,7 @@ import type { ChatFill } from '../eventFill';
 // The real server. Calls use signed initData or the browser session; errors come back as
 // { error, message } and become ApiErr.
 import type { ResearchAnswers, ResearchSurvey, ResearchInput, ResearchRequest, Support, Sponsor, DonationReview, ApiError, Credits, ClubApplication, Id, OfficialPath, PersonCard, Video, AdminOrg, AdminEvent, OrgRole, TeamMember, Member, TeamSetup, MemberPatch, Friends, Friendship, FoundStudent, LinkCard, PersonRef, Media, GalleryPage, AlbumPhoto, Attendee, DoorPerson, EventUpdate, PostInput, CheckinResult, ClassItem, JoinRequest, CohostInvite, CrewKind, CrewMember, EventReport, ReportPatch, EventCard, EventFull, EventInput, Me, Org, Post, Settings, Ts, FriendInvite, CommentThread, ReportReason, ReportItem, RegistryOrg, SentMemo, RosterMember, RegistryHit, Chat, ChatSection, Chats, ClubApplicationInput, OfficialRequest, LeadersAnswer, MeetingAnswer, OrgPatch, PostPatch, OrgRef, TakenDown, Staff, StaffRow, LentStudio, AuditRow, PlatformRole, Right, MemoDraft, MemoSign, GrantItem, AdminStats, AdminDay, AdminAi, Round, RoundInput, RoundApp, AppStage, RoundSlot, VolunteerApp, TeamAsk, TeamPick, TeamInvite, TeamsBoard, ShortLink, StudioChat, ChatTree, WaitingChat, SwearRow, ChatRoles, RosterRequest, Skill, ForumMe, ForumCard, Ask, AskInput, Contact, ForumMod, AssistReply, Fixable, TgComment, TgcRule, VolLedger, VolPerson, VolDoor, Appeal, AppealHelp, AppealTopic, AppealStatus, SgQueue, Solved, Subjects, SubjectCard, RejectWhy } from './types';
+import type { AkoDesk, AkoPackage, AkoStatus } from './types';
 import type { BracketMatch, BracketSeed, EventBracket, EventGroups, EventMatch, MatchScore } from './types';
 import type { Archived, ReportLogEntry, ReportMarkPatch, ReviewReason, SantaChats, SantaMsg, SantaReport } from './types';
 import type { LibAct, LibRoom, LibState, LibTable, LibWall } from './types';
@@ -739,5 +740,22 @@ export const server = {
   shortLinks: (org: Id): Promise<ShortLink[]> => call('GET', `/orgs/${org}/links`), // Vice+
   addShortLink: (org: Id, link: { slug: string; kind: ShortLink['kind']; eventId?: Id }): Promise<ShortLink[]> => call('POST', `/orgs/${org}/links`, link), // conflict 'taken' / 'limit'
   dropShortLink: (slug: string): Promise<void> => call('DELETE', `/links/${slug}`), // the club's Vice+, or the admin revoking it
+  // admissions (server logic/ako.py): the team's desk; head+ change it, a member reads. The applicant's own calls: lib/api/ako.ts
+  akoDesk: (org: Id): Promise<AkoDesk> => call('GET', `/orgs/${org}/ako`),
+  akoPackage: (org: Id, app: Id): Promise<AkoPackage> => call('GET', `/orgs/${org}/ako/apps/${app}`),
+  /** after a consultation: a prefilled package and its link's secret (shown once: /ako/<token>) */
+  akoNew: (org: Id, x: { program: string; name: string; phone: string; lang?: 'ru' | 'kk' | 'en' }): Promise<{ id: Id; token: string }> => call('POST', `/orgs/${org}/ako/apps`, x),
+  /** status (review: passed to Academic Programs), note, program, the interview moved or taken back (reason), a new link (the old stops) */
+  akoUpdate: (org: Id, app: Id, x: { status?: AkoStatus; note?: string; program?: string; slot?: Id | null; reason?: string; newLink?: true }): Promise<{ token?: string }> => call('PATCH', `/orgs/${org}/ako/apps/${app}`, x),
+  akoDrop: (org: Id, app: Id): Promise<void> => call('DELETE', `/orgs/${org}/ako/apps/${app}`),
+  /** a day's times in one go; teams: the day's meeting link */
+  akoAddSlots: (org: Id, x: { day: string; times: string[]; minutes: number; cap?: number; who?: string; teams?: string }): Promise<void> => call('POST', `/orgs/${org}/ako/slots`, x),
+  akoSetDay: (org: Id, day: string, teams: string): Promise<void> => call('PUT', `/orgs/${org}/ako/days`, { day, teams }),
+  akoUpdateSlot: (org: Id, slot: Id, x: { teams?: string; who?: string; cap?: number }): Promise<void> => call('PATCH', `/orgs/${org}/ako/slots/${slot}`, x),
+  /** a booked time only with force (conflict 'ako_slot_booked' first): its people read the reason and pick again */
+  akoDropSlot: (org: Id, slot: Id, force = false, reason = ''): Promise<{ booked: number }> => call('DELETE', `/orgs/${org}/ako/slots/${slot}${query({ force: force ? 'true' : undefined, reason: reason || undefined })}`),
+  /** a document, or the whole package as a ZIP: a signed five-minute link to open at once (tg.downloadFile or a tab) */
+  akoFileLink: (org: Id, file: Id): Promise<{ url: string }> => call('GET', `/orgs/${org}/ako/files/${file}/link`),
+  akoZipLink: (org: Id, app: Id): Promise<{ url: string }> => call('GET', `/orgs/${org}/ako/apps/${app}/link`),
 
 };
