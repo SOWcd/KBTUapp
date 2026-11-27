@@ -70,6 +70,12 @@
                                 creator only: queue a bot template once per reachable user. --dry counts new recipients;
                                 @username or Telegram ID queues it for one person first; --platform: only people who
                                 opened the app on that kind of device in the last 90 days (a preview goes regardless)
+  .venv/bin/python -m kbtu.admin broadcast-android <name> [--dry | <@who>]   the template <name> (e.g. android_test) with
+                                a button to kbtu.sow.kz/android.html, only to people seen on Android in the last 90 days
+                                who never opened the installed Google Play app; the same rules as broadcast
+  .venv/bin/python -m kbtu.admin android-welcome <@who> | on [--dry] | off   the bot's one thanks on the installed Android
+                                app's first launch: <@who> a preview; on (after the creator's yes) also thanks whoever
+                                opened it before; off stops new ones
   .venv/bin/python -m kbtu.admin team add|del <@username | telegram id>   People of the app's Team (core developers), audited
   .venv/bin/python -m kbtu.admin credit add <telegram id | gh:login> <idea | find | code> "<ru>" "<kk>" "<en>" [--gh <login>] [--name "<name>"] [--ai]   "People of the app"
                                 (logic/credits.py): a line in OUR words about what they gave (an account isn't needed;
@@ -228,10 +234,15 @@ def _staff_undo(con, uid: int) -> int:
     return con.execute("DELETE FROM students WHERE user_id = ? AND student_id = ? AND consent_version != 'staff'", (uid, f"staff{uid}")).rowcount
 
 
-def _broadcast(con, name: str, url: str, target: str | None = None, platform: str | None = None) -> None:
+ANDROID_PAGE = "https://kbtu.sow.kz/android.html"  # the Google Play tester's steps, opened in the phone's browser
+
+
+def _broadcast(con, name: str, url: str, target: str | None = None, platform: str | None = None, android: bool = False) -> None:
+    """android (broadcast-android): to people seen on Android who haven't opened the installed app (android_app),
+    the button to ANDROID_PAGE in each one's language."""
     if platform is not None and platform not in PLATFORMS:
         sys.exit(f"broadcast: --platform is one of {', '.join(PLATFORMS)}")
-    if not re.fullmatch(r"https://t\.me/[^\s\x00-\x1f\x7f-\x9f\\]*", url):
+    if not android and not re.fullmatch(r"https://t\.me/[^\s\x00-\x1f\x7f-\x9f\\]*", url):
         sys.exit("broadcast: expected an https://t.me/ URL")
     if not all(texts.broadcast_message(lang, name) for lang in texts.BOT):
         sys.exit("broadcast: expected a translated bot template with a button and no required fields")
@@ -256,14 +267,15 @@ def _broadcast(con, name: str, url: str, target: str | None = None, platform: st
         recipients = """FROM users u WHERE u.can_dm = 1 AND u.banned_at IS NULL AND u.tg_id > 0 AND (u.n_broadcasts = 1 OR ? IS NOT NULL)
             AND (? IS NULL OR u.id = ?) AND (? IS NOT NULL OR NOT EXISTS (SELECT 1 FROM bot_outbox b
                 WHERE b.user_id = u.id AND b.kind = 'app_broadcast' AND b.ref = ? AND b.error IS NULL))
-            AND (? IS NULL OR ? IS NOT NULL OR EXISTS (SELECT 1 FROM user_platforms p WHERE p.user_id = u.id AND p.kind = ?))"""  # a failed one, or a preview, may go again
-        args = (only, only, only, only, name, platform, only, platform)
+            AND (? IS NULL OR ? IS NOT NULL OR EXISTS (SELECT 1 FROM user_platforms p WHERE p.user_id = u.id AND p.kind = ?))
+            AND (? = 0 OR ? IS NOT NULL OR NOT EXISTS (SELECT 1 FROM android_app a WHERE a.user_id = u.id))"""  # a failed one, or a preview, may go again
+        args = (only, only, only, only, name, platform, only, platform, android, only)
         if dry:
             count = one(con, f"SELECT COUNT(*) {recipients}", *args)[0]
         else:
             count = con.execute(f"""INSERT OR REPLACE INTO bot_outbox (user_id, kind, ref, payload, send_after)
-                SELECT u.id, 'app_broadcast', ?, ?, ? {recipients} ORDER BY u.id""",
-                                (name, json.dumps({"url": url}), now(), *args)).rowcount
+                SELECT u.id, 'app_broadcast', ?, json_object('url', ? || CASE WHEN ? THEN '?lang=' || u.lang ELSE '' END), ?
+                {recipients} ORDER BY u.id""", (name, url, android, now(), *args)).rowcount
     print(f"{'would queue' if dry else 'queued'} {count}")
 
 
@@ -666,6 +678,29 @@ def main(args: list[str]) -> None:
             platform = rest.pop(at + 1)
             rest.pop(at)
         _broadcast(con, *rest, platform=platform)
+    elif cmd == "broadcast-android" and len(args) in (2, 3) and gz is None:
+        _broadcast(con, args[1], ANDROID_PAGE, *args[2:], platform="android", android=True)
+    elif cmd == "android-welcome" and (len(args) == 2 or args[1:] == ["on", "--dry"]):
+        from .logic.account import WELCOME
+        if args[1] == "off":
+            with db.tx(con):
+                con.execute("DELETE FROM meta WHERE key = ?", (WELCOME,))
+            print("off")
+        elif args[1] == "on":  # from now on, and to whoever opened the installed app before the yes
+            dry = args[2:] == ["--dry"]
+            with db.tx(con, write=not dry):
+                if dry:
+                    n = one(con, """SELECT COUNT(*) FROM android_app a WHERE NOT EXISTS (SELECT 1 FROM bot_outbox b
+                        WHERE b.user_id = a.user_id AND b.kind = ? AND b.ref = '')""", WELCOME)[0]
+                else:
+                    con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, 'on')", (WELCOME,))
+                    n = con.execute("""INSERT OR IGNORE INTO bot_outbox (user_id, kind, ref, payload, send_after)
+                        SELECT user_id, ?, '', '{}', ? FROM android_app ORDER BY user_id""", (WELCOME, now())).rowcount
+            print(f"{'would queue' if dry else 'on, queued'} {n}")
+        else:  # a preview to one person, again each time (its own ref)
+            with db.tx(con):
+                notify(con, _user(con, args[1])["id"], WELCOME, f"p{now()}")
+            print("queued 1")
     elif cmd == "credit" and args[1:2] in (["add"], ["ai"], ["gh"], ["ship"], ["list"], ["del"], ["ask"]):  # the people of the app (logic/credits.py)
         try:
             if args[1] == "add" and len(args) >= 7:

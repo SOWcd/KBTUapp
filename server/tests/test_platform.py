@@ -72,3 +72,42 @@ def test_android_app_reported(env, monkeypatch):
     logic.account.delete_me(con, logic.Viewer(uid, "user", True))
     assert con.execute("SELECT COUNT(*) FROM android_app").fetchone()[0] == 0
     assert ("android_app", "user_id") in logic.account._DEL_GONE
+
+
+def test_android_welcome_once_after_the_yes(env, monkeypatch, capsys):
+    """The installed app's first launch queues the bot's one thanks, but only once the creator turned it on (admin
+    android-welcome on, which also thanks whoever opened it before); off stops new ones; a preview goes to one person."""
+    from kbtu import admin, outbox
+    c, cfg = env
+    monkeypatch.setattr(admin.config, "load", lambda: cfg)
+    login(c, 90, "stu")
+    login(c, 91, "two")
+    con = db.connect(cfg.db_path)
+    uid = {tg: con.execute("SELECT id FROM users WHERE tg_id = ?", (tg,)).fetchone()[0] for tg in (90, 91)}
+
+    def thanks():
+        return [r[0] for r in con.execute("SELECT user_id FROM bot_outbox WHERE kind = 'android_welcome' AND ref = '' ORDER BY user_id")]
+    c.get("/api/me?platform=android&app=play", headers=tma(90))
+    assert thanks() == []                                                    # not before the yes
+    admin.main(["android-welcome", "on", "--dry"])
+    assert capsys.readouterr().out.strip() == "would queue 1"
+    admin.main(["android-welcome", "on"])
+    assert capsys.readouterr().out.strip() == "on, queued 1"
+    assert thanks() == [uid[90]]
+    c.get("/api/me?platform=android&app=play", headers=tma(91))
+    con.execute("UPDATE android_app SET seen_at = 0")                         # a later day: no second thanks
+    c.get("/api/me?platform=android&app=play", headers=tma(91))
+    c.get("/api/me?platform=android&app=play", headers=tma(90))
+    admin.main(["android-welcome", "on"])
+    assert thanks() == [uid[90], uid[91]]
+    row = con.execute("SELECT * FROM bot_outbox WHERE kind = 'android_welcome' AND user_id = ?", (uid[91],)).fetchone()
+    text, button, start = outbox._render(con, {**dict(row), "lang": "en", "tg_id": 91})
+    assert text.startswith("\U0001f389") and button and start == ""
+    admin.main(["android-welcome", "off"])
+    con.execute("DELETE FROM android_app")
+    con.execute("DELETE FROM bot_outbox")
+    c.get("/api/me?platform=android&app=play", headers=tma(90))
+    assert thanks() == []                                                    # off: no new ones
+    con.execute("UPDATE users SET tg_username = 'owner90' WHERE tg_id = 90")
+    admin.main(["android-welcome", "@owner90"])
+    assert [r[0] for r in con.execute("SELECT user_id FROM bot_outbox WHERE kind = 'android_welcome' AND ref != ''")] == [uid[90]]

@@ -155,6 +155,8 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         return (*texts.bot_message(lang, kind, title=a["title"], why=why), f"sj_{a['subject']}" if a["subject"] else f"fa_{ref[1]}") if why else None
     if kind in ("backup_failed", "backup_ok", "userbot_off", "userbot_ok"):  # bf/bo:<day> to the admins; uo/ub:<since> to the owner
         return (*texts.bot_message(lang, kind), "")
+    if kind == "android_welcome":  # the installed Android app's first launch (account._play_seen), or the creator's preview
+        return (*texts.bot_message(lang, kind), "")
     if kind in ("prefill_other_id", "prefill_id_held"):  # pf:<user>, ph:<user>:<holder>, to the owner (account.ms_link)
         return (*texts.bot_message(lang, kind, user=ref[1], holder=ref[-1]), "")
     if kind == "channel_ask":  # ca:<org>, to the club's President (admin channel-ask): gone once the club has its channel
