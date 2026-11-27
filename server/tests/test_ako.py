@@ -76,6 +76,7 @@ def test_public_link_makes_a_draft_only_on_a_post(env, monkeypatch):
     c.get("/ako/o/ako")  # the page itself, as a link preview fetches it
     assert con.execute("SELECT COUNT(*) FROM ako_apps").fetchone()[0] == 0
     r = c.get("/ako/whatever")
+    assert '<base href="/">' in r.text  # the build's relative links resolve from the root, not /ako/
     assert r.headers["referrer-policy"] == "no-referrer" and "no-store" in r.headers["cache-control"] and r.headers["x-robots-tag"] == "noindex"
     tok = c.post("/api/ako/o/ako", json={"program": "dba", "lang": "en"}).json()["token"]
     row = con.execute("SELECT token, status, lang FROM ako_apps").fetchone()
@@ -89,7 +90,7 @@ def test_public_link_makes_a_draft_only_on_a_post(env, monkeypatch):
     con.execute("DELETE FROM ako_apps")
     assert c.post("/api/ako/o/ako", json={"program": "dba"}).status_code == 429
     monkeypatch.setattr(ako, "STARTS_A_DAY", 99)
-    monkeypatch.setattr(ako, "ORG_STARTS_A_DAY", 3)
+    monkeypatch.setattr(ako, "ORG_STARTS_A_DAY", 2)  # two started today (the refused one made none)
     assert c.post("/api/ako/o/ako", json={"program": "dba"}).status_code == 429
 
 

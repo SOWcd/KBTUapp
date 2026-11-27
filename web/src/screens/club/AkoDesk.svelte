@@ -1,9 +1,10 @@
 <script lang="ts">
+  import { akoTeam } from '../../lib/api/akoTeam';
   // Studio → admissions (AKO): the team's desk. Two parts: the applicants (filter, search, a tap opens the package) and
   // the interview days (each day's Teams link and its times). Managers (desk.manage) change things; a reviewer reads.
   // Every change shows at once and rolls back with the toast when the server says no.
   import { onMount } from 'svelte';
-  import { api, ApiErr, type Id, type AkoDesk, type AkoRow, type AkoSlot } from '../../lib/api';
+  import { ApiErr, type Id, type AkoDesk, type AkoRow, type AkoSlot } from '../../lib/api';
   import { open, say, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { i18n, t } from '../../lib/i18n/index.svelte';
@@ -43,7 +44,7 @@
 
   async function load() {
     failed = false;
-    try { desk = await api.akoDesk(org); }
+    try { desk = await akoTeam.akoDesk(org); }
     catch { if (!desk) failed = true; say(t('common.error'), 'warning_3d'); }
   }
   onMount(() => { void load(); });
@@ -141,7 +142,7 @@
     const err = await change((d) => {
       d.slots = d.slots.filter((x) => x.id !== id);
       for (const a of d.apps) if (a.slot?.id === id) a.slot = null;
-    }, () => api.akoDropSlot(org, id, force, reason));
+    }, () => akoTeam.akoDropSlot(org, id, force, reason));
     if (err) say(t('common.error'), 'warning_3d');
     if (err || force) void load(); // someone booked it meanwhile, or its people now need a new time: the server's truth
   }
@@ -164,7 +165,7 @@
       const s = d.slots.find((x) => x.id === e.slot!.id);
       if (s && e.mode === 'who') s.who = text;
       else if (s) s.teams = text || null;
-    }, () => (e.mode === 'day' ? api.akoSetDay(org, e.day, text) : api.akoUpdateSlot(org, e.slot!.id, e.mode === 'who' ? { who: text } : { teams: text })));
+    }, () => (e.mode === 'day' ? akoTeam.akoSetDay(org, e.day, text) : akoTeam.akoUpdateSlot(org, e.slot!.id, e.mode === 'who' ? { who: text } : { teams: text })));
     e.busy = false;
     if (!err) ed = null;
     else if (link && err instanceof ApiErr && err.message === 'bad_input') e.error = aw('akd.teamsBad');
@@ -175,7 +176,7 @@
 <Pane {overlay} title={aw('akd.title')}>
   <div class="page">
     <div class="bar">
-      <div class="seg">
+      <div class="segs">
         <Segmented items={[{ value: 'apps', label: aw('akd.tabApps') }, { value: 'slots', label: aw('akd.tabSlots') }]} bind:value={tab}
           label={t('studio.ako')} onchange={() => { haptic.select(); ed = null; }} />
       </div>
@@ -257,7 +258,7 @@
 <style>
   .page { display: flex; flex-direction: column; gap: var(--s-4); }
   .bar { display: flex; align-items: center; gap: var(--s-2); }
-  .seg { flex: 1; min-width: 0; }
+  .segs { flex: 1; min-width: 0; }
   .part { display: flex; flex-direction: column; gap: var(--s-3); animation: part-in var(--t-base) var(--ease) both; }
   @keyframes part-in { from { opacity: 0; transform: translateY(6px); } }
   @media (prefers-reduced-motion: reduce) { .part { animation: none; } }

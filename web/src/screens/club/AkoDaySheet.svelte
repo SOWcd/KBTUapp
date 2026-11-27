@@ -1,7 +1,8 @@
 <script lang="ts">
+  import { akoTeam } from '../../lib/api/akoTeam';
   // Add an interview day: the date, from–to and a length make the times, shown live as chips the manager taps off;
   // seats, interviewer and the day's Teams link. The new times show on the desk at once and go back if the server says no.
-  import { api, ApiErr, type Id, type AkoDesk, type AkoSlot } from '../../lib/api';
+  import { ApiErr, type Id, type AkoDesk, type AkoSlot } from '../../lib/api';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { aw } from '../../lib/i18n/ako';
@@ -62,7 +63,7 @@
     desk.slots.push(...temp);
     if (link) desk.days[d] = link;
     try {
-      await api.akoAddSlots(org, { day: d, times, minutes, cap, who: w || undefined, teams: link || undefined });
+      await akoTeam.akoAddSlots(org, { day: d, times, minutes, cap, who: w || undefined, teams: link || undefined });
       haptic.ok();
       onchange?.();
       close(overlay.id);

@@ -1,7 +1,8 @@
 <script lang="ts">
+  import { akoTeam } from '../../lib/api/akoTeam';
   // After a consultation: program (one tap), name, phone, the page's language → a link. Then the same sheet becomes
   // "the link is ready": the link (shown once), WhatsApp as the main action, copy under it.
-  import { api, ApiErr, type Id, type AkoDesk } from '../../lib/api';
+  import { ApiErr, type Id, type AkoDesk } from '../../lib/api';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { i18n, t, LANG_FULL } from '../../lib/i18n/index.svelte';
   import { aw } from '../../lib/i18n/ako';
@@ -43,7 +44,7 @@
     if (err.program || err.name || err.phone) { haptic.warn(); return; }
     busy = true;
     try {
-      token = (await api.akoNew(org, { program, name: n, phone: phone.trim(), lang })).token;
+      token = (await akoTeam.akoNew(org, { program, name: n, phone: phone.trim(), lang })).token;
       haptic.ok();
       onchange?.();
     } catch (e) {

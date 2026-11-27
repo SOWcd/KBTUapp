@@ -3649,9 +3649,11 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
 
     @app.get("/ako/{rest:path}", include_in_schema=False)
     def ako_page(rest: str):
-        r = page()
-        r.headers.update({"Cache-Control": "no-store", "Referrer-Policy": "no-referrer", "X-Robots-Tag": "noindex"})
-        return r
+        # the build's links are relative (./assets/...): from /ako/<secret> they'd resolve under /ako/, so the page says
+        # where it lives
+        html = (dist / "index.html").read_text(encoding="utf-8").replace("<head>", '<head><base href="/">', 1)
+        return Response(html, media_type="text/html", headers={"Cache-Control": "no-store", "Referrer-Policy": "no-referrer",
+                                                               "X-Robots-Tag": "noindex"})
 
     @app.get("/api/ako/o/{slug}")
     def ako_public(slug: str, con: Con):

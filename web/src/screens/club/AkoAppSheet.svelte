@@ -1,9 +1,10 @@
 <script lang="ts">
+  import { akoTeam } from '../../lib/api/akoTeam';
   // Studio → admissions (AKO): one applicant's package. Who it is and where the application stands, the contacts, the
   // interview (managers move or cancel it), every document of the program page by page, the team's note. One main
   // action by status in the footer; the rest in the ⋯. A reviewer reads the same sheet with nothing to press.
   import { onMount } from 'svelte';
-  import { api, type Id, type AkoDesk, type AkoDoc, type AkoFile, type AkoPackage, type AkoSlot, type AkoStatus } from '../../lib/api';
+  import { type Id, type AkoDesk, type AkoDoc, type AkoFile, type AkoPackage, type AkoSlot, type AkoStatus } from '../../lib/api';
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { i18n, t } from '../../lib/i18n/index.svelte';
@@ -52,7 +53,7 @@
 
   async function load() {
     failed = false;
-    try { const p = await api.akoPackage(org, id), first = !pkg; pkg = p; if (first) noteText = p.note; }
+    try { const p = await akoTeam.akoPackage(org, id), first = !pkg; pkg = p; if (first) noteText = p.note; }
     catch { if (!pkg) failed = true; say(t('common.error'), 'warning_3d'); }
   }
   onMount(() => { void load(); });
@@ -63,7 +64,7 @@
     if (s === 'declined' && !(await sheets.ask({ title: aw('akd.declineAsk'), text: aw('akd.declineLead'), ok: aw('akd.decline'), cancel: t('common.cancel'), danger: true }))) return;
     const was = pkg.status;
     pkg.status = s; sending = true;
-    try { await api.akoUpdate(org, id, { status: s }); haptic.ok(); onchange?.(); }
+    try { await akoTeam.akoUpdate(org, id, { status: s }); haptic.ok(); onchange?.(); }
     catch { pkg.status = was; fail(); }
     finally { sending = false; }
   }
@@ -92,7 +93,7 @@
     pkg.teams = s ? (s.teams ?? desk.days[dateInput(s.at)] ?? null) : null;
     pkg.rebook = s ? null : why;
     mode = null; sending = true;
-    try { await api.akoUpdate(org, id, s ? { slot: s.id } : { slot: null, reason: why }); haptic.ok(); onchange?.(); void load(); }
+    try { await akoTeam.akoUpdate(org, id, s ? { slot: s.id } : { slot: null, reason: why }); haptic.ok(); onchange?.(); void load(); }
     catch { pkg = was; fail(); onchange?.(); } // most likely the time was just taken: the desk's truth again
     finally { sending = false; }
   }
@@ -112,7 +113,7 @@
     if (busy) return;
     busy = f.id;
     try {
-      const { url } = await api.akoFileLink(org, f.id);
+      const { url } = await akoTeam.akoFileLink(org, f.id);
       downloadFile(location.origin + url, safe(`${name} ${aw(`ako.doc.${f.doc}`)}${all > 1 ? ` ${i + 1}` : ''}`) + (f.mime === 'application/pdf' ? '.pdf' : '.jpg'));
     } catch { fail(); }
     finally { busy = null; }
@@ -120,7 +121,7 @@
   async function getZip() {
     if (busy) return;
     busy = 'zip';
-    try { const { url } = await api.akoZipLink(org, id); downloadFile(location.origin + url, safe(name) + '.zip'); }
+    try { const { url } = await akoTeam.akoZipLink(org, id); downloadFile(location.origin + url, safe(name) + '.zip'); }
     catch { fail(); }
     finally { busy = null; }
   }
@@ -131,7 +132,7 @@
     if (!pkg || text === pkg.note) return;
     const was = pkg.note;
     pkg.note = text;
-    try { await api.akoUpdate(org, id, { note: text }); say(aw('akd.saved')); }
+    try { await akoTeam.akoUpdate(org, id, { note: text }); say(aw('akd.saved')); }
     catch { pkg.note = was; fail(); } // the typed text stays in the field: leaving it again retries
   }
 
@@ -139,14 +140,14 @@
   async function newLink() {
     if (!(await sheets.ask({ title: aw('akd.newLink'), text: aw('akd.newLinkAsk'), ok: aw('akd.make'), cancel: t('common.cancel') }))) return;
     try {
-      const { token } = await api.akoUpdate(org, id, { newLink: true });
+      const { token } = await akoTeam.akoUpdate(org, id, { newLink: true });
       if (!token) throw new Error('no token');
       link = `${location.origin}/ako/${token}`; haptic.ok();
     } catch { fail(); }
   }
   async function remove() {
     if (!(await sheets.ask({ title: aw('akd.delete'), text: aw('akd.deleteAsk'), ok: aw('akd.delete'), cancel: t('common.cancel'), danger: true }))) return;
-    try { await api.akoDrop(org, id); haptic.ok(); onchange?.(); close(overlay.id); }
+    try { await akoTeam.akoDrop(org, id); haptic.ok(); onchange?.(); close(overlay.id); }
     catch { fail(); }
   }
   const more = (e: MouseEvent) => menu(e.currentTarget as Element, [
