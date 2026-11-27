@@ -42,12 +42,15 @@ def routes() -> list[tuple[str, str, int, str, list[str]]]:
         if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         for d in fn.decorator_list:
-            if not (isinstance(d, ast.Call) and isinstance(d.func, ast.Attribute) and d.func.attr in METHODS and d.args):
+            if not (isinstance(d, ast.Call) and isinstance(d.func, ast.Attribute) and d.args
+                    and (d.func.attr in METHODS or d.func.attr == "api_route")):
                 continue
             a = d.args[0]
             path = a.value if isinstance(a, ast.Constant) else consts.get(a.id) if isinstance(a, ast.Name) else None
+            methods = [d.func.attr.upper()] if d.func.attr in METHODS else [  # api_route(path, methods=["GET", "HEAD"])
+                m.value for k in d.keywords if k.arg == "methods" for m in getattr(k.value, "elts", []) if m.value != "HEAD"]
             if isinstance(path, str):
-                out.append((d.func.attr.upper(), path, fn.lineno, fn.name, _calls(fn, mods)))
+                out += [(m, path, fn.lineno, fn.name, _calls(fn, mods)) for m in methods]
     return sorted(out, key=lambda r: r[2])
 
 
