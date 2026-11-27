@@ -754,7 +754,7 @@ def test_forum_topic_source(env):
             return peer
 
         async def get_participants(self, ent, filter=None):
-            return [NS(id=700)]
+            return [NS(id=700, bot=False), NS(id=702, bot=True)]   # an admin bot never announces
 
         async def download_media(self, m, kind):
             raise AssertionError("a dropped message is never downloaded")
@@ -769,6 +769,7 @@ def test_forum_topic_source(env):
     run(msg(30, NS(user_id=700), 5))                              # an admin, in the topic
     run(msg(31, NS(channel_id=9001), 5))                          # an anonymous admin (as the group)
     run(msg(32, NS(user_id=701), 5))                              # a member
+    run(msg(36, NS(user_id=702), 5))                              # an admin bot
     run(msg(33, NS(user_id=700), 9))                              # another topic
     run(msg(34, NS(user_id=700), 5, reply=30))                    # a reply
     run(msg(35, NS(user_id=700), None))                           # General
@@ -777,3 +778,6 @@ def test_forum_topic_source(env):
     # back to the channel: the group is forgotten, not left (stay); the channel is joined again
     assert put(2, None).status_code == 200 and mirror.wanted(con) == {"mk_news": 1}
     assert mirror.to_leave(con) == [(9001, "#9001")] and mirror.stays(con, 9001) is True
+    put(2, 5)
+    mirror.unpick(con, 9001)                                      # the userbot can't use it: never tried again
+    assert mirror.groups(con) == {} and mirror.wanted(con) == {"mk_news": 1}

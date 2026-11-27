@@ -143,6 +143,18 @@ def left(con, channel: int) -> None:
     con.execute("DELETE FROM tg_channels WHERE id = ?", (channel,))
 
 
+def unpick(con, group: int) -> None:
+    """The userbot can't use the group the club picked (not a forum, another group behind the link, it asks to be let
+    in): no more its source (Studio shows the channel again), so it is never tried again by itself."""
+    con.execute("UPDATE chats SET news_topic = NULL WHERE tg_chat_id = ?", (int(f"-100{group}"),))
+
+
+def seen(con, channel: int, msg_id: int) -> None:
+    """A source group's topic read up to here, its post taken or not (members' replies there are skipped, never kept):
+    the next sweep starts after it."""
+    con.execute("UPDATE tg_channels SET last_msg = MAX(last_msg, ?) WHERE id = ?", (msg_id, channel))
+
+
 def _source(con, channel: int) -> dict | None:
     """What a joined chat is mirrored as now: org, topic (None: a channel; 0: a group whose topic isn't picked yet)
     and the title an untitled post takes; None: not (or no more) a source."""

@@ -212,7 +212,7 @@ class Mirror:
 
     async def own(self, channel: int, m) -> bool:
         """The sender may announce in the group: sent as the group itself (an anonymous admin) or by one of its admins
-        (their ids listed at most every SWEEP_GAP, kept in memory only)."""
+        (people, not bots; their ids listed at most every SWEEP_GAP, kept in memory only)."""
         from telethon.tl.types import ChannelParticipantsAdmins, PeerChannel
         f = m.from_id
         if (ch := getattr(f, "channel_id", None)) is not None:
@@ -220,9 +220,10 @@ class Mirror:
         if (uid := getattr(f, "user_id", None)) is None:
             return False
         at, ids = self.admins.get(channel, (0.0, set()))
-        if at < time.time() - SWEEP_GAP:
+        if at < time.time() - SWEEP_GAP or uid not in ids and at < time.time() - 60:  # a new admin's first post counts
             ent = await self.client.get_input_entity(PeerChannel(channel))
-            ids = {u.id for u in await self.client.get_participants(ent, filter=ChannelParticipantsAdmins())}
+            # never a bot: our own warnings, a welcome bot naming newcomers
+            ids = {u.id for u in await self.client.get_participants(ent, filter=ChannelParticipantsAdmins()) if not u.bot}
             self.admins[channel] = (time.time(), ids)
         return uid in ids
 
@@ -283,7 +284,8 @@ class Mirror:
                     group, url = todo[0]
                     try:
                         if not await self.join_group(group, url):
-                            skip[f"#{group}"] = time.time() + 86400
+                            mirror.unpick(self.con, group)
+                            log.warning("userbot: group %d can't be a source, unpicked", group)
                     except FloodWaitError:
                         raise
                     except RPCError as exc:
@@ -325,7 +327,7 @@ class Mirror:
                 except (ValueError, TypeError):
                     return False
                 inside = isinstance(ent, Channel) and not ent.left
-                if isinstance(ent, Channel) and ent.id == group and ent.megagroup and not inside:
+                if isinstance(ent, Channel) and ent.id == group and ent.megagroup and ent.forum and not inside:
                     await self.client(JoinChannelRequest(ent))
                     now = True
         if not isinstance(ent, Channel) or ent.id != group or not ent.megagroup or not ent.forum:
@@ -352,13 +354,16 @@ class Mirror:
         await self.client(UpdateNotifySettingsRequest(InputNotifyPeer(await self.client.get_input_entity(ent)),
                                                       InputPeerNotifySettings(mute_until=2**31 - 1)))
 
-    async def first(self, ent, topic: int | None = None) -> None:
-        """A first link: the channel's (or the group topic's) last few posts of the last month (an album is one), oldest first."""
+    async def first(self, ent, topic: int | None = None, group: int = 0) -> None:
+        """A first link: the channel's (or the group topic's admins') last few posts of the last month (an album is
+        one), oldest first; a group's topic is read up to its newest message (mirror.seen)."""
         since, picked, groups = time.time() - mirror.FIRST_DAYS * 86400, [], set()
         async for m in self.client.iter_messages(ent, limit=mirror.FIRST_TAKE * 10, reply_to=topic):
+            if topic:
+                mirror.seen(self.con, group, m.id)
             if m.date.timestamp() < since:
                 break
-            if m.action is not None:
+            if m.action is not None or topic and (self.topic_of(m) != topic or not await self.own(group, m)):
                 continue
             key = m.grouped_id or -m.id
             if key not in groups:
@@ -408,11 +413,16 @@ class Mirror:
                         if not grp:
                             continue
                         if not mirror.last(self.con, channel):  # a topic just picked
-                            await self.first(ent, grp)
-                    async for m in self.client.iter_messages(ent, min_id=mirror.last(self.con, channel), reverse=True, limit=50, reply_to=grp or None):
-                        if m.date.timestamp() >= since:
-                            await self.guard(self.post(m))
-                    if grp is None:
+                            await self.first(ent, grp, channel)
+                        else:
+                            async for m in self.client.iter_messages(ent, min_id=mirror.last(self.con, channel), reverse=True, limit=50, reply_to=grp):
+                                if m.date.timestamp() >= since:
+                                    await self.guard(self.post(m))
+                                mirror.seen(self.con, channel, m.id)
+                    else:
+                        async for m in self.client.iter_messages(ent, min_id=mirror.last(self.con, channel), reverse=True, limit=50):
+                            if m.date.timestamp() >= since:
+                                await self.guard(self.post(m))
                         await self.translations(ent, channel)
                     ids = mirror.recent(self.con, channel)
                     for i in range(0, len(ids), 100):

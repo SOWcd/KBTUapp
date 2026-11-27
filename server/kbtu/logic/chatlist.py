@@ -484,7 +484,7 @@ def set_chat_org(con, v: Viewer, cid: int, oid: int | None) -> dict:
         if c["status"] == "org" and oid is None:
             raise ApiError("bad_input")  # out of the catalog and nobody's: removed from the club's list instead
         if c["org_id"] != oid:
-            con.execute("UPDATE chats SET org_id = ?, main = 0 WHERE id = ?", (oid, cid))
+            con.execute("UPDATE chats SET org_id = ?, main = 0, news_topic = NULL WHERE id = ?", (oid, cid))  # never the new club's source
             chatmod.forget(con, cid)  # the old club's switch and record don't pass to the new one
             if c["main"] and (nxt := one(con, """SELECT id FROM chats WHERE org_id = ? AND kind = 'channel' AND url NOT LIKE '%/+%'
                     ORDER BY COALESCE(members, -1) DESC LIMIT 1""", c["org_id"])):  # the old org's next public channel
@@ -503,7 +503,7 @@ def _unlink(con, c: sqlite3.Row) -> str | None:
     if c["status"] == "org" or (c["status"] == "pending" and _closed(c)):
         con.execute("DELETE FROM chats WHERE id = ?", (c["id"],))
         return c["photo"]
-    con.execute("UPDATE chats SET org_id = NULL, main = 0 WHERE id = ?", (c["id"],))
+    con.execute("UPDATE chats SET org_id = NULL, main = 0, news_topic = NULL WHERE id = ?", (c["id"],))
     return None
 
 
