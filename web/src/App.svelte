@@ -193,6 +193,11 @@
     lastTab = k;
   });
   const idle = (fn: () => void) => { if ('requestIdleCallback' in window) requestIdleCallback(fn, { timeout: 4000 }); else setTimeout(fn, 500); };
+  // the Afisha's answer is in (or failed), then an idle moment: the start's other loads wait for it, so they never
+  // compete with the first screen's request
+  let afishaIn!: () => void, afishaOver = false;
+  const afishaDone = new Promise<void>((r) => (afishaIn = r)).then(() => { afishaOver = true; });
+  const calm = () => afishaDone.then(() => new Promise<void>((r) => idle(r)));
   function prebuild() {
     const k = tabs.find((x) => !built[x] && (x !== 'club' || session.ready));
     if (session.banned) return;
@@ -517,7 +522,7 @@
     const left = () => { leftAt ||= Date.now(); };
     const back = () => {
       if (leftAt && Date.now() - leftAt >= 30_000) {
-        void loadMe(true); void loadAfisha(); loadMine(); void loadInbox(); void loadCredits();
+        void loadMe(true); void loadAfisha(); loadMine(); void loadNews(true); void loadInbox(); void loadCredits();
         if (session.channel || data.research) void loadResearch();
         void loadResearchRequests();
       }
@@ -549,10 +554,12 @@
   $effect(() => {
     const st = !!session.me?.student;
     if (st !== wasStudent) untrack(() => {
-      // known to be a student (the stored copy, the server, a sign-in): Profile's and the club tab's pages fill at once
-      loadMine();
-      void loadGallery();
-      void loadInbox(true); // staff only (it checks)
+      // known to be a student (the stored copy, the server, a sign-in): Profile's and the club tab's pages fill ahead of
+      // any tap. The news at once (StoryRow on the Afisha shows it; its own refresh joins this one); the rest after the
+      // Afisha's answer at launch (10-15 requests raced it), at once after a sign-in
+      void loadNews(true);
+      const rest = () => { loadMine(); void loadGallery(); void loadInbox(true); }; // the inbox: staff only (it checks)
+      if (afishaOver) rest(); else void calm().then(rest);
     });
     if (st && !wasStudent && booted) { moment(tgComment); moment(celebrate); } // signed in just now: his comment first
     wasStudent = st;
@@ -560,7 +567,7 @@
   function loadMine() {
     if (session.me?.bigScreen || session.me?.memberships.some((m) => ['president', 'vice', 'head'].includes(m.role))) void loadMeetups();
     for (const m of session.me?.memberships ?? []) if (may(m, 'events') || m.role === 'head') void loadMeetupSetup(m.org.id);
-    void loadFriends(); void loadMyCard(true); void loadNews(true); // StoryRow's refresh at the same launch joins it
+    void loadFriends(); void loadMyCard(true);
     const club = session.me?.memberships.find((m) => m.org.id === ui.club) ?? session.me?.memberships[0];
     if (club) { void loadStudio(club.org.id); void loadTeam(club.org.id); }
     if (session.me?.oversee) void loadRegistry();
@@ -577,7 +584,7 @@
     void loginSheet().catch(() => {}); void askSheet().catch(() => {});
     warm(chunks.person); warm(chunks.club);
     if (inTelegram && session.me && !session.me.canDm) warm(dmSheet);
-    for (const tab of tabs) void loadPage(tab).catch(() => {});
+    // (the tabs' chunks: prebuild and warmChannel fetch them in idle moments, not all at once after the first frame)
   }
   // my own comment the bot deleted in the forum channel's Telegram group (the server knows me by the signed initData,
   // not by the bot's button, startapp=cm): the first launch moment, the others wait behind it (owner, Nov 1)
@@ -683,14 +690,15 @@
     }
     const account = inTelegram ? loadMe(false, true) : Promise.resolve();
     const afisha = loadAfisha();
+    void afisha.then(afishaIn, afishaIn);
     // Warm the first event while the lists are on their way.
     warm(chunks.event);
     void account.then(() => {
       // Made together: Profile's row and its screen, ahead of any tap. Something of mine there and never answered:
       // the "show your name?" sheet once on this phone (owner, Nov 20: few open that screen, so ask at the door)
-      const credits = loadCredits();
+      const credits = calm().then(() => loadCredits()); // (both after the Afisha's answer: they raced it)
       if (session.banned || session.revoked) return;
-      void loadSupport();
+      void calm().then(loadSupport);
       requestAnimationFrame(() => setTimeout(warmNavigation));
       // A Microsoft return without a start parameter can still carry a verified pending claim.
       const microsoftReturn = !!session.me?.msPending;
