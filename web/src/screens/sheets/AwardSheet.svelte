@@ -1,5 +1,5 @@
 <script lang="ts">
-  // One award up close (SPEC §4.11), full screen over a dimmed profile (the sheet's top cut the light
+  // One award up close, full screen over a dimmed profile (the sheet's top cut the light
   // behind the medal). An achievement: the medal big with the
   // tilt light, what it takes, the way to the next level and how rare every level is; a secret one shows only its
   // hint until earned. A badge: the event it came from. The Creator's seal: what it is, in the words everyone

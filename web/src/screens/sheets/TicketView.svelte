@@ -39,7 +39,7 @@
   let { overlay, id }: { overlay: Overlay; id: Id } = $props();
 
   const e = $derived(eventById(id));
-  $effect(() => { overlay.title = t('cap.ticket'); overlay.icon = Ticket; overlay.theme = 'dark'; }); // the capsule (SPEC §8.2), dark as the scrim
+  $effect(() => { overlay.title = t('cap.ticket'); overlay.icon = Ticket; overlay.theme = 'dark'; }); // the capsule, dark as the scrim
   const my = $derived(e?.my);
   const pending = $derived(goingPending.has(id));
   const valid = $derived(!!e && e.status !== 'cancelled' && my?.status === 'going' && !!my.ticketCode);
@@ -90,7 +90,7 @@
 
   async function cancelReg() {
     if (pending) return;
-    if (e?.meeting) { // a club meeting (§2b): "can't make it" says why
+    if (e?.meeting) { // a club meeting: "can't make it" says why
       const why = await sheets.askText({ title: t('meet.whyTitle'), text: t('meet.whyText'), ok: t('meet.send'), cancel: t('common.cancel'),
         placeholder: t('meet.whyPh'), max: 140 });
       if (!why) return;
@@ -145,7 +145,7 @@
     </div>
 
     {#if valid && !my?.checkedInAt}<p class="hint">{#if data.offline}<span class="off"><WifiOff size={13} />{t('tk.offline')}</span>{/if}{t('tk.hint')}</p>{/if}
-    <!-- the receipt looks wrong (§4.3): why, and another file in its place, in the pay sheet -->
+    <!-- the receipt looks wrong: why, and another file in its place, in the pay sheet -->
     {#if valid && my?.receiptFlags?.length}<button class="pill glass glass-pill doubt" use:glass onclick={() => { close(overlay.id); sheets.pay(id); }}><TriangleAlert size={17} />{t('tk.receiptDoubt')}</button>{/if}
     <!-- the bot may not write yet: no reminders, no ticket in the chat -->
     {#if valid && !started && session.me && !session.me.canDm}<button class="pill glass glass-pill" use:glass onclick={() => askDm(id, true)}><Bell size={17} />{t('tk.dmOn')}</button>{/if}

@@ -82,7 +82,7 @@
     if (!(await sheets.ask({ title: t('team.transferAsk', { name: p.person.name }), text: t('team.transferText', { name: p.person.name }), ok: t('team.transfer'), cancel: t('common.cancel'), danger: true }))) return;
     if (await run(() => api.transfer(org, p.person.id), t('team.transferred', { name: p.person.name }), 'party_popper_3d')) { void loadMe(); close(overlay.id); }
   }
-  // a Vice+ removes at once; a Head's goes to the President and Vice (§2b)
+  // a Vice+ removes at once; a Head's goes to the President and Vice
   const remove = (p: TeamMember) => sheets.removeMember(org, p.person.id, p.person.name, !vice, (gone) => {
     if (gone) { data.team[org] = (data.team[org] ?? []).filter((y) => y.person.id !== p.person.id); close(overlay.id); }
     onchange();

@@ -1,4 +1,4 @@
-// The API contract (SPEC §6), as the server (server/kbtu) answers it: screens only ever see these shapes. JSON fields are camelCase; time is unix seconds (UTC).
+// The API contract, as the server (server/kbtu) answers it: screens only ever see these shapes. JSON fields are camelCase; time is unix seconds (UTC).
 
 export type Id = number;
 /** an archived lanyard (web awards.ts ARCHIVE_LOOKS, server logic.ARCHIVE): the creator's alone to wear */
@@ -12,7 +12,7 @@ export type OrgKind = 'club' | 'school' | 'council' | 'office' | 'app';
 export interface ApiError { error: 'unauthorized' | 'need_student' | 'forbidden' | 'not_found' | 'full' | 'closed' | 'conflict' | 'guest_list' | 'rate_limited' | 'bad_input' | 'unavailable'; message?: string }
 
 /** Image prepared by the server: WebP, thumbnail and a tiny inline blur preview. */
-/** An application to start a club (§4.6): it opens after the creator's check. `applicant` for moderators and the admin. */
+/** An application to start a club: it opens after the creator's check. `applicant` for moderators and the admin. */
 export interface ClubApplication {
   id: Id; name: string; short: string; description: string; emoji: string; cover: number; links: string[]; why: string | null;
   status: 'pending' | 'approved' | 'rejected'; reason: string | null; orgId: Id | null; createdAt: Ts; decidedAt: Ts | null; reapplyAt: Ts | null;
@@ -25,12 +25,12 @@ export interface OfficialRequest { id: Id; status: 'pending' | 'approved' | 'rej
 export interface OfficialPath { steps: Record<PathStep, boolean>; members: number; events: number; guests: number /* the most different outside guests two of those events drew */; request: OfficialRequest | null }
 export interface ClubApplicationInput { name: string; short: string; description: string; emoji: string; cover: number; why?: string; links?: string[] }
 
-/** A curated Telegram chat (§4.11): for everyone, or aimed at a school and/or a course; a tick once I've opened it. */
+/** A curated Telegram chat: for everyone, or aimed at a school and/or a course; a tick once I've opened it. */
 export interface Chat { id: Id; title: string; kind: 'channel' | 'group' | 'forum'; url: string; members: number | null; photo: string | null /* from its t.me page */; school: string | null; course: number | null; opened: boolean;
-  org?: OrgRef | null /* whose chat it is (PLAN 86) */; section: ChatSection | null /* what it's for; null: not sorted yet */; sectionAi: boolean /* the AI's section, no one checked (Admin) */ }
+  org?: OrgRef | null /* whose chat it is */; section: ChatSection | null /* what it's for; null: not sorted yet */; sectionAi: boolean /* the AI's section, no one checked (Admin) */ }
 export type ChatSection = 'study' | 'reviews' | 'admission' | 'schools' | 'clubs' | 'fun';
 export const CHAT_SECTIONS: ChatSection[] = ['study', 'reviews', 'admission', 'schools', 'clubs', 'fun'];
-/** A club's or school's own chat on its page (PLAN 86): `main` its one channel with the Subscribe button; a closed one
+/** A club's or school's own chat on its page: `main` its one channel with the Subscribe button; a closed one
  *  (an invite link) shows without a way in, `url` null. */
 export interface OrgChat { id: Id; title: string; kind: Chat['kind']; members: number | null; about: string | null; photo: string | null; closed: boolean; main: boolean; url: string | null }
 /** The same in Studio: the invite link too, and whether our bot keeps the card. */
@@ -49,7 +49,7 @@ export interface ChatTree { org: OrgRef; groups: number; kept: number; last: Ts 
 export interface SwearRow { person: PersonRef | null; warns: number; mutes: number; stems: string[] }
 export interface Chats { forYou: Chat[]; all: Chat[]; pending?: (Chat & { at: Ts })[] /* admins and moderators: suggested, waiting */ }
 
-/** DMP's view of a club member (§3, §4.13): contacts only of Presidents and Vices. */
+/** DMP's view of a club member: contacts only of Presidents and Vices. */
 export interface DmpPerson { person: PersonRef; fullName: string; studentId: string; course: number | null; school: string | null; username: string | null; email: string | null; phone: string | null }
 /** A club in DMP's registry with its live numbers for this month. */
 export interface RegistryOrg { org: OrgRef; members: number; president: DmpPerson | null; month: { events: number; registrations: number; came: number } }
@@ -58,7 +58,7 @@ export interface RosterMember extends DmpPerson { role: OrgRole; joinedAt: Ts; l
 export interface SentMemo { org: OrgRef; sentAt: Ts; by: string | null; events: { id: Id; title: string; startsAt: Ts }[] }
 export interface RegistryHit extends DmpPerson { clubs: { org: OrgRef; role: OrgRole }[] }
 
-/** A comment under a post or an event (§4.10): a student (short name, §3) or the club itself. */
+/** A comment under a post or an event: a student (short name) or the club itself. */
 export interface Comment { id: Id; person: PersonRef | null; org: OrgRef | null; body: string; at: Ts; mine: boolean; canDelete: boolean;
   replyTo?: { id: Id; name: string; body: string } | null /* the comment it answers, quoted while still up */ }
 /** A thread: oldest first; the club's Head+ moderate it and may write as the club (`asOrg`). */
@@ -141,7 +141,7 @@ export interface TgComment { body: string; link: string | null; student: boolean
 export interface AdminStats { online: number; day: number; week: number; month: number; users: number; students: number; newToday: number; studentsToday: number;
   days: { day: number; active: number; new: number; students: number }[];
   notificationCounts?: { category: keyof Settings; sent: number; turnedOff: number }[];
-  /** the translator (PLAN 9): Cloudflare's keys set, translated today (UTC), the last error */
+  /** the translator: Cloudflare's keys set, translated today (UTC), the last error */
   ai?: { on: boolean; today: number; error: string | null };
   today?: number /* opened the app today so far (the visits log) */;
   /** Microsoft-confirmed students by the month their account was made ('YYYY-MM'; '' unknown), counts only; msCutoff the MS_AGE_CUTOFF in force (MM-DD) or null */
@@ -174,7 +174,7 @@ export interface ReportItem { target: 'comment' | 'post' | 'event' | 'user' | 'p
 
 /** DMP's view of a leaders meeting: per club, who said yes, who no, who hasn't answered. */
 export interface LeadersAnswer { org: OrgRef; people: { person: PersonRef; fullName: string; role: OrgRole; answer: 'yes' | 'no' | 'none' }[] }
-/** A club meeting's person for its Head+ (§2b): the answer ("no" with why), whether they came. */
+/** A club meeting's person for its Head+: the answer ("no" with why), whether they came. */
 export interface MeetingAnswer { person: PersonRef; fullName: string; role: OrgRole; answer: 'yes' | 'no' | 'none'; note: string | null; came: boolean;
   probation?: boolean }
 
@@ -240,16 +240,16 @@ export interface Org extends OrgRef {
   joinQuestions?: (RoundQuestion & { id: Id })[]; // the club's own questions for them (as a round's; id: the position)
   membersHidden: boolean;       // the club hides its member list from outsiders
   leaders?: Member[];           // President and Vice, from api.org only
-  chats?: OrgChat[];            // its Telegram chats, the main channel first (PLAN 86), from api.org only
+  chats?: OrgChat[];            // its Telegram chats, the main channel first, from api.org only
   myRequest: 'pending' | 'rejected' | null; // my application; rejected = declined < 30 days ago, no new one yet
   round?: { id: Id; closesAt: Ts; applied: boolean; quick?: boolean } | null; // a recruitment round taking applications (casting), whether I applied; quick: nothing to answer or pick
   subscribed: boolean;
   myRole: OrgRole | null;
-  myTitle?: string | null;      // the club's own name for my role (§2b)
+  myTitle?: string | null;      // the club's own name for my role
   myTitleKk?: string | null; myTitleEn?: string | null; // and in Kazakh, English (perms.inLang)
-  myRights?: Right[];           // what I may do in it (§2)
+  myRights?: Right[];           // what I may do in it
   canBroadcast: boolean;
-  canOversee?: boolean;         // DMP: may hold a leaders meeting (§4.10)
+  canOversee?: boolean;         // DMP: may hold a leaders meeting
   top?: boolean;                // a student initiative at the Ascent's top: an official club's tools, no ✓ (server clubs.py)
   awards?: OrgAward[];          // KBTU Awards it won, newest first (its card's plaque)
   category: OrgCategory | null; // its interest (the Clubs tab's tiles), set by its President or Vice
@@ -259,11 +259,11 @@ export interface Org extends OrgRef {
   friendsN: number;             // how many there are
 }
 
-/** The club's own profile (Vice+, SPEC §2): only what is sent changes. */
+/** The club's own profile (Vice+): only what is sent changes. */
 /** `logoId`: an upload of mine (uploadPhoto); null takes the logo off. */
 export interface OrgPatch { category?: OrgCategory | null; name?: string; short?: string; emoji?: string; cover?: number; description?: string; links?: string[]; recruiting?: boolean; joinQuestions?: RoundQuestion[]; membersHidden?: boolean; logoId?: Id | null; slug?: string; abbr?: string } // slug: the President's (A5)
 
-/** A person as other students see them (§4): the nick if they have one, else the short name, and with a nick the short
+/** A person as other students see them: the nick if they have one, else the short name, and with a nick the short
  *  name too (`realName`: a nick is a display name, not a mask); their photo (their own or Telegram's); the founder
  *  mark. Organizers get the full name too: lists' `fullName`. */
 /** Someone in a club as anyone sees them: name and role, never the @username (api.team is the club's own) */
@@ -329,8 +329,8 @@ export interface StudentProfile {
   undo?: { school?: string | null }; // spent, yet the value before can come back once, free
 }
 
-/** A club role: the level (what one may do, §2) and the club's own name for it, if it has one (§2b). */
-/** A club role's rights (SPEC §2): door (check people in), events, posts (news, replies as the club), people (tags, probation),
+/** A club role: the level (what one may do) and the club's own name for it, if it has one. */
+/** A club role's rights: door (check people in), events, posts (news, replies as the club), people (tags, probation),
  *  team (applications, invites, roles, removing), money (price, Kaspi), profile (the club's page). */
 export type Right = 'door' | 'events' | 'posts' | 'people' | 'casting' | 'team' | 'money' | 'memo' | 'profile' | 'reports';
 export interface Membership { org: OrgRef; role: OrgRole; title?: string | null; titleKk?: string | null; titleEn?: string | null; rights?: Right[]; oversee?: boolean; channel?: { title: string; mirror: boolean } | null; storiesLocked?: true }  // storiesLocked: a writer of a student initiative below the Ascent's collab (server clubs.stories_open); rights, oversee (DMP staff there): in my own memberships; channel (the main chat, mirror: its posts reach the news): to Vice+ only
@@ -369,7 +369,7 @@ export interface Me {
   no: number | null;            // the card number: the order of first KBTU sign-in, the Creator's 0; null for guests
   referrals: { count: number; code: string } | null; // students my invite link brought (signed in with KBTU), my badge's code for the link
   evRef?: string | null;        // "My link"'s code for an event (ev_<id>_<code>): its own, never the badge's; null for guests
-  qr: string | null;            // my badge QR, "<id>_<code>" (§4.4): a random code, so nobody can make up another's; null for guests
+  qr: string | null;            // my badge QR, "<id>_<code>": a random code, so nobody can make up another's; null for guests
   wallet?: string;              // my badge as an Apple Wallet pass (server/kbtu/wallet.py): its link; absent: off
   oversee: boolean;             // DMP staff: the registry in Studio with DMP picked
   checkin?: MyCheckin | null;   // my running check-in: the capsule
@@ -394,8 +394,8 @@ export interface Me {
   frame: string | null;
   /** "Delete my account" asked: when it goes (a week later); null: not asked, or changed my mind. */
   deleteAt: Ts | null;
-  city: { name: string; hidden: boolean } | null;  // from the club's roster (PLAN 95); hidden: off my profile
-  /** the clubs' rosters (PLAN 95): welcome = listed under my Telegram username, Microsoft sign-in still to do (clubs and
+  city: { name: string; hidden: boolean } | null;  // from the club's roster; hidden: off my profile
+  /** the clubs' rosters: welcome = listed under my Telegram username, Microsoft sign-in still to do (clubs and
    *  positions only); joined = just joined (a toast, then rosterSeen); ask = listed under another name */
   roster: { welcome?: RosterSpot[]; joined?: { org: OrgRef; title: string | null }[]; ask?: (RosterSpot & { id: Id; dept: string | null })[] } | null;
   unlocked: { code: string; level: number }[]; // new achievement levels the app hasn't celebrated yet (the unlock moment)
@@ -410,8 +410,8 @@ export interface MyRegistration {
   holdUntil: Ts | null;
   checkedInAt: Ts | null;
   receipt: 'none' | 'accepted' | 'rejected';
-  receiptFlags?: string[];      // why my receipt looks wrong, until the organizer looks at it (§4.3): another file may replace it
-  free?: boolean;               // one of a paid event's free seats for 1st-year students (§4.3)
+  receiptFlags?: string[];      // why my receipt looks wrong, until the organizer looks at it: another file may replace it
+  free?: boolean;               // one of a paid event's free seats for 1st-year students
   rating?: number | null;       // came: my rating after the event
   ratingDismissed?: boolean;   // the in-app prompt was dismissed for this event
   ics?: string | null;          // going: the signed calendar file's path
@@ -458,18 +458,18 @@ export interface EventCard {
   onlineUrl: string | null;     // its meeting link (server-checked https; any host when typed by hand, so its host is shown)
   cover: Media | null;          // photo or poster; null → emoji + colour
   video?: Video | null;         // a short vertical video the Feed plays (ready ones only; the editor also sees one being compressed)
-  slides: Media[];              // photos after the cover, swiped sideways (PLAN 33)
+  slides: Media[];              // photos after the cover, swiped sideways
   emoji: string | null;
   color: string | null;
   tint: string;                 // sheet tint
   seats: number | null;         // null = no limit
   taken: number;                // hold + going
-  visibility?: 'public' | 'members' | 'leaders'; // members: the club's team only; leaders: DMP's meeting of club leaders (§4.10)
+  visibility?: 'public' | 'members' | 'leaders'; // members: the club's team only; leaders: DMP's meeting of club leaders
   leadersFrom?: 'president' | 'vice' | 'head' | null; // a leaders meeting: the lowest role invited
-  meeting?: boolean;            // a club meeting (§2b): team-only, the whole club or one tag expected to answer and come
+  meeting?: boolean;            // a club meeting: team-only, the whole club or one tag expected to answer and come
   firstYear: boolean;
   school?: string;              // a school's own event: its slug; only that school's students see it (server seats.school_ok)
-  needsPhone?: boolean;         // sign-up asks for the phone if none is kept (PLAN 71)
+  needsPhone?: boolean;         // sign-up asks for the phone if none is kept
   form?: Question[] | null;     // the event's own questions at sign-up, answered in the same tap
   santa?: { drawn: boolean; budget?: number }; // Secret Santa is on (server santa.py): sign-up asks a wishlist; drawn: sign-up is closed; budget: the gift's, tenge (the deadline is regUntil)
   externalUrl: string | null;
@@ -486,7 +486,7 @@ export interface EventCard {
   saved: boolean;
   friends: PersonRef[];         // friends going, privacy-filtered; empty for guests
   questions?: number;           // Studio, the club's Head+: students' comments since the club last answered
-  toCheck?: number;             // Studio, the club's Head+: receipts that look wrong and nobody looked at yet (§4.3)
+  toCheck?: number;             // Studio, the club's Head+: receipts that look wrong and nobody looked at yet
   savedBy?: number;             // Studio, the club's Head+: how many saved it ("Save" with a purpose)
   needsVolunteers?: number | null;  // how many volunteers it asks for; null: none
   volunteersAsked?: number;     // Studio, the organizers: applications waiting for an answer
@@ -570,11 +570,11 @@ export interface EventFull extends EventCard {
   cohost?: { org: OrgRef; status: 'pending' | 'accepted' | 'declined' } | null;  // the host's Head+: the invited club
   badgeName: string | null;
   photos: AlbumPhoto[];          // the guests' album (students only), oldest first by when each was taken (EXIF), else uploaded
-  wideVideo?: Video | null;      // a horizontal muted clip behind the sheet (PLAN 32)
+  wideVideo?: Video | null;      // a horizontal muted clip behind the sheet
   doc?: EventDoc | null;         // its rules (a PDF the club attached), as its pages' pictures
   canAddPhotos: boolean;        // came (checked in) or the team, from the start until a week after the end, room left
   updates: EventUpdate[];       // the organizer's updates, newest first (pinned under the title)
-  comments: number;             // questions and comments under the event (§4.10)
+  comments: number;             // questions and comments under the event
   commentsOn: boolean;
   discuss: string | null;       // its channel post's comments in Telegram, where the talk goes when there is one
   myRating: number | null;      // 1..5, my one-tap rating after the event
@@ -589,7 +589,7 @@ export interface RatingSummary { avg: number | null; count: number; dist: number
 export interface EventUpdate { id: Id; body: string; at: Ts; canDelete: boolean }
 
 /** What the Studio editor sends (create or edit). */
-/** Casting (PLAN "Casting"): a club's recruitment round. Departments are the club's tags; up to six questions of its own. */
+/** Casting: a club's recruitment round. Departments are the club's tags; up to six questions of its own. */
 export type RoundKind = 'short' | 'long' | 'one' | 'many' | 'link';
 export interface RoundQuestion { id?: Id; kind: RoundKind; text: string; options?: string[] | null; required: boolean; tagId?: Id | null }
 export interface RoundDepartment { tagId: Id; name?: string; color?: string; about: string; places?: number | null }
@@ -620,7 +620,7 @@ export interface RoundSlot { id: Id; startsAt: Ts; minutes: number; capacity: nu
    *  `waiting` still queued, the rest failed: no DMs, blocked), would reach `left` more */
   call?: { told: number; waiting: number; tried: number; left: number; opensAt?: number } }
 
-/** What a club asks DMP for in its weekly memo (PLAN "Memo in one tap"; the server writes DMP's template from it).
+/** What a club asks DMP for in its weekly memo (the server writes DMP's template from it).
  *  Every request is optional; dates are the form's 'YYYY-MM-DD', times 'HH:MM'. */
 export type MemoSide = 'tole' | 'kazybek' | 'abylai' | 'turgut' | 'karimov';  // KBTU's entrances; the last two the dorm's gates
 export interface MemoSlot { date?: string; from?: string; to?: string }
@@ -691,7 +691,7 @@ export interface EventInput {
   /** A format's own crop ({focus}) or its own photo ({id, focus}) over the cover; a format's null: back to the cover;
    *  left out keeps them. */
   coverFormats?: Partial<Record<CoverFormat, { id?: Id | null; focus?: [number, number] | null } | null>>;
-  /** Paid (§4.3): tenge, null = free; with the name on the Kaspi receipt and the Kaspi phone. Only an official club's
+  /** Paid: tenge, null = free; with the name on the Kaspi receipt and the Kaspi phone. Only an official club's
    *  Vice+ send these, and they are fixed once someone has paid; left out keeps them. */
   price?: number | null;
   payToName?: string | null;
@@ -701,11 +701,11 @@ export interface EventInput {
   memo?: MemoAsks | null;
 }
 
-/** One registration as the organizer sees it (§3: full name for organizers). */
+/** One registration as the organizer sees it (full name for organizers). */
 /** An event's own question at sign-up (server clean_questions): text, or a choice of 2-8 options. */
 export interface Question { label: string; kind: 'text' | 'choice'; options?: string[]; required: boolean }
 export interface Attendee { answers?: { q: string; a: string }[] | null; person: PersonRef; by?: PersonRef | null /* who brought them (a member): their link or "Bring a friend" */; byCame?: boolean /* came, checked in by someone else than who brought them */; fullName: string; status: RegStatus; checkedInAt: Ts | null; walkIn: boolean; manual: boolean; at: Ts; free?: boolean; receipt?: AttendeeReceipt | null; previousReceipts?: AttendeeReceipt[] }
-/** A paid event's receipt (§4.3) as the organizer sees it: what OCR read off it (null: not read), `flags` from the
+/** A paid event's receipt as the organizer sees it: what OCR read off it (null: not read), `flags` from the
  *  server's checks ('duplicate' the same file or receipt number came before, 'amount_short', 'recipient_mismatch',
  *  'too_early' older than the event, 'unreadable'); `reviewed` by the app (`auto`) or an organizer. Flagged ones first. */
 /** why the organizer rejected a receipt; the bot names it to the student (server seats.REJECT_WHY) */
@@ -714,7 +714,7 @@ export interface AttendeeReceipt {
   id: Id; flags: string[]; reviewed: boolean; auto: boolean; at: Ts;
   amount?: number | null; no?: string | null; sender?: string | null; recipient?: string | null; paidAt?: Ts | null;
 }
-/** The door list for check-in by name (Member+, short names only, §3): going people, the ones still to come first.
+/** The door list for check-in by name (Member+, short names only): going people, the ones still to come first.
  *  `manual` = checked in by hand (no QR). */
 /** a row of the organizers' list at the door (server guests.door_list): by name, not in the app; walkIn: added at the door */
 export interface ListGuest { key: string; name: string; adult: boolean | null; came: boolean; at?: Ts | null; team?: string | null; walkIn?: boolean }
@@ -722,22 +722,22 @@ export interface ListGuest { key: string; name: string; adult: boolean | null; c
  *  repeated rows skipped, bad rows (1-based, why), app seats the first list ends, old list rows a corrected file drops */
 export interface GuestListResult { rows: number; inApp: number; onList: number; dupes: number; bad: { row: number; why: 'name' | 'student_id' | 'adult' | 'username' | 'long' }[]; badCount: number; dropped: number; removed: number }
 export interface DoorPerson { person: DoorRef; checkedInAt: Ts | null; walkIn: boolean; manual: boolean; adult?: boolean | null; team?: string | null }
-/** An application to join, as the club's Vice+ see it (§4.5): enough to write to the person first. */
-/** Someone in a club, as its own team sees them (§3: full names and @usernames inside the team). */
+/** An application to join, as the club's Vice+ see it: enough to write to the person first. */
+/** Someone in a club, as its own team sees them (full names and @usernames inside the team). */
 export interface TeamMember {
   person: PersonRef; fullName: string; username: string | null; role: OrgRole; joinedAt: Ts;
   quiet?: boolean;              // Vice+: 60 days without a check-in
-  roleId?: Id | null; title?: string | null; titleKk?: string | null; titleEn?: string | null; titleColor?: string | null; // the club's own role (§2b)
+  roleId?: Id | null; title?: string | null; titleKk?: string | null; titleEn?: string | null; titleColor?: string | null; // the club's own role
   tags?: Id[];                  // the club's tags on them
-  depts?: Id[];                 // their departments: those of the tags marked department (PLAN 47; a person may be in several)
+  depts?: Id[];                 // their departments: those of the tags marked department (a person may be in several)
   probation?: boolean; // for the club's Head+ and the person
   brought?: number;    // Head+: came by their link to the club's events in 60 days
 }
 
-/** Team 2.0 (§2b): the club's own roles (a name on a level), tags, and for Vice+ the open removal requests and bans. */
+/** Team 2.0: the club's own roles (a name on a level), tags, and for Vice+ the open removal requests and bans. */
 export type ClubLevel = 'member' | 'head' | 'vice';
 export interface ClubRole { id: Id; name: string; nameKk?: string | null; nameEn?: string | null; src?: 'ru' | 'kk' | 'en'; hand?: string[]; translating?: boolean; color: string; level: ClubLevel; rights: Right[]; count: number; fixed?: boolean /* Vice, Head: official */ }  // level: its highest right's
-export interface ClubTag { id: Id; name: string; color: string; count: number; department?: boolean } // department: one per person (PLAN 47)
+export interface ClubTag { id: Id; name: string; color: string; count: number; department?: boolean } // department: one per person
 export interface RemovalRequest { id: Id; person: PersonRef; fullName: string; by: PersonRef | null; ban: boolean; note: string; at: Ts; canDecide: boolean }
 export interface ClubBan { person: PersonRef; fullName: string; at: Ts }
 export interface TeamSetup { roles: ClubRole[]; tags: ClubTag[]; myDepts?: Id[]; inDept?: boolean; removals?: RemovalRequest[]; bans?: ClubBan[]; teamLink?: { expiresAt: Ts } | null }
@@ -753,10 +753,10 @@ export type DoorAudience = 'guests' | 'team' | 'both';
 export interface TeamRow { key: string; name: string; group: string | null; at: Ts | null; manual: boolean; app: boolean }
 export interface TeamList { session: Id | null; audience: DoorAudience; rows: TeamRow[]; other: { name: string; at: Ts }[]; open: boolean }
 
-/** Door scanner answer (§4.4): a ticket or a badge QR. `walkIn` = registered at the door by their badge,
+/** Door scanner answer: a ticket or a badge QR. `walkIn` = registered at the door by their badge,
  *  `late` = minutes after the start. */
 export type CheckinResult =
-  | { result: 'ok' | 'already' | 'flagged' | 'ask_org' /* flagged: a receipt nobody checked, not let in yet (its organizer admits after a look); ask_org: the same, said to anyone else */; person: DoorRef; at: Ts; came: number; going: number; walkIn: boolean; late: number; adult?: boolean | null; flagged?: boolean /* a receipt to look at (§4.3) */ }
+  | { result: 'ok' | 'already' | 'flagged' | 'ask_org' /* flagged: a receipt nobody checked, not let in yet (its organizer admits after a look); ask_org: the same, said to anyone else */; person: DoorRef; at: Ts; came: number; going: number; walkIn: boolean; late: number; adult?: boolean | null; flagged?: boolean /* a receipt to look at */ }
   | { result: 'cancelled' | 'not_found' | 'not_open' | 'closed' | 'paid' };
 
 export interface ClassItem { weekday: number; begins: string; ends: string; subject: string; kind: string | null; room: string | null; teacher: string | null;
@@ -786,7 +786,7 @@ export interface Post {
   canDelete: boolean;           // the club's Head+ (or the admin) may take it down
   canEdit: boolean;             // the club's Head+: edit it, pin it
   editedAt: Ts | null;          // the text, label or photo changed after it went out
-  /** a post of the club's Telegram channel (PLAN 86 part 2): Telegram's views and reactions instead of ours, comments
+  /** a post of the club's Telegram channel: Telegram's views and reactions instead of ours, comments
    *  there; `media`: a video plays in Telegram's post widget (News), a file is only linked to; a tap opens the post in Telegram */
   tg?: { url: string; views: number | null; reactions: [string, number][]; media: 'video' | 'file' | null } | null;
   /** a channel's post in the other languages: the channel's own (folded posts, its comments) or our AI's; applied by api/client.ts */
@@ -817,7 +817,7 @@ export interface Achievement {
   parts?: { posts: number; events: number }; // Chief activist, visible only to the medal owner
   season?: string;              // season medals: '2026-fall'
   at?: Ts | null;               // when its current level was reached (null: before the dates were kept)
-  now?: number;                 // the streak only: weeks in a row up to this one (SPEC §4.11)
+  now?: number;                 // the streak only: weeks in a row up to this one
   reason?: string;              // The public inscription on a contribution medal
   org?: OrgRef | null;          // Club founder only: the club founded (to those who see someone's clubs)
   /** a badge with variants (the initiation's: guest, volunteer, performer): mine, the highest I hold, its medal in `emoji` */
@@ -835,7 +835,7 @@ export interface BadgeSession { id: Id; title: string; at: Ts; done: number }
 export interface Badge { eventId: Id; title: string; org: OrgRef; emoji: string; color: string; at: Ts }
 export interface Awards { achievements: Achievement[]; badges: Badge[] }
 
-/** Profile card (§4.12) — what the viewer is allowed to see. */
+/** Profile card — what the viewer is allowed to see. */
 export interface RosterSpot { org: OrgRef; title: string | null; role: OrgRole }
 /** "Yes, it's me" on a roster row under another name, for the club's President (or DMP) to confirm */
 export interface RosterRequest { id: Id; org: OrgRef; person: PersonRef; name: string; sheetName: string | null; title: string | null; role: OrgRole; dept: string | null }
@@ -880,11 +880,11 @@ export interface PersonCard extends PersonRef {
   blocked?: boolean;            // I blocked them (the card's Unblock)
 }
 
-/** A friend, or a person in a friend request, on the Friends page. `fullName`: the full one for friends only (§3), the
+/** A friend, or a person in a friend request, on the Friends page. `fullName`: the full one for friends only, the
  *  short one in a request. `at`: friends since, or when the request was made. `streak`: a friend's current weeks in a
  *  row (0: none; never on a request). */
 export interface FriendRow { person: PersonRef; fullName: string; course: number | null; school: string | null; at: Ts; streak?: number }
-/** The Friends page (§4.7): requests both ways, and the coming events friends go to (only those who let friends see
+/** The Friends page: requests both ways, and the coming events friends go to (only those who let friends see
  *  it; each card's `friends` says who). A quietly declined request of mine stays in `outgoing` for 30 days. */
 /** People you may know: a clubmate who turned it on too; `clubs` is how many we share, never which (server logic/pymk.py). */
 export interface Suggestion { person: PersonRef; course: number | null; school: string | null; clubs: number }

@@ -3,7 +3,7 @@
   // The door scanner (Member+, full screen): our own camera on top (so the screen around it
   // is ours: the result, the count, haptics, without a popup closing after each scan), Telegram's QR popup when the
   // camera is refused or missing, the typed code anywhere. It takes a
-  // ticket or a badge QR (§4.4): a badge registers a person who didn't sign up, on a free event, at the door.
+  // ticket or a badge QR: a badge registers a person who didn't sign up, on a free event, at the door.
   // Each answer shows big — a name and avatar to compare with the face at the door. After a good scan the
   // camera comes back by itself so a queue moves fast; an error waits for a tap. A club's own event has no tickets
   // (`names`): it opens on the people expected, marked by name ("Who came").
@@ -101,7 +101,7 @@
   const board = $derived(session.me?.role === 'admin' || !!session.me?.memberships.some((m) => m.org.id === e?.org.id && (m.role === 'president' || m.role === 'vice')));
   // one place for helpers (CrewSheet): the helper's QR and the people named, with what each may do
   function addHelper() { haptic.tap(); sheets.crew(id); }
-  // the capsule's title, live as the door fills up: "Scanner · 12 of 44" (SPEC §8.2)
+  // the capsule's title, live as the door fills up: "Scanner · 12 of 44"
   $effect(() => { overlay.title = qr ? t('mk.title') : names ? (count ? t('cap.marks', count) : t('door.title')) : count ? t('cap.scanner', count) : t('studio.scanner'); overlay.icon = ScanLine; });
 
   // one of our own QRs (the door's own check-in QR, a club's link...) read by this scanner: opened as if tapped, so a
@@ -131,7 +131,7 @@
   }
   const scan = () => scanQr(t('scan.prompt'), (text) => { void check(text); return true; });
 
-  // ---- no QR (a dead phone): find them among the people going and check in by hand (§4.4) ----
+  // ---- no QR (a dead phone): find them among the people going and check in by hand ----
   let byName = $state(untrack(() => names));
   const { state: doorRoster, load: loadPeople } = readState(() => api.door(id));
   const people = $derived(doorRoster.value);

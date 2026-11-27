@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Students who say they're the one in DMP's list under another name (PLAN 95): the club's President confirms (DMP for
+  // Students who say they're the one in DMP's list under another name: the club's President confirms (DMP for
   // a club without one). The sheet's name beside the KBTU account's: the President knows their people. Confirmed: joined
   // with the row's data; not them: the row stays for the right person.
   import { api, type RosterRequest } from '../../lib/api';

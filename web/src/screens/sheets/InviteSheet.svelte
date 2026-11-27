@@ -1,5 +1,5 @@
 <script lang="ts">
-  // "Bring a friend" (SPEC §4.7): my friends and where they stand with this event. "Invite" has the bot bring them our
+  // "Bring a friend": my friends and where they stand with this event. "Invite" has the bot bring them our
   // card ("<name> invites you to <title>" + a button), once per friend; if they sign up, the credit is mine. No friends
   // yet: the way to add some.
   import Mail from '@lucide/svelte/icons/mail';

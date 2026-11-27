@@ -51,7 +51,7 @@
   const studio = () => { haptic.tap(); openAsCreator(org); sheets.studio(org.id, true); };
   const newEvent = () => { haptic.tap(); sheets.editor(org.id, undefined, true); };
 
-  // ---- the ✓ (§4.6): turning it on congratulates the President through the bot, as DMP's switch does. The switch
+  // ---- the ✓: turning it on congratulates the President through the bot, as DMP's switch does. The switch
   // answers at once and steps back on a "no"
   let official = $state<boolean | null>(null); // while the question is up or the save is on its way
   async function setOfficial(x: AdminOrg, on: boolean) {
@@ -96,7 +96,7 @@
     ];
   };
 
-  // ---- the President's one-time link (§2): our bot's card, one person, once, 7 days; or the same as a QR, to show face
+  // ---- the President's one-time link: our bot's card, one person, once, 7 days; or the same as a QR, to show face
   // to face (he goes round the schools' presidents). Each card and each QR is a fresh link
   let qr = $state<string | null>(null); // '' while its token is on the way
   function sendLink() {

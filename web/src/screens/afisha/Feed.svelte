@@ -107,7 +107,7 @@
         {:else if e.video?.poster}<img src={e.video.poster.url} alt="" decoding="async" loading="lazy" class="still" />
         {:else if e.cover && e.slides?.length}
           {@const c = coverFor(e.cover, 'feed')!}
-          <!-- the cover (the Feed's own crop or photo of it) and its photos, swiped sideways like a TikTok photo post (PLAN 33) -->
+          <!-- the cover (the Feed's own crop or photo of it) and its photos, swiped sideways like a TikTok photo post -->
           <div class="strip" onscroll={(s) => (pic[e.id] = Math.round(s.currentTarget.scrollLeft / s.currentTarget.clientWidth))}>
             <img src={c.url} alt="" decoding="async" loading={i < 2 ? 'eager' : 'lazy'} style:object-position={focusPos(c)} />
             {#each e.slides as p (p.id)}<img src={p.url} alt="" decoding="async" loading="lazy" />{/each}
@@ -181,7 +181,7 @@
   .feed::-webkit-scrollbar { display: none; }
   .x { position: absolute; top: calc(var(--safe-top) + var(--s-3)); left: var(--s-3); display: flex; }
   /* the slide is role=button and :active reaches it from every rail button inside, so base.css's press give scaled the
-     whole screen to .965 at each Going / Save / Share and the Feed re-snapped 12 px (B3's jump, PLAN 81): it never gives */
+     whole screen to .965 at each Going / Save / Share and the Feed re-snapped 12 px (B3's jump): it never gives */
   .slide { position: relative; height: 100%; scroll-snap-align: start; scroll-snap-stop: always; overflow: hidden; color: var(--on-accent); background: var(--tint); transform: none; opacity: 1; }
   .bg { position: absolute; inset: 0; }
   .bg img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.06); }

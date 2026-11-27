@@ -7,7 +7,7 @@
 </script>
 
 <script lang="ts">
-  // Indoor routes on the main map (PLAN item 22): "How to get there" (from a room or an entrance to a
+  // Indoor routes on the main map: "How to get there" (from a room or an entrance to a
   // room: fastest by stairs, by lift, another staircase), "How do I get out?" (the exits open now, nearest first), the
   // way step by step, floor by floor. (The graph's editor went with its save route: the graph is edited in the repo.)
   import { untrack } from 'svelte';

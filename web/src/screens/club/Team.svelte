@@ -1,10 +1,10 @@
 <script lang="ts">
-  // My club → Team, a sheet from its row (SPEC §2, §2b): the club's roster for its own team, highest role first (full names inside the team, §3),
+  // My club → Team, a sheet from its row: the club's roster for its own team, highest role first (full names inside the team),
   // each with the club's own role name and its tags. A tap opens the person's card; for someone below me it opens their
   // own sheet instead (MemberSheet, the card is its first row): Vice+ give a role (a level or one of the club's own) and remove;
   // Head+ put on probation and ask the President and Vice to remove someone. On top for Vice+: the
   // removal requests. Tags (and probation) filter the list; "Roles and tags" makes the club's own. The club is the one
-  // picked in My club (ui.club). Vice+ also get the club's invite link (§4.5): the link icon opens two cards, the
+  // picked in My club (ui.club). Vice+ also get the club's invite link: the link icon opens two cards, the
   // team's link for everyone (7 days, one per club, shared again until turned off) and a one-time one. Anyone but the
   // President can leave.
   import { api, ApiErr, type RemovalRequest, type TeamMember, type TeamSetup } from '../../lib/api';
@@ -224,7 +224,7 @@
     {/if}
 
     {#if setup?.removals?.length}
-      <!-- §2b: a Head's request; the President or a Vice above them decides -->
+      <!-- a Head's request; the President or a Vice above them decides -->
       <Group caption={t('team.removals')}>
         {#each setup.removals as q (q.id)}
           <Row dense title={withNick(q.fullName, q.person)}

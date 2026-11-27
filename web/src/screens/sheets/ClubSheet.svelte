@@ -1,5 +1,5 @@
 <script lang="ts">
-  // A club, from anywhere its name or logo shows (SPEC §8.3: one sheet for "Subscribe" and "Join"): who they
+  // A club, from anywhere its name or logo shows (one sheet for "Subscribe" and "Join"): who they
   // are, their socials, what's coming up. Subscribe and Apply answer at once (optimistic, data.svelte.ts); a
   // club can be written to: a DM to its President (lib/clubdm; in the footer once applications are closed). Its Vice+ change
   // the logo and the rest by tapping the logo (it is looked for here, not in Studio).
@@ -66,10 +66,10 @@
   const o = $derived(data.orgs.find((x) => x.id === id) ?? data.small.find((x) => x.id === id) ?? fetched);
   const eventRating = $derived(fetched ? fetched.eventRating : o?.eventRating);
   const leaders = $derived(fetched?.leaders ?? []); // the catalog's copy has none
-  // its Telegram chats (PLAN 86), the main channel first (the server's order), all the same rows; a closed one has no way in
+  // its Telegram chats, the main channel first (the server's order), all the same rows; a closed one has no way in
   const chats = $derived(fetched?.chats ?? []);
   const tap = (url: string) => { haptic.tap(); openLink(url); };
-  let raw = $state(false); // the description as typed, not the AI's translation (PLAN 9)
+  let raw = $state(false); // the description as typed, not the AI's translation
   function load() {
     failed = false;
     api.org(id).then((x) => (fetched = x)).catch(() => (failed = true));

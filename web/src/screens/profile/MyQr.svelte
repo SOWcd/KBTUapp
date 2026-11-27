@@ -2,7 +2,7 @@
   import CloseX from '../../ui/CloseX.svelte';
   // My QR — the back of my badge. Opens over a blurred scrim like the ticket, follows the phone's tilt and
   // leans toward a pressing finger. The code holds only a link into the app (my profile; the friend invite
-  // takes its place once friends exist, SPEC §4.7), in the brand gradient with the app's mark in the middle
+  // takes its place once friends exist), in the brand gradient with the app's mark in the middle
   // (the face is once, on top) — big enough for any phone camera across a table. Back, a tap
   // outside or Close dismisses it.
   import { onMount } from 'svelte';
@@ -32,7 +32,7 @@
   // ponytail: our own black pill, not Apple's "Add to Apple Wallet" artwork; swap in the official badge (developer.apple.com/wallet/add-to-apple-wallet-guidelines) with the certificate
   const h = $derived(hero(p));
   const look = $derived(lookOf(p)); // the class and the strap's word
-  // the capsule's title (SPEC §8.2), with a QR mark, and dark like the scrim under it: in the light look dark text
+  // the capsule's title, with a QR mark, and dark like the scrim under it: in the light look dark text
   // on a darkened glass reads poorly
   $effect(() => { overlay.title = t('me.qr'); overlay.icon = QrCode; overlay.theme = 'dark'; });
 

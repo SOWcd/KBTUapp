@@ -1,6 +1,6 @@
 <script lang="ts">
-  // Admin → Chats (§4.11): the directory's t.me links, for everyone or for a school and/or a course; a sheet of its own
-  // in the admin hub. The admin says whose a chat is (PLAN 86: then it shows on that
+  // Admin → Chats: the directory's t.me links, for everyone or for a school and/or a course; a sheet of its own
+  // in the admin hub. The admin says whose a chat is (then it shows on that
   // club's or school's page too; t.me/kbtusite is SITE's). Staff set what each chat is for (its section): the AI's
   // section shows marked unchecked until someone picks one.
   import { staffOnly } from '../../lib/state/staffGate.svelte';
@@ -21,9 +21,9 @@
   let { overlay }: { overlay: Overlay } = $props();
   staffOnly(() => overlay, 'staff');
   let busy = $state(false);
-  // ---- the chats directory (§4.11): t.me links for everyone, or for a school and/or a course ----
+  // ---- the chats directory: t.me links for everyone, or for a school and/or a course ----
   let chats = $state<Chat[] | null>(null);
-  // suggested by students through the bot (PLAN item 45): Add puts it in the catalog, the cross declines it
+  // suggested by students through the bot: Add puts it in the catalog, the cross declines it
   let pending = $state<Chat[]>([]);
   $effect(() => { api.chats().then((c) => { chats = c.all; pending = c.pending ?? []; }).catch(() => (chats = [])); });
   async function approve(c: Chat) {

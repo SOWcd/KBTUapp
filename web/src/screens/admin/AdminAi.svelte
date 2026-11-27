@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Admin → AI: the translator of event and club texts (PLAN 9, ai.py):
+  // Admin → AI: the translator of event and club texts (ai.py):
   // on or off, what it did today (UTC), its last error, how much is done, waits or failed three times (the failed can
   // get three more tries); and the AI chain (llm.py), each link's answers, failures and average answer time today (Google's lead first); the assistant's feedback (30 days, none of it tied to a person).
   import { staffOnly } from '../../lib/state/staffGate.svelte';

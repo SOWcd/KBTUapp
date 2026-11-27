@@ -1,6 +1,6 @@
 <script lang="ts">
   import CloseX from '../../ui/CloseX.svelte';
-  // The unlock moment (SPEC §4.11): a new achievement level, celebrated once. The medal drops in and lands with a glow in
+  // The unlock moment: a new achievement level, celebrated once. The medal drops in and lands with a glow in
   // its tier's colour, the confetti flies from it; its name, tier, what it took and how rare it is. Share sends our bot's
   // card (aw_<code>), "Great!" closes; the next new level, if any, comes after.
   import { onMount } from 'svelte';

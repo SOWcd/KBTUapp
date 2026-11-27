@@ -6,7 +6,7 @@
 </script>
 
 <script lang="ts">
-  // Paying for a seat (SPEC §4.3): the money goes straight to the club by Kaspi, never through the app. "Going · N ₸"
+  // Paying for a seat: the money goes straight to the club by Kaspi, never through the app. "Going · N ₸"
   // holds the seat for 30 minutes; the receipt makes it a ticket at once (the organizer compares it with their Kaspi
   // history and can still reject it). The receipt comes as Kaspi's PDF or a screenshot, here or through the bot
   // (Kaspi → Share → Telegram → the bot): back in the app after that, the seat that became a ticket opens it. A receipt

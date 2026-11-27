@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Avatar: the person's own photo or Telegram's (never the portal photo, SPEC §3). Tapping it opens the universal profile card.
+  // Avatar: the person's own photo or Telegram's (never the portal photo). Tapping it opens the universal profile card.
   import Founder from './Founder.svelte';
   import { sheets } from '../lib/state/sheets';
   import { prefetchPerson } from '../lib/state/data.svelte';

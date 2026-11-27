@@ -108,7 +108,7 @@
   onMount(() => { let stop = after(() => { soon = true; stop = after(() => (later = true)); }); return () => stop(); });
   $effect(() => { if (overlay.closing) land(); });
   const about = $derived(preview ? preview.description : detail?.description);
-  let raw = $state(false); // the description as typed, not the AI's translation (PLAN 9)
+  let raw = $state(false); // the description as typed, not the AI's translation
   const aiAbout = $derived(!preview && !!detail && translated(detail, 'description'));
   // the description's addresses as typed (a translation may mangle one), less those with a row of their own
   const links = $derived(eventLinks(preview ? preview.description : detail?.orig?.description ?? detail?.description,
@@ -124,7 +124,7 @@
   const going = $derived(st === 'going');
   const full = $derived(!!e && e.seats != null && e.taken >= e.seats && st !== 'going' && st !== 'hold');
   const cancelled = $derived(e?.status === 'cancelled');
-  // the horizontal clip plays only where it costs nothing extra: not on the light look, not with Data Saver (PLAN 32)
+  // the horizontal clip plays only where it costs nothing extra: not on the light look, not with Data Saver
   const wv = $derived(e && 'wideVideo' in e ? (e as EventFull).wideVideo : null);
   const wide = $derived(wv?.url && !cancelled && !document.documentElement.classList.contains('lowfx')
     && !(navigator as { connection?: { saveData?: boolean } }).connection?.saveData ? wv.url : null);
@@ -132,7 +132,7 @@
   const cost = $derived(!e ? '' : e.price ? money(e.price) : e.guestHost || inner(e) || e.meeting ? '' : t('event.free'));
   const pct = $derived(e && e.seats ? Math.min(100, Math.round((e.taken / e.seats) * 100)) : 0);
   const started = $derived(!!e && e.startsAt <= nowTs());
-  // the registration deadline closes "Going" for those not in yet; a 1st-year takes a paid event's free seat (§4.3)
+  // the registration deadline closes "Going" for those not in yet; a 1st-year takes a paid event's free seat
   const regShut = $derived(!!e?.regUntil && e.regUntil <= nowTs() && st !== 'going' && st !== 'hold' && st !== 'waitlist');
   // still open and I'm not in: said right over the button (closed: the button itself says so)
   const regNote = $derived(!!e?.regUntil && e.regUntil > nowTs() && !cancelled && !started && !e.externalUrl && st !== 'going' && st !== 'hold' && st !== 'waitlist' && !e.santa); // a Santa game: its own row names the deadline
@@ -212,7 +212,7 @@
     try { detail = await api.volunteerLeave(id); haptic.soft(); say(phrase('say.volLeft'), 'waving_hand_3d_default'); } catch { haptic.error(); }
   }
 
-  // ---- "+N seats" (§4.2): when it's full, the club's Head+ add seats right here; the waitlist moves in ----
+  // ---- "+N seats": when it's full, the club's Head+ add seats right here; the waitlist moves in ----
   let adding2 = $state(false);
   async function addSeats(n: number) {
     adding2 = true;
@@ -221,11 +221,11 @@
     finally { adding2 = false; }
   }
 
-  // ---- a leaders meeting (§4.10): DMP sees every club's answers ----
+  // ---- a leaders meeting: DMP sees every club's answers ----
   let answers = $state<import('../../lib/api').LeadersAnswer[] | null>(null);
   $effect(() => { if (e?.visibility === 'leaders' && head && crew) api.leadersAnswers(id).then((l) => (answers = l)).catch(() => {}); });
 
-  // ---- a club meeting (§2b): "can't" says why; the club's Head+ see everyone expected, and after it who came ----
+  // ---- a club meeting: "can't" says why; the club's Head+ see everyone expected, and after it who came ----
   let meet = $state<MeetingAnswer[] | null>(null);
   const loadMeet = () => api.meetingAnswers(id).then((l) => (meet = l)).catch(() => {});
   $effect(() => { if (e?.meeting && head && crew) void loadMeet(); });
@@ -353,7 +353,7 @@
   {#if e}
     {#if preview}<p class="pv"><Tag tone="accent"><Eye size={15} />{t('event.preview')}</Tag></p>{/if}
     <div class="hero" class:cancelled bind:this={hero}>
-      <!-- the header (PLAN 32/33): the horizontal clip behind it, else the vertical one, else the photos swiped sideways, else the cover -->
+      <!-- the header: the horizontal clip behind it, else the vertical one, else the photos swiped sideways, else the cover -->
       {#if wide}
         <Poster item={e} big radius={22} />
         <video class="wide" src={wide} poster={wv?.poster?.url} autoplay muted loop playsinline preload="none"></video>
@@ -544,7 +544,7 @@
           {#if head}
             {#if !e.guestHost}<Row icon={UsersRound} title={t('studio.attendees')} accessory="chevron" onclick={() => sheets.attendees(id)} />{/if}
             {#if e.teamMax}<Row icon={UsersRound} title={t('tm.board')} value={detail?.teams?.count ? String(detail.teams.count) : undefined} accessory="chevron" onclick={() => sheets.teams(id)} />{/if}
-            <!-- full before it starts: more seats right here, the waitlist moves in (§4.2) -->
+            <!-- full before it starts: more seats right here, the waitlist moves in -->
             {#if e.seats && !cancelled && !started && e.taken >= e.seats}<Row icon={Plus} title={t('seats.addRow')} disabled={adding2}
               menu={[5, 10, 20].map((n) => ({ label: `+${n}`, onselect: () => void addSeats(n) }))} />{/if}
             <Row icon={Megaphone} title={t('upd.write')} accessory="disclosure" open={writing} onclick={() => (writing = !writing)} />

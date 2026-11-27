@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Applying to a club's recruitment round (PLAN "Casting"): a minute. What the club knows already comes from the KBTU
+  // Applying to a club's recruitment round: a minute. What the club knows already comes from the KBTU
   // sign-in and Telegram and is only shown; the student picks departments in order of wish (tap order = priority) and
   // answers the club's own questions (a department's question only once it's picked). The draft stays on the phone as
   // it's typed (Telegram may close the app mid-answer). The steps (application, screening, the audition when the club

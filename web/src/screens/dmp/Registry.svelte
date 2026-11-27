@@ -1,5 +1,5 @@
 <script lang="ts">
-  // DMP's clubs registry (SPEC §4.13): every club with its live numbers for this month and its President — instead of
+  // DMP's clubs registry: every club with its live numbers for this month and its President — instead of
   // asking in chats who leads what and instead of monthly reports. A club opens its roster; a name or a student ID finds a
   // member and their clubs; CSV sends every roster into my chat with the bot. A sheet, from Studio (DMP) and the Admin panel.
   // wide (a computer's window, RegistrySheet): the same registry as a sortable table with the chosen club's roster beside it,
