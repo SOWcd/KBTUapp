@@ -16,6 +16,7 @@
   import { session } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t, tn, type Key } from '../../lib/i18n/index.svelte';
+  import { sw } from '../../lib/i18n/staff';
   import { haptic, scanQr, shareCard } from '../../lib/tg';
   import { dayMonth, nowTs } from '../../lib/time';
   import { menu } from '../../ui/menu';
@@ -110,27 +111,27 @@
     api.revokeLink(l.token).then(() => { haptic.soft(); say(t('aw.revoked'), 'locked_3d'); }).catch(() => { l.until = was; fail(); });
   }
   async function takeOne(l: GrantLink, g: GrantItem) {
-    if (!(await sheets.ask({ title: t('adm.takeBackAsk', { award: manualName(g.code), name: g.person.name }), ok: t('adm.takeBack'), cancel: t('common.cancel'), danger: true }))) return;
+    if (!(await sheets.ask({ title: sw('adm.takeBackAsk', { award: manualName(g.code), name: g.person.name }), ok: sw('adm.takeBack'), cancel: t('common.cancel'), danger: true }))) return;
     const was = l.people;
     l.people = was.filter((x) => x.id !== g.id);
-    api.ungrant(g.id).then(() => { haptic.soft(); say(t('adm.takenBack'), 'waving_hand_3d_default'); changed(); }).catch(() => { l.people = was; fail(); });
+    api.ungrant(g.id).then(() => { haptic.soft(); say(sw('adm.takenBack'), 'waving_hand_3d_default'); changed(); }).catch(() => { l.people = was; fail(); });
   }
   async function takeAll(l: GrantLink) {
     if (!(await sheets.ask({ title: t('aw.takeAllAsk', { award: manualName(l.code), n: l.people.length }), ok: t('aw.takeAll'), cancel: t('common.cancel'), danger: true }))) return;
     const was = l.people;
     l.people = [];
-    api.undoBatch('l_' + l.token).then(() => { haptic.soft(); say(t('adm.takenBack'), 'waving_hand_3d_default'); changed(); }).catch(() => { l.people = was; fail(); });
+    api.undoBatch('l_' + l.token).then(() => { haptic.soft(); say(sw('adm.takenBack'), 'waving_hand_3d_default'); changed(); }).catch(() => { l.people = was; fail(); });
   }
 
   // ---- who has it: a tap, their profile or the award back (all of its grants)
   function holder(e: MouseEvent, g: GrantItem) {
     menu(e.currentTarget as Element, [
       { label: t('tab.profile'), onselect: () => sheets.person(g.person.id) },
-      { label: t('adm.takeBack'), destructive: true, onselect: async () => {
-        if (!(await sheets.ask({ title: t('adm.takeBackAsk', { award: manualName(g.code), name: g.person.name }), ok: t('adm.takeBack'), cancel: t('common.cancel'), danger: true }))) return;
+      { label: sw('adm.takeBack'), destructive: true, onselect: async () => {
+        if (!(await sheets.ask({ title: sw('adm.takeBackAsk', { award: manualName(g.code), name: g.person.name }), ok: sw('adm.takeBack'), cancel: t('common.cancel'), danger: true }))) return;
         const was = holders;
         holders = (holders ?? []).filter((x) => x.id !== g.id);
-        api.takeBackGrant(g.person.id, g.code).then(() => { haptic.soft(); say(t('adm.takenBack'), 'waving_hand_3d_default'); onchange?.(); }).catch(() => { holders = was; fail(); });
+        api.takeBackGrant(g.person.id, g.code).then(() => { haptic.soft(); say(sw('adm.takenBack'), 'waving_hand_3d_default'); onchange?.(); }).catch(() => { holders = was; fail(); });
       } },
     ]);
   }
@@ -139,15 +140,15 @@
   let sessOpen = $state(false);
   let bulk = $state<{ n: number; batch: string; title: string; code: Code } | null>(null);
   async function giveAll(s: BadgeSession) {
-    if (!(await sheets.ask({ title: t('scr.grantAsk', { variant: manualName(code) }), text: t('scr.grantText', { n: s.done }), ok: t('scr.grant'), cancel: t('scr.keep') }))) return;
-    try { const r = await api.screenGrant(s.id, code); sessOpen = false; bulk = { n: r.granted, batch: r.batch, title: s.title, code }; haptic.ok(); say(t('scr.granted', { n: r.granted }), 'party_popper_3d'); changed(); }
+    if (!(await sheets.ask({ title: sw('scr.grantAsk', { variant: manualName(code) }), text: sw('scr.grantText', { n: s.done }), ok: sw('scr.grant'), cancel: t('scr.keep') }))) return;
+    try { const r = await api.screenGrant(s.id, code); sessOpen = false; bulk = { n: r.granted, batch: r.batch, title: s.title, code }; haptic.ok(); say(sw('scr.granted', { n: r.granted }), 'party_popper_3d'); changed(); }
     catch { fail(); }
   }
   async function undoAll() {
     const b = bulk!;
     if (!(await sheets.ask({ title: t('aw.takeAllAsk', { award: manualName(b.code), n: b.n }), ok: t('aw.takeAll'), cancel: t('common.cancel'), danger: true }))) return;
     bulk = null;
-    api.undoBatch(b.batch).then(() => { haptic.soft(); say(t('adm.takenBack'), 'waving_hand_3d_default'); changed(); }).catch(() => { bulk = b; fail(); });
+    api.undoBatch(b.batch).then(() => { haptic.soft(); say(sw('adm.takenBack'), 'waving_hand_3d_default'); changed(); }).catch(() => { bulk = b; fail(); });
   }
 </script>
 
@@ -222,7 +223,7 @@
               onclick={() => { haptic.select(); openLink = openLink === l.token ? null : l.token; }} />
             {#if openLink === l.token}
               {#each l.people as g (g.id)}
-                <Row dense title={g.person.name} onclick={(e) => menu(e.currentTarget as Element, [{ label: t('tab.profile'), onselect: () => sheets.person(g.person.id) }, { label: t('adm.takeBack'), destructive: true, onselect: () => takeOne(l, g) }])}>
+                <Row dense title={g.person.name} onclick={(e) => menu(e.currentTarget as Element, [{ label: t('tab.profile'), onselect: () => sheets.person(g.person.id) }, { label: sw('adm.takeBack'), destructive: true, onselect: () => takeOne(l, g) }])}>
                   {#snippet lead()}<Avatar person={g.person} size={32} tappable={false} />{/snippet}
                 </Row>
               {/each}

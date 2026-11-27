@@ -19,6 +19,7 @@
   import { sheets } from '../../lib/state/sheets';
   import { say } from '../../lib/state/ui.svelte';
   import { t, tn, type Key } from '../../lib/i18n/index.svelte';
+  import { sw, swn, type StaffKey } from '../../lib/i18n/staff';
   import { haptic, openLink } from '../../lib/tg';
   import { ago, relDay, time } from '../../lib/time';
   import { withNick, roleName } from '../../lib/perms';
@@ -75,7 +76,7 @@
     catch (e) {
       if (e instanceof ApiErr && e.code === 'conflict' && e.message === 'decided') {
         const by = (e.data as { by?: string | null }).by;
-        handled[it.key] = { text: by ? t('adm.decided', { name: by }) : t('adm.decidedAnon'), it, at };
+        handled[it.key] = { text: by ? sw('adm.decided', { name: by }) : sw('adm.decidedAnon'), it, at };
       } else { delete handled[it.key]; haptic.error(); say(t('common.error'), 'warning_3d'); }
     }
     void loadInbox(); void loadMe();
@@ -84,10 +85,10 @@
 
   async function undo(d: DoneRow) {
     haptic.select();
-    try { await api.undoDone(d.id); say(t('adm.undoneSay'), 'raising_hands_3d_default'); }
+    try { await api.undoDone(d.id); say(sw('adm.undoneSay'), 'raising_hands_3d_default'); }
     catch (e) {
       const by = e instanceof ApiErr && e.code === 'conflict' ? (e.data as { by?: string | null }).by : undefined;
-      haptic.error(); say(by ? t('adm.decided', { name: by }) : e instanceof ApiErr && e.code === 'not_found' ? t('adm.tooLate') : t('common.error'), 'warning_3d');
+      haptic.error(); say(by ? sw('adm.decided', { name: by }) : e instanceof ApiErr && e.code === 'not_found' ? sw('adm.tooLate') : t('common.error'), 'warning_3d');
     }
     // the card it came from is waiting again: it comes back in the list
     for (const [k, h] of Object.entries(handled)) if (h.target === d.target) delete handled[k];
@@ -101,8 +102,8 @@
   // the reporters in one word: someone often right, or an account days old (never who)
   function whoReported(r: ReportItem): string {
     const l = r.reporters ?? [];
-    if (l.some((x) => x.right >= 3 && x.right > x.wrong * 2)) return t('adm.trusted');
-    if (l.some((x) => x.days != null && x.days < 7)) return t('adm.newAcc');
+    if (l.some((x) => x.right >= 3 && x.right > x.wrong * 2)) return sw('adm.trusted');
+    if (l.some((x) => x.days != null && x.days < 7)) return sw('adm.newAcc');
     return '';
   }
   const RULES: TgcRule[] = ['abuse', 'fake', 'spam', 'pdata', 'disrupt', 'other'];
@@ -110,12 +111,12 @@
   const ruleOf = (r: ReportItem): TgcRule => rules[r.id] ?? r.rule ?? 'other';
   const repTarget = (r: ReportItem) => (r.target === 'fpost' ? `fchan:${r.id}` : `${r.target}:${r.id}`);
   function resolve(it: InboxItem, r: ReportItem, remove: boolean, abuse = false) {
-    const text = abuse ? t('adm.abuse') : t(remove ? (r.target === 'tgc' ? 'adm.act.tg_confirm' : 'adm.act.report_remove') : r.removed ? 'adm.act.tg_restore' : 'adm.act.report_keep');
+    const text = abuse ? sw('adm.abuse') : sw(remove ? (r.target === 'tgc' ? 'adm.act.tg_confirm' : 'adm.act.report_remove') : r.removed ? 'adm.act.tg_restore' : 'adm.act.report_keep');
     void decide(it, text, remove ? repTarget(r) : undefined, () => api.resolveReport(r.target, r.id, remove, abuse || undefined, r.target === 'tgc' && remove ? ruleOf(r) : undefined));
   }
   // a photo with the Gallery on: Delete asks first (Done's Undo has it for 30 days); Return keeps it, for everyone again
   async function dropPhoto(it: InboxItem, r: ReportItem) {
-    if (await sheets.ask({ title: t('adm.photoDeleteAsk'), ok: t('adm.photoDelete'), cancel: t('common.cancel'), danger: true })) resolve(it, r, true);
+    if (await sheets.ask({ title: sw('adm.photoDeleteAsk'), ok: sw('adm.photoDelete'), cancel: t('common.cancel'), danger: true })) resolve(it, r, true);
   }
   function look(r: ReportItem) {
     if (r.target === 'comment') sheets.comments(r.where.kind as 'post' | 'event', r.where.id, r.text);
@@ -132,8 +133,8 @@
   function tgcMenu(e: MouseEvent, it: InboxItem, r: ReportItem) {
     menu(e.currentTarget as Element, [
       ...RULES.map((k): MenuItem => ({ label: t(`tgc.rule.${k}`), checked: ruleOf(r) === k, onselect: () => (rules[r.id] = k) })),
-      { label: t('adm.abuse'), destructive: true, onselect: async () => {
-        if (await sheets.ask({ title: t('adm.abuseAsk'), text: t('adm.abuseText'), ok: t('adm.abuse'), cancel: t('common.cancel'), danger: true })) resolve(it, r, false, true);
+      { label: sw('adm.abuse'), destructive: true, onselect: async () => {
+        if (await sheets.ask({ title: sw('adm.abuseAsk'), text: sw('adm.abuseText'), ok: sw('adm.abuse'), cancel: t('common.cancel'), danger: true })) resolve(it, r, false, true);
       } },
     ]);
   }
@@ -151,24 +152,24 @@
     // a lost send may be in the channel or its comments already (the bot can't tell): sent again only after a look there
     if (!(await sheets.ask({ title: t(post ? 'fc.againAsk' : 'fcr.againAsk'), text: t(post ? 'fc.againText' : 'fcr.againText'),
       ok: t('fcr.again'), cancel: t('common.cancel') }))) return;
-    void (post ? decide(it, t('adm.act.fchan_release'), undefined, () => api.channelModDecide(id, true, true))
-      : decide(it, t('adm.act.fchan_reply_release'), undefined, () => api.channelReplyMod(id, true, true)));
+    void (post ? decide(it, sw('adm.act.fchan_release'), undefined, () => api.channelModDecide(id, true, true))
+      : decide(it, sw('adm.act.fchan_reply_release'), undefined, () => api.channelReplyMod(id, true, true)));
   }
 
   // what a decided card was about, after its verdict on the slim line
   const what = (it: InboxItem): string => it.kind === 'report' ? it.data.text : it.kind === 'capp' ? it.data.name : it.kind === 'opath' ? it.data.org.name : it.kind === 'chat' ? it.data.title
     : it.kind === 'claim' ? it.data.name : it.kind === 'autoev' ? it.data.title : it.data.body;
   const tagOf = (it: InboxItem): string =>
-    it.kind === 'report' ? t(`adm.rep.${it.data.target}`) : it.kind === 'capp' ? t('adm.cappTag') : it.kind === 'opath' ? t('adm.k.opath') : it.kind === 'fpost' ? t('adm.rep.fpost')
-      : it.kind === 'freply' ? t('adm.k.freply') : it.kind === 'chat' ? t('adm.k.chat') : it.kind === 'autoev' ? t('adm.k.autoev') : t('adm.k.claim');
+    it.kind === 'report' ? sw(`adm.rep.${it.data.target}`) : it.kind === 'capp' ? sw('adm.cappTag') : it.kind === 'opath' ? sw('adm.k.opath') : it.kind === 'fpost' ? sw('adm.rep.fpost')
+      : it.kind === 'freply' ? sw('adm.k.freply') : it.kind === 'chat' ? sw('adm.k.chat') : it.kind === 'autoev' ? sw('adm.k.autoev') : sw('adm.k.claim');
   // an event found in a club's channel (server autoev.py): its draft opens as any event from Admin (api staffEvents);
   // Dismiss is Admin's event delete, hidden at once with Done's Undo for a day
   function openDraft(e: AutoEvent) { haptic.tap(); staffEvents.add(e.id); sheets.editor(e.org.id, e.id); }
   // the eye: the draft as students will see it once published (the editor's preview), read as the admin from Admin
   function previewDraft(e: AutoEvent) { haptic.tap(); staffEvents.add(e.id); sheets.draftPreview(e.id); }
   function more(it: InboxItem): MenuItem[] {
-    if (it.kind === 'autoev') { const u = it.data.url; return [{ label: t('adm.autoevPost'), onselect: () => openLink(u) }]; }
-    if (it.kind === 'capp' && it.data.applicant?.username) { const u = it.data.applicant.username; return [{ label: t('adm.cappWrite'), onselect: () => openLink('https://t.me/' + u) }]; }
+    if (it.kind === 'autoev') { const u = it.data.url; return [{ label: sw('adm.autoevPost'), onselect: () => openLink(u) }]; }
+    if (it.kind === 'capp' && it.data.applicant?.username) { const u = it.data.applicant.username; return [{ label: sw('adm.cappWrite'), onselect: () => openLink('https://t.me/' + u) }]; }
     if (it.kind === 'fpost' && owner && it.data.anon) { const id = it.data.id; return [{ label: t('fc.reveal'), onselect: () => reveal(id) }]; }
     if (it.kind === 'freply' && owner && it.data.anon) { const id = it.data.post; return [{ label: t('fc.reveal'), onselect: () => reveal(id) }]; }
     return [];
@@ -178,7 +179,7 @@
 {#snippet head(it: InboxItem, items: MenuItem[], onmore?: (e: MouseEvent) => void)}
   <div class="hd">
     <!-- already hidden: the kind in red with the card's red edge (one tag, so the kind reads whole at 375) -->
-    <span class="kt" title={it.hidden ? t('adm.k.hidden') : undefined}><Tag tone={it.hidden ? 'danger' : 'neutral'}>{tagOf(it)}</Tag></span>
+    <span class="kt" title={it.hidden ? sw('adm.k.hidden') : undefined}><Tag tone={it.hidden ? 'danger' : 'neutral'}>{tagOf(it)}</Tag></span>
     <span class="age">{it.at ? ago(it.at) : ''}</span>
     {#if onmore || items.length}<IconButton icon={Ellipsis} label={t('common.more')} kind="plain" size="s" onclick={(e) => (onmore ? onmore(e) : menu(e.currentTarget as Element, items))} />{/if}
   </div>
@@ -197,7 +198,7 @@
         {#if u}
           <Row dense title={h.text} subtitle={what(it) || undefined}>
             {#snippet lead()}<span class="ok"><CircleCheck size={22} /></span>{/snippet}
-            {#snippet trailing()}<Button kind="tinted" size="s" onclick={() => undo(u)}>{t('adm.undo')}</Button>{/snippet}
+            {#snippet trailing()}<Button kind="tinted" size="s" onclick={() => undo(u)}>{sw('adm.undo')}</Button>{/snippet}
           </Row>
         {:else}
           <Row dense title={h.text} subtitle={what(it) || undefined}>{#snippet lead()}<span class="ok"><CircleCheck size={22} /></span>{/snippet}</Row>
@@ -210,16 +211,16 @@
       {@render head(it, [], r.target === 'tgc' ? (e) => tgcMenu(e, it, r) : undefined)}
       {#if r.was}<i class="meta">{t('fc.repWas')}</i><p class="quote selectable">{r.was}</p>{/if}
       <button class="body" onclick={() => look(r)}>
-        {#if r.target === 'photo'}<img class="ph" src={r.text} alt={t('adm.rep.photo')} />{:else}<b class="clamp-3 selectable">{r.text}</b>{/if}
+        {#if r.target === 'photo'}<img class="ph" src={r.text} alt={sw('adm.rep.photo')} />{:else}<b class="clamp-3 selectable">{r.text}</b>{/if}
         <i>{r.target === 'tgc'
-          ? [r.ai ? t(`adm.tgcAi.${r.ai}`) : '', whoReported(r), t('adm.ruleNow', { rule: t(`tgc.rule.${ruleOf(r)}`) })].filter(Boolean).join(' · ')
-          : `${reasons(r)}${r.count > 1 ? ' · ' + tn('adm.reports', r.count) : ''}`}</i>
+          ? [r.ai ? sw(`adm.tgcAi.${r.ai}`) : '', whoReported(r), sw('adm.ruleNow', { rule: t(`tgc.rule.${ruleOf(r)}`) })].filter(Boolean).join(' · ')
+          : `${reasons(r)}${r.count > 1 ? ' · ' + swn('adm.reports', r.count) : ''}`}</i>
       </button>
       <ForumPics photos={r.photos} />
       {#each r.notes ?? [] as n, i (i)}<p class="note selectable">{n.note}</p>{/each}
-      {#if r.target === 'tgc' && r.removed}{@render two(t('adm.tgcConfirm'), () => resolve(it, r, true), t('adm.tgcRestore'), () => resolve(it, r, false))}
-      {:else if r.target === 'photo' && data.galleryPost}{@render two(t('adm.photoDelete'), () => dropPhoto(it, r), t('adm.photoBack'), () => resolve(it, r, false))}
-      {:else}{@render two(t('adm.takeDown'), () => resolve(it, r, true), t('adm.keep'), () => resolve(it, r, false))}{/if}
+      {#if r.target === 'tgc' && r.removed}{@render two(sw('adm.tgcConfirm'), () => resolve(it, r, true), sw('adm.tgcRestore'), () => resolve(it, r, false))}
+      {:else if r.target === 'photo' && data.galleryPost}{@render two(sw('adm.photoDelete'), () => dropPhoto(it, r), sw('adm.photoBack'), () => resolve(it, r, false))}
+      {:else}{@render two(sw('adm.takeDown'), () => resolve(it, r, true), sw('adm.keep'), () => resolve(it, r, false))}{/if}
     </div>
   {:else if it.kind === 'capp'}
     {@const a = it.data}
@@ -233,19 +234,19 @@
       {#if opened === a.id}
         <div class="cb" transition:fold>
           <p class="selectable">{a.description}</p>
-          {#if a.why}<p class="selectable"><b>{t('adm.cappWhy')}</b> {a.why}</p>{/if}
+          {#if a.why}<p class="selectable"><b>{sw('adm.cappWhy')}</b> {a.why}</p>{/if}
           {#each a.links as l (l)}<Button kind="plain" size="s" onclick={() => openLink(l)}>{l.replace('https://', '')}</Button>{/each}
         </div>
       {/if}
       {#if refusing === it.key}
         <div class="cb" transition:fold>
-          <Field label={t('adm.cappReason')} bind:value={why} multiline rows={2} maxlength={300} />
+          <Field label={sw('adm.cappReason')} bind:value={why} multiline rows={2} maxlength={300} />
           <div class="btns"><Button kind="gray" size="m" full onclick={() => (refusing = null)}>{t('common.cancel')}</Button>
             <Button kind="filled" size="m" full destructive disabled={why.trim().length < 3}
-              onclick={() => { const w = why.trim(); refusing = null; void decide(it, t('adm.act.capp_no'), `capp:${a.id}`, () => api.decideClubApplication(a.id, false, w)); }}>{t('adm.cappRefuse')}</Button></div>
+              onclick={() => { const w = why.trim(); refusing = null; void decide(it, sw('adm.act.capp_no'), `capp:${a.id}`, () => api.decideClubApplication(a.id, false, w)); }}>{sw('adm.cappRefuse')}</Button></div>
         </div>
       {:else}
-        {@render two(t('adm.cappApprove'), () => decide(it, t('adm.act.capp_yes'), undefined, () => api.decideClubApplication(a.id, true)), t('adm.cappRefuse'), () => { refusing = it.key; why = ''; })}
+        {@render two(sw('adm.cappApprove'), () => decide(it, sw('adm.act.capp_yes'), undefined, () => api.decideClubApplication(a.id, true)), sw('adm.cappRefuse'), () => { refusing = it.key; why = ''; })}
       {/if}
     </div>
   {:else if it.kind === 'opath'}
@@ -258,13 +259,13 @@
       </button>
       {#if refusing === it.key}
         <div class="cb" transition:fold>
-          <Field label={t('adm.opathReason')} bind:value={why} multiline rows={2} maxlength={300} />
+          <Field label={sw('adm.opathReason')} bind:value={why} multiline rows={2} maxlength={300} />
           <div class="btns"><Button kind="gray" size="m" full onclick={() => (refusing = null)}>{t('common.cancel')}</Button>
             <Button kind="filled" size="m" full destructive disabled={why.trim().length < 3}
-              onclick={() => { const w = why.trim(); refusing = null; void decide(it, t('adm.act.opath_no'), `opath:${r.id}`, () => api.decideOfficial(r.id, false, w)); }}>{t('adm.cappRefuse')}</Button></div>
+              onclick={() => { const w = why.trim(); refusing = null; void decide(it, sw('adm.act.opath_no'), `opath:${r.id}`, () => api.decideOfficial(r.id, false, w)); }}>{sw('adm.cappRefuse')}</Button></div>
         </div>
       {:else}
-        {@render two(t('adm.opathApprove'), () => decide(it, t('adm.act.opath_yes'), `opath:${r.id}`, () => api.decideOfficial(r.id, true)), t('adm.cappRefuse'), () => { refusing = it.key; why = ''; })}
+        {@render two(sw('adm.opathApprove'), () => decide(it, sw('adm.act.opath_yes'), `opath:${r.id}`, () => api.decideOfficial(r.id, true)), sw('adm.cappRefuse'), () => { refusing = it.key; why = ''; })}
       {/if}
     </div>
   {:else if it.kind === 'fpost'}
@@ -278,12 +279,12 @@
       <p class="text selectable">{p.body}</p>
       <ForumPics photos={p.photos} />
       {#if p.own}<i class="meta">{t('fc.ownPost')}</i>
-      {:else if p.edit}{@const e = p.edit}{@render two(t('fc.release'), () => decide(it, t('adm.act.fchan_edit_release'), undefined, () => api.channelEditDecide(e.id, true)),
-        t('fc.editDecline'), () => decide(it, t('adm.act.fchan_edit_decline'), undefined, () => api.channelEditDecide(e.id, false)))}
+      {:else if p.edit}{@const e = p.edit}{@render two(t('fc.release'), () => decide(it, sw('adm.act.fchan_edit_release'), undefined, () => api.channelEditDecide(e.id, true)),
+        t('fc.editDecline'), () => decide(it, sw('adm.act.fchan_edit_decline'), undefined, () => api.channelEditDecide(e.id, false)))}
       {:else if p.why === 'lost'}{@render two(t('fcr.again'), () => sendAgain(it, p.id, true),
-        t('fc.takeDown'), () => decide(it, t('adm.act.fchan_hide'), `fchan:${p.id}`, () => api.channelModDecide(p.id, false)))}
-      {:else}{@render two(t('fc.release'), () => decide(it, t('adm.act.fchan_release'), undefined, () => api.channelModDecide(p.id, true)),
-        t('fc.takeDown'), () => decide(it, t('adm.act.fchan_hide'), `fchan:${p.id}`, () => api.channelModDecide(p.id, false)))}{/if}
+        t('fc.takeDown'), () => decide(it, sw('adm.act.fchan_hide'), `fchan:${p.id}`, () => api.channelModDecide(p.id, false)))}
+      {:else}{@render two(t('fc.release'), () => decide(it, sw('adm.act.fchan_release'), undefined, () => api.channelModDecide(p.id, true)),
+        t('fc.takeDown'), () => decide(it, sw('adm.act.fchan_hide'), `fchan:${p.id}`, () => api.channelModDecide(p.id, false)))}{/if}
     </div>
   {:else if it.kind === 'freply'}
     {@const r = it.data}
@@ -294,13 +295,13 @@
       <p class="quote">{r.postBody}</p>
       <p class="text selectable">{r.body}</p>
       {#if it.hidden && r.why === 'lost'}
-        {@render two(t('fcr.again'), () => sendAgain(it, r.id), t('fc.takeDown'), () => decide(it, t('adm.act.fchan_reply_hide'), `fchanr:${r.id}`, () => api.channelReplyMod(r.id, false)))}
+        {@render two(t('fcr.again'), () => sendAgain(it, r.id), t('fc.takeDown'), () => decide(it, sw('adm.act.fchan_reply_hide'), `fchanr:${r.id}`, () => api.channelReplyMod(r.id, false)))}
       {:else if it.hidden}
-        {@render two(t('fc.release'), () => decide(it, t('adm.act.fchan_reply_release'), undefined, () => api.channelReplyMod(r.id, true)),
-          t('fc.takeDown'), () => decide(it, t('adm.act.fchan_reply_hide'), `fchanr:${r.id}`, () => api.channelReplyMod(r.id, false)))}
+        {@render two(t('fc.release'), () => decide(it, sw('adm.act.fchan_reply_release'), undefined, () => api.channelReplyMod(r.id, true)),
+          t('fc.takeDown'), () => decide(it, sw('adm.act.fchan_reply_hide'), `fchanr:${r.id}`, () => api.channelReplyMod(r.id, false)))}
       {:else}
-        {@render two(t('fc.takeDown'), () => decide(it, t('adm.act.fchan_reply_hide'), `fchanr:${r.id}`, () => api.channelReplyMod(r.id, false)),
-          t('fcr.keep'), () => decide(it, t('adm.act.fchan_reply_keep'), undefined, () => api.channelReplyMod(r.id, true)))}
+        {@render two(t('fc.takeDown'), () => decide(it, sw('adm.act.fchan_reply_hide'), `fchanr:${r.id}`, () => api.channelReplyMod(r.id, false)),
+          t('fcr.keep'), () => decide(it, sw('adm.act.fchan_reply_keep'), undefined, () => api.channelReplyMod(r.id, true)))}
       {/if}
     </div>
   {:else if it.kind === 'chat'}
@@ -313,8 +314,8 @@
         <span class="tx"><b>{c.title}</b><i>{c.url.replace('https://', '')} · {t(`chats.${c.kind}`)}{c.members ? ' · ' + c.members : ''}{c.org ? ' · ' + nameOf(c.org) : ''}</i></span>
         <span class="turn"><ArrowUpRight size={18} /></span>
       </button>
-      {@render two(t('adm.chatApprove'), () => decide(it, t('adm.act.chat_approve'), undefined, () => api.approveChat(c.id)),
-        t('adm.chatDecline'), () => decide(it, t('adm.act.chat_decline'), `chat:${c.id}`, () => api.deleteChat(c.id)))}
+      {@render two(sw('adm.chatApprove'), () => decide(it, sw('adm.act.chat_approve'), undefined, () => api.approveChat(c.id)),
+        sw('adm.chatDecline'), () => decide(it, sw('adm.act.chat_decline'), `chat:${c.id}`, () => api.deleteChat(c.id)))}
     </div>
   {:else if it.kind === 'claim'}
     {@const r = it.data}
@@ -323,8 +324,8 @@
       <div class="who"><Avatar person={r.person} size={44} />
         <span class="tx"><b>{r.name}</b><i>{t('ro.listed', { name: r.sheetName ?? '—' })}</i>
           <i>{nameOf(r.org)} · {r.title || roleName(r.role, null)}{r.dept ? ' · ' + r.dept : ''}</i></span></div>
-      {@render two(t('ro.confirm'), () => decide(it, t('adm.act.roster_ok'), undefined, () => api.rosterDecide(r.id, true)),
-        t('ro.decline'), () => decide(it, t('adm.act.roster_no'), undefined, () => api.rosterDecide(r.id, false)))}
+      {@render two(t('ro.confirm'), () => decide(it, sw('adm.act.roster_ok'), undefined, () => api.rosterDecide(r.id, true)),
+        t('ro.decline'), () => decide(it, sw('adm.act.roster_no'), undefined, () => api.rosterDecide(r.id, false)))}
     </div>
   {:else if it.kind === 'autoev'}
     {@const e = it.data}
@@ -337,26 +338,26 @@
         </button>
         <IconButton icon={Eye} kind="gray" size="s" label={t('ed.preview')} onclick={() => previewDraft(e)} />
       </div>
-      {@render two(t('adm.autoevOpen'), () => openDraft(e), t('adm.autoevDismiss'),
-        () => decide(it, t('adm.act.event_delete'), `event:${e.id}`, () => api.adminDeleteEvent(e.id)))}
+      {@render two(sw('adm.autoevOpen'), () => openDraft(e), sw('adm.autoevDismiss'),
+        () => decide(it, sw('adm.act.event_delete'), `event:${e.id}`, () => api.adminDeleteEvent(e.id)))}
     </div>
   {/if}
 {/snippet}
 
 {#if queue.length}
-  <Section title={t('adm.queue')} count={waiting}>
+  <Section title={sw('adm.queue')} count={waiting}>
     <div class="list stagger">
       {#each shown as it (it.key)}{@render card(it)}{/each}
     </div>
-    {#if limit && rest && waiting > limit}<Group><Row title={t('adm.more', { n: waiting - limit })} accessory="chevron" onclick={() => { haptic.tap(); rest(); }} /></Group>{/if}
+    {#if limit && rest && waiting > limit}<Group><Row title={sw('adm.more', { n: waiting - limit })} accessory="chevron" onclick={() => { haptic.tap(); rest(); }} /></Group>{/if}
   </Section>
 {:else if data.inbox && !limit}
-  <Group><Row title={t('adm.nothing')}>{#snippet lead()}<span class="ok"><CircleCheck size={24} /></span>{/snippet}</Row></Group>
+  <Group><Row title={sw('adm.nothing')}>{#snippet lead()}<span class="ok"><CircleCheck size={24} /></span>{/snippet}</Row></Group>
 {/if}
 
 {#if drafts.length}
   <div class="done">
-    <Group><Row title={t('adm.drafts')} value={String(drafts.filter((x) => !handled[x.key]).length)} accessory="disclosure" open={draftsOpen} onclick={() => { haptic.select(); draftsOpen = !draftsOpen; }} /></Group>
+    <Group><Row title={sw('adm.drafts')} value={String(drafts.filter((x) => !handled[x.key]).length)} accessory="disclosure" open={draftsOpen} onclick={() => { haptic.select(); draftsOpen = !draftsOpen; }} /></Group>
     {#if draftsOpen}
       <div class="list" transition:fold>{#each drafts as it (it.key)}{@render card(it)}{/each}</div>
     {/if}
@@ -365,16 +366,16 @@
 
 {#if done.length}
   <div class="done">
-    <Group><Row title={t('adm.doneList')} value={String(done.length)} accessory="disclosure" open={doneOpen} onclick={() => { haptic.select(); doneOpen = !doneOpen; }} /></Group>
+    <Group><Row title={sw('adm.doneList')} value={String(done.length)} accessory="disclosure" open={doneOpen} onclick={() => { haptic.select(); doneOpen = !doneOpen; }} /></Group>
     {#if doneOpen}
       <div transition:fold>
         <Group>
           {#each done as d (d.id)}
-            {@const title = d.kind === 'photo' ? t(`adm.act.${d.action}` as Key) : d.text}
-            {@const sub = `${d.kind === 'photo' ? '' : t(`adm.act.${d.action}` as Key) + ' · '}${d.mine ? t('adm.you') : d.by ?? '—'} · ${ago(d.at)}${d.undone ? ' · ' + t('adm.undone') : ''}`}
+            {@const title = d.kind === 'photo' ? sw(`adm.act.${d.action}` as StaffKey) : d.text}
+            {@const sub = `${d.kind === 'photo' ? '' : sw(`adm.act.${d.action}` as StaffKey) + ' · '}${d.mine ? sw('adm.you') : d.by ?? '—'} · ${ago(d.at)}${d.undone ? ' · ' + sw('adm.undone') : ''}`}
             {#if d.undo && (d.mine || admin)}
               <Row dense {title} subtitle={sub}>
-                {#snippet trailing()}<Button kind="tinted" size="s" onclick={() => undo(d)}>{t('adm.undo')}</Button>{/snippet}
+                {#snippet trailing()}<Button kind="tinted" size="s" onclick={() => undo(d)}>{sw('adm.undo')}</Button>{/snippet}
               </Row>
             {:else}<Row dense {title} subtitle={sub} />{/if}
           {/each}

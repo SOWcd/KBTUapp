@@ -12,6 +12,7 @@
   import { eventById } from '../../lib/state/data.svelte';
   import { time } from '../../lib/time';
   import { t } from '../../lib/i18n/index.svelte';
+  import { sw } from '../../lib/i18n/staff';
   import { haptic } from '../../lib/tg';
   import Qr from '../../ui/Qr.svelte';
   import '../../lib/qrnow'; // its code in the first frame (lib/qr.svelte.ts)
@@ -23,7 +24,7 @@
 
   // `embed`: the door screen's QR half (Scanner.svelte): the code alone, inside its overlay; `onlast` as someone counts
   let { overlay, event, sess, hand = false, scanner = false, embed = false, onlast }: { overlay: Overlay; event?: Id | null; sess?: Id; hand?: boolean; scanner?: boolean; embed?: boolean; onlast?: () => void } = $props();
-  $effect(() => { if (!embed) { overlay.title = t(hand ? 'scr.hand' : 'aw.show'); overlay.icon = QrCode; overlay.theme = 'dark'; } });
+  $effect(() => { if (!embed) { overlay.title = sw(hand ? 'scr.hand' : 'aw.show'); overlay.icon = QrCode; overlay.theme = 'dark'; } });
 
   let q = $state<ScreenSession | null>(null), note = $state('');
   let sid: Id, timer: ReturnType<typeof setTimeout> | undefined, gone = false;
@@ -45,9 +46,9 @@
   // why the server refused (checkin._door): not open yet (when), closed, an organizers' QR; else as before
   function why(e: unknown): string {
     if (!(e instanceof ApiErr)) return t('common.error');
-    if (e.message === 'not_open' && typeof e.data.at === 'number') return t('scr.doorAt', { time: time(e.data.at) });
-    if (e.code === 'closed') return t('scr.closed');
-    if (e.message === 'door_staff') return t('scr.staffOnly');
+    if (e.message === 'not_open' && typeof e.data.at === 'number') return sw('scr.doorAt', { time: time(e.data.at) });
+    if (e.code === 'closed') return sw('scr.closed');
+    if (e.message === 'door_staff') return sw('scr.staffOnly');
     return t(sess && e.code === 'forbidden' ? 'scr.helpEnded' : 'common.error');
   }
   function stop(e: unknown) {
@@ -69,7 +70,7 @@
   const board = $derived(!sess && !hand && !!event && (session.me?.role === 'admin' || !!session.me?.memberships.some((m) => m.org.id === eventById(event)?.org.id && (m.role === 'president' || m.role === 'vice'))));
 
   async function handsOff() {
-    if (!(await sheets.ask({ title: t('scr.handOffAsk'), text: t('scr.handOffText'), ok: t('scr.handOff'), cancel: t('scr.keep') }))) return;
+    if (!(await sheets.ask({ title: sw('scr.handOffAsk'), text: sw('scr.handOffText'), ok: sw('scr.handOff'), cancel: t('scr.keep') }))) return;
     off = true; halt();
     let r: ScreenSession | undefined;
     try { r = await api.screenHandsOff(sid); haptic.ok(); } catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
@@ -103,7 +104,7 @@
     {#if q?.param}
       <Qr text={`https://t.me/KBTUappBot?startapp=${q.param}`} tone={QR_TONE}><span class="appmark"><KbtuMark /></span></Qr><!-- a new code redraws in place: no blank frame -->
     {:else if q?.ended || note}
-      <p class="note">{note || t('scr.closed')}</p>
+      <p class="note">{note || sw('scr.closed')}</p>
     {/if}
   </div>
 {/snippet}
@@ -116,16 +117,16 @@
     {#if q}<b class="head">{q.title}</b>{/if}
     {@render plate()}
     {#if q && hand}
-      {#if q.param}<p class="hint">{t('scr.handHint')}</p>{/if}
-      <p class="got">{t('scr.helpersN', { n: q.helpers ?? 0 })}</p>
-      {#if q.helpers}<Button kind="secondary" size="m" loading={off} onclick={handsOff}>{t('scr.handOff')}</Button>{/if}
+      {#if q.param}<p class="hint">{sw('scr.handHint')}</p>{/if}
+      <p class="got">{sw('scr.helpersN', { n: q.helpers ?? 0 })}</p>
+      {#if q.helpers}<Button kind="secondary" size="m" loading={off} onclick={handsOff}>{sw('scr.handOff')}</Button>{/if}
     {:else if q}
-      {#if q.param}<p class="hint">{t(out ? 'scr.outScan' : 'scr.scan')}</p>{/if}
-      <p class="got"><b>{out ? q.departed : q.done}</b>{#if out} / {q.done}{:else if q.expected} / {q.expected}{/if} {t(out ? 'scr.outDone' : 'scr.done')}</p>
-      {#if q.last && !out}<p class="hint">{t(q.last.team ? 'scr.lastTeam' : 'scr.lastIn', { name: q.last.name, time: time(q.last.at) })}</p>{/if}
-      {#if q.pending}<p class="hint">{t('scr.joining', { n: q.pending })}</p>{/if}
+      {#if q.param}<p class="hint">{sw(out ? 'scr.outScan' : 'scr.scan')}</p>{/if}
+      <p class="got"><b>{out ? q.departed : q.done}</b>{#if out} / {q.done}{:else if q.expected} / {q.expected}{/if} {sw(out ? 'scr.outDone' : 'scr.done')}</p>
+      {#if q.last && !out}<p class="hint">{sw(q.last.team ? 'scr.lastTeam' : 'scr.lastIn', { name: q.last.name, time: time(q.last.at) })}</p>{/if}
+      {#if q.pending}<p class="hint">{sw('scr.joining', { n: q.pending })}</p>{/if}
       {#if event && sess && scanner && q.param}<Button kind="secondary" size="m" onclick={toScanner}>{#snippet icon()}<ScanLine size={17} />{/snippet}{t('studio.scanner')}</Button>{/if}
-      {#if board && q.param}<Button kind="secondary" size="m" onclick={() => { haptic.tap(); sheets.handQr(sid); }}>{#snippet icon()}<UserPlus size={17} />{/snippet}{t('scr.hand')}</Button>{/if}
+      {#if board && q.param}<Button kind="secondary" size="m" onclick={() => { haptic.tap(); sheets.handQr(sid); }}>{#snippet icon()}<UserPlus size={17} />{/snippet}{sw('scr.hand')}</Button>{/if}
     {/if}
   </div>
 </div>

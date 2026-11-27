@@ -25,6 +25,7 @@
   import { sheets, registration } from '../../lib/state/sheets';
   import { session } from '../../lib/state/session.svelte';
   import { t, money, placeOf } from '../../lib/i18n/index.svelte';
+  import { sw } from '../../lib/i18n/staff';
   import { relDay, time, nowTs, dayNo, dayMonthShort } from '../../lib/time';
   import { haptic, openLink } from '../../lib/tg';
   import { count } from '../../lib/stats';
@@ -202,7 +203,7 @@
   const toCheck = $derived(going.filter((a) => a.receipt?.flags.length && !a.receipt.reviewed).length);
 
   async function removeEvent() {
-    if (!(await sheets.ask({ title: t('studio.deleteAsk'), text: t('studio.deleteText'), ok: t('ed.deleteGo'), cancel: t('tk.keep'), danger: true }))) return;
+    if (!(await sheets.ask({ title: t('studio.deleteAsk'), text: t('studio.deleteText'), ok: sw('ed.deleteGo'), cancel: t('tk.keep'), danger: true }))) return;
     // off every Studio list at once (an admin's soft delete too), before their reload says the same
     const gone = () => { for (const [k, l] of Object.entries(data.studio)) data.studio[+k] = l.filter((x) => x.id !== id); studioChanged(); haptic.warn(); say(phrase('say.eventDeleted'), 'waving_hand_3d_default'); close(overlay.id); };
     try { await api.deleteEvent(id); gone(); }
@@ -485,7 +486,7 @@
               {#if e.needsVolunteers}<Row icon={HandHeart} title={t('mg.helpers')} count={e.volunteersAsked ?? 0} accessory="chevron" onclick={() => sheets.volunteers(id, e.needsVolunteers!)} />{/if}
               <!-- the big screen at the door (/show): connect a laptop, finish, the CSV -->
               <!-- a partner's event has no door of ours: its team is marked here -->
-              {#if e.guestHost && teamMark}<Row icon={UserCheck} title={t('scr.team')} accessory="chevron" onclick={() => { haptic.tap(); sheets.screens(undefined, undefined, undefined, undefined, id); }} />{/if}
+              {#if e.guestHost && teamMark}<Row icon={UserCheck} title={sw('scr.team')} accessory="chevron" onclick={() => { haptic.tap(); sheets.screens(undefined, undefined, undefined, undefined, id); }} />{/if}
               {#if live && !e.guestHost}<Row icon={MonitorUp} title={t('scr.title')} accessory="chevron" onclick={() => sheets.screens(undefined, id)} />{/if}
             {/if}
             {#if reports}<Row icon={ClipboardCheck} title={t('evr.title')} accessory="chevron" onclick={() => sheets.eventReport(id, co ? org : undefined)} />{/if}

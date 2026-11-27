@@ -7,6 +7,7 @@
   import { close, say, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import { t, money } from '../../lib/i18n/index.svelte';
+  import { sw } from '../../lib/i18n/staff';
   import { whenLine } from '../../lib/time';
   import { haptic } from '../../lib/tg';
   import Sheet from '../../ui/Sheet.svelte';
@@ -91,7 +92,7 @@
                 <Button kind="destructive" full disabled={busy} onclick={() => decide('reject')}>{t('rc.reject')}</Button>
               </div>
             {/if}
-            {#if row.undo}<Button kind="secondary" disabled={busy} onclick={() => decide('undo')}>{t('adm.undo')}</Button>{/if}
+            {#if row.undo}<Button kind="secondary" disabled={busy} onclick={() => decide('undo')}>{sw('adm.undo')}</Button>{/if}
           </div>
         {/if}
       {/each}
