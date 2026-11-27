@@ -1733,6 +1733,8 @@ const kk: Dict = {
   'andr.account': "Барлық жерде бір Google аккаунты: телефондағы Google Play-дегі аккаунт",
   'andr.go': "Бастау",
   'andr.later': "Қазір емес",
+  'andr.row': "KBTU App Google Play-де",
+  'andr.rowSub': "Тестер болу",
   'web.verify': 'Студент екеніңді Telegram қосымшасында бір рет раста.',
   'web.back': 'Артқа',
   'web.search': 'Іздеу',

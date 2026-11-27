@@ -1,12 +1,16 @@
 <script lang="ts">
   // The app's own block, last on Profile (only these): its channel, the bugs-and-ideas group, GitHub and
   // the people who made it (the creator and the idea's author; a tap: Made together, People.svelte; his contact is there). One group of rows like every other on the page: a label, a grey value, an arrow out.
+  // On Android, first: the Google Play app's row until the person has opened it (the tester steps' page).
   // Helping (an offer) and supporting (the donate page) are one row, HelpSheet (the sponsors are on Made together); the main admin is not here, Admin knows him.
   import HeartHandshake from '@lucide/svelte/icons/heart-handshake';
   import MessageCircleWarning from '@lucide/svelte/icons/message-circle-warning';
   import Megaphone from '@lucide/svelte/icons/megaphone';
   import MessagesSquare from '@lucide/svelte/icons/messages-square';
   import GitHubMark from '../../ui/GitHubMark.svelte';
+  import PlayMark from '../../ui/PlayMark.svelte';
+  import { count } from '../../lib/stats';
+  import { openPlayPage } from '../../lib/androidTest';
   import UsersRound from '@lucide/svelte/icons/users-round';
   import type { PersonRef } from '../../lib/api';
   import { data } from '../../lib/state/data.svelte';
@@ -14,7 +18,7 @@
   import Group from '../../ui/Group.svelte';
   import Row from '../../ui/Row.svelte';
   import { t } from '../../lib/i18n/index.svelte';
-  import { haptic, openLink } from '../../lib/tg';
+  import { haptic, inPlayApp, onAndroid, openLink } from '../../lib/tg';
   import { CODE, TALK } from '../../lib/feedback';
   import { session } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
@@ -29,10 +33,20 @@
   const names = $derived(creator && muse ? t('cr.two', { a: nameOf(creator), b: nameOf(muse) }) : creator ? nameOf(creator) : muse ? nameOf(muse) : undefined);
   const go = (url: string) => { haptic.tap(); openLink(url); };
   const helpRow = () => { haptic.tap(); if (session.me?.student || !session.donate) sheets.helpUs(); else sheets.settings('donate'); };
+  // the Android app's lasting way in (the entry sheet comes at most twice): on Android, until the person has opened
+  // the installed app (here: inPlayApp; in Telegram: the account's androidApp); counted drawn once a launch, and tapped
+  const play = $derived(onAndroid && !inPlayApp && !!session.me && !session.me.androidApp);
+  $effect(() => { if (play && !drawn) { drawn = true; count('andr.row'); } });
+  const playRow = () => { haptic.tap(); openPlayPage('andr.rowgo'); };
+</script>
+
+<script module lang="ts">
+  let drawn = false; // once a launch, however often Profile is drawn
 </script>
 
 <div class="appc" data-away><!-- data-away: it leaves while Me's settings are open -->
   <Group caption="KBTU App">
+    {#if play}<Row icon={PlayMark} title={t('andr.row')} value={t('andr.rowSub')} accessory="external" onclick={playRow} />{/if}
     <!-- the channel and the group only for who isn't in them yet (server logic/appchats.py: the bot hears joins and leaves) -->
     {#if !session.me?.inChannel}<Row icon={Megaphone} title={t('app.channel')} value={t('app.channelSub')} accessory="external" onclick={() => go(TG_NEWS)} />{/if}
     {#if !session.me?.inGroup}<Row icon={MessagesSquare} title={t('app.group')} value={t('app.groupSub')} accessory="external" onclick={() => go(TALK)} />{/if}

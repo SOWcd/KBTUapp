@@ -831,8 +831,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.get("/api/me")
     def get_me(request: Request, con: Con, v: Me, response: Response, later: BackgroundTasks,
-               report_log: Annotated[bool, Query(alias="reportLog")] = True, platform: str | None = None):
-        logic.account.seen_platform(con, v.id, platform)  # no extra request: the app's own /api/me says it
+               report_log: Annotated[bool, Query(alias="reportLog")] = True, platform: str | None = None, app: str | None = None):
+        logic.account.seen_platform(con, v.id, platform, app)  # no extra request: the app's own /api/me says it
         if cfg.background and cfg.bot_token and (tg := db.maybe(con, logic.appchats.due, con, v.id)):
             later.add_task(app_chats, v.id, tg)
         if cfg.reports:

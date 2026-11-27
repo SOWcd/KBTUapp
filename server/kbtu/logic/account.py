@@ -518,15 +518,21 @@ def lent_studio(con, v: Viewer, oid: int) -> dict:
 PLATFORMS = ("android", "ios", "desktop", "web")  # the coarse device kinds kept (user_platforms); the web app picks one
 
 
-def seen_platform(con, uid: int, kind: str | None) -> None:
+def seen_platform(con, uid: int, kind: str | None, app: str | None = None) -> None:
     """The device kind someone opened the app on, from /api/me: a read first, then a write (never waited for) at most
-    once a day per kind, so the creator can write to the people of one platform (admin broadcast --platform)."""
+    once a day per kind, so the creator can write to the people of one platform (admin broadcast --platform).
+    app='play': it was the installed Android app (android_app), so its install row and sheet stop."""
     if kind not in PLATFORMS:
         return
     at = one(con, "SELECT seen_at FROM user_platforms WHERE user_id = ? AND kind = ?", uid, kind)
     if at is None or at[0] <= core.now() - 86400:
         db.maybe(con, con.execute, """INSERT INTO user_platforms (user_id, kind, seen_at) VALUES (?, ?, ?)
             ON CONFLICT (user_id, kind) DO UPDATE SET seen_at = excluded.seen_at""", (uid, kind, core.now()))
+    if app == "play" and kind == "android":
+        at = one(con, "SELECT seen_at FROM android_app WHERE user_id = ?", uid)
+        if at is None or at[0] <= core.now() - 86400:
+            db.maybe(con, con.execute, """INSERT INTO android_app (user_id, seen_at) VALUES (?, ?)
+                ON CONFLICT (user_id) DO UPDATE SET seen_at = excluded.seen_at""", (uid, core.now()))
 
 
 def me(con, v: Viewer) -> dict:
@@ -617,6 +623,7 @@ def me(con, v: Viewer) -> dict:
         "bigScreen": "pair" if any("events" in _rights_from(m["role"], m["rights"]) for m in members) or one(con, """SELECT 1 FROM vol_hands h
             JOIN qr_sessions s ON s.id = h.session_id WHERE h.user_id = ? AND h.revoked_at IS NULL AND s.ended_at IS NULL""", v.id)
             else "qr" if c and c["helper"] else None,
+        "androidApp": bool(one(con, "SELECT 1 FROM android_app WHERE user_id = ?", v.id)),  # Profile's Google Play row goes
     }
 
 
@@ -1361,7 +1368,7 @@ def replay_deletions(con) -> tuple[int, int]:
 _DEL_KEEP = {("org_bans", "user_id")}  # a club's ban stays on the Telegram account
 _DEL_GONE = {
     ("donations", "user_id"), ("sponsor_consents", "user_id"),
-    ("fchan_feed_pages", "user_id"), ("broadcast_votes", "user_id"), ("user_platforms", "user_id"),
+    ("fchan_feed_pages", "user_id"), ("broadcast_votes", "user_id"), ("user_platforms", "user_id"), ("android_app", "user_id"),
     ("web_sessions", "user_id"),
     ("identities", "user_id"), ("push_devices", "user_id"),  # my Apple sign-in and my iPhones' push tokens (logic/apple.py)
     ("students", "user_id"), ("staff_ok", "user_id"), ("santa_people", "user_id"), ("santa_msgs", "giver_id"), ("santa_msgs", "to_id"), ("santa_sends", "user_id"), ("schedule_classes", "user_id"), ("org_members", "user_id"), ("join_requests", "user_id"),

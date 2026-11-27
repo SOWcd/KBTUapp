@@ -48,3 +48,27 @@ def test_platform_swept_and_deleted(env, monkeypatch):
     logic.account.delete_me(con, logic.Viewer(stu, "user", True))
     assert kinds(con, stu) == {} and kinds(con, bob) == {"android": night}
     assert ("user_platforms", "user_id") in logic.account._DEL_GONE
+
+
+def test_android_app_reported(env, monkeypatch):
+    """The installed Android app (the Google Play TWA) says app=play: /api/me answers androidApp from then on (Profile's
+    Google Play row and the tester sheet stop); only with platform=android, swept after 90 days, gone with the account."""
+    c, cfg = env
+    login(c, 90, "stu")
+    con = db.connect(cfg.db_path)
+    uid = con.execute("SELECT id FROM users WHERE tg_id = 90").fetchone()[0]
+    now = int(time.time())
+    set_clock(monkeypatch, lambda: now)
+    assert c.get("/api/me?platform=android", headers=tma(90)).json()["androidApp"] is False
+    for bad in ("?platform=ios&app=play", "?platform=android&app=other", "?app=play"):  # another kind or word: nothing kept
+        c.get("/api/me" + bad, headers=tma(90))
+    assert c.get("/api/me?platform=android", headers=tma(90)).json()["androidApp"] is False
+    c.get("/api/me?platform=android&app=play", headers=tma(90))
+    assert c.get("/api/me", headers=tma(90)).json()["androidApp"] is True      # Telegram too: the account knows
+    con.execute("UPDATE android_app SET seen_at = ?", (now - 91 * 86400,))
+    logic.stats_day(con)
+    assert con.execute("SELECT COUNT(*) FROM android_app").fetchone()[0] == 0
+    c.get("/api/me?platform=android&app=play", headers=tma(90))
+    logic.account.delete_me(con, logic.Viewer(uid, "user", True))
+    assert con.execute("SELECT COUNT(*) FROM android_app").fetchone()[0] == 0
+    assert ("android_app", "user_id") in logic.account._DEL_GONE

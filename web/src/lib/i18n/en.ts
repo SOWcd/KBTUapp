@@ -1733,6 +1733,8 @@ const en: Dict = {
   'andr.account': "One Google account everywhere: the one in Google Play on your phone",
   'andr.go': "Start",
   'andr.later': "Not now",
+  'andr.row': "KBTU App on Google Play",
+  'andr.rowSub': "Become a tester",
   'web.verify': 'Verify your student status once in the Telegram app.',
   'web.back': 'Back',
   'web.search': 'Search',

@@ -378,6 +378,7 @@ export interface Me {
   vol?: VolMe;                  // GET /api/me only: the volunteers ledger's club (server logic/vol.py, VOLUNTEERS); absent: nothing of it for me
   inChannel?: boolean;          // in the app's Telegram channel / topics group (server logic/appchats.py): Profile hides their rows
   inGroup?: boolean;
+  androidApp?: boolean; // opened the installed Android app (Google Play) in the last 90 days: no install row, no tester sheet
   bigScreen?: 'pair' | 'qr' | null; // Profile's "Big screen" row: scan a computer's QR (who runs events), or a helper's own QR
   bio: string;
   showcase: string[];

@@ -14,6 +14,10 @@ CREATE TABLE achievement_levels (                    -- last notified level, so 
   reached_at INTEGER NOT NULL, seen INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (user_id, code)
 ) STRICT;
+CREATE TABLE android_app (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      seen_at INTEGER NOT NULL
+    ) STRICT;
 CREATE TABLE anon_feedback (
       id INTEGER PRIMARY KEY,
       body TEXT NOT NULL CHECK (length(body) <= 1000),

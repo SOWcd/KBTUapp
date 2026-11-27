@@ -31,8 +31,10 @@ APPEALS = ("apl.open", "apl.typed", "apl.ai", "apl.sent", "apl.drop", "apl.del")
 HERO_KINDS = ("ticket", "friends", "club", "news", "forum", "class", "next", "today", "week")
 HERO = tuple(f"hero.{a}.{k}" for a in ("show", "tap") for k in HERO_KINDS)
 # the Android tester's funnel: the sheet in the app (shown, tapped), then kbtu.sow.kz/android.html in the phone's
-# browser (opened, each Google step's button, the "Item not found" retry); the page has no sign-in, so `page_hit`
-ANDROID_APP = ("andr.sheet", "andr.go")
+# browser (opened, each Google step's button, the "Item not found" retry); the page has no sign-in, so `page_hit`.
+# andr.again: the sheet's one second showing (3 days on, dismissed); andr.row / andr.rowgo: Profile's lasting row,
+# drawn (once a launch) and tapped
+ANDROID_APP = ("andr.sheet", "andr.again", "andr.go", "andr.row", "andr.rowgo")
 ANDROID_PAGE = ("page", "join", "optin", "play", "retry")
 ANDROID = (*ANDROID_APP, *(f"andr.{k}" for k in ANDROID_PAGE))
 PAGE_CAP = 5000  # a key's day ceiling for the signed-out page: far above real use, so a script can't run it up
