@@ -11,6 +11,24 @@ from kbtu import bot, chores, config, db, logic, media, outbox, app as server, t
 from test_core import env, login, set_clock, tma  # noqa: F401  (env: the fixture)
 
 
+def test_channel_unposts_events_that_stop_being_public(env):
+    _, cfg = env
+    con = db.connect(cfg.db_path)
+    oid = logic.create_org(con, None, "Chess", "CH", "crown_3d", True)
+    now = logic.core.now()
+    con.executemany("""INSERT INTO events (id, org_id, title, starts_at, status, channel_msg, created_at, updated_at)
+        VALUES (?, ?, 'Quiz', ?, 'published', ?, 0, 0)""", [(i, oid, now + 3600, i + 10) for i in range(1, 5)] + [(5, oid, now - 3600, 15)])
+    con.execute("INSERT INTO meta (key, value) VALUES ('thread:1', '-123 17')")
+    con.execute("UPDATE events SET visibility = 'members' WHERE id IN (1, 5)")
+    con.execute("UPDATE events SET visibility = 'leaders' WHERE id = 2")
+    con.execute("UPDATE events SET meeting = 1 WHERE id = 3")
+    con.execute("UPDATE events SET status = 'draft' WHERE id = 4")
+
+    assert logic.channel_due(con) == []
+    assert logic.channel_gone(con) == [(11, "-123 17"), (12, ""), (13, ""), (14, "")]
+    assert [r[0] for r in con.execute("SELECT channel_msg FROM events ORDER BY id")] == [None, None, None, None, 15]
+
+
 def test_events_channel(env, monkeypatch):
     """The events channel: a published public event is due once; an edit makes it due again; a cancel
     marks its post; a team-only one never goes."""

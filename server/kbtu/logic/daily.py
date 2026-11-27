@@ -151,8 +151,8 @@ def memo_week(con) -> None:
     monday = _next_week()
     if not _once(con, "memo_week", str(monday)):
         return
-    for (oid,) in rows(con, """SELECT DISTINCT org_id FROM events WHERE status IN ('draft', 'published') AND memo IS NOT NULL
-            AND memo_sent_at IS NULL AND starts_at >= ? AND starts_at < ?
+    for (oid,) in rows(con, f"""SELECT DISTINCT org_id FROM events WHERE status IN ('draft', 'published') AND memo IS NOT NULL
+            AND memo_only = 0 AND NOT {evdel('events')} AND memo_sent_at IS NULL AND starts_at >= ? AND starts_at < ?
             AND org_id IN (SELECT id FROM orgs WHERE official = 1 OR top_at IS NOT NULL)""", monday, monday + 7 * 86400):
         for m in rows(con, "SELECT m.user_id, m.role, t.rights FROM org_members m LEFT JOIN org_roles t ON t.id = m.role_id WHERE m.org_id = ?", oid):
             if "memo" in _rights_from(m["role"], m["rights"]):
@@ -183,8 +183,9 @@ def tba_day(con) -> None:
     day = local // 86400
     if local % 86400 < 10 * 3600 or not _once(con, "tba_day", str(day)):
         return
-    for e in rows(con, """SELECT created_by, starts_at FROM events WHERE status = 'published' AND place = '' AND created_by IS NOT NULL AND starts_at > ?
-            AND id NOT IN (SELECT event_id FROM santa_events)""", core.now()):  # a Santa game (santa.start) has no room to confirm
+    for e in rows(con, """SELECT created_by, starts_at FROM events WHERE status = 'published' AND place = '' AND online IS NULL
+            AND created_by IS NOT NULL AND starts_at > ? AND id NOT IN (SELECT event_id FROM santa_events)""",
+                  core.now()):  # a Santa game (santa.start) has no room to confirm
         if day_of(e["starts_at"]) - day in (7, 3, 1, 0):
             notify(con, e["created_by"], "place_tba", f"tba:{day}")
 

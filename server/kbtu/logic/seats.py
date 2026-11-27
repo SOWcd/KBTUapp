@@ -207,6 +207,7 @@ def channel_due(con, bot: str = "", limit: int = 3) -> list[tuple[sqlite3.Row, s
     there (its official co-host left or lost the ✓, its club is archived or hidden) is deleted; it comes back with a
     new yes."""
     out = []
+    t = core.now()
     for e in rows(con, """SELECT e.*, o.name AS org_name, o.official AS h_off, o.kind AS h_kind, o.status AS h_status,
             c.id AS co_id, c.name AS co_name, c.official AS co_off, f.path AS cover,
             e.starts_at > ? AND e.visibility = 'public' AND e.meeting = 0 AND e.hidden_at IS NULL AND e.school IS NULL
@@ -218,7 +219,7 @@ def channel_due(con, bot: str = "", limit: int = 3) -> list[tuple[sqlite3.Row, s
             LEFT JOIN orgs c ON c.id = x.org_id AND c.status = 'active' AND c.kind = 'club'
             LEFT JOIN files f ON f.id = e.cover_file_id
             WHERE e.starts_at > ? AND (e.status != 'draft' OR e.channel_msg IS NOT NULL) OR e.channel_via IS NOT NULL
-            ORDER BY e.published_at""", core.now(), core.now()):
+            ORDER BY e.published_at""", t, t):
         on = e["h_status"] == "active"
         own = on and (e["h_off"] or e["h_kind"] != "club")
         kept = on and e["channel_msg"] and e["channel_via"] is None
@@ -227,7 +228,9 @@ def channel_due(con, bot: str = "", limit: int = 3) -> list[tuple[sqlite3.Row, s
             # one still to come that may not be there, or a past one that hung on a co-host now gone
             # (a collab a moderator hid goes too: the official club's name stays on nothing taken down)
             # a school's own event never: one posted before it was made so goes too
-            if e["channel_msg"] and (e["live"] or e["school"] or e["channel_via"] is not None and (e["hidden_at"] or not (own or vouch and e["co_id"] == e["channel_via"]))):
+            upcoming = e["starts_at"] is not None and e["starts_at"] > t
+            if e["channel_msg"] and (upcoming or e["school"] or e["channel_via"] is not None
+                                     and (e["hidden_at"] or not (own or vouch and e["co_id"] == e["channel_via"]))):
                 _unpost(con, e)
             continue
         via = None if own or kept else e["co_id"]
