@@ -34,7 +34,7 @@ from .newsfeed import (cancel_casting, castings, create_post, feature, hide_post
     update_post, wipe_post)  # noqa: F401
 from .chatlist import (add_chat, add_org_chat, approve_chat, bot_added, bot_admin, bot_unwait, my_waits, wait_target,
     claim_wait, tag_all, chat_pick, pick_claim, bot_left, chat_card, chat_input, chat_link, chat_opened,
-    chat_refreshed, chats, chats_gone, delete_chat, drop_org_chat, main_org_chat, may_chats, mirror_org_chat,
+    chat_refreshed, chats, chats_gone, delete_chat, drop_org_chat, main_org_chat, may_chats, mirror_org_chat, news_org_chat,
     org_chats, photo_free, set_chat_org, suggest_chat, suggest_check, chat_links, known_chat, set_chat_section,
     sort_next, sort_save, chat_asked_too)  # noqa: F401
 from .oversight import (_owner, admin_create_org, admin_hide_org, admin_set_award, admin_org_events, admin_orgs,

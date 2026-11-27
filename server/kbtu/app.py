@@ -1542,6 +1542,10 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def mirror_org_chat(oid: int, cid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.mirror_org_chat(con, v, oid, cid, body.get("on"))
 
+    @app.put("/api/orgs/{oid}/chats/{cid}/news")
+    def news_org_chat(oid: int, cid: int, con: Con, v: Me, body: dict = Body(...)):
+        return logic.news_org_chat(con, v, oid, cid, body.get("topic"))
+
 
     @app.put("/api/orgs/{oid}/chats/{cid}/swear")
     async def swear_org_chat(oid: int, cid: int, con: Con, v: Me, body: dict = Body(...)):

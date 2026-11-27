@@ -2627,4 +2627,16 @@ MIGRATIONS: list[tuple[int, str]] = [
       user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
       seen_at INTEGER NOT NULL
     ) STRICT;"""),
+    # A club that announces in a forum group's topic, not a channel (mirror.py): chats.news_topic on its group = the
+    # org's news source instead of the main channel (0: picked, its topic not yet; else the topic's id). chat_topics: the
+    # group's topics as the userbot listed them, for Studio's picker (titles only). tg_channels.stay: the userbot was in
+    # the group before (added by hand): when it stops being a source it is forgotten, never left.
+    (255, """ALTER TABLE chats ADD COLUMN news_topic INTEGER;
+    CREATE TABLE chat_topics (
+      chat_id INTEGER NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+      topic   INTEGER NOT NULL,
+      title   TEXT NOT NULL,
+      PRIMARY KEY (chat_id, topic)
+    ) STRICT;
+    ALTER TABLE tg_channels ADD COLUMN stay INTEGER NOT NULL DEFAULT 0;"""),
 ]

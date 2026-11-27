@@ -702,3 +702,78 @@ def test_deleted_posts_are_wiped(env, monkeypatch, tmp_path):
     assert mirror.take(con, 500, mirror.Msg(id=1, date=0, text="Meetup moved\nAt 8", photo=pic, views=9)) == tg
     assert mirror.comments(con, 500, 1, ["\u0412\u0441\u0442\u0440\u0435\u0447\u0430 \u0432 \u0441\u0435\u043c\u044c"]) == 0   # the channel's translation neither
     assert wiped(tg) and con.execute("SELECT COUNT(*) FROM posts").fetchone()[0] == n
+
+
+def test_forum_topic_source(env):
+    """A club without a channel announces in a forum group's topic: Studio picks the group (our bot inside says which),
+    then one of the topics the userbot listed (never General); it replaces the main channel. Only an admin's post opening
+    in that topic is taken (another topic, a reply, a member's message: dropped unread, never downloaded); its link is
+    the closed group's; another source: the userbot forgets a group it was added to by hand instead of leaving it."""
+    import datetime
+    from types import SimpleNamespace as NS
+    from kbtu import mirror, userbot
+    c, cfg = env
+    pres = login(c, 80, "pres")
+    login(c, 81, "ali")
+    con = db.connect(cfg.db_path)
+    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (1, 'mk', 'club', 'Mountain', 'MK', 'laptop_3d', 1, 0)")
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'president', 0)", (pres["id"],))
+    con.execute("""INSERT INTO chats (id, title, kind, url, created_at, status, org_id, main, tg_chat_id) VALUES
+        (1, 'MK News', 'channel', 'https://t.me/mk_news', 0, 'org', 1, 1, NULL),
+        (2, 'MK Hikers', 'group', 'https://t.me/+AbCdEfGh12', 0, 'org', 1, 0, -1009001),
+        (3, 'MK Old', 'group', 'https://t.me/+ZzZzZzZz99', 0, 'org', 1, 0, NULL)""")
+    assert mirror.wanted(con) == {"mk_news": 1} and mirror.groups(con) == {}
+    put = lambda cid, topic, who=80: c.put(f"/api/orgs/1/chats/{cid}/news", headers=tma(who), json={"topic": topic})  # noqa: E731
+    assert put(2, 0, 81).status_code == 403                       # not Ali's club
+    assert put(1, 0).status_code == 400 and put(3, 0).status_code == 400   # a channel; a group our bot isn't in
+    assert put(2, 7).status_code == 400                           # a topic nobody listed
+    studio = {x["id"]: x for x in put(2, 0).json()}
+    assert studio[2]["news"] == 0 and studio[2]["topics"] == []
+    assert mirror.wanted(con) == {} and list(mirror.groups(con)) == [9001] and mirror.groups_to_join(con) == [(9001, "https://t.me/+AbCdEfGh12")]
+    assert mirror.has_channel(con, 1) is True                     # the main channel still
+
+    mirror.joined(con, 9001, "#9001", stay=True)                  # the owner had added the userbot by hand
+    mirror.topics(con, 9001, [(1, "General"), (5, "  Announcements "), (9, "Rides")])
+    studio = {x["id"]: x for x in put(2, 0).json()}
+    assert studio[2]["topics"] == [{"id": 5, "title": "Announcements"}, {"id": 9, "title": "Rides"}]
+    assert mirror.take(con, 9001, mirror.Msg(id=20, date=logic.now(), text="Hike on Saturday", topic=5)) is None   # no topic picked yet
+    con.execute("UPDATE tg_channels SET last_msg = 15 WHERE id = 9001")
+    assert put(2, 5).status_code == 200 and mirror.topic(con, 9001) == 5 and mirror.last(con, 9001) == 0   # its first posts next
+
+    take = lambda i, **kw: mirror.take(con, 9001, mirror.Msg(id=i, date=logic.now(), **kw))  # noqa: E731
+    assert take(21, text="Rides to the lake", topic=9) is None    # another topic
+    assert take(22, text="me too!", topic=5, own=False) is None   # a member
+    assert take(23, text="a reply", topic=None) is None           # a reply inside the topic, or General
+    pid = take(24, text="Big Almaty Lake hike\nSaturday 8:00", topic=5)
+    p = con.execute("SELECT * FROM posts WHERE id = ?", (pid,)).fetchone()
+    assert (p["org_id"], p["title"], p["tg_url"], p["author_id"]) == (1, "Big Almaty Lake hike", "https://t.me/c/9001/5/24", None)
+
+    # the userbot's side: Telethon-shaped messages; only an admin's (or the group's own) top-level post in topic 5
+    class Client:
+        async def get_input_entity(self, peer):
+            return peer
+
+        async def get_participants(self, ent, filter=None):
+            return [NS(id=700)]
+
+        async def download_media(self, m, kind):
+            raise AssertionError("a dropped message is never downloaded")
+
+    def msg(i, sender, top, reply=None):
+        r = NS(forum_topic=True, reply_to_msg_id=reply or top, reply_to_top_id=top if reply else None) if top else None
+        return NS(id=i, peer_id=NS(channel_id=9001), action=None, message=f"Trip number {i}", grouped_id=None, reply_to=r, from_id=sender,
+                  date=datetime.datetime.now(datetime.timezone.utc), photo=None, video=None, gif=None, video_note=None, media=None,
+                  web_preview=None, views=None, reactions=None)
+    work = userbot.Mirror(cfg, Client(), con)
+    run = lambda m: asyncio.run(work.guard(work.post(m)))  # noqa: E731
+    run(msg(30, NS(user_id=700), 5))                              # an admin, in the topic
+    run(msg(31, NS(channel_id=9001), 5))                          # an anonymous admin (as the group)
+    run(msg(32, NS(user_id=701), 5))                              # a member
+    run(msg(33, NS(user_id=700), 9))                              # another topic
+    run(msg(34, NS(user_id=700), 5, reply=30))                    # a reply
+    run(msg(35, NS(user_id=700), None))                           # General
+    assert sorted(r[0] for r in con.execute("SELECT msg_id FROM tg_post_msgs WHERE channel = 9001")) == [24, 30, 31]
+
+    # back to the channel: the group is forgotten, not left (stay); the channel is joined again
+    assert put(2, None).status_code == 200 and mirror.wanted(con) == {"mk_news": 1}
+    assert mirror.to_leave(con) == [(9001, "#9001")] and mirror.stays(con, 9001) is True

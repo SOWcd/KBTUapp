@@ -684,6 +684,7 @@ export const server = {
   rosterRequests: (org?: Id): Promise<RosterRequest[]> => call('GET', org ? `/roster/requests?org=${org}` : '/roster/requests'), // the claims I confirm (President; DMP for a club without one)
   rosterDecide: (row: Id, ok: boolean): Promise<void> => call('POST', `/roster/requests/${row}`, { ok }), // the main channel's posts in the club's news
   mirrorOrgChat: (org: Id, chat: Id, on: boolean): Promise<StudioChat[]> => call('PUT', `/orgs/${org}/chats/${chat}/mirror`, { on }),
+  newsOrgChat: (org: Id, chat: Id, topic: number | null): Promise<StudioChat[]> => call('PUT', `/orgs/${org}/chats/${chat}/news`, { topic }),
   swearOrgChat: (org: Id, chat: Id, on: boolean): Promise<StudioChat[]> => call('PUT', `/orgs/${org}/chats/${chat}/swear`, { on }), // President or Vice; conflict rights: the bot can't delete and restrict there
   swearReport: (org: Id): Promise<SwearRow[]> => call('GET', `/orgs/${org}/chats/swear`), // President, Vice, Heads
   chatRoles: (org: Id, chat: Id): Promise<ChatRoles> => call('GET', `/orgs/${org}/chats/${chat}/roles`), // the group's admins against the club's roles, asked of Telegram now

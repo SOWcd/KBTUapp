@@ -215,6 +215,12 @@ CREATE TABLE chat_sync_todo (
       user_id INTEGER NOT NULL REFERENCES users(id),
       op TEXT NOT NULL CHECK (op IN ('add', 'drop')),
       PRIMARY KEY (chat_id, user_id)) STRICT, WITHOUT ROWID;
+CREATE TABLE chat_topics (
+      chat_id INTEGER NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+      topic   INTEGER NOT NULL,
+      title   TEXT NOT NULL,
+      PRIMARY KEY (chat_id, topic)
+    ) STRICT;
 CREATE TABLE chat_waits (
       id INTEGER PRIMARY KEY,
       user_id INTEGER NOT NULL REFERENCES users(id),
@@ -235,7 +241,7 @@ CREATE TABLE chats (
   sort       INTEGER NOT NULL DEFAULT 0,
   added_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
   created_at INTEGER NOT NULL
-, photo TEXT, forum INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'live', org_id INTEGER REFERENCES orgs(id) ON DELETE SET NULL, main INTEGER NOT NULL DEFAULT 0, about TEXT, mirror INTEGER NOT NULL DEFAULT 1, section TEXT CHECK (section IN ('study', 'reviews', 'admission', 'schools', 'clubs', 'fun')), section_ai INTEGER NOT NULL DEFAULT 0, section_try INTEGER, swear INTEGER NOT NULL DEFAULT 0, swear_miss TEXT) STRICT;
+, photo TEXT, forum INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'live', org_id INTEGER REFERENCES orgs(id) ON DELETE SET NULL, main INTEGER NOT NULL DEFAULT 0, about TEXT, mirror INTEGER NOT NULL DEFAULT 1, section TEXT CHECK (section IN ('study', 'reviews', 'admission', 'schools', 'clubs', 'fun')), section_ai INTEGER NOT NULL DEFAULT 0, section_try INTEGER, swear INTEGER NOT NULL DEFAULT 0, swear_miss TEXT, news_topic INTEGER) STRICT;
 CREATE TABLE "club_applications" (
       id          INTEGER PRIMARY KEY,
       user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -1329,7 +1335,7 @@ CREATE TABLE tg_channels (
         username  TEXT NOT NULL,                      -- lowercase, the t.me name it was joined by
         joined_at INTEGER NOT NULL,
         last_msg  INTEGER NOT NULL DEFAULT 0          -- the newest post taken: the catch-up after a restart starts there
-    ) STRICT;
+    , stay INTEGER NOT NULL DEFAULT 0) STRICT;
 CREATE TABLE tg_post_msgs (
         channel  INTEGER NOT NULL,
         msg_id   INTEGER NOT NULL,

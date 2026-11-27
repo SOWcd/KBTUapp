@@ -6,7 +6,13 @@ The source is the org's MAIN public channel with its Studio switch on (chats.mai
 itself and leaves it when it stops being one. A post is a channel post (an album is one post): its text as typed (the
 first line the title), its photo copied, a video or a file only as a link to the post; edits follow, a deletion takes
 it down and wipes its text and photo; Telegram's views and reaction counts show instead of ours, and comments stay in Telegram. Nobody is notified
-of a mirrored post. Nothing but the channel's own posts is kept."""
+of a mirrored post. Nothing but the channel's own posts is kept.
+
+A club that announces in a forum group instead (no channel, an "Announcements" topic) picks that group and topic in
+Studio (chats.news_topic; it then replaces the main channel). Our bot must be in the group (tg_chat_id says which one it
+is); the userbot joins it by its link (or was added by hand: then it never leaves it, stay) and lists its topics for the
+picker. Only that topic's top-level posts by the group's admins (or sent as the group) are taken, like a channel's
+posts; every other message (other topics, General, members, replies) is dropped unread."""
 from __future__ import annotations
 
 import html
@@ -46,6 +52,10 @@ class Msg:
     views: int | None = None
     reactions: list[tuple[str, int]] | None = field(default=None)
     entities: list[Entity] = field(default_factory=list)  # Telegram's UTF-16 offsets
+    # a group's message: the topic it opens a post in (None: a reply, or no topic) and whether its sender may announce
+    # there (an admin, or the group itself); a channel's post is always the channel's own
+    topic: int | None = None
+    own: bool = True
 
 
 def username(url: str) -> str | None:
@@ -54,18 +64,48 @@ def username(url: str) -> str | None:
     return m.group(1).lower() if m else None
 
 
-def wanted(con) -> dict[str, int]:
-    """The channels to mirror, by name: each active org's main public channel with the switch on. name -> org id."""
+def invite(url: str) -> str | None:
+    """A closed chat's invite hash from its t.me link; None for a public one."""
+    m = re.fullmatch(r"https://t\.me/(?:\+|joinchat/)([A-Za-z0-9_-]{8,64})/?", url or "", re.I)
+    return m.group(1) if m else None
+
+
+def tid(tg_chat_id: int | None) -> int | None:
+    """A supergroup's Telethon id from its Bot API id (-100<id>); None for anything else."""
+    s = str(tg_chat_id or "")
+    return int(s[4:]) if s.startswith("-100") and s[4:].isdigit() else None
+
+
+_GROUP_SRC = "{a}.news_topic IS NOT NULL AND {a}.kind = 'group' AND {a}.tg_chat_id IS NOT NULL"  # a chats row (alias a) as a group source
+
+
+def groups(con) -> dict[int, dict]:
+    """The forum groups an active org picked as its news source (chats.news_topic), by Telethon id: the chat row."""
     out = {}
-    for c in rows(con, """SELECT c.url, c.org_id FROM chats c JOIN orgs o ON o.id = c.org_id
-            WHERE c.main = 1 AND c.mirror = 1 AND c.kind = 'channel' AND o.status = 'active' ORDER BY c.id"""):
+    for c in rows(con, f"""SELECT c.* FROM chats c JOIN orgs o ON o.id = c.org_id
+            WHERE {_GROUP_SRC.format(a='c')} AND o.status = 'active' ORDER BY c.id"""):
+        if (t := tid(c["tg_chat_id"])) is not None:
+            out.setdefault(t, dict(c))
+    return out
+
+
+def wanted(con) -> dict[str, int]:
+    """The channels to mirror, by name: each active org's main public channel with the switch on, unless the org picked
+    a group's topic instead. name -> org id."""
+    out = {}
+    for c in rows(con, f"""SELECT c.url, c.org_id FROM chats c JOIN orgs o ON o.id = c.org_id
+            WHERE c.main = 1 AND c.mirror = 1 AND c.kind = 'channel' AND o.status = 'active'
+            AND NOT EXISTS (SELECT 1 FROM chats g WHERE g.org_id = o.id AND {_GROUP_SRC.format(a='g')}) ORDER BY c.id"""):
         if name := username(c["url"]):
             out.setdefault(name, c["org_id"])
     return out
 
 
 def has_channel(con, oid: int) -> bool:
-    """The org's main chat is a public channel: one the userbot can mirror (admin channel-ask asks the rest for one)."""
+    """The org's main chat is a public channel, or it announces in a group's topic: one the userbot can mirror (admin
+    channel-ask asks the rest for one)."""
+    if one(con, f"SELECT 1 FROM chats c WHERE c.org_id = ? AND {_GROUP_SRC.format(a='c')} AND c.news_topic > 0", oid):
+        return True
     c = one(con, "SELECT kind, url FROM chats WHERE org_id = ? AND main = 1", oid)
     return bool(c and c["kind"] == "channel" and username(c["url"]))
 
@@ -75,25 +115,75 @@ def to_join(con) -> list[str]:
     return [n for n in wanted(con) if n not in have]
 
 
+def groups_to_join(con) -> list[tuple[int, str]]:
+    """The source groups the userbot is not known to be in yet: (Telethon id, the group's link to join by)."""
+    have = {r[0] for r in rows(con, "SELECT id FROM tg_channels")}
+    return [(t, c["url"]) for t, c in groups(con).items() if t not in have]
+
+
 def to_leave(con) -> list[tuple[int, str]]:
-    """Channels the userbot joined that are no mirror any more (never one it didn't join itself)."""
-    keep = wanted(con)
-    return [(r["id"], r["username"]) for r in rows(con, "SELECT id, username FROM tg_channels ORDER BY id") if r["username"] not in keep]
+    """Channels and groups the userbot joined that are no source any more."""
+    keep, gs = wanted(con), groups(con)
+    return [(r["id"], r["username"]) for r in rows(con, "SELECT id, username FROM tg_channels ORDER BY id")
+            if r["username"] not in keep and r["id"] not in gs]
 
 
-def joined(con, channel: int, name: str) -> None:
-    con.execute("INSERT INTO tg_channels (id, username, joined_at) VALUES (?, ?, ?) ON CONFLICT (id) DO UPDATE SET username = excluded.username",
-                (channel, name.lower(), now()))
+def stays(con, channel: int) -> bool:
+    """The userbot was in this group before it became a source (added by hand): forgotten, never left."""
+    return bool(one(con, "SELECT stay FROM tg_channels WHERE id = ?", channel)["stay"])
+
+
+def joined(con, channel: int, name: str, stay: bool = False) -> None:
+    """A channel by its t.me name, a group as '#<id>' (never a channel's name)."""
+    con.execute("""INSERT INTO tg_channels (id, username, joined_at, stay) VALUES (?, ?, ?, ?)
+        ON CONFLICT (id) DO UPDATE SET username = excluded.username""", (channel, name.lower(), now(), int(stay)))
 
 
 def left(con, channel: int) -> None:
     con.execute("DELETE FROM tg_channels WHERE id = ?", (channel,))
 
 
+def _source(con, channel: int) -> dict | None:
+    """What a joined chat is mirrored as now: org, topic (None: a channel; 0: a group whose topic isn't picked yet)
+    and the title an untitled post takes; None: not (or no more) a source."""
+    c = one(con, "SELECT username FROM tg_channels WHERE id = ?", channel)
+    if not c:
+        return None
+    if g := groups(con).get(channel):
+        return {"org": g["org_id"], "topic": g["news_topic"], "title": g["title"], "url": g["url"]}
+    if (oid := wanted(con).get(c["username"])) is None:
+        return None
+    m = one(con, "SELECT title FROM chats WHERE org_id = ? AND main = 1", oid)
+    return {"org": oid, "topic": None, "title": m["title"] if m else c["username"], "url": f"https://t.me/{c['username']}"}
+
+
 def source(con, channel: int) -> int | None:
     """The org a joined channel is mirrored into now; None: not (or no more) a mirror: its posts are let be."""
-    c = one(con, "SELECT username FROM tg_channels WHERE id = ?", channel)
-    return wanted(con).get(c["username"]) if c else None
+    s = _source(con, channel)
+    return s["org"] if s else None
+
+
+def topic(con, channel: int) -> int | None:
+    """A source group's picked topic (0: none yet); None for a channel or no source."""
+    s = _source(con, channel)
+    return s["topic"] if s else None
+
+
+def topics(con, channel: int, got: list[tuple[int, str]]) -> None:
+    """A source group's topics as the userbot listed them, for Studio's picker: titles only, all anew; never General
+    (id 1: the members' chat)."""
+    if not (g := groups(con).get(channel)):
+        return
+    with tx(con):
+        con.execute("DELETE FROM chat_topics WHERE chat_id = ?", (g["id"],))
+        con.executemany("INSERT OR IGNORE INTO chat_topics (chat_id, topic, title) VALUES (?, ?, ?)",
+                        [(g["id"], int(t), " ".join(str(x).split())[:80] or "#") for t, x in got[:100] if int(t) > 1])
+
+
+def _link(s: dict, channel: int, msg: int) -> str:
+    """A taken message's t.me address: a public chat's, or a closed group's (opens for its members)."""
+    name = username(s["url"])
+    return f"https://t.me/{name}/{msg}" if name else f"https://t.me/c/{channel}/{s['topic']}/{msg}"
 
 
 def last(con, channel: int) -> int:
@@ -186,12 +276,12 @@ def legacy_album_siblings(con, channel: int, m: Msg) -> list[int] | None:
 
 def take(con, channel: int, m: Msg, *, album_empty: bool = False) -> int | None:
     """A new channel post, an edit of one, or one more piece of an album: the org's post for it (a post without text
-    is titled by the channel). The post's id; None when the channel is no mirror now."""
-    oid = source(con, channel)
-    if oid is None:
+    is titled by the channel). The post's id; None when the channel is no mirror now, or (a group) the message is not
+    an admin's post opening in the picked topic."""
+    s = _source(con, channel)
+    if s is None or s["topic"] is not None and not (s["topic"] and m.topic == s["topic"] and m.own):
         return None
-    name = one(con, "SELECT username FROM tg_channels WHERE id = ?", channel)["username"]
-    title = (one(con, "SELECT title FROM chats WHERE org_id = ? AND main = 1", oid) or {"title": name})["title"]
+    oid, title = s["org"], s["title"]
     with tx(con):
         had = one(con, "SELECT post_id, lang FROM tg_post_msgs WHERE channel = ? AND msg_id = ?", channel, m.id)
         album = one(con, "SELECT post_id FROM tg_post_msgs WHERE channel = ? AND grouped = ?", channel, m.grouped) if m.grouped and not had else None
@@ -242,7 +332,7 @@ def take(con, channel: int, m: Msg, *, album_empty: bool = False) -> int | None:
             pid = con.execute("""INSERT INTO posts (org_id, author_id, audience, title, body, tg_fmt, photo_file_id, comments_on,
                     created_at, tg_channel, tg_url, tg_media) VALUES (?, NULL, 'public', ?, ?, ?, ?, 0, ?, ?, ?, ?)""",
                               (oid, t, b, tg_fmt, _photo(con, m.photo) if m.photo else None, m.date, channel,
-                               f"https://t.me/{name}/{m.id}", m.media)).lastrowid
+                               _link(s, channel, m.id), m.media)).lastrowid
         else:
             p = one(con, "SELECT * FROM posts WHERE id = ?", pid)
             sets = {}
@@ -284,7 +374,8 @@ def _untitled(con, pid: int, fallback: str) -> bool:
 def _langs(con, p) -> tuple[str | None, set[str]]:
     """A post's own language and the ones the channel itself gave it (folded posts, its comments); our AI's don't count.
     A picture with no words of its own (SITE posts the photo, then the kk, ru and en texts) has none: all three fold in."""
-    bare = not p["body"].strip() and _untitled(con, p["id"], (one(con, "SELECT title FROM chats WHERE org_id = ? AND main = 1", p["org_id"]) or {"title": ""})["title"])
+    s = _source(con, p["tg_channel"]) if p["tg_channel"] else None
+    bare = not p["body"].strip() and _untitled(con, p["id"], s["title"] if s else "")
     own = None if bare else ai.lang_of(f"{p['title']} {p['body']}")
     tr = set(json.loads(p["i18n"])) if p["i18n"] and p["tr_by"] == "tg" else set()
     return own, tr | ({own} if own else set())
