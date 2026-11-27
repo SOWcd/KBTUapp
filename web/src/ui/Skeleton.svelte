@@ -17,11 +17,12 @@
 
 <style>
   .sk { display: flex; flex-direction: column; }
-  .rows { border-radius: var(--r-group); background: var(--surface); overflow: hidden; }
+  /* the rim Group and Card wear: what loads in lands on the same edge */
+  .rows { border-radius: var(--r-group); background: var(--surface); box-shadow: var(--card-rim, none); overflow: hidden; }
   .cards { gap: var(--s-3); }
   .lines { gap: 10px; }
   .it { display: flex; align-items: center; gap: var(--s-3); padding: 10px var(--s-4); min-height: var(--row-h); }
-  .cards .it { padding: 10px; border-radius: var(--r-l); background: var(--surface); box-shadow: var(--shadow-card); }
+  .cards .it { padding: 10px; border-radius: var(--r-l); background: var(--surface); box-shadow: var(--card-rim, var(--shadow-card)); }
   .pic { flex: none; width: 30px; height: 30px; border-radius: var(--r-xs); }
   .cards .pic { width: 68px; height: 68px; border-radius: var(--r-m); }
   .txt { flex: 1; display: flex; flex-direction: column; gap: 8px; }

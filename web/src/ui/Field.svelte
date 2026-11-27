@@ -31,7 +31,7 @@
   .fld { display: flex; flex-direction: column; gap: 6px; }
   .lb { padding: 0 var(--s-4); font: 450 var(--fs-sub)/1.2 var(--font-text); color: var(--text-3); }
   .box { width: 100%; min-width: 0; min-height: var(--ctl-l); padding: 0 var(--s-4); border-radius: var(--r-m); background: var(--fill); color: var(--text);
-    font: 450 var(--fs-row)/1.35 var(--font-text); letter-spacing: -0.012em; transition: box-shadow var(--t-fast); }
+    font: 450 var(--fs-row)/1.35 var(--font-text); letter-spacing: -0.012em; caret-color: var(--accent); transition: box-shadow var(--t-fast); }
   textarea.box { display: block; padding: 13px var(--s-4); resize: none; }
   .box::placeholder { color: var(--text-3); }
   .box:focus { box-shadow: inset 0 0 0 1.5px var(--accent); }

@@ -129,22 +129,22 @@
     transition: opacity var(--t-fast);
   }
 
-  /* primary: the accent body (the label sits on the accent itself: contrast as before), a sheen in its top half, a
-     white rim in both themes, the fringes, a lift in its own colour */
+  /* primary: the accent body (the label sits on the accent itself: contrast as before), a quiet sheen in its top half, a
+     white rim in both themes, the fringes as a hairline, a short neutral lift (a halo in its own colour read as a glow) */
   .k-primary {
     --body: var(--accent);
     --rim-hi: rgba(255, 255, 255, 0.85); --rim-lo: rgba(255, 255, 255, 0.3); --rim-base: rgba(255, 255, 255, 0.14);
     color: var(--on-accent);
     background:
-      radial-gradient(ellipse 40% 60% at var(--hx) 0%, rgba(255, 255, 255, 0.2), transparent 70%),
-      linear-gradient(180deg, rgba(255, 255, 255, 0.16), transparent 50%) var(--body); /* no color-mix: iOS < 16.2 drops it */
+      radial-gradient(ellipse 40% 60% at var(--hx) 0%, rgba(255, 255, 255, 0.14), transparent 70%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.12), transparent 50%) var(--body); /* no color-mix: iOS < 16.2 drops it */
     box-shadow:
-      inset 0 1px 1px rgba(255, 255, 255, 0.4), inset 0 -8px 14px -8px rgba(0, 0, 0, 0.22),
-      inset 1.5px 0 1px -0.5px rgba(255, 120, 200, 0.4), inset -1.5px 0 1px -0.5px rgba(120, 210, 255, 0.45),
-      0 10px 22px -12px var(--body), 0 2px 5px -2px rgba(0, 0, 0, 0.18);
+      inset 0 1px 0.5px rgba(255, 255, 255, 0.36), inset 0 -8px 14px -8px rgba(0, 0, 0, 0.18),
+      inset 1.5px 0 1px -0.5px rgba(255, 120, 200, 0.28), inset -1.5px 0 1px -0.5px rgba(120, 210, 255, 0.32),
+      0 6px 14px -8px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.14);
   }
-  .s.k-primary { box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.4), inset 0 -6px 10px -6px rgba(0, 0, 0, 0.2),
-    inset 1px 0 1px -0.5px rgba(255, 120, 200, 0.4), inset -1px 0 1px -0.5px rgba(120, 210, 255, 0.45), 0 6px 14px -8px var(--body); }
+  .s.k-primary { box-shadow: inset 0 1px 0.5px rgba(255, 255, 255, 0.36), inset 0 -6px 10px -6px rgba(0, 0, 0, 0.16),
+    inset 1px 0 1px -0.5px rgba(255, 120, 200, 0.28), inset -1px 0 1px -0.5px rgba(120, 210, 255, 0.32), 0 4px 10px -6px rgba(0, 0, 0, 0.28); }
   .k-primary.done { --body: var(--success); }
   .k-primary.red { --body: var(--danger); }
   .k-primary.onmedia { --body: var(--on-accent); color: var(--ink); --rim-lo: rgba(11, 20, 51, 0.2); }

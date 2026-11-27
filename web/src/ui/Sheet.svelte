@@ -283,7 +283,7 @@
   }
   /* the tinted page's own colour (its tint under the ground's veil), so the sheet reads as part of it */
   .ground { background: linear-gradient(var(--tint-veil), var(--tint-veil)), var(--ground); --surface-solid: transparent; }
-  .grip { position: relative; flex: none; width: 38px; height: 5px; border-radius: 3px; background: var(--line-2); margin: 8px auto 4px; }
+  .grip { position: relative; flex: none; width: 36px; height: 5px; border-radius: var(--r-full); background: var(--fill-2); margin: 8px auto 4px; }
   .body { position: relative; flex: 1; --pb: calc(var(--s-6) + var(--safe-bottom)); padding: 6px var(--gutter) var(--pb); scroll-padding-bottom: var(--kb-room, 0px); }
   /* (scroll-padding: a scrollIntoView to the end, the newest message, stops above the raised footer) */
   /* the keyboard's room to scroll: no height in the flow (a short sheet keeps its size), its box reaching that much past
@@ -291,7 +291,7 @@
   .kbroom { height: calc(var(--kb-room, 0px) + var(--pb)); margin-bottom: calc(-1 * (var(--kb-room, 0px) + var(--pb))); pointer-events: none; }
   .foot {
     position: relative; flex: none; padding: var(--s-3) var(--gutter) calc(var(--s-3) + var(--safe-bottom));
-    border-top: 1px solid var(--line);
+    border-top: 0.5px solid var(--separator);
   }
   /* a footer with nothing in it (its {#if} false: a club I'm in) is no bar at all: never an empty strip over the bottom */
   .foot:not(:has(*)) { display: none; }
