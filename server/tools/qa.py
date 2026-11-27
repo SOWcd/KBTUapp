@@ -4,7 +4,7 @@ paid event, starts the real server on it with the postman off, and prints a link
 them: Telegram's initData rides in the link's hash, signed with a made-up bot token, the way Telegram passes it, so
 the real telegram-web-app.js reads it. Nothing leaves this machine.
 
-    cd server && .venv/bin/python tools/qa.py [--port 8790] [--db /tmp/qa.db] [--fake-ai] [--big] [--now 1795582800]
+    cd server && .venv/bin/python tools/qa.py [--port 8790] [--db /tmp/qa.db] [--fake-ai] [--big] [--clubs] [--now 1795582800]
 
 --now sets the clock (the seed's and the server's) to that moment, running on from there: the same "in 2 days, 18:30"
 on every run, for the web's screen snapshots (web/e2e/snap.spec.ts).
@@ -203,6 +203,50 @@ def big(path: str, n: int = 2000) -> None:
     con.close()
 
 
+def clubs(path: str) -> None:
+    """--clubs: a Clubs tab worth looking at (the screen snapshots): KBTU's clubs by their real names, lanyard slugs and
+    logos (the app's own assets), each over the registry's size bar, with open rounds, quiet ones, Dana in two of them
+    (Ali's friend, so her face is on their rows) and Open Mic over the bar too. The flows keep the plain seed."""
+    con = db.connect(path)
+    now, day = int(time.time()), 86400
+    people = range(200, 250)
+    con.executemany("INSERT INTO users (id, tg_id, tg_first_name, tg_last_name, created_at, seen_at) VALUES (?, ?, 'Guest', ?, ?, ?)",
+                    [(i, 20000 + i, str(i), now - 40 * day, now) for i in people])
+    marks = SERVER.parent / "web" / "src" / "assets" / "lanyards"
+    # slug, name, its logo's file, category, official, members, recruiting any time, a round closing in N days, with Dana
+    for n, (slug, name, logo, cat, official, size, anytime, due, dana) in enumerate((
+            ("cybersportkbtu", "KBTU Cybersport", "cyber", "sport", 1, 46, 0, 2, 1),
+            ("enactuskbtu", "Enactus KBTU", "enactus", "business", 1, 38, 0, 9, 0),
+            ("tumarorchestrakbtu", "Tumar Orchestra", "tumar", "art", 1, 31, 0, 0, 1),
+            ("caseclubkbtu", "Case Club KBTU", "case", "business", 1, 27, 1, 0, 0),
+            ("diceanddestinykbtu", "Dice and Destiny", "dd", "art", 1, 22, 0, 0, 0),
+            ("shadekbtu", "Shade", "shade", "art", 1, 19, 0, 5, 0),
+            ("web", "Web3 Club", None, "it", 1, 16, 1, 0, 0),
+            ("literatureclub", "Literature Club", "literature", "art", 1, 14, 0, 0, 0),
+            ("qoloner", "Qoloner", "qoloner", "volunteer", 1, 12, 1, 0, 0),
+            ("knlknolimits", "K|NO LIMITS", "knl", "sport", 0, 9, 0, 0, 0),
+            ("kbtucinema", "Cinema Club", None, "art", 0, 7, 0, 0, 0))):
+        fid = None
+        if logo:
+            f = media.save((marks / f"{logo}-logo.webp").read_bytes(), Path(path).resolve().parent / "media", f"qa-logo-{slug}".encode(), logo=True)
+            fid = con.execute("""INSERT INTO files (sha256, kind, mime, bytes, width, height, path, owner_id, created_at, color)
+                VALUES (?, 'org_logo', 'image/webp', ?, ?, ?, ?, 1, ?, ?)""", (f["sha256"], f["bytes"], f["width"], f["height"], f["path"], now, f["color"])).lastrowid
+        oid = con.execute("""INSERT INTO orgs (slug, kind, name, short, emoji, cover, logo_file_id, official, recruiting, category, created_at)
+            VALUES (?, 'club', ?, ?, ?, ?, ?, ?, ?, ?, ?)""", (slug, name, name[:2].upper(), "clapper_board_3d" if slug == "kbtucinema" else "laptop_3d",
+                                                               n, fid, official, anytime, cat, now - 90 * day)).lastrowid
+        for rn, color, lv in logic.OFFICIAL_ROLES:
+            con.execute("INSERT INTO org_roles (org_id, name, color, level, fixed, created_at) VALUES (?, ?, ?, ?, 1, ?)", (oid, rn, color, lv, now))
+        con.executemany("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, 'member', ?)",
+                        [(oid, u, now - 30 * day) for u in [*people][:size - dana] + [1] * dana])
+        if due:
+            con.execute("INSERT INTO rounds (org_id, title, closes_at, created_by, created_at) VALUES (?, 'Winter recruitment', ?, 1, ?)", (oid, now + due * day - 3600, now - day))
+    con.executemany("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'member', ?)", [(u, now - 30 * day) for u in [*people][:11]])
+    con.execute("UPDATE orgs SET category = 'art' WHERE id = 1")
+    con.execute("INSERT INTO subscriptions (user_id, org_id, created_at) VALUES (2, (SELECT id FROM orgs WHERE slug = 'enactuskbtu'), ?)", (now - day,))  # Ali follows Enactus
+    con.commit()
+    con.close()
+
+
 def link(port: int, tg: int, first: str) -> str:
     data = auth.sign_init_data({"id": tg, "first_name": first, "language_code": "ru"}, BOT)
     theme = json.dumps({"bg_color": "#000000", "text_color": "#ffffff"})
@@ -264,6 +308,7 @@ def main() -> None:
     ap.add_argument("--db", default=str(Path(os.environ.get("TMPDIR", "/tmp")) / "kbtu-qa.db"))
     ap.add_argument("--fake-ai", action="store_true", help="a made-up assistant model (fake_ai_app)")
     ap.add_argument("--big", action="store_true", help="2000 more people on the long lists (big); Dana is the app's admin")
+    ap.add_argument("--clubs", action="store_true", help="a dozen real-looking clubs for the Clubs tab (clubs)")
     ap.add_argument("--now", type=int, help="the clock starts at this Unix time (stable screens for snapshots)")
     a = ap.parse_args()
     if a.now:
@@ -272,6 +317,8 @@ def main() -> None:
     seed(a.db)
     if a.big:
         big(a.db)
+    if a.clubs:
+        clubs(a.db)
     for _, tg, first, _ in PEOPLE:
         print(f"{first}: {link(a.port, tg, first)}", flush=True)
     env = {**os.environ, "DB_PATH": a.db, "BOT_TOKEN": BOT, "TOKEN_KEY": base64.b64encode(os.urandom(32)).decode(), "BACKGROUND": "0",
