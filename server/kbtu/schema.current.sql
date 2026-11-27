@@ -732,12 +732,12 @@ CREATE TABLE kri_consents (  -- IF NOT EXISTS: tests rewind user_version
       user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
       version TEXT NOT NULL,
       at INTEGER NOT NULL) STRICT;
-CREATE TABLE lib_consents (
+CREATE TABLE IF NOT EXISTS lib_consents (
       user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
       version TEXT NOT NULL,
       at      INTEGER NOT NULL
     ) STRICT;
-CREATE TABLE lib_reports (
+CREATE TABLE IF NOT EXISTS lib_reports (
       id          INTEGER PRIMARY KEY,
       sit_id      INTEGER NOT NULL REFERENCES lib_sits(id) ON DELETE CASCADE,
       reporter_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -746,14 +746,14 @@ CREATE TABLE lib_reports (
       still_at    INTEGER,
       false_at    INTEGER
     ) STRICT;
-CREATE TABLE lib_rooms (
+CREATE TABLE IF NOT EXISTS lib_rooms (
       id         INTEGER PRIMARY KEY,
       name       TEXT NOT NULL,
       screen     TEXT NOT NULL UNIQUE,
       created_at INTEGER NOT NULL,
       gone_at    INTEGER
     ) STRICT;
-CREATE TABLE lib_sits (
+CREATE TABLE IF NOT EXISTS lib_sits (
       id         INTEGER PRIMARY KEY,
       table_id   INTEGER NOT NULL REFERENCES lib_tables(id) ON DELETE CASCADE,
       seat       INTEGER NOT NULL,
@@ -763,7 +763,7 @@ CREATE TABLE lib_sits (
       ended_at   INTEGER,
       why        TEXT
     ) STRICT;
-CREATE TABLE lib_tables (
+CREATE TABLE IF NOT EXISTS lib_tables (
       id         INTEGER PRIMARY KEY,
       room_id    INTEGER NOT NULL REFERENCES lib_rooms(id) ON DELETE CASCADE,
       label      TEXT NOT NULL,
@@ -1732,14 +1732,14 @@ CREATE INDEX helper_offers_by_user ON helper_offers(user_id, created_at);
 CREATE INDEX ig_media_by_org ON ig_media(org_id, handle);
 CREATE INDEX join_requests_by_user ON join_requests(user_id);
 CREATE UNIQUE INDEX one_pending_request ON join_requests(org_id, user_id) WHERE status = 'pending';
-CREATE INDEX lib_reports_by_reporter ON lib_reports(reporter_id, created_at);
-CREATE INDEX lib_reports_by_sit ON lib_reports(sit_id);
-CREATE INDEX lib_reports_open ON lib_reports(created_at) WHERE answered_at IS NULL AND still_at IS NULL;
-CREATE INDEX lib_sits_by_user ON lib_sits(user_id, started_at);
-CREATE UNIQUE INDEX lib_sits_mine ON lib_sits(user_id) WHERE ended_at IS NULL;
-CREATE UNIQUE INDEX lib_sits_seat ON lib_sits(table_id, seat) WHERE ended_at IS NULL;
-CREATE INDEX lib_sits_until ON lib_sits(until) WHERE ended_at IS NULL;
-CREATE INDEX lib_tables_by_room ON lib_tables(room_id);
+CREATE INDEX IF NOT EXISTS lib_reports_by_reporter ON lib_reports(reporter_id, created_at);
+CREATE INDEX IF NOT EXISTS lib_reports_by_sit ON lib_reports(sit_id);
+CREATE INDEX IF NOT EXISTS lib_reports_open ON lib_reports(created_at) WHERE answered_at IS NULL AND still_at IS NULL;
+CREATE INDEX IF NOT EXISTS lib_sits_by_user ON lib_sits(user_id, started_at);
+CREATE UNIQUE INDEX IF NOT EXISTS lib_sits_mine ON lib_sits(user_id) WHERE ended_at IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS lib_sits_seat ON lib_sits(table_id, seat) WHERE ended_at IS NULL;
+CREATE INDEX IF NOT EXISTS lib_sits_until ON lib_sits(until) WHERE ended_at IS NULL;
+CREATE INDEX IF NOT EXISTS lib_tables_by_room ON lib_tables(room_id);
 CREATE INDEX map_flaws_open ON map_flaws(done_at, created_at);
 CREATE INDEX official_requests_by_org ON official_requests(org_id, id);
 CREATE UNIQUE INDEX one_official_request ON official_requests(org_id) WHERE status = 'pending';

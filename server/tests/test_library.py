@@ -63,7 +63,7 @@ def test_library_seats(env, monkeypatch):
     assert r["table"]["seats"] == ["mine", "free", "free", "free"] and r["state"]["mine"]["until"] == t0 + logic.library.HOLD
     assert c.get("/api/me", headers=tma(2)).json()["library"] == {"consent": True}
     assert c.post("/api/library/sit", headers=tma(3), json={"code": code, "seat": 1, "consent": "lib1"}).status_code == 409
-    assert c.post("/api/library/sit", headers=tma(3), json={"code": code, "seat": 5}).status_code == 400
+    assert c.post("/api/library/sit", headers=tma(3), json={"code": code, "seat": 5, "consent": "lib1"}).status_code == 400
     view = c.post("/api/library/table", headers=tma(3), json={"code": code}).json()
     assert view["seats"][0] == "taken" and "ann" not in str(view).lower()                            # never who
     soon = con.execute("SELECT * FROM bot_outbox WHERE kind = 'lib_soon'").fetchone()
@@ -71,7 +71,7 @@ def test_library_seats(env, monkeypatch):
     assert outbox._render(con, {**dict(soon), "lang": "ru"})[2] == "lib"
 
     # "nobody here": the holder gets the template, the seat shows as being checked
-    r = c.post("/api/library/report", headers=tma(3), json={"code": code, "seat": 1}).json()
+    r = c.post("/api/library/report", headers=tma(3), json={"code": code, "seat": 1, "consent": "lib1"}).json()  # a refused tap kept no consent
     assert r["table"]["seats"][0] == "asked" and r["state"]["report"]["state"] == "wait"
     rid = r["state"]["report"]["id"]
     assert c.post("/api/library/table", headers=tma(4), json={"code": code}).json()["seats"][0] == "reported"
@@ -93,12 +93,15 @@ def test_library_seats(env, monkeypatch):
     still = con.execute("SELECT * FROM bot_outbox WHERE kind = 'lib_still'").fetchone()
     assert still["user_id"] == ann["id"] and outbox._render(con, {**dict(still), "lang": "kk"})[2] == "lib"
 
-    # the reporter sits there; the holder is back at once: the report was false, the seat hers again
-    assert c.post("/api/library/sit", headers=tma(3), json={"code": code, "seat": 1}).status_code == 200
+    # the holder is back at once, the seat still free: the report was false, the seat hers again
     assert c.post("/api/library/sit", headers=tma(2), json={"code": code, "seat": 1}).json()["table"]["seats"][0] == "mine"
     assert con.execute("SELECT false_at FROM lib_reports WHERE id = ?", (rid,)).fetchone()[0] == t0
-    assert c.get("/api/library", headers=tma(3)).json()["mine"] is None
+    assert c.get("/api/library", headers=tma(3)).json()["report"] is None
     assert outbox._render(con, {**dict(still), "lang": "kk"}) is None
+    # whoever sits on a seat is never evicted by a rescan (a saved photo of the sticker)
+    c.post("/api/library/sit", headers=tma(4), json={"code": code, "seat": 3, "consent": "lib1"})
+    assert c.post("/api/library/sit", headers=tma(2), json={"code": code, "seat": 3}).status_code == 409
+    c.post("/api/library/leave", headers=tma(4))
 
     # no answer in 10 minutes: the seat frees, and the reporter hears of it
     c.post("/api/library/sit", headers=tma(4), json={"code": code, "seat": 2, "consent": "lib1"})
@@ -122,7 +125,10 @@ def test_library_seats(env, monkeypatch):
     # leaving frees it; withdrawing the consent drops my seat and my records
     assert c.post("/api/library/leave", headers=tma(3)).json()["mine"] is None
     assert c.delete("/api/library/consent", headers=tma(2)).status_code == 204
-    assert con.execute("SELECT COUNT(*) FROM lib_sits WHERE user_id = ?", (ann["id"],)).fetchone()[0] == 0
+    # her seat freed; only the sit under bob's "still not here" stays its week (his strike rests on it)
+    assert con.execute("SELECT COUNT(*) FROM lib_sits WHERE user_id = ? AND ended_at IS NULL", (ann["id"],)).fetchone()[0] == 0
+    assert con.execute("SELECT COUNT(*) FROM lib_sits WHERE user_id = ?", (ann["id"],)).fetchone()[0] == 1
+    assert con.execute("SELECT COUNT(*) FROM lib_reports WHERE false_at IS NOT NULL").fetchone()[0] == 3
     assert c.get("/api/me", headers=tma(2)).json()["library"] == {"consent": False}
 
     # a week on, the night's sweep keeps nothing older

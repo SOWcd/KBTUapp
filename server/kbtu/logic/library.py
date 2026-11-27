@@ -63,12 +63,16 @@ def _agree(con, v: Viewer, body: dict) -> None:
 
 
 def withdraw(con, v: Viewer) -> None:
-    """The consent taken back: my seat freed, my sits and reports gone; false reports of mine stay their week (a strike
-    must not wash off by withdrawing and agreeing again: the policy's "kept for protection")."""
+    """The consent taken back: my seat freed, my sits and reports gone. What a strike rests on stays its week (the
+    policy's "kept for protection"): my reports that freed a seat ("still not here", false or not yet), and my sits
+    under someone else's such report, so neither side washes one off by withdrawing and agreeing again."""
+    t = core.now()
     with tx(con):
         con.execute("DELETE FROM lib_consents WHERE user_id = ?", (v.id,))
-        con.execute("DELETE FROM lib_reports WHERE reporter_id = ? AND (false_at IS NULL OR false_at < ?)", (v.id, core.now() - WEEK))
-        con.execute("DELETE FROM lib_sits WHERE user_id = ?", (v.id,))
+        con.execute("UPDATE lib_sits SET ended_at = ?, why = 'left' WHERE user_id = ? AND ended_at IS NULL", (t, v.id))
+        con.execute("DELETE FROM lib_reports WHERE reporter_id = ? AND (still_at IS NULL OR still_at < ?)", (v.id, t - WEEK))
+        con.execute("""DELETE FROM lib_sits WHERE user_id = ? AND NOT EXISTS (SELECT 1 FROM lib_reports r
+            WHERE r.sit_id = lib_sits.id AND r.still_at >= ?)""", (v.id, t - WEEK))
 
 
 def _settle(con, t: int) -> None:
@@ -109,10 +113,12 @@ def _states(con, t: int, table_ids: list[int], uid: int = 0) -> dict[tuple[int, 
     """(table, seat) -> taken | reported | mine | asked (my own report waits on it), for every live sit at once."""
     if not table_ids:
         return {}
+    # asked: my report on it waits for its answer, or was answered and "still not here" is still mine to say
     got = rows(con, f"""SELECT s.table_id, s.seat, s.user_id,
             EXISTS (SELECT 1 FROM lib_reports r WHERE r.sit_id = s.id AND {_OPEN}) AS open,
-            EXISTS (SELECT 1 FROM lib_reports r WHERE r.sit_id = s.id AND r.reporter_id = ? AND r.still_at IS NULL) AS asked
-        FROM lib_sits s WHERE s.table_id IN ({",".join("?" * len(table_ids))}) AND {LIVE}""", uid, *table_ids, t, t)
+            EXISTS (SELECT 1 FROM lib_reports r WHERE r.sit_id = s.id AND r.reporter_id = ? AND r.still_at IS NULL
+                AND (r.answered_at IS NULL OR r.answered_at + {STILL_FOR} > ?)) AS asked
+        FROM lib_sits s WHERE s.table_id IN ({",".join("?" * len(table_ids))}) AND {LIVE}""", uid, t, *table_ids, t, t)
     return {(r["table_id"], r["seat"]): "mine" if uid and r["user_id"] == uid else "asked" if uid and r["asked"]
             else "reported" if r["open"] else "taken" for r in got}
 
@@ -156,7 +162,7 @@ def _my_report(con, v: Viewer, t: int) -> dict | None:
     base = {"id": r["id"], "table": r["label"], "tableId": r["table_id"], "seat": r["seat"]}
     deadline = r["created_at"] + CONFIRM
     if r["still_at"]:
-        return {**base, "state": "freed"} if t < r["still_at"] + FALSE_FOR else None
+        return {**base, "state": "freed"} if t < r["still_at"] + FALSE_FOR and not _live_at(con, r["table_id"], r["seat"], t) else None
     live = r["ended_at"] is None and r["until"] > t
     if r["answered_at"]:
         return {**base, "state": "here", "until": r["answered_at"] + STILL_FOR} if live and t < r["answered_at"] + STILL_FOR else None
@@ -164,7 +170,9 @@ def _my_report(con, v: Viewer, t: int) -> dict | None:
         return {**base, "state": "wait", "until": deadline}
     # no answer in time, or the holder left first: the seat is free now (scan to sit)
     ended = r["ended_at"] or min(deadline, r["until"])
-    return {**base, "state": "freed"} if r["why"] != "gone" and t < ended + FALSE_FOR else None
+    if r["why"] == "gone" or t >= ended + FALSE_FOR or _live_at(con, r["table_id"], r["seat"], t):
+        return None  # a removed table, too long ago, or someone (the holder back, too) sits there again
+    return {**base, "state": "freed"}
 
 
 def _strikes(con, uid: int, t: int) -> int | None:
@@ -202,13 +210,16 @@ def _answer(con, sit_id: int, t: int) -> None:
 
 def _soon(con, uid: int, sit_id: int, until: int) -> None:
     from .seats import notify
-    notify(con, uid, "lib_soon", f"ls:{sit_id}:{until}", after=until - SOON)  # an extend leaves this one stale (render)
+    # one waiting per sit: an extend replaces the one before (rescans never pile rows up in the queue)
+    con.execute("DELETE FROM bot_outbox WHERE user_id = ? AND kind = 'lib_soon' AND sent_at IS NULL AND ref LIKE ?", (uid, f"ls:{sit_id}:%"))
+    notify(con, uid, "lib_soon", f"ls:{sit_id}:{until}", after=until - SOON)
 
 
 def sit(con, v: Viewer, body: dict) -> dict:
     """A tap on a seat at the table just scanned: a free one is mine for HOLD (any other seat of mine freed); mine again
-    extends it and answers a report on it; another's is taken, except mine back from the very person whose "still not
-    here" freed it a moment ago (that report false)."""
+    extends it and answers a report on it; another's is taken, always (whoever sat down after a "still not here" keeps
+    it: a saved photo of the sticker must not evict someone sitting there). Mine back while still free soon after a
+    "still not here" freed it: that report was false."""
     need_student(v)
     code, t = _code(body), core.now()
     with tx(con):
@@ -224,13 +235,11 @@ def sit(con, v: Viewer, body: dict) -> dict:
             _soon(con, v.id, cur["id"], t + HOLD)
             return {"table": _view(con, v, tab, t), "state": state(con, v)}
         # my seat freed by a "still not here" a moment ago: I'm here after all, so that report was false
-        back = one(con, """SELECT r.id, r.reporter_id FROM lib_reports r JOIN lib_sits s ON s.id = r.sit_id
+        if cur:
+            raise ApiError("conflict", "taken")
+        back = one(con, """SELECT r.id FROM lib_reports r JOIN lib_sits s ON s.id = r.sit_id
             WHERE s.table_id = ? AND s.seat = ? AND s.user_id = ? AND r.still_at > ? AND r.false_at IS NULL
             ORDER BY r.id DESC LIMIT 1""", tab["id"], seat, v.id, t - FALSE_FOR)
-        if cur:
-            if not back or cur["user_id"] != back["reporter_id"]:
-                raise ApiError("conflict", "taken")
-            con.execute("UPDATE lib_sits SET ended_at = ?, why = 'back' WHERE id = ?", (t, cur["id"]))
         if back:
             con.execute("UPDATE lib_reports SET false_at = ? WHERE id = ?", (t, back["id"]))
         con.execute("UPDATE lib_sits SET ended_at = ?, why = 'moved' WHERE user_id = ? AND ended_at IS NULL", (t, v.id))
@@ -287,7 +296,8 @@ def report(con, v: Viewer, body: dict) -> dict:
             raise ApiError("rate_limited", "reports")
         if one(con, f"SELECT 1 FROM lib_reports r WHERE r.reporter_id = ? AND {_OPEN} AND r.created_at + {CONFIRM} > ?", v.id, t):
             raise ApiError("conflict", "waiting")
-        if one(con, "SELECT 1 FROM lib_reports WHERE sit_id = ? AND created_at > ?", cur["id"], t - AGAIN):
+        # once an hour per holder, whoever reports and whichever seat they took since: nobody is pinged on a loop
+        if one(con, "SELECT 1 FROM lib_reports r JOIN lib_sits s ON s.id = r.sit_id WHERE s.user_id = ? AND r.created_at > ?", cur["user_id"], t - AGAIN):
             raise ApiError("conflict", "reported")
         rid = con.execute("INSERT INTO lib_reports (sit_id, reporter_id, created_at) VALUES (?, ?, ?)", (cur["id"], v.id, t)).lastrowid
         notify(con, cur["user_id"], "lib_report", f"lr:{rid}")
@@ -335,7 +345,8 @@ def render(con, m, lang: str):
     elif kind == "lib_freed":  # lf:<report>, to the reporter at its deadline: only if no answer freed it
         s = one(con, f"""SELECT s.seat, tb.label FROM lib_reports r JOIN lib_sits s ON s.id = r.sit_id JOIN lib_tables tb ON tb.id = s.table_id
             WHERE r.id = ? AND r.reporter_id = ? AND {_OPEN} AND r.created_at + {CONFIRM} <= ? AND r.created_at + {CONFIRM} < s.until
-            AND (s.ended_at IS NULL OR s.why = 'report') AND tb.gone_at IS NULL""", int(ref[1]), uid, t)
+            AND (s.ended_at IS NULL OR s.why = 'report') AND tb.gone_at IS NULL AND NOT EXISTS (SELECT 1 FROM lib_sits x
+            WHERE x.table_id = s.table_id AND x.seat = s.seat AND x.id != s.id AND x.ended_at IS NULL AND x.until > ?)""", int(ref[1]), uid, t, t)
     elif kind == "lib_still":  # lst:<report>, to the holder: freed by "still not here"; quiet once they're back or it's late
         s = one(con, f"""SELECT s.seat, tb.label FROM lib_reports r JOIN lib_sits s ON s.id = r.sit_id JOIN lib_tables tb ON tb.id = s.table_id
             WHERE r.id = ? AND s.user_id = ? AND r.still_at > ? AND r.false_at IS NULL""", int(ref[1]), uid, t - FALSE_FOR)
@@ -466,8 +477,8 @@ def edit_table(con, v: Viewer, tid: int, body: dict) -> list[dict]:
         return admin_list(con, v)
 
 
-PAGE_BYTES, PAGES = 3_000_000, 60
-PAGE_PX = (2600, 3700)  # A4 at up to ~300 dpi
+PAGE_BYTES, PAGES = 1_500_000, 20  # 120 tables a sheet; the app's pages are ~200 KB
+PAGE_PX = (1800, 2600)  # A4 at up to ~220 dpi (the app draws 150)
 
 
 def stickers(con, v: Viewer, rid: int, body: object) -> tuple[str, bytes]:

@@ -567,6 +567,16 @@ def library_viewer(request: Request, v: Me) -> Viewer:
 Library = Annotated[Viewer, Depends(library_viewer)]
 
 
+def library_admin(v: Library) -> Viewer:
+    """The admin's library routes whose body is big (the sticker pages): refused before a byte of it is read."""
+    if v.role != "admin":
+        raise ApiError("forbidden")
+    return v
+
+
+LibraryAdmin = Annotated[Viewer, Depends(library_admin)]
+
+
 def create(cfg: config.Config | None = None) -> FastAPI:
     cfg = cfg or config.load()
     logic.core._SHARED.clear(); logic.profiles._RARITY[0] = 0  # per-worker caches belong to one database (tests make many)
@@ -2665,7 +2675,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         return logic.library.edit_table(con, v, tid, body)
 
     @app.post("/api/admin/library/rooms/{rid}/stickers", status_code=204)
-    async def library_stickers(rid: int, con: Con, v: Library, request: Request,
+    async def library_stickers(rid: int, con: Con, v: LibraryAdmin, request: Request,
                                body: object = Depends(json_body(logic.library.PAGES * logic.library.PAGE_BYTES * 4 // 3 + 4096))):
         """The sticker sheet the app drew, as a PDF into the admin's chat with the bot (it prints from any phone)."""
         room, pdf = await run_in_threadpool(logic.library.stickers, con, v, rid, body)
