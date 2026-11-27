@@ -1,8 +1,10 @@
 <script lang="ts">
-  // The Clubs tab, one page and nothing pushed from it: the title with what's alive today; my clubs as a dock of marks
-  // (a tap: Studio); who is recruiting now as big covers with the one button; then every club in one list that the chips
-  // filter in place (all by the server's rank, recruiting with Apply on each row, followed, an interest, schools), the
-  // quiet clubs dimmed at its end. Search (pulled down) swaps the page for what it found.
+  // The Clubs tab, one page and nothing pushed from it, in the Profile's language: no page title, a stack of cards on
+  // one 16 px rhythm. First who is recruiting now, each a club's badge (its lanyard's colours, its mark and name, a strip
+  // with the deadline and the one button), as the Profile opens with mine; then my clubs, a shelf of marks in a card (a
+  // tap: Studio); then every club on one grouped card, rows with hairlines, that the chips filter in place (all by the
+  // server's rank, recruiting with Apply on each row, followed, an interest, schools), the quiet clubs dimmed at its
+  // end; last two tiles, the chats and a new club. Search (pulled down) swaps the page for what it found.
   import Briefcase from '@lucide/svelte/icons/briefcase';
   import Code from '@lucide/svelte/icons/code';
   import FlaskConical from '@lucide/svelte/icons/flask-conical';
@@ -56,14 +58,14 @@
   const castings = $derived(currentCastings().filter((p) => !memberOf.has(p.org.id)));
   const rounds = $derived(data.orgs.filter((o) => o.round && outside(o)).sort((a, b) => +!a.official - +!b.official || b.members - a.members || a.round!.closesAt - b.round!.closesAt));
   const always = $derived(clubs.filter((o) => o.recruiting && !o.round && outside(o)).sort(byWeight));
-  type Call = { key: string; org: OrgRef; when: string; soon?: boolean; live?: boolean; sub: string; open: () => void; cta?: { label: string; done: boolean; off?: boolean; run: () => void } };
+  type Call = { key: string; org: OrgRef; tag: string; when: string; soon?: boolean; live?: boolean; sub: string; open: () => void; cta?: { label: string; done: boolean; off?: boolean; run: () => void } };
   const people = (o: Org) => (o.friendsN ? friendsIn(o) : tn('club.members', o.members));
   const story = (p: Post) => sheets.stories([{ org: p.org, items: [{ post: p }], unread: false, cast: false }], 0);
   const calls = $derived<Call[]>([
-    ...castings.map((p) => ({ key: `c${p.id}`, org: p.org, when: castingStatus(p.casting!), live: castingState(p.casting!) === 'open', sub: `${t('casting.come')} · ${p.casting!.place}`, open: () => story(p) })),
-    ...rounds.map((o) => ({ key: `r${o.id}`, org: o, when: roundDue(o.round!.closesAt), soon: daysLeft(o.round!.closesAt) <= 3, sub: people(o), open: () => sheets.club(o.id),
+    ...castings.map((p) => ({ key: `c${p.id}`, org: p.org, tag: t('casting.come'), when: castingStatus(p.casting!), live: castingState(p.casting!) === 'open', sub: p.casting!.place, open: () => story(p) })),
+    ...rounds.map((o) => ({ key: `r${o.id}`, org: o, tag: t('clubs.recruitingNow'), when: roundDue(o.round!.closesAt), soon: daysLeft(o.round!.closesAt) <= 3, sub: people(o), open: () => sheets.club(o.id),
       cta: { label: t(o.round!.applied ? 'clubs.applied' : 'join.apply'), done: o.round!.applied, run: () => sheets.roundApply(o.id, 'join') } })),
-    ...always.map((o) => ({ key: `a${o.id}`, org: o, when: t('clubs.openNow'), sub: people(o), open: () => sheets.club(o.id),
+    ...always.map((o) => ({ key: `a${o.id}`, org: o, tag: t('clubs.recruitingNow'), when: t('clubs.openNow'), sub: people(o), open: () => sheets.club(o.id),
       cta: { label: t(o.myRequest === 'rejected' ? 'join.notNow' : o.myRequest === 'pending' ? 'join.sent' : 'join.apply'), done: !!o.myRequest, off: o.myRequest === 'rejected', run: () => toggleJoin(o.id) } })),
   ]);
   const SHOWN = 10;
@@ -111,7 +113,7 @@
   {@const cta = filter === 'recruit' && !searching ? ctaOf.get(o.id) : undefined}
   <div class="row">
     <button class="rt" onclick={() => sheets.club(o.id)}>
-      <span class="lg"><OrgLogo org={o} size={52} />{#if l.hot}<i class="dot"></i>{/if}</span>
+      <span class="lg"><OrgLogo org={o} size={46} />{#if l.hot}<i class="dot"></i>{/if}</span>
       <span class="tx">
         <b><span class="ellipsis">{nameOf(o)}</span>{#if o.official && o.kind === 'club'}<OfficialMark size={15} />{/if}{#if o.gov}<GovMark size={14} />{/if}{#if service(o)}<OfficeMark size={14} />{/if}</b>
         {#if l.text}<small class={['ellipsis', { hot: l.hot }]}>{l.text}</small>{/if}
@@ -126,22 +128,47 @@
   <PullSearch bind:value={q} placeholder={t('clubs.search')} />
 
   {#if searching}
-    <section class="found">
+    <section class="card list found">
       {#each found as o (o.id)}{@render row(o)}{:else}<p class="none">{t('clubs.nothing')}</p>{/each}
     </section>
   {:else}
-    <header class="head">
-      <h1>{t('clubs.clubs')}</h1>
-      {#if pulse}<p>{pulse}</p>{/if}
-    </header>
+    {#if calls.length}
+      <!-- keyed: castings come in after the rounds, and scroll snap would stay on the card it had, hiding them -->
+      {#key castings.length}<section class={['calls', 'hscroll', { one: calls.length === 1 }]} aria-label={t('clubs.recruitingNow')}>
+        {#each calls.slice(0, SHOWN) as c (c.key)}
+          {@const art = artOf(c.org)}
+          {@const look = skinOf(c.org)}
+          {@const tpl = look ? clubLook(look) : undefined}
+          <!-- a template lanyard's picture is see-through: its ground and ink are the look's colours, as on its ticket -->
+          <div class={['call', { look: tpl, paper: tpl?.ink }]} style={look && tpl ? lookVars(look) : undefined} style:background={tpl ? undefined : coverOf(c.org)}>
+            {#if art}<img class="art" src={art} alt="" loading="lazy" decoding="async" draggable="false" />{/if}
+            <i class="shade"></i>
+            <button class="open" onclick={c.open} aria-label={c.org.name}></button>
+            <span class="who">
+              <span class="ph"><OrgLogo org={c.org} size={64} /></span>
+              <span class="id">
+                <b class="clamp-2">{nameOf(c.org)}</b>
+                <i>{c.tag}</i>
+                <small class="ellipsis">{c.sub}</small>
+              </span>
+            </span>
+            <span class="strip">
+              <span class={['when', 'ellipsis', { soon: c.soon, live: c.live }]}>{c.when}</span>
+              {#if c.cta}<button class={['go', { done: c.cta.done }]} disabled={c.cta.off} onclick={c.cta.run}>{c.cta.label}</button>{/if}
+            </span>
+          </div>
+        {/each}
+        {#if calls.length > SHOWN}<button class="call rest press" onclick={allCalls}>{t('clubs.allN', { n: recruiting.length })}</button>{/if}
+      </section>{/key}
+    {/if}
 
     {#if mine.length}
-      <section>
-        <div class="hd"><h2>{t('clubs.mineTitle')}</h2></div>
+      <section class="card">
+        <div class="hd"><h2>{t('clubs.mineTitle')}</h2><span class="n">{mine.length}</span></div>
         <div class="dock hscroll">
           {#each mine as m (m.org.id)}
             <button class="me press" onclick={() => openMine(m)} {@attach canLeave(m) && longPress(hold(m))}>
-              <span class={['ring', { hot: next.has(m.org.id) }]}><OrgLogo org={m.org} size={58} /></span>
+              <span class={['ring', { hot: next.has(m.org.id) }]}><OrgLogo org={m.org} size={56} /></span>
               <b class="ellipsis">{shortOf(m.org)}</b>
               <small class="ellipsis">{roleLabel(m)}</small>
             </button>
@@ -150,42 +177,9 @@
       </section>
     {/if}
 
-    {#if calls.length}
-      <section>
-        <div class="hd">
-          <h2>{t('clubs.recruitingNow')}</h2>
-          {#if calls.length > SHOWN}<button class="all" onclick={allCalls}>{t('clubs.allN', { n: recruiting.length })}</button>{/if}
-        </div>
-        <!-- keyed: castings come in after the rounds, and scroll snap would stay on the card it had, hiding them -->
-        {#key castings.length}<div class={['calls', 'hscroll', { one: calls.length === 1 }]}>
-          {#each calls.slice(0, SHOWN) as c (c.key)}
-            {@const art = artOf(c.org)}
-            {@const look = skinOf(c.org)}
-            {@const tpl = look ? clubLook(look) : undefined}
-            <!-- a template lanyard's picture is see-through: its ground and ink are the look's colours, as on its ticket -->
-            <div class={['call', { look: tpl, paper: tpl?.ink }]} style={look && tpl ? lookVars(look) : undefined} style:background={tpl ? undefined : coverOf(c.org)}>
-              {#if art}<img class="art" src={art} alt="" loading="lazy" decoding="async" draggable="false" />{/if}
-              <i class="shade"></i>
-              <button class="open" onclick={c.open} aria-label={c.org.name}></button>
-              <span class="top">
-                <OrgLogo org={c.org} size={44} />
-                <span class={['when', { soon: c.soon, live: c.live }]}>{c.when}</span>
-              </span>
-              <span class="bot">
-                <b class="clamp-2">{nameOf(c.org)}</b>
-                <span class="act">
-                  <small class="ellipsis">{c.sub}</small>
-                  {#if c.cta}<button class={['go', { done: c.cta.done }]} disabled={c.cta.off} onclick={c.cta.run}>{c.cta.label}</button>{/if}
-                </span>
-              </span>
-            </div>
-          {/each}
-        </div>{/key}
-      </section>
-    {/if}
-
-    <section class="dir" bind:this={dir}>
-      <div class="hd"><h2>{t('clubs.allClubs')}<i>{clubs.length}</i></h2></div>
+    <section class="card list dir" bind:this={dir}>
+      <div class="hd"><h2>{t('clubs.allClubs')}</h2><span class="n">{clubs.length}</span></div>
+      {#if pulse}<p class="pulse">{pulse}</p>{/if}
       <div class="chips hscroll">
         {#each chips as c (c.key)}
           <button class={['chip', { on: filter === c.key }]} aria-pressed={filter === c.key} onclick={() => pick(c.key)}>
@@ -201,14 +195,14 @@
       {/if}
     </section>
 
-    <section class="more">
+    <section class="duo">
       {#if data.chats?.all.length}
-        <button class="tile" onclick={() => sheets.chats(data.chats!.all)}>
+        <button class="tile press" onclick={() => sheets.chats(data.chats!.all)}>
           <span class="tt"><span class="badge tg"><TelegramMark size={20} /></span><span class="faces">{#each chatFaces as c (c.id)}<ChatAvatar title={c.title} photo={c.photo} kind={c.kind} size={24} />{/each}</span></span>
           <b>{t('chats.sheet')}</b>
         </button>
       {/if}
-      <button class="tile" onclick={() => asStudent(() => sheets.createClub(), 'newclub')}>
+      <button class="tile press" onclick={() => asStudent(() => sheets.createClub(), 'newclub')}>
         <span class="tt"><span class="badge"><Plus size={20} strokeWidth={2.4} /></span></span>
         <b>{t('create.button')}</b>
       </button>
@@ -218,97 +212,105 @@
 </div>
 
 <style>
+  /* the Profile's page: cards on the ground, 16 px apart, nothing loose between them */
   .page { position: absolute; inset: 0; padding: var(--page-top) var(--gutter) 0; }
-  section { margin-top: var(--s-7); }
-  .found { margin-top: var(--s-1); } /* right under the capsule */
+  section { margin-top: var(--s-4); }
+  .page > section:first-of-type { margin-top: 0; } /* right under the capsule, where the Profile's badge hangs */
+  .tail { height: calc(var(--bottom) + var(--s-3)); }
 
-  /* the headline: the tab's name, and under it in the light voice how alive the clubs are today */
-  .head { padding-top: var(--s-1); }
-  h1 { font: 700 var(--fs-title)/1.1 var(--font-display); letter-spacing: -0.025em; }
-  .head p { margin-top: var(--s-1); font: var(--fw-light) var(--fs-card)/1.3 var(--font-display); color: var(--text-2); }
-  .tail { height: calc(var(--bottom) + var(--s-6)); }
+  /* a card: the Profile's surface, its title in the card's own head with the count beside it (Awards' "2 of 16") */
+  .card { border-radius: var(--r-l); background: var(--surface); box-shadow: var(--card-rim, var(--shadow-card)); }
+  .hd { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-3); padding: 14px var(--s-4) 0; }
+  h2 { font: 700 var(--fs-card)/1.2 var(--font-display); letter-spacing: -0.015em; }
+  .n { flex: none; font: 600 var(--fs-body)/1 var(--font-text); color: var(--text-3); font-variant-numeric: tabular-nums; }
 
-  .hd { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-3); margin-bottom: var(--s-3); }
-  h2 { font: 700 var(--fs-sec)/1.15 var(--font-display); letter-spacing: -0.022em; }
-  h2 i { margin-left: 7px; font-style: normal; font-weight: var(--fw-light); color: var(--text-3); font-variant-numeric: tabular-nums; }
-  .all { position: relative; flex: none; font: 600 var(--fs-sub)/1 var(--font-text); color: var(--accent-text); }
-  .all::after { content: ''; position: absolute; inset: -14px -8px; }
+  /* a shelf runs to the card's (or the screen's) edges and starts on its padding */
+  .hscroll { gap: 10px; padding-inline: var(--s-4); scroll-padding-inline: var(--s-4); }
 
-  /* a shelf runs edge to edge and starts on the gutter */
-  .hscroll { gap: 10px; margin: 0 calc(-1 * var(--gutter)); padding: 0 var(--gutter); scroll-padding: 0 var(--gutter); }
+  /* recruiting: a club's badge, as mine on the Profile. Its lanyard's colours (else its cover), its mark framed where my
+     photo is, its name and what it calls for; the strip at its foot holds the deadline and the one button */
+  .calls { margin-inline: calc(-1 * var(--gutter)); padding-inline: var(--gutter); scroll-padding-inline: var(--gutter); gap: var(--s-3); }
+  .call { position: relative; flex: none; width: min(318px, 88%); height: 172px; overflow: hidden; border-radius: var(--r-xl); color: var(--on-accent); scroll-snap-align: start;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1); transition: transform 450ms var(--ease-bounce); }
+  .one .call { width: 100%; }
+  .call:has(.open:active) { transform: scale(0.98); transition-duration: 80ms; }
+  .art, .shade { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .art { object-position: right center; opacity: 0.9; }
+  .shade { background: linear-gradient(100deg, rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.12) 60%, rgba(0, 0, 0, 0)), linear-gradient(180deg, rgba(0, 0, 0, 0) 55%, rgba(0, 0, 0, 0.3)); }
+  .open { position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
+  .open:active { transform: none; opacity: 1; } /* the press is the whole card's */
+  .who { position: absolute; inset: var(--s-4) var(--s-4) auto; display: flex; align-items: center; gap: 14px; }
+  .ph { flex: none; display: flex; padding: 3px; border-radius: var(--r-l); background: rgba(255, 255, 255, 0.24); box-shadow: 0 8px 18px -8px rgba(0, 0, 0, 0.5); }
+  .id { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .id b { font: 700 var(--fs-t3)/1.1 var(--font-display); letter-spacing: -0.02em; text-shadow: 0 1px 10px rgba(0, 0, 0, 0.28); }
+  .id i { font: 700 var(--fs-micro)/1.2 var(--font-text); font-style: normal; letter-spacing: 0.1em; text-transform: uppercase; opacity: 0.86; }
+  .id small { font: 500 var(--fs-sub)/1.3 var(--font-text); opacity: 0.86; }
+  .strip { position: absolute; inset: auto var(--s-3) var(--s-3); display: flex; align-items: center; justify-content: space-between; gap: var(--s-3);
+    height: var(--ctl-m); padding: 0 6px 0 14px; border-radius: var(--r-m); background: rgba(0, 0, 0, 0.36); box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.14); color: var(--on-accent); }
+  .when { display: flex; align-items: center; gap: 6px; min-width: 0; font: 600 var(--fs-sub)/1 var(--font-text); letter-spacing: 0.01em; }
+  .when.soon { color: var(--warning); }
+  .when.live::before { content: ''; flex: none; width: 7px; height: 7px; border-radius: var(--r-full); background: var(--success); }
+  .go { position: relative; z-index: 2; flex: none; height: 32px; padding: 0 14px; border-radius: var(--r-full); background: var(--on-accent); color: var(--ink); font: 600 var(--fs-sub)/1 var(--font-text); }
+  .go::after { content: ''; position: absolute; inset: -6px 0; } /* 44 to the finger */
+  .go.done { background: rgba(255, 255, 255, 0.22); color: var(--on-accent); }
+  .go:disabled { opacity: 0.6; }
+  /* a club's lanyard as the ground (lookVars, the ticket's .club): its colours and ink; a light paper is washed in the
+     paper under the words instead of shaded dark, so the dark ink reads */
+  .call.look { background: linear-gradient(155deg, var(--c1), var(--c2) 55%, var(--c3)); color: var(--ink); }
+  .look .id b { text-shadow: var(--tsh); }
+  /* lookVars' --ink shadows the app's: a dark look's white button takes the look's colour */
+  .look:not(.paper) .go:not(.done) { color: var(--c2); }
+  .paper .shade { background: linear-gradient(100deg, var(--c1), transparent 70%); opacity: 0.8; }
+  .paper .id small { color: var(--ink2); opacity: 1; }
+  .paper .ph { background: rgba(0, 0, 0, 0.1); }
+  .paper .strip { background: rgba(0, 0, 0, 0.72); }
+  /* past the first ten: the rest, in the list below */
+  .call.rest { width: 104px; display: grid; place-items: center; background: var(--surface); box-shadow: var(--card-rim, var(--shadow-card)); color: var(--accent-text); font: 600 var(--fs-body)/1.2 var(--font-text); }
 
-  /* my clubs: a dock of marks, as apps on a home screen; a green ring when something is coming up there */
-  .dock { gap: var(--s-2); padding-block: var(--s-1); }
+  /* my clubs: a shelf of marks in its card, as the medals in Awards; a green ring when something is coming up there */
+  .dock { gap: var(--s-1); padding: var(--s-3) 10px 14px; scroll-padding-inline: 10px; }
   .me { flex: none; width: 76px; display: flex; flex-direction: column; align-items: center; gap: 3px; scroll-snap-align: start; color: var(--text); }
   .ring { display: flex; padding: 3px; border-radius: var(--r-l); box-shadow: inset 0 0 0 2px var(--line-2); }
   .ring.hot { box-shadow: inset 0 0 0 2px var(--success); }
   .me b { max-width: 100%; margin-top: 3px; font: 600 var(--fs-cap)/1.2 var(--font-text); }
   .me small { max-width: 100%; font: 500 var(--fs-micro)/1.2 var(--font-text); color: var(--text-3); }
 
-  /* recruiting: the club's own cover, its name on it, the deadline in the corner and the one button */
-  .call { position: relative; flex: none; width: min(312px, 86%); height: 204px; overflow: hidden; border-radius: var(--r-xl); color: var(--on-accent); scroll-snap-align: start; }
-  .one .call { width: 100%; }
-  .art, .shade { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-  .shade { background: linear-gradient(180deg, rgba(0, 0, 0, 0.14), rgba(0, 0, 0, 0) 36%, rgba(0, 0, 0, 0.7)); }
-  .open { position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
-  .open:active { transform: none; opacity: 1; } /* the press is the whole card's */
-  .call { transition: transform 450ms var(--ease-bounce); }
-  .call:has(.open:active) { transform: scale(0.98); transition-duration: 80ms; }
-  .top { position: absolute; inset: 14px 14px auto; display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s-2); }
-  .top :global(.logo) { box-shadow: 0 6px 16px rgba(0, 0, 0, 0.28); }
-  .when { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 7px 11px; border-radius: var(--r-full); background: rgba(0, 0, 0, 0.44); font: 600 var(--fs-cap)/1 var(--font-text); white-space: nowrap; }
-  .when.soon { color: var(--warning); }
-  .when.live::before { content: ''; width: 7px; height: 7px; border-radius: var(--r-full); background: var(--success); }
-  .bot { position: absolute; inset: auto 16px 14px; display: flex; flex-direction: column; gap: var(--s-2); }
-  .bot b { font: 700 var(--fs-sec)/1.12 var(--font-display); letter-spacing: -0.022em; text-shadow: 0 1px 12px rgba(0, 0, 0, 0.3); }
-  .act { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); min-height: var(--ctl-s); }
-  .act small { min-width: 0; font: 500 var(--fs-sub)/1.3 var(--font-text); opacity: 0.86; }
-  .go { position: relative; z-index: 2; flex: none; height: var(--ctl-s); padding: 0 14px; border-radius: var(--r-full); background: var(--on-accent); color: var(--ink); font: 600 var(--fs-sub)/1 var(--font-text); }
-  .go::after { content: ''; position: absolute; inset: -4px 0; } /* 44 to the finger */
-  .go.done { background: rgba(255, 255, 255, 0.24); color: var(--on-accent); }
-  .go:disabled { opacity: 0.6; }
-  /* a club's lanyard as the ground (lookVars, the ticket's .club): its colours and ink; on a light paper the foot washed
-     in the paper instead of shaded dark, so the dark ink reads */
-  .call.look { background: linear-gradient(155deg, var(--c1), var(--c2) 55%, var(--c3)); color: var(--ink); }
-  .look .bot b { text-shadow: var(--tsh); }
-  /* lookVars' --ink shadows the app's: a dark look's white button takes the look's colour, and the time pill stays white */
-  .look:not(.paper) .go:not(.done) { color: var(--c2); }
-  .look .when:not(.soon) { color: var(--on-accent); }
-  .paper .shade { background: linear-gradient(180deg, transparent 38%, var(--c2)); opacity: 0.82; }
-  .paper .act small { color: var(--ink2); opacity: 1; }
-  .paper .go { background: var(--ink); color: var(--c1); }
-  .paper .go.done { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ink2); color: var(--ink); }
-
-  /* the list: chips that filter it in place, then plain rows on the ground */
+  /* every club: one grouped card, Settings' rows with a hairline from the name; the chips filter it in place */
+  .list { overflow: hidden; }
   .dir { scroll-margin-top: var(--page-top); }
-  .chips { margin-bottom: var(--s-2); padding-block: 2px; }
-  .chip { flex: none; display: flex; align-items: center; gap: 6px; height: var(--ctl-s); padding: 0 14px; border-radius: var(--r-full); background: var(--surface); box-shadow: var(--card-rim, var(--shadow-card)); font: 600 var(--fs-sub)/1 var(--font-text); color: var(--text-2); white-space: nowrap; scroll-snap-align: start; }
-  .chip.on { background: var(--text); color: var(--bg); box-shadow: none; }
+  .pulse { padding: 3px var(--s-4) 0; font: 500 var(--fs-sub)/1.3 var(--font-text); color: var(--text-3); }
+  .chips { gap: var(--s-2); padding-block: var(--s-3) var(--s-1); }
+  .chip { flex: none; display: flex; align-items: center; gap: 6px; height: var(--ctl-s); padding: 0 14px; border-radius: var(--r-full); background: var(--fill); font: 600 var(--fs-sub)/1 var(--font-text); color: var(--text-2); white-space: nowrap; scroll-snap-align: start; }
+  .chip.on { background: var(--text); color: var(--bg); }
   .chip i { font-style: normal; font-variant-numeric: tabular-nums; opacity: 0.6; }
   .ic { display: flex; color: var(--c); }
   .on .ic { color: inherit; }
 
-  .row { position: relative; display: flex; align-items: center; gap: var(--s-2); }
+  .row { position: relative; display: flex; align-items: center; gap: var(--s-2); padding-inline: var(--s-4); }
   .rt { flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--s-3); padding: 10px 0; text-align: left; color: var(--text); }
   .row :global(.btn) { flex: none; padding-inline: var(--s-3); font-size: var(--fs-sub); }
-  .row + .row::before { content: ''; position: absolute; top: 0; left: 64px; right: 0; height: 0.5px; background: var(--separator); }
+  .row + .row::before { content: ''; position: absolute; top: 0; left: 74px; right: 0; height: 0.5px; background: var(--separator); }
   .lg { position: relative; flex: none; display: flex; }
-  .dot { position: absolute; right: -2px; bottom: -2px; width: 12px; height: 12px; border-radius: var(--r-full); background: var(--success); box-shadow: 0 0 0 2.5px var(--bg); }
+  .dot { position: absolute; right: -2px; bottom: -2px; width: 12px; height: 12px; border-radius: var(--r-full); background: var(--success); box-shadow: 0 0 0 2.5px var(--surface-solid); }
   .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-  .tx b { display: flex; align-items: center; gap: var(--s-1); font: 600 var(--fs-card)/1.25 var(--font-text); letter-spacing: -0.012em; }
+  .tx b { display: flex; align-items: center; gap: var(--s-1); font: 600 var(--fs-body)/1.25 var(--font-text); letter-spacing: -0.01em; }
   .tx small { font: 450 var(--fs-sub)/1.3 var(--font-text); color: var(--text-2); }
   .tx small.hot { font-weight: 500; color: var(--accent-text); }
   .faces { flex: none; display: flex; }
   .faces > :global(* + *) { margin-left: -7px; }
-  .cap { margin: var(--s-5) 0 var(--s-1); font: 600 var(--fs-sub)/1 var(--font-text); color: var(--text-3); }
-  .still { opacity: 0.62; }
+  .row:last-child { padding-bottom: var(--s-1); }
+  .found .row:first-child { padding-top: var(--s-1); }
+  .cap { margin-top: var(--s-2); padding: var(--s-3) var(--s-4) var(--s-1); border-top: 0.5px solid var(--separator); font: 600 var(--fs-sub)/1 var(--font-text); color: var(--text-3); }
+  .still .rt { opacity: 0.62; }
   .none { padding: var(--s-10) 0; text-align: center; font: 450 var(--fs-body)/1.3 var(--font-text); color: var(--text-3); }
 
-  .more { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .more > :only-child { grid-column: 1 / -1; }
-  .tile { display: flex; flex-direction: column; justify-content: space-between; gap: var(--s-4); min-width: 0; padding: 14px; border-radius: var(--r-l); background: var(--surface); box-shadow: var(--card-rim, var(--shadow-card)); }
+  /* the chats and a new club: two tiles, the Profile's pair under its badge */
+  .duo { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-3); }
+  .duo > :only-child { grid-column: 1 / -1; }
+  .tile { display: flex; flex-direction: column; justify-content: space-between; gap: var(--s-5); min-width: 0; padding: 14px; border-radius: var(--r-l); text-align: left;
+    background: radial-gradient(90% 70% at 15% 0%, var(--accent-soft), transparent 70%), var(--surface); box-shadow: var(--card-rim, var(--shadow-card)); }
   .tt { display: flex; align-items: center; justify-content: space-between; }
   .badge { display: grid; place-items: center; width: 36px; height: 36px; border-radius: var(--r-s); background: var(--fill); }
   .badge.tg { background: var(--tile-blue); color: var(--on-accent); }
-  .tile b { font: 600 var(--fs-body)/1.25 var(--font-text); letter-spacing: -0.01em; }
+  .tile b { font: 700 var(--fs-body)/1.25 var(--font-text); letter-spacing: -0.01em; }
 </style>
