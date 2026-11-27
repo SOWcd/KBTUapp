@@ -503,15 +503,20 @@ def test_kaspi_list_ticks_off_auto_and_spot(paid, monkeypatch):
 
 
 def test_unchecked_receipts_capped_per_event(paid, monkeypatch):
-    # any picture with a sum turns a hold into a ticket: past the cap of unreviewed ones the hold stays a hold
+    # any picture with a sum turns a hold into a ticket: past the cap of unreviewed ones the event takes no new paid
+    # holds (before anyone pays); OCR down and people already at the door don't count; a review frees it
     c, con, eid, (a, b, d), now = paid
     monkeypatch.setattr(seats, "UNCHECKED_CAP", 1)
-    for tg in (a, b, d):
-        _go(c, eid, tg)
-    _send(paid, monkeypatch, a, {**_fields(now), "amount": 1500})
-    monkeypatch.setattr(receipt, "read", lambda im: {**_fields(now, "823456789012345678"), "amount": 1500})
-    r = _up(c, eid, b, 241)
+    _go(c, eid, a)
+    row = _send(paid, monkeypatch, a, {**_fields(now), "amount": 1500})
+    r = _go(c, eid, b)
     assert (r.status_code, r.json()["error"], r.json()["message"]) == (429, "rate_limited", "unchecked")
-    assert c.get(f"/api/events/{eid}", headers=tma(b)).json()["my"]["status"] == "hold"
-    assert _send(paid, monkeypatch, d, _fields(now, "833456789012345678"), 242)["flags"] == ""  # a clean one still passes
-    assert _send(paid, monkeypatch, a, _fields(now, "843456789012345678"), 243)["flags"] == "partial,resent"  # a replacement too
+    assert c.get(f"/api/events/{eid}", headers=tma(b)).json()["my"] is None
+    con.execute("UPDATE registrations SET checked_in_at = ? WHERE id = ?", (now, row["registration_id"]))
+    assert _go(c, eid, b).json()["my"]["status"] == "hold"
+    con.execute("UPDATE registrations SET checked_in_at = NULL WHERE id = ?", (row["registration_id"],))
+    assert _go(c, eid, d).status_code == 429
+    assert c.post(f"/api/receipts/{row['id']}/review", headers=tma(20), json={"reject": False}).status_code == 204
+    assert _go(c, eid, d).json()["my"]["status"] == "hold"
+    _send(paid, monkeypatch, b, None, 241)  # ocr_unavailable: our outage, not counted
+    assert seats._unchecked(con, eid) == 0

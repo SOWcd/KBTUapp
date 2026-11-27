@@ -1778,7 +1778,7 @@ const en: Dict = {
   'pay.copied': "Number copied",
   'pay.until': "Your seat is held until {time}",
   'pay.tooMany': "The receipt was replaced three times. The organizer will look at the last one",
-  'pay.queue': "Receipts are being checked. Send yours later",
+  'pay.queue': "The organizer is checking receipts. Try again later",
   'pay.notReceipt': "That isn't a Kaspi receipt. Upload the receipt itself: Kaspi → the payment → “Share”, or a screenshot of it",
   'pay.expired': "The hold expired. Tap “I'm going” again if seats are left",
   'pay.upload': "Upload the receipt",

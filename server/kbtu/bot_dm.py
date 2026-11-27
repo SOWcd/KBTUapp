@@ -334,9 +334,9 @@ async def _receipt(cfg: Config, http: httpx.AsyncClient, con, msg: dict, eid: in
     root = Path(cfg.db_path).resolve().parent / "receipts"
     try:
         c, gone = logic.add_receipt(con, viewer, eid, saved, read, via="bot")
-    except logic.ApiError as exc:  # the hold ran out while the file was read (or too many unchecked): the picture goes, unless a row has the same one
+    except logic.ApiError:  # the hold ran out while the file was read: the picture goes, unless a row has the same one
         media.drop(root, [] if one(con, "SELECT 1 FROM files WHERE path = ?", saved["path"]) else [saved["path"]])
-        return say("receipt_wait" if exc.code == "rate_limited" else "receipt_none")
+        return say("receipt_none")
     media.drop(root, gone)  # the one it replaced
     return taken(eid, next(h["title"] for h in holds if h["id"] == eid), c)
 

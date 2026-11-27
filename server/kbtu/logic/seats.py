@@ -784,6 +784,8 @@ def register(con, v: Viewer, eid: int, ref: object = None, phone: object = None,
         is_full = e["seats"] is not None and taken(con, eid) >= e["seats"]
         free = not is_full and _free_seat(con, e, v.id)
         status = "waitlist" if is_full else "hold" if e["price"] and not free else "going"
+        if status == "hold" and _unchecked(con, eid) >= max(UNCHECKED_CAP, (e["seats"] or 0) // 4):
+            raise ApiError("rate_limited", "unchecked")  # before anyone pays: the organizer catches up on receipts first
         hold = min(core.now() + HOLD, end_of(e)) if status == "hold" else None
         wait = core.now() if status == "waitlist" else None
         if r:
@@ -878,9 +880,6 @@ def add_receipt(con, v: Viewer, eid: int, saved: dict, read: dict | None = None,
             flags, clean = SPOT, False
         elif not clean and not flags:
             flags = PARTIAL
-        # OCR down (read None) is our outage, not a junk picture: every honest receipt would hit the cap then
-        if not old and read is not None and not clean and flags != SPOT and _unchecked(con, eid) >= UNCHECKED_CAP:
-            raise ApiError("rate_limited", "unchecked")  # the hold stays (and runs out): the organizer catches up first
         reviewed_at = core.now() if clean else None
         fid = con.execute("""INSERT INTO files (sha256, kind, mime, bytes, width, height, path, owner_id, created_at)
             VALUES (?, 'receipt', 'image/webp', ?, ?, ?, ?, ?, ?)""", (saved["sha256"], saved["bytes"], saved["width"], saved["height"], saved["path"], v.id, core.now())).lastrowid
@@ -933,16 +932,19 @@ AUDIT = 5
 SPOT = "spot"  # the only flag a clean receipt carries: picked for a person's look, nothing wrong found
 PARTIAL = "partial"  # payment not fully verified: a person must check before admission
 RESENT = "resent"  # the seat had a receipt before this one (replaced, or rejected before a new sign-up)
-# any picture OCR reads a sum or a number off turns a hold into a ticket; tickets on receipts nobody passed stop here
-# per event, so junk can't take every seat for good. ponytail: one number for every event; scale by seats if one fills it
+# any picture OCR reads a sum or a number off turns a hold into a ticket: with this many such tickets nobody reviewed
+# (or a quarter of the seats), the event takes no new paid holds until the organizer catches up, so junk can't take
+# every seat for good. Checked at the hold, never at the receipt: nobody pays into a refusal.
 UNCHECKED_CAP = 20
 
 
 def _unchecked(con, eid: int) -> int:
-    """This event's tickets whose receipt warns or is read in part and nobody reviewed it yet (a spot one is clean)."""
+    """This event's tickets not yet at the door whose receipt warns or is read in part and nobody reviewed it (a spot
+    one is clean; OCR down is our outage, not a junk picture)."""
     return one(con, """SELECT COUNT(*) FROM registrations r JOIN receipts c ON c.id = (SELECT MAX(id) FROM receipts
             WHERE registration_id = r.id AND status = 'accepted' AND created_at >= r.created_at)
-        WHERE r.event_id = ? AND r.status = 'going' AND c.reviewed_at IS NULL AND c.flags NOT IN ('', 'spot')""", eid)[0]
+        WHERE r.event_id = ? AND r.status = 'going' AND r.checked_in_at IS NULL AND c.reviewed_at IS NULL
+        AND c.flags NOT IN ('', 'spot') AND c.flags NOT LIKE '%ocr_unavailable%'""", eid)[0]
 
 
 def _audit() -> bool:
