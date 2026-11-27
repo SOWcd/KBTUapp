@@ -1,26 +1,3 @@
 # Serious and critical a11y violations the app had when e2e/a11y.spec.ts came in (#362): one per line,
 # `<theme> <screen> <rule> <element>`. Fix one, strike its line; never add a line for something new.
-dark afisha label-content-name-mismatch .today
-dark afisha label-content-name-mismatch button[aria-label="Friday, 27 November · 1"]
-dark afisha label-content-name-mismatch button[aria-label="Monday, 30 November"]
-dark afisha label-content-name-mismatch button[aria-label="Saturday, 28 November"]
-dark afisha label-content-name-mismatch button[aria-label="Sunday, 29 November"]
-dark afisha label-content-name-mismatch button[aria-label="Thursday, 26 November · 1"]
-dark afisha label-content-name-mismatch button[aria-label="Tuesday, 1 December"]
-dark forum label-content-name-mismatch article[data-post="1"] > .head > .rail > .av[aria-label="Ali N"]
-dark forum label-content-name-mismatch article[data-post="4"] > .head > .rail > .av[aria-label="Ali N"]
-dark me label-content-name-mismatch .fr
-dark me label-content-name-mismatch .photo
-dark me nested-interactive .inv
-light afisha label-content-name-mismatch .today
-light afisha label-content-name-mismatch button[aria-label="Friday, 27 November · 1"]
-light afisha label-content-name-mismatch button[aria-label="Monday, 30 November"]
-light afisha label-content-name-mismatch button[aria-label="Saturday, 28 November"]
-light afisha label-content-name-mismatch button[aria-label="Sunday, 29 November"]
-light afisha label-content-name-mismatch button[aria-label="Thursday, 26 November · 1"]
-light afisha label-content-name-mismatch button[aria-label="Tuesday, 1 December"]
-light forum label-content-name-mismatch article[data-post="1"] > .head > .rail > .av[aria-label="Ali N"]
-light forum label-content-name-mismatch article[data-post="4"] > .head > .rail > .av[aria-label="Ali N"]
-light me label-content-name-mismatch .fr
-light me label-content-name-mismatch .photo
-light me nested-interactive .inv
+# All 34 struck (#401, #402, and the last 24 with #362's close): new ones fail the check.

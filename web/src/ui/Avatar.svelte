@@ -29,7 +29,9 @@
     <img draggable="false" src={person.avatar} alt="" width={size} height={size} decoding="async" loading={size >= 64 ? 'eager' : 'lazy'} style="background:{tone}"
       onerror={() => (broken = true)} />
   {:else}
-    <span class="ini" style="background:{tone};font-size:{Math.round(size * 0.38)}px">{initials}</span>
+    <!-- the initials stand in for the photo, a picture of the person (its img is alt=""), not a label: drawn by CSS so
+         a button's name stays the person's name (axe's label-in-name, #362) -->
+    <span class="ini" style="background:{tone};font-size:{Math.round(size * 0.38)}px" data-ini={initials} aria-hidden="true"></span>
   {/if}
   {#if (person.founder || person.mark === 'idea') && size >= 28}<span class="seal"><Founder size={Math.max(14, Math.round(size * 0.36))} idea={!person.founder} /></span>{/if}
 {/snippet}
@@ -44,6 +46,7 @@
   .av { position: relative; display: inline-flex; flex: none; border-radius: 50%; }
   .av img, .ini { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; background: var(--surface-2); }
   .ini { display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; letter-spacing: -0.02em; }
+  .ini::before { content: attr(data-ini); }
   .ring { box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px var(--accent); }
   .seal { position: absolute; right: -3px; bottom: -3px; }
   button.av { transition: transform var(--t-fast) var(--ease); }

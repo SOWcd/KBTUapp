@@ -30,17 +30,20 @@
   function open() { haptic.tap(); sheets.referral(r.code); }
 </script>
 
-<div class="sq inv surface {metal}" role="button" tabindex="0" onclick={open} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } }}>
+<!-- a tap anywhere opens RefSheet; for screen readers and keyboards the title is that button and the medal its own (a
+     button can't hold another: axe's nested-interactive, #362), so the tile itself is no button -->
+<div class="sq inv surface {metal}" onclick={open} role="presentation">
   <span class="burst" aria-hidden="true"></span>
   <span class="top">
     <button class="art" use:glass onclick={(e) => { e.stopPropagation(); haptic.tap(); sheets.award(achItem(a), true); }} aria-label={achName(a)}><Medal {a} size={80} /></button>
     <span class="cnt"><b class="num">{r.count}</b><i>{tn('ref.came', r.count)}</i></span>
   </span>
-  <span class="tx">
+  <!-- its click goes up to the tile's (open) -->
+  <button class="tx">
     <b>{t('ref.title')}</b>
     <span class="marks" aria-hidden="true">{#each marks as k, i (i)}<i class={k.m}><s style:transform="scaleX({k.fill})"></s></i>{/each}</span>
     {#if next}<i class="left ellipsis">{leftLine(a)}</i>{/if}
-  </span>
+  </button>
 </div>
 
 <style>
@@ -67,7 +70,7 @@
   .cnt { display: flex; flex-direction: column; align-items: flex-end; padding-top: 2px; }
   .cnt b { font: 800 var(--fs-title)/1 var(--font-display, var(--font-text)); letter-spacing: -0.03em; }
   .cnt i { font: 500 var(--fs-sub)/1.3 var(--font-text); font-style: normal; color: var(--text-2); }
-  .tx { display: flex; flex-direction: column; min-width: 0; }
+  .tx { display: flex; flex-direction: column; min-width: 0; padding: 0; }
   .tx b { font: 700 var(--fs-body)/1.2 var(--font-text); }
   .left { margin-top: 5px; font: 500 var(--fs-cap)/1.2 var(--font-text); font-style: normal; color: var(--text-2); }
   /* the nine levels: a mark each, in its metal; the next one fills as friends come */

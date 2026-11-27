@@ -460,8 +460,9 @@
     <nav class="week" aria-label={t('list.title')}>
       {#each strip as w (w.d)}
         {@const ts = dayTs(w.d) + 12 * 3600}
-        <button class={['wd', { today: w.d === today, has: w.n }]} disabled={!w.on} aria-label={weekday(ts) + ', ' + dayMonth(ts) + (w.n ? ' · ' + w.n : '')} onclick={() => void toDay(w.d)}>
-          <span>{weekdayShort(ts)}</span><b class="num">{parts(ts).d}</b><i class={{ on: w.mine }}></i>
+        <!-- named as it shows ("Fri 27", for voice control), then the whole date; the space between them isn't drawn (a flex column) -->
+        <button class={['wd', { today: w.d === today, has: w.n }]} disabled={!w.on} aria-label={`${weekdayShort(ts)} ${parts(ts).d} · ${weekday(ts)}, ${dayMonth(ts)}${w.n ? ' · ' + w.n : ''}`} onclick={() => void toDay(w.d)}>
+          <span>{weekdayShort(ts)}</span> <b class="num">{parts(ts).d}</b><i class={{ on: w.mine }}></i>
         </button>
       {/each}
     </nav>
