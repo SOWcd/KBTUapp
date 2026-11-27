@@ -387,7 +387,7 @@ def ms_claim(con, v: Viewer, secret: str) -> bool:
 
 
 def staff_row(con, uid: int, first: str, last: str, school: str | None = None, consent: str = "staff") -> None:
-    """A KBTU staff member acts as a student (SPEC §1): no student ID of theirs exists, so a placeholder no real one can
+    """A KBTU staff member acts as a student: no student ID of theirs exists, so a placeholder no real one can
     match (`staff<id>`). consent 'staff': typed in by the creator (kbtu.admin staff), no policy gate; else the version
     the person accepted at the sign-in (staff_ok's way)."""
     t = core.now()
@@ -772,7 +772,7 @@ def _skin_ok(con, uid: int, oid: int):
 
 
 def _qr_code(con, uid: int, col: str = "qr_code") -> str:
-    """The secret half of my badge QR (§4.4), or with "link_code" my links' code (r_, ev_: posted in chats, so never the
+    """The secret half of my badge QR, or with "link_code" my links' code (r_, ev_: posted in chats, so never the
     badge's): made on first use, random like a ticket code."""
     assert col in ("qr_code", "link_code")
     code = one(con, f"SELECT {col} FROM users WHERE id = ?", uid)[col]
@@ -959,7 +959,7 @@ def _update_me(con, v: Viewer, patch: dict) -> None:
         sets["avatar_tg"] = int(bool(patch["avatarTg"]))
     if "bio" in patch:
         sets["bio"] = str(patch["bio"])[:150]
-    if "showcase" in patch:  # up to 6 keys: achievement codes and badges as b<event id>, in the order picked (§4.11)
+    if "showcase" in patch:  # up to 6 keys: achievement codes and badges as b<event id>, in the order picked
         codes = {a[0] for a in ACHIEVEMENTS} - {"activist"}
         keys = [k for k in (patch["showcase"] if isinstance(patch["showcase"], list) else [])
                 if isinstance(k, str) and (k in codes or re.fullmatch(r"b\d{1,9}", k))]
@@ -1096,7 +1096,7 @@ def _may_delete(con, v: Viewer) -> None:
 
 
 def ask_delete(con, v: Viewer, photos: bool = False) -> dict:
-    """"Delete my account" (§4.8) waits a week, then `delete_due` runs it (a change of heart, or someone
+    """"Delete my account" waits a week, then `delete_due` runs it (a change of heart, or someone
     holding my phone, shouldn't cost the awards; asking the KBTU password would shut out whoever no longer has it).
     The bot says so at once, with the way back; nothing is hidden meanwhile. `photos`: the album photos I added go
     too (by default they stay, without my name). A President's club passes on at the deletion (delete_due)."""
@@ -1440,7 +1440,7 @@ def _placeholder(con) -> int:
 
 
 def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
-    """Delete my data (§4.8, consent withdrawn), run by delete_due after the week. The Telegram account stays a guest:
+    """Delete my data (consent withdrawn), run by delete_due after the week. The Telegram account stays a guest:
     its settings and a club's ban stay on the Telegram ID. Future tickets are given up first, so
     seats free up and the waitlist moves. My part of what is over moves to a nameless placeholder, its free text
     blanked: who came to an ended event, ratings, volunteering, done casting rounds, comments written as the club.

@@ -1,9 +1,9 @@
-"""HTTP layer (SPEC §6): FastAPI routes over logic.py, the Telegram initData check, sign-in with KBTU, share
+"""HTTP layer: FastAPI routes over logic.py, the Telegram initData check, sign-in with KBTU, share
 cards, and the built frontend with an SPA fallback.
 
 Run from server/:  .venv/bin/uvicorn kbtu.app:create --factory --port 8080
-Routes cover what the frontend's Api interface calls (web/src/lib/api/index.ts); the rest of SPEC §6 comes
-with the screens that need it. Handlers that only touch SQLite are plain functions (FastAPI runs them in its
+Routes cover what the frontend's Api interface calls (web/src/lib/api/index.ts); new ones come
+with the screens that need them. Handlers that only touch SQLite are plain functions (FastAPI runs them in its
 thread pool); those that wait on the network (Telegram) are async."""
 from __future__ import annotations
 
@@ -292,7 +292,7 @@ def viewer(request: Request, con: Con) -> Iterator[Viewer]:
         logic.log_action(con, v.id, "staff_event", f"event:{eid}", json.dumps({"do": f"{request.method} {request.scope['route'].path}", **({"full": True, "org": v.staff_org} if v.lent_full else {})}))
 
 def _upsert(con, tg: dict, admins: frozenset[int]) -> Viewer:
-    """The Telegram user as our user: created on the first call, names and photo kept fresh (SPEC §5)."""
+    """The Telegram user as our user: created on the first call, names and photo kept fresh."""
     t = logic.now()
     if tg["id"] >= logic.apple.SYNTH:  # never a Telegram ID (52 bits): the Apple-made accounts' range (logic/apple.py)
         raise ApiError("forbidden", "init_data")
@@ -606,7 +606,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     app.router.route_class = _Route
     dist = Path(cfg.web_dist).resolve()
     photos = Path(cfg.db_path).resolve().parent / "media"   # next to the database: one volume to back up
-    receipts = Path(cfg.db_path).resolve().parent / "receipts"   # private (§4.3): never under /media, only through the API
+    receipts = Path(cfg.db_path).resolve().parent / "receipts"   # private: never under /media, only through the API
     # the "To calendar" link is signed by one worker and may be opened on another: one key for all, from the env
     logic.seats.ICS_KEY = hmac.new(cfg.token_key, b"kbtu-ics", hashlib.sha256).digest()
     logic.seats.REF_KEY = hmac.new(cfg.token_key, b"kbtu-event-ref", hashlib.sha256).digest()  # "My link"'s code
@@ -851,7 +851,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.post("/api/me/delete")
     def ask_delete(con: Con, v: Me, body: dict | None = Body(None)):
-        """§4.8: in a week, with the way back meanwhile (logic.ask_delete); the bot's round runs it (outbox.send_due)."""
+        """Deleting my account: in a week, with the way back meanwhile (logic.ask_delete); the bot's round runs it (outbox.send_due)."""
         return logic.ask_delete(con, v, (body or {}).get("photos") is True)
 
     @app.post("/api/me/consent")
@@ -1677,7 +1677,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     # ------------------------------------------------------------ Studio
 
-    # ---- friends (§4.7) ----
+    # ---- friends ----
     @app.get("/api/friends")
     def friends(con: Con, v: Me):
         return logic.friends(con, v)
@@ -2132,7 +2132,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def update_member(oid: int, uid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.update_member(con, v, oid, uid, body)
 
-    # Team 2.0 (§2b): the club's roles and tags, probation, removal by request, bans
+    # Team 2.0: the club's roles and tags, probation, removal by request, bans
     @app.get("/api/orgs/{oid}/team")
     def team_setup(oid: int, con: Con, v: Me):
         return logic.team_setup(con, v, oid)
@@ -2287,7 +2287,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             return logic.me(con, v)
         return await run_in_threadpool(done)
 
-    # paid events (§4.3): the receipt is the body, like /api/photos; its image only through the API, to whom may see it
+    # paid events: the receipt is the body, like /api/photos; its image only through the API, to whom may see it
     @app.post("/api/events/{eid}/receipt")
     async def upload_receipt(eid: int, request: Request, con: Con, v: Me):
         data = await read_upload(request)
@@ -2315,7 +2315,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def review_receipt(rid: int, con: Con, v: Me, body: dict = Body(...)):
         logic.review_receipt(con, v, rid, body.get("reject"), body.get("why"))
 
-    # comments under posts and events, reports (§4.10)
+    # comments under posts and events, reports
     @app.get("/api/{kind}s/{tid}/comments")
     def get_comments(kind: str, tid: int, con: Con, v: Me):
         return logic.comments(con, v, kind, tid)
@@ -2731,7 +2731,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
             log.warning("file: %s", answer.get("description"))
             raise ApiError("unavailable", "telegram")
 
-    # ------------------------------------------------------------ starting a club (§4.6)
+    # ------------------------------------------------------------ starting a club
 
     @app.get("/api/club-applications/mine")
     def my_club_application(con: Con, v: Me):
@@ -2759,7 +2759,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def decide_official(rid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.decide_official(con, v, rid, bool(body.get("approve")), body.get("reason"))
 
-    # ------------------------------------------------------------ the chats directory (§4.11)
+    # ------------------------------------------------------------ the chats directory
 
     @app.get("/api/chats")
     def list_chats(con: Con, v: Me):
@@ -3016,7 +3016,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def admin_delete_event(eid: int, con: Con, v: Me):
         logic.admin_delete_event(con, v, eid)  # hidden now, gone a day later (the Undo's day)
 
-    # ------------------------------------------------------------ the clubs registry for DMP (§4.13)
+    # ------------------------------------------------------------ the clubs registry for DMP
 
     @app.get("/api/registry/orgs")
     def registry(con: Con, v: Me, back: int = 0):
@@ -3100,20 +3100,20 @@ def create(cfg: config.Config | None = None) -> FastAPI:
                     raise ApiError("need_student")
                 start = f"r_{logic._qr_code(con, v.id, 'link_code')}"
                 fields = {"name": logic.shown_name(logic.one(con, logic.PERSON + " WHERE u.id = ?", v.id))}
-            elif kind == "join":  # a one-time member link (§4.5), Vice+; each card is a fresh link; many: the team's 7-day link
+            elif kind == "join":  # a one-time member link, Vice+; each card is a fresh link; many: the team's 7-day link
                 link = logic.team_link(con, v, ref) if body.get("many") is True else logic.invite(con, v, ref)
                 start = f"join_{ref}_{link['token']}"
                 fields = {"club": logic.one(con, "SELECT name FROM orgs WHERE id = ?", ref)["name"]}
                 if "expiresAt" in link:
                     kind, fields["until"] = "jm", texts.when(link["expiresAt"], lang).split(",")[0]
-            else:  # a new club's one-time President link (§2), the admin; each card is a fresh link
+            else:  # a new club's one-time President link, the admin; each card is a fresh link
                 start = f"pres_{ref}_{logic.president_link(con, v, ref)['token']}"
                 fields = {"club": logic.one(con, "SELECT name FROM orgs WHERE id = ?", ref)["name"]}
             title, text, button = texts.share_invite(kind, lang, **fields)
             result = {"type": "article", "id": f"{kind}-{ref}-{stamp}", "title": title,
                       "input_message_content": {"message_text": text, "parse_mode": "HTML", "link_preview_options": {"is_disabled": True}},
                       "reply_markup": {"inline_keyboard": [[{"text": button, "url": f"https://t.me/{cfg.bot_username}?startapp={start}"}]]}}
-        elif kind == "aw":  # an achievement of mine (§4.11): the reader's button opens their own progress toward it
+        elif kind == "aw":  # an achievement of mine: the reader's button opens their own progress toward it
             code = body.get("code")
             a = next((x for x in logic.achievements(con, v.id) if x["code"] == code and x["level"] > 0), None) if v.student and code not in logic.PRIVATE and code != "activist" else None  # Chief activist counts anonymous posts: never shared
             if not a:

@@ -1,4 +1,4 @@
-"""The userbot (PLAN 86 part 2): an old Telegram account, signed in once (tools/userbot_login.py), that joins each org's
+"""The userbot: an old Telegram account, signed in once (tools/userbot_login.py), that joins each org's
 main public channel and mirrors its posts into the org's news (mirror.py has the rules). It runs in the bot's process
 beside the postman (bot.run), never in a request: one account is one point of failure, and Telegram makes it wait
 (FloodWait) when it hurries. TG_API_ID, TG_API_HASH and TG_SESSION in the environment; any missing: off, nothing else

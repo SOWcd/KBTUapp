@@ -1,4 +1,4 @@
-"""F1 find people: skills, requests, contact by double opt-in, blocks, pings (PLAN F1)."""
+"""F1 find people: skills, requests, contact by double opt-in, blocks, pings."""
 from __future__ import annotations
 
 import difflib

@@ -1,4 +1,4 @@
-"""Signing in with the KBTU Microsoft account (PLAN item 44). The app "KBTU App" lives in the owner's own
+"""Signing in with the KBTU Microsoft account. The app "KBTU App" lives in the owner's own
 Entra directory (not KBTU's), as a single-page app with PKCE and no secret. The Mini App asks start() for a link and
 opens it outside Telegram (/ms/go puts a random PKCE verifier into that browser's cookie); Microsoft sends the student
 back to /ms.html, which takes the verifier from its cookie, trades the code for tokens in the browser (Microsoft redeems a single-page app's code only from a browser)

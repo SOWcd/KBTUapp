@@ -1,4 +1,4 @@
-"""An org's main Telegram channel in its news (PLAN 86 part 2): what the userbot (userbot.py) saw,
+"""An org's main Telegram channel in its news: what the userbot (userbot.py) saw,
 written as the org's posts. Here only the database: the Telegram side hands over messages (Msg), so the rules
 are tested without Telegram.
 

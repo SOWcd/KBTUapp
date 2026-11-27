@@ -1,4 +1,4 @@
-"""The rules of SPEC §2–§4 over SQLite, answering in the shapes of web/src/lib/api/types.ts (camelCase).
+"""The app's rules over SQLite, answering in the shapes of web/src/lib/api/types.ts (camelCase).
 
 The only copy of the rules. Every function takes the connection and the caller (`Viewer`) and either returns
 JSON-ready data or raises ApiError. Writes that check and then change (seats, check-in) run in db.tx.

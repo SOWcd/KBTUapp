@@ -15,14 +15,14 @@ from dataclasses import dataclass, field
 from ..db import tx
 
 
-HOLD = 30 * 60          # an unpaid seat waits 30 min for the receipt (§4.3)
+HOLD = 30 * 60          # an unpaid seat waits 30 min for the receipt
 log = logging.getLogger("kbtu.logic")
 NO_END = 3 * 3600       # an event without an end counts as 3 h long
 DOOR_AUTO = 30 * 60     # the door (check-in) opens by itself 30 min before the start …
 DOOR_EARLY = 4 * 3600   # … or earlier, from 4 h before, when the club's President or a Vice opens it (organizing.open_door) …
 DOOR_LATE = 6 * 3600    # … and, without an end, closes 6 h after the start
 RANK = {"member": 1, "head": 2, "vice": 3, "president": 4}
-# A club role's rights (SPEC §2): the toggles of its editor. Each needs a level; the
+# A club role's rights: the toggles of its editor. Each needs a level; the
 # highest one a role has is its level, which ranks it for the rank rule (whom it acts on). A level without a club role,
 # and a role made before the toggles, has its level's rights; the President has them all.
 RIGHTS = {"door": "member", "events": "head", "posts": "head", "people": "head", "casting": "head", "team": "vice", "money": "vice", "memo": "vice", "profile": "vice",
@@ -32,7 +32,7 @@ RIGHTS = {"door": "member", "events": "head", "posts": "head", "people": "head",
 # without making those people Heads or Vices
 OWN_FROM = {"reports": "vice"}
 LEVEL_RIGHTS = {lv: frozenset(r for r, need in RIGHTS.items() if RANK[OWN_FROM.get(r, need)] <= RANK[lv]) for lv in RANK}
-PROFILE_QR = re.compile(r"\bu_(\d+)_([A-Z2-7]{10})\b")  # a badge QR: …?startapp=u_<id>_<code> (§4.4)
+PROFILE_QR = re.compile(r"\bu_(\d+)_([A-Z2-7]{10})\b")  # a badge QR: …?startapp=u_<id>_<code>
 TWO_GIS = re.compile(r"^https://(?:[a-z]+\.)?2gis\.(?:kz|ru|com)/", re.I)
 # An online event's meeting link: a button every student sees, so a trust boundary. The well-known meeting
 # hosts below are the only ones the AI or the finder may fill in; an organizer typing it by hand may use any https host
@@ -79,7 +79,7 @@ def meet_link(text: str) -> str | None:
     return None
 
 
-SEASON_MONTHS = (2, 8)  # a season starts in February and in August (§4.11)
+SEASON_MONTHS = (2, 8)  # a season starts in February and in August
 # typed in by the student: a name in any alphabet (hyphen, apostrophe, space), and a student ID like 24B031234 or a
 # master's 26MD1234 (year, a degree letter and 5-7 digits, or two letters and 4-7: the registrar's masters); ASCII digits only
 NAME = re.compile(r"[^\W\d_](?:[^\W\d_]|[-' ]){0,39}")
@@ -105,7 +105,7 @@ class ApiError(Exception):
 class Viewer:
     id: int
     role: str                   # platform role: user / moderator / admin
-    student: bool               # signed in with KBTU (only students act, §2)
+    student: bool               # signed in with KBTU (only students act)
     # Admin → an event (app.viewer, X-Staff-Event): the app's admin acting as that event's organizers, in this one request
     # on that event's own routes; `used` collects the rights lent, and the request's audit line names them
     staff_org: int = 0
@@ -225,7 +225,7 @@ def decided(con, target: str) -> ApiError:
     return ApiError("conflict", "decided", {"by": shown_name(p) if p else None, "action": a["action"] if a else None, "at": a["at"] if a else None})
 
 
-# staff, not students (SPEC §1): typed in by the creator (kbtu.admin staff: consent 'staff', a real ID kept when a
+# staff, not students: typed in by the creator (kbtu.admin staff: consent 'staff', a real ID kept when a
 # student turned staff) or signed in on his staff-ok (a placeholder ID `staff<id>`, a policy version accepted). No
 # student ID can start with "staff" (STUDENT_ID: two digits first), and a staff row never changes its own ID
 # (account.fix_identity). The one rule for every count, card number, comment and chat sync that leaves staff out.
@@ -362,7 +362,7 @@ def club_rights(role: str, rights: str | None, o) -> frozenset[str]:
 
 
 def rights_of(con, uid: int, oid: int) -> frozenset[str]:
-    """What someone may do in a club: their club role's toggles, else their level's (SPEC §2)."""
+    """What someone may do in a club: their club role's toggles, else their level's."""
     m = one(con, """SELECT m.role, t.rights, o.official, o.top_at FROM org_members m JOIN orgs o ON o.id = m.org_id
         LEFT JOIN org_roles t ON t.id = m.role_id WHERE m.org_id = ? AND m.user_id = ?""", oid, uid)
     return club_rights(m["role"], m["rights"], m) if m else frozenset()
@@ -374,7 +374,7 @@ STAFF_RIGHTS = frozenset({"events"})
 
 
 def can(con, v: Viewer, oid: int | None, right: str) -> bool:
-    """I may do this in this club (students only act, §2); or, from Admin, the admin on that one event (STAFF_RIGHTS),
+    """I may do this in this club (students only act); or, from Admin, the admin on that one event (STAFF_RIGHTS),
     the creator with a President's but its reports (lent_full). Receipts stay the club's: their routes never take the staff headers."""
     if v.student and oid and right in rights_of(con, v.id, oid):
         return True
@@ -412,7 +412,7 @@ def _roles(con, v: Viewer) -> dict[int, str]:
 
 
 def short_name(p: sqlite3.Row) -> str:
-    """"Alikhan S" for students (§3; no dot), the Telegram first name otherwise."""
+    """"Alikhan S" for students (no dot), the Telegram first name otherwise."""
     if p["first_name"]:
         return f"{p['first_name']} {p['last_name'][:1] if p['last_name'] else ''}".strip()
     return p["tg_first_name"] or GONE["ru"]  # Telegram never has an empty first name: a deleted account's
@@ -455,7 +455,7 @@ CALLER: ContextVar[dict | None] = ContextVar("caller", default=None)
 def person_ref(p: sqlite3.Row) -> dict:
     # the app's moderators and admins carry a badge everyone sees, like the founder's
     staff = p["platform_role"] if "platform_role" in p.keys() and p["platform_role"] in ("admin", "moderator") else None
-    # a nick never hides the name from students (§4, §8); anyone else sees the nick alone (link_card's rule)
+    # a nick never hides the name from students; anyone else sees the nick alone (link_card's rule)
     real = p["nick"] and (CALLER.get() or {}).get("student") is not False
     return {"id": p["id"], "name": shown_name(p), "nick": p["nick"], "avatar": avatar_of(p), "founder": bool(p["is_founder"]), "mark": p["mark"], "staff": staff,
             **({"realName": short_name(p)} if real else {}),
@@ -495,7 +495,7 @@ def taken(con, eid: int) -> int:
 
 
 def free_taken(con, eid: int) -> int:
-    """A paid event's free seats for 1st-year students already given (§4.3)."""
+    """A paid event's free seats for 1st-year students already given."""
     return one(con, "SELECT COUNT(*) FROM registrations WHERE event_id = ? AND status = 'going' AND free = 1", eid)[0]
 
 
@@ -666,7 +666,7 @@ def cards(con, v: Viewer, evs: list[sqlite3.Row], share: bool = False) -> list[d
     saved = {r[0] for r in rows(con, f"SELECT event_id FROM saved_events WHERE user_id = ? AND event_id IN ({q})", v.id, *ids)}
     asks = dict(rows(con, f"SELECT event_id, status FROM team_asks WHERE user_id = ? AND event_id IN ({q})", v.id, *ids))  # seats.team_ask
     friends: dict[int, list] = {}
-    if v.student:  # §3: friends see where you go only if you allow it; guests see nobody
+    if v.student:  # friends see where you go only if you allow it; guests see nobody
         for p in rows(con, f"""SELECT {PERSON_COLS}, r.event_id AS ev FROM registrations r JOIN users u ON u.id = r.user_id
                 LEFT JOIN students s ON s.user_id = u.id WHERE r.event_id IN ({q}) AND r.status = 'going' AND u.show_going = 1
                 AND r.user_id IN (SELECT b FROM friendships WHERE a = ? UNION SELECT a FROM friendships WHERE b = ?) ORDER BY r.id""", *ids, v.id, v.id):

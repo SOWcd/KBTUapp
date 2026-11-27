@@ -1,4 +1,4 @@
-"""AI0 (PLAN "AI0 spec", "AI provider"): one OpenAI-shaped client over every free account the owner has, an ordered chain
+"""The AI provider chain: one OpenAI-shaped client over every free account the owner has, an ordered chain
 of (provider, model) links from the strongest to the weakest. A link that is rate-limited, busy, slow or answers
 nonsense hands over to the next and rests for its reset time; a missing key drops that provider's links; Munito runs
 on both its keys (the second when the first is limited). Which link answered is logged and counted per day (never
