@@ -270,10 +270,10 @@
      in the paper instead of shaded dark, so the dark ink reads */
   .call.look { background: linear-gradient(155deg, var(--c1), var(--c2) 55%, var(--c3)); color: var(--ink); }
   .look .bot b { text-shadow: var(--tsh); }
-  .paper .shade { background: linear-gradient(180deg, transparent 38%, color-mix(in srgb, var(--c2) 82%, transparent)); }
+  .paper .shade { background: linear-gradient(180deg, transparent 38%, var(--c2)); opacity: 0.82; }
   .paper .act small { color: var(--ink2); opacity: 1; }
   .paper .go { background: var(--ink); color: var(--c1); }
-  .paper .go.done { background: color-mix(in srgb, var(--ink) 12%, transparent); color: var(--ink); }
+  .paper .go.done { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ink2); color: var(--ink); }
 
   /* the list: chips that filter it in place, then plain rows on the ground */
   .dir { scroll-margin-top: var(--page-top); }
