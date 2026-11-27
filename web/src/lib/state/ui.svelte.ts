@@ -42,9 +42,18 @@ export function goTab(tab: Tab): void {
 export interface Overlay { id: number; component: Component<any>; props: Record<string, unknown>; closing: boolean; key?: SheetKey | null; byUser?: boolean; title?: string; theme?: 'light' | 'dark'; icon?: Component<any>; holdBack?: boolean; feed?: boolean; quiet?: boolean; mark?: boolean; bare?: boolean;
   /** a tinted page (the event editor): its colour, which the sheets opened over it take (Sheet), and the capsule */
   tint?: string | null;
+  /** the screen's one action in the web app's top-right pill (ui/StandaloneBar), as the capsule shows its name; null:
+   *  it has none (the app menu shows); unset: the one below decides. Inside Telegram that corner is Telegram's, so the
+   *  screen keeps its own button there (`!inTelegram` hides it where the pill has it) */
+  action?: TopAction | null;
   /** what the anonymous counters call it (lib/stats.ts); a generic error toast is counted against the top one that has it */
   stat?: Screen }
+/** run gets the pill's tap, so a menu opens at the pill (ui/menu) */
+export interface TopAction { icon: Component<any>; label: string; run: (e: MouseEvent) => void }
 export const overlays: Overlay[] = $state([]);
+/** the top-right pill's action: the top overlay that speaks (a titled one, or one that set action) decides, so a
+ *  menu or a quiet helper over a screen leaves that screen's action in place */
+export const topAction = (): TopAction | null => [...overlays].reverse().find((o) => !o.closing && (o.title || o.quiet || o.action !== undefined))?.action ?? null;
 let seq = 0;
 
 /** Same component and entity id return to the live view. A key can distinguish modes or identify a contextual view.

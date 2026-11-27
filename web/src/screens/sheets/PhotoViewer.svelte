@@ -5,7 +5,8 @@
   // enough it closes into its square, else springs back); pinch or a double tap zooms at the fingers, a zoomed photo
   // pans with a rubber edge. A tap hides and shows the chrome: "3 / 12" in the capsule, the filmstrip (it follows the
   // photo, a finger along it scrubs, a tap jumps), who added it and when, and ⋯: report (another's: gone for me at once, the admin decides) and
-  // delete (mine, or any for the club's Head+). Telegram's Back or the app's one × (CloseX) leaves. A person's lone photo
+  // delete (mine, or any for the club's Head+): in the web app the top-right pill is that one action (Overlay.action),
+  // inside Telegram they stay at the bottom. Telegram's Back or the app's one × (CloseX) leaves. A person's lone photo
   // opens here too: a tap closes it. Every move is transform and opacity (clip-path in the flight).
   import { calm } from '../../ui/fold';
   import Images from '@lucide/svelte/icons/images';
@@ -22,7 +23,7 @@
   import { sheets } from '../../lib/state/sheets';
   import { data } from '../../lib/state/data.svelte';
   import { t } from '../../lib/i18n/index.svelte';
-  import { haptic } from '../../lib/tg';
+  import { haptic, inTelegram } from '../../lib/tg';
   import { glass } from '../../ui/glass';
   import CloseX from '../../ui/CloseX.svelte';
 
@@ -300,12 +301,18 @@
   // ⋯: report another's photo, delete mine (or any, for the club's Head+ in its album); a single one is its own button
   const moreActs = $derived(list[at] ? [
     ...(!list[at].mine ? [{ label: t('cm.report'), icon: Flag, onselect: report }] : []),
-    ...(onremove && list[at].canDelete ? [{ label: t('gallery.delete'), icon: Trash, destructive: true, onselect: remove }] : []),
+    ...(onremove && list[at].canDelete ? [{ label: t(data.galleryPost ? 'gallery.delete' : 'album.remove'), icon: Trash, destructive: true, onselect: remove }] : []),
   ] : []);
   function more(e: MouseEvent) {
     if (moreActs.length === 1) moreActs[0].onselect();
     else menu(e.currentTarget as Element, moreActs, 'end');
   }
+  // the web app: the top pill is the photo's one action (Report on another's), or ⋯ when it has both
+  $effect(() => {
+    if (inTelegram) return;
+    const one = moreActs.length === 1 ? moreActs[0] : null;
+    overlay.action = moreActs.length ? { icon: one ? one.icon : Ellipsis, label: one ? one.label : t('common.more'), run: more } : null;
+  });
   // the day it was taken; the year too when it isn't this one
   const when = (ts: number) => dayMonth(ts) + (parts(ts).y !== parts(nowTs()).y ? ` ${parts(ts).y}` : '');
   // the one report sheet; once sent the photo is hidden for me, so it leaves the viewer and the album
@@ -357,7 +364,9 @@
         {#if p.by || p.at}<p>{#if p.by && p.uid}{@const uid = p.uid}<button class="who" onclick={() => sheets.person(uid)}>{p.by}</button>{:else if p.by}{p.by}{/if}{#if p.by && p.at}{' · '}{/if}{#if p.at}{when(p.at)}{/if}</p>{/if}
       </div>
     {/if}
-    {#if data.galleryPost}
+    {#if !inTelegram}
+      <!-- the web app: report and delete are the top pill's (above) -->
+    {:else if data.galleryPost}
       {#if moreActs.length}
         {@const Icon = moreActs.length === 1 ? moreActs[0].icon : Ellipsis}
         <button class="tool r glass glass-pill" use:glass aria-label={moreActs.length === 1 ? moreActs[0].label : t('common.more')} onclick={more}><Icon size={moreActs.length === 1 ? 20 : 22} /></button>
