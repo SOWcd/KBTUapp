@@ -2680,7 +2680,7 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         """The sticker sheet the app drew, as a PDF into the admin's chat with the bot (it prints from any phone)."""
         room, pdf = await run_in_threadpool(logic.library.stickers, con, v, rid, body)
         lang = logic.one(con, "SELECT lang FROM users WHERE id = ?", v.id)["lang"]
-        await send_file(request.state.tg["id"], "stickers.pdf", pdf, texts.bot_message(lang, "lib_stickers", room=room)[0], "application/pdf")
+        await send_file(request.state.tg["id"], "stickers.pdf", pdf, texts.pick(texts.BOT, lang)["lib_stickers"][0].format(room=room), "application/pdf")  # a plain caption: no HTML escaping
 
     # Native research: verified students answer once; proposals are reviewed only in Admin.
     research_body = Depends(json_body(logic.research.BODY_MOST))

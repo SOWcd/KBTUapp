@@ -7,7 +7,7 @@ import dataclasses
 import io
 
 from kbtu import bot, db, logic, outbox
-from test_core import delete_now, env, login, set_clock, tma  # noqa: F401  (env: the fixture)
+from helpers import delete_now, env, login, set_clock, tma  # noqa: F401  (env: the fixture)
 
 
 def _on(c, cfg, monkeypatch, mode: str = "all") -> None:

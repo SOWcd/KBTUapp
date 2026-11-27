@@ -64,15 +64,16 @@ def _agree(con, v: Viewer, body: dict) -> None:
 
 def withdraw(con, v: Viewer) -> None:
     """The consent taken back: my seat freed, my sits and reports gone. What a strike rests on stays its week (the
-    policy's "kept for protection"): my reports that freed a seat ("still not here", false or not yet), and my sits
-    under someone else's such report, so neither side washes one off by withdrawing and agreeing again."""
+    policy's "false flags are kept"): my false reports, those whose "still not here" may still turn false (FALSE_FOR),
+    and my sits under someone else's such report, so neither side washes one off by withdrawing and agreeing again."""
     t = core.now()
+    kept = "COALESCE(r.false_at >= ? OR r.still_at > ?, 0)"  # false_at is set only after a still_at
     with tx(con):
         con.execute("DELETE FROM lib_consents WHERE user_id = ?", (v.id,))
         con.execute("UPDATE lib_sits SET ended_at = ?, why = 'left' WHERE user_id = ? AND ended_at IS NULL", (t, v.id))
-        con.execute("DELETE FROM lib_reports WHERE reporter_id = ? AND (still_at IS NULL OR still_at < ?)", (v.id, t - WEEK))
-        con.execute("""DELETE FROM lib_sits WHERE user_id = ? AND NOT EXISTS (SELECT 1 FROM lib_reports r
-            WHERE r.sit_id = lib_sits.id AND r.still_at >= ?)""", (v.id, t - WEEK))
+        con.execute(f"DELETE FROM lib_reports WHERE reporter_id = ? AND NOT {kept.replace('r.', '')}", (v.id, t - WEEK, t - FALSE_FOR))
+        con.execute(f"""DELETE FROM lib_sits WHERE user_id = ? AND NOT EXISTS (SELECT 1 FROM lib_reports r
+            WHERE r.sit_id = lib_sits.id AND {kept})""", (v.id, t - WEEK, t - FALSE_FOR))
 
 
 def _settle(con, t: int) -> None:
