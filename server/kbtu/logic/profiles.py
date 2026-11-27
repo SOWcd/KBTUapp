@@ -770,7 +770,7 @@ def _stranger_view(con, v: Viewer, uid: int) -> None:
 
 
 def person(con, v: Viewer, uid: int) -> dict:
-    """A profile. Friends and clubmates see it all; anyone else the card, the bio and achievements
+    """A profile. Friends and clubmates see the full profile except achievement dates; anyone else the card, the bio and achievements
     (the "team" medal says only "some club", accepted), but not the clubs, past roles, event badges or a club's badge
     that came by itself (where someone goes can say more than they chose to show: a
     support group, a faith club) and at most PROFILES_A_DAY of them, so the student body can't be scraped by id."""
@@ -782,18 +782,19 @@ def person(con, v: Viewer, uid: int) -> dict:
     u = one(con, "SELECT bio, showcase, show_going, can_friend, card_no, is_founder, tg_username, skin_pick, skin_org, skin_look, city, city_hidden, frame FROM users WHERE id = ?", uid)
     link = one(con, "SELECT created_at FROM friendships WHERE a = ? AND b = ?", min(uid, v.id), max(uid, v.id))
     # their @username, to their own club's team only (the team sees it in its roster anyway): "Message on Telegram"
-    team = uid != v.id and one(con, "SELECT 1 FROM org_members a JOIN org_members b ON b.org_id = a.org_id WHERE a.user_id = ? AND b.user_id = ?",
-                               v.id, uid) is not None
+    team = uid != v.id and one(con, """SELECT 1 FROM org_members a JOIN org_members b ON b.org_id = a.org_id
+        JOIN orgs o ON o.id = a.org_id WHERE a.user_id = ? AND b.user_id = ? AND o.status = 'active'""", v.id, uid) is not None
     state = "none" if uid == v.id else friendship(con, v.id, uid)
     block = uid != v.id and blocked(con, v.id, uid)
     mine_block = block and bool(one(con, "SELECT 1 FROM blocks WHERE user_id = ? AND blocked_id = ?", v.id, uid))
+    team = team and not block
     close = uid == v.id or link is not None or team
     if not close:
         _stranger_view(con, v, uid)
     # when a level was reached is the second of a check-in: matched against the Afisha it names the event
     picked = list(dict.fromkeys(BADGE_OF.get(k, k) for k in u["showcase"].split(",")))  # a variant picked on its own ("init26f") shows as its badge
     # Fuel (PRIVATE): not even locked on my own (no nudge to pay); on someone else's only if they showcase it (minors, pressure)
-    ach = [a if close else {**a, "at": None} for a in achievements(con, uid, own=uid == v.id)
+    ach = [a if uid == v.id else {**a, "at": None} for a in achievements(con, uid, own=uid == v.id)
            if (a["code"] not in PRIVATE or a["level"] and (uid == v.id or a["code"] in picked or a["code"] == "sponsor")) and (a["code"] not in CATALOG_HIDDEN or a["level"])]
     for a in ach:  # the club a founder founded, to those who see someone's clubs
         if a["code"] == "streak" and uid != v.id and not link:
@@ -944,7 +945,8 @@ def find_student(con, v: Viewer, username: str) -> dict:
     state = "none" if me else friendship(con, v.id, p["id"])
     # a stranger's real name counts as a profile opened, as in person(): @usernames from the chats can't be mapped to names in bulk
     if not me and state != "friends" and v.role not in ("admin", "moderator") and not one(
-            con, "SELECT 1 FROM org_members a JOIN org_members b ON b.org_id = a.org_id WHERE a.user_id = ? AND b.user_id = ?", v.id, p["id"]):
+            con, """SELECT 1 FROM org_members a JOIN org_members b ON b.org_id = a.org_id JOIN orgs o ON o.id = a.org_id
+                WHERE a.user_id = ? AND b.user_id = ? AND o.status = 'active'""", v.id, p["id"]):
         _stranger_view(con, v, p["id"])
     s = one(con, "SELECT course, school FROM students WHERE user_id = ?", p["id"])
     out = {"person": person_ref(p), "course": s["course"], "school": s["school"], "friendship": state, "me": me}
