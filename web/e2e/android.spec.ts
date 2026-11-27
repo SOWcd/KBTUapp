@@ -54,42 +54,46 @@ test('News with 100 posts: tap to first frame, main thread after', async ({ page
     w.__long = [];
     new PerformanceObserver((l) => { for (const e of l.getEntries()) w.__long.push({ start: e.startTime, duration: e.duration }); }).observe({ type: 'longtask' });
   });
-  // the tap: from the click to the frame after the sheet's first post is on the screen (lib/stats.ts timed())
-  const { tti, t0 } = await p.page.evaluate(async (label) => {
-    const b = document.querySelector<HTMLElement>(`button[aria-label="${label}"]`)!;
-    const t0 = performance.now();
-    b.click();
-    await new Promise<void>((done) => {
-      const tick = () => document.querySelector('[role="dialog"] article.post') ? requestAnimationFrame(() => done()) : requestAnimationFrame(tick);
-      requestAnimationFrame(tick);
-    });
-    return { tti: performance.now() - t0, t0 };
-  }, tr('page.news'));
-  await p.page.waitForTimeout(3000);
-  const after = await p.page.evaluate((t0) => {
-    const long = (window as unknown as { __long: { start: number; duration: number }[] }).__long.filter((e) => e.start >= t0);
-    const body = document.querySelector<HTMLElement>('[role="dialog"] .body')!;
-    const posts = document.querySelectorAll('[role="dialog"] article.post').length;
-    return {
-      n: long.length,
-      max: Math.max(0, ...long.map((e) => e.duration)),
-      tbt: long.reduce((s, e) => s + e.duration - 50, 0),
-      posts, height: body.scrollHeight,
-    };
-  }, t0);
-  // scrolled to the end: is the last post shown at once (not still fading in on a delay)?
-  const last = await p.page.evaluate(async () => {
-    const body = document.querySelector<HTMLElement>('[role="dialog"] .body')!;
-    body.scrollTop = body.scrollHeight;
-    await new Promise((r) => setTimeout(r, 300));
-    const cards = document.querySelectorAll<HTMLElement>('[role="dialog"] article.post');
-    return Number(getComputedStyle(cards[cards.length - 1].parentElement!).opacity);
-  });
+  // five opens (one run's single number wobbles by tens of ms), each: the tap to the frame after the sheet's first post
+  // is on the screen (lib/stats.ts timed()), the long tasks in the 3 s after, the last post scrolled to, then Back
+  const runs: { tti: number; max: number; tbt: number; posts: number; last: number }[] = [];
+  for (let i = 0; i < 5; i++) {
+    const { tti, t0 } = await p.page.evaluate(async (label) => {
+      const b = document.querySelector<HTMLElement>(`button[aria-label="${label}"]`)!;
+      const t0 = performance.now();
+      b.click();
+      await new Promise<void>((done) => {
+        const tick = () => document.querySelector('[role="dialog"] article.post') ? requestAnimationFrame(() => done()) : requestAnimationFrame(tick);
+        requestAnimationFrame(tick);
+      });
+      return { tti: performance.now() - t0, t0 };
+    }, tr('page.news'));
+    await p.page.waitForTimeout(3000);
+    const after = await p.page.evaluate(async (t0) => {
+      const long = (window as unknown as { __long: { start: number; duration: number }[] }).__long.filter((e) => e.start >= t0);
+      const posts = document.querySelectorAll('[role="dialog"] article.post').length;
+      // scrolled to the end: is the last post shown at once (not still fading in on a delay)?
+      const body = document.querySelector<HTMLElement>('[role="dialog"] .body')!;
+      body.scrollTop = body.scrollHeight;
+      await new Promise((r) => setTimeout(r, 300));
+      const cards = document.querySelectorAll<HTMLElement>('[role="dialog"] article.post');
+      return { max: Math.max(0, ...long.map((e) => e.duration)), tbt: long.reduce((s, e) => s + e.duration - 50, 0), posts,
+        last: Number(getComputedStyle(cards[cards.length - 1].parentElement!).opacity) };
+    }, t0);
+    runs.push({ tti, ...after });
+    await p.back.press();
+    await expect(p.page.locator('[role="dialog"]')).toHaveCount(0);
+    await p.page.waitForTimeout(1000);
+  }
+  const med = (k: 'tti' | 'max' | 'tbt') => Math.round(runs.map((r) => r[k]).sort((x, y) => x - y)[2]);
+  const all = (k: 'tti' | 'max' | 'tbt') => runs.map((r) => Math.round(r[k])).join('/');
   report([
-    `**Android News, 100 posts, CPU 4x** · tap → first frame ${Math.round(tti)} ms · in the 3 s after: ${after.n} long tasks, the longest ${Math.round(after.max)} ms, blocking ${Math.round(after.tbt)} ms · ${after.posts} posts drawn · the last post's opacity 0.3 s after scrolling to it: ${last}`,
+    `**Android News, 100 posts, CPU 4x, median of 5** · tap → first frame ${med('tti')} ms (${all('tti')}) · in the 3 s after: the longest task ${med('max')} ms (${all('max')}), blocking ${med('tbt')} ms (${all('tbt')}) · the last post's opacity 0.3 s after scrolling to it: ${runs.map((r) => r.last).join('/')}`,
   ]);
-  expect(after.posts, 'every post drawn within 3 s').toBe(100);
-  expect(last, 'the last post is there when scrolled to, not fading in on a delay').toBe(1);
+  for (const r of runs) {
+    expect(r.posts, 'every post drawn within 3 s').toBe(100);
+    expect(r.last, 'the last post is there when scrolled to, not fading in on a delay').toBe(1);
+  }
 });
 
 test.describe('a phone Telegram marks LOW', () => {
