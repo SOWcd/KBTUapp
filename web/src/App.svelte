@@ -72,7 +72,8 @@
   // sheets.consent), and may be declined. Staff and students added by hand have no consent of theirs; a deletion
   // pending is exempt. Only on the server's word (boardKnown): the launch copy's policy is the default, not the one in force.
   let asked = $state(false);
-  const consentGate = () => import('./screens/ConsentGate.svelte');
+  // offline, its chunk fails: the gate steps back (the app stays usable) and asks again on the next held action
+  const consentGate = () => import('./screens/ConsentGate.svelte').catch((e) => { asked = false; say(t('common.error'), 'warning_3d'); throw e; });
   const gated = $derived.by(() => {
     const s = session.me?.student;
     return !!s && session.boardKnown && !session.me?.deleteAt && asked && !['staff', 'admin', session.policy, session.policy + CONSENT_VOL].includes(s.consent);
@@ -764,7 +765,7 @@
     {#if StandaloneBar && !gated}<StandaloneBar back={showBack} tint={capOf?.tint} />{/if}
 
     {#if gated}
-      {#await consentGate() then m}<m.default oncancel={() => (asked = false)} />{/await}
+      {#await consentGate() then m}<m.default oncancel={() => (asked = false)} />{:catch}{/await}
     {:else}
       <!-- Keep exiting entries mounted until their animation calls removeOverlay. -->
       {#each overlays as o (o.id)}<o.component {...o.props} overlay={o} />{/each}
