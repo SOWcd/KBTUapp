@@ -4,7 +4,8 @@
 // A label: [u, v, text, key, size, turn, anchor, tier, fill, darkFill, halo, darkHalo, spacing, opacity]
 //   u, v: its middle (anchor 0) or its left end (1) as fractions of the frame; size: in the plan's units of a
 //   1000-wide frame; turn: degrees clockwise; key: its kmap.* word in the i18n files ('' when the text is as is);
-//   tier: 0 always, 1 from mid zoom, 2 up close; colours '' where the map's own theme picks them.
+//   tier: 0 always, 1 from mid zoom, 2 up close, 3 an area's name (class "area": big over its rooms, never in their
+//   way); colours '' where the map's own theme picks them.
 
 const num = (s, k) => { const m = new RegExp(`(?:^|\\s)${k}="([^"]*)"`).exec(s); return m ? m[1] : null; };
 const plain = (s) => s.replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(+n)).replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
@@ -40,7 +41,7 @@ export function labelsOf(svg, box, dark = null) {
     }
     const d = night?.[i], ink = (s, key) => (dark ? num(s.at, key) ?? '' : '');
     return [r4((px - box[0]) / box[2]), r4((py - box[1]) / box[2]), t.text, num(t.at, 'data-t') ?? '', Math.round(size * k * 10) / 10, turn,
-      (t.up('text-anchor') ?? 'start') === 'middle' ? 0 : 1, /\bfine\b/.test(t.cls) ? 2 : /\bmid\b/.test(t.cls) ? 1 : 0,
+      (t.up('text-anchor') ?? 'start') === 'middle' ? 0 : 1, /\barea\b/.test(t.cls) ? 3 : /\bfine\b/.test(t.cls) ? 2 : /\bmid\b/.test(t.cls) ? 1 : 0,
       ink(t, 'fill'), d ? ink(d, 'fill') : '', ink(t, 'stroke'), d ? ink(d, 'stroke') : '',
       +(num(t.at, 'letter-spacing') ?? 0) / size || 0, +(num(t.at, 'fill-opacity') ?? 1)];
   });

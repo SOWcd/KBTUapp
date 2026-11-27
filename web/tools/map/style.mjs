@@ -15,6 +15,8 @@ export const STYLE = {
   shadow: '#0B1020', oShade: [0.22, 0.6], black: '#000', oDrop: [0.16, 0.55],
   // words: none smaller than minText
   minText: 7, label: ['#5B6278', '#8C93AB'], num: ['#69718A', '#8189A3'], street: ['#9AA1B5', '#4E5670'], oMark: [0.4, 0.45],
+  // a wing closed to students (DIT): dimmed toward the asphalt and hatched over its rooms, its name big over it
+  oClosed: [0.55, 0.5], oHatch: [0.4, 0.5], oArea: [0.3, 0.35],
   // openings and fixtures
   glass: ['#E4ECFF', '#24314F'], oGlassLine: [0.45, 0.7], door: ['#B88A5A', '#9C7448'],
   oak: ['#C08A50', '#8A5E35'], oakGrain: ['#8A5A2E', '#5E3D20'], pane: ['#BFE0F5', '#4F6E8F'],

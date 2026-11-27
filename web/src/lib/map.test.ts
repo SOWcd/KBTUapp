@@ -140,7 +140,7 @@ describe('the map frame', () => {
   });
   it('a floor is a pyramid of tiles named as web-mercator ones; a screen with more pixels takes smaller tiles', async () => {
     const { tilesOf, overview, tileSize } = await import('./mapgl');
-    expect(tilesOf('kbtu', true, 2)).toMatch(/map\/k2d\/f2\/\{z\}\/\{x\}_\{y\}\.webp$/);
+    expect(tilesOf('kbtu', true, 2)).toMatch(/map\/k3d\/f2\/\{z\}\/\{x\}_\{y\}\.webp$/);
     expect(overview('main', true, 0)).toMatch(/map\/u2\/f0\/6\/32_32\.webp$/); // inverted in the dark look, not another cut
     expect(tileSize(3)).toBeLessThan(tileSize(2));
     expect(512 / tileSize(3)).toBeGreaterThan(3 / 1.5); // at least 2/3 of a picture's pixel a screen pixel

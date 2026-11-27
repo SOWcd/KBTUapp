@@ -33,7 +33,7 @@ export const widthAt = (f: Frame, zoom: number): number => 512 * f.fx * 2 ** (zo
 
 /** the tiles: public/map, next to index.html; a cut's folder (dark: our map is drawn twice) */
 export const MAPS = `${import.meta.env.BASE_URL}map/`;
-export const cutOf = (ver: Ver, dark: boolean): string => (ver === 'main' ? 'u2' : ver === 'old' ? 'o2' : dark ? 'k2d' : 'k2');
+export const cutOf = (ver: Ver, dark: boolean): string => (ver === 'main' ? 'u2' : ver === 'old' ? 'o2' : dark ? 'k3d' : 'k3');
 export const tilesOf = (ver: Ver, dark: boolean, floor: number): string => `${MAPS}${cutOf(ver, dark)}/f${floor}/{z}/{x}_{y}.webp`;
 /** a floor's whole sheet in one small picture (its coarsest tile): what shows the moment the map opens */
 export const overview = (ver: Ver, dark: boolean, floor: number): string =>
@@ -121,6 +121,9 @@ export function labelsOf(ver: Ver, floor: number, dark: boolean, word: (key: str
   }));
   const bx = BOXES[ver][floor] ?? [];
   return (DRAWN[ver][floor] ?? []).map((r, i) => {
+    // an area's name (a closed wing): its print size over the rooms, no room to fit it in
+    if (r[7] === 3) return { u: r[0], v: r[1], t: r[3] ? word(r[3]) : r[2], s: r[4], turn: r[5], left: r[6] === 1, tier: 3,
+      color: (r[8 + d] as string) || INK[d], halo: '', space: r[12], alpha: r[13], rank: 50, plate: false };
     const room = isRoom(r), street = r[4] >= 30 || r[12] > 0.2, small = !room && !street && (r[4] < 9 || /^(level0|staff)$/.test(r[3]));
     const [s, t] = sized(r[3] ? word(r[3]) : r[2], bx[i], r[4], r[6] === 1, r[12]);
     return { u: r[0], v: r[1], t, s, turn: r[5], left: r[6] === 1, tier: room ? 0 : small ? Math.max(1, r[7]) : r[7],
