@@ -592,6 +592,7 @@ def test_old_board_cleaned_up(env, before_door_migration):
     con.execute("ALTER TABLE events DROP COLUMN door_extra")  # 208's
     con.execute("ALTER TABLE users DROP COLUMN n_forum_comments")  # 206's
     con.executescript("DROP TABLE fchan_hearts; ALTER TABLE users DROP COLUMN forum_seen_msg;")  # 205
+    con.executescript("DROP TABLE chat_topics; ALTER TABLE chats DROP COLUMN news_topic; ALTER TABLE tg_channels DROP COLUMN stay;")  # 254
     con.execute("PRAGMA user_version = 102")
     con.close()
     db.init(cfg.db_path)
