@@ -207,16 +207,18 @@ STAFF_ROLES = ("user", "moderator", "admin")
 _STAFF = f"SELECT {PERSON_COLS}, u.tg_username, u.role, u.ban_reason FROM users u LEFT JOIN students s ON s.user_id = u.id"
 
 
-def reconcile_erased_admins(con, admins: frozenset[int]) -> None:
-    """Old erasures anonymized appointments but kept the role. Preserve configured and documented grants."""
+def drop_stale_admins(con, admins: frozenset[int]) -> None:
+    """At startup: sign-in only ever raises the role, so an id taken out of ADMIN_TG_IDS would stay admin forever.
+    An admin is the owner, in ADMIN_TG_IDS, or given the role by hand (the latest staff_role line says admin)."""
     with tx(con):
-        if not core._once(con, "erased_admins_reconciled", "1"):
-            return
-        con.execute(f"""UPDATE users SET role = 'user' WHERE role = 'admin' AND is_founder = 0
+        stale = rows(con, f"""SELECT id, tg_id FROM users WHERE role = 'admin' AND is_founder = 0
             AND tg_id NOT IN ({_qs(admins)})
-            AND EXISTS (SELECT 1 FROM audit_log WHERE target = 'user' AND action = 'delete_my_data')
             AND (SELECT json_extract(data, '$.to') FROM audit_log WHERE target = 'user:' || users.id
-                AND action = 'staff_role' ORDER BY id DESC LIMIT 1) IS NOT 'admin'""", tuple(admins))
+                AND action = 'staff_role' ORDER BY id DESC LIMIT 1) IS NOT 'admin'""", *admins)
+        for u in stale:
+            con.execute("UPDATE users SET role = 'user' WHERE id = ?", (u["id"],))
+            log_action(con, None, "staff_role", f"user:{u['id']}", json.dumps({"from": "admin", "to": "user", "by": "env"}))
+            core.log.warning("admin role dropped: user %s (tg %s) is no longer in ADMIN_TG_IDS", u["id"], u["tg_id"])
 
 
 def _owner(con, v: Viewer) -> bool:

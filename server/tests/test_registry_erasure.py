@@ -24,18 +24,19 @@ def test_registry_export_requires_verified_account(env):
     assert not con.execute("SELECT 1 FROM audit_log WHERE action = 'registry_export'").fetchone()
 
 
-def test_startup_reconciles_legacy_staff_erasure(env):
+def test_startup_drops_admins_no_longer_configured(env):
     import dataclasses
     from kbtu import app
 
     c, cfg = env
     con = db.connect(cfg.db_path)
-    uids = [login(c, tg, name)["id"] for tg, name in ((80, "erased"), (81, "appointed"), (82, "bootstrap"))]
+    uids = [login(c, tg, name)["id"] for tg, name in ((80, "removed"), (81, "appointed"), (82, "bootstrap"), (83, "owner"))]
     con.execute("UPDATE users SET role = 'admin'")
-    # Erasure anonymized the original appointment. A subsequent appointment retains its target.
-    logic.log_action(con, None, "staff_role", "user")
-    logic.log_action(con, None, "delete_my_data", "user")
+    con.execute("UPDATE users SET is_founder = 1 WHERE id = ?", (uids[3],))
+    # An erasure anonymized someone's appointment: it grants nobody. A by-hand appointment keeps its target.
+    logic.log_action(con, None, "staff_role", "user", '{"to":"admin"}')
     logic.log_action(con, None, "staff_role", f"user:{uids[1]}", '{"to":"admin"}')
-    con.execute("DELETE FROM meta WHERE key = 'erased_admins_reconciled'")  # snapshot from before the repair
     app.create(dataclasses.replace(cfg, admins=frozenset({82})))
-    assert [con.execute("SELECT role FROM users WHERE id = ?", (uid,)).fetchone()[0] for uid in uids] == ["user", "admin", "admin"]
+    assert [con.execute("SELECT role FROM users WHERE id = ?", (uid,)).fetchone()[0] for uid in uids] == ["user", "admin", "admin", "admin"]
+    assert con.execute("SELECT json_extract(data, '$.to') FROM audit_log WHERE action = 'staff_role' AND target = ?",
+                       (f"user:{uids[0]}",)).fetchone()[0] == "user"
