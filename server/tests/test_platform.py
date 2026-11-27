@@ -57,7 +57,7 @@ def test_android_app_reported(env, monkeypatch):
     login(c, 90, "stu")
     con = db.connect(cfg.db_path)
     uid = con.execute("SELECT id FROM users WHERE tg_id = 90").fetchone()[0]
-    now = int(time.time())
+    now = ((int(time.time()) + 5 * 3600) // 86400 + 2) * 86400 - 4 * 3600       # two days on, 01:00 Almaty: the sweep runs
     set_clock(monkeypatch, lambda: now)
     assert c.get("/api/me?platform=android", headers=tma(90)).json()["androidApp"] is False
     for bad in ("?platform=ios&app=play", "?platform=android&app=other", "?app=play"):  # another kind or word: nothing kept
