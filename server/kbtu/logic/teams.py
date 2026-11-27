@@ -617,6 +617,22 @@ def team_link_off(con, v: Viewer, oid: int) -> None:
             log_action(con, v.id, "team_link_off", f"org:{oid}")
 
 
+TEAM_LINK_UNDO = 120  # the toast's Undo, with room for a slow network
+
+
+def team_link_back(con, v: Viewer, oid: int) -> dict:
+    """Undo of team_link_off: the same link (the token already in chats) opens again, if it was turned off moments ago,
+    hasn't run out and no new one was made since."""
+    _may(con, v, oid, "team")
+    with tx(con):
+        r = one(con, "SELECT token, expires_at, revoked_at FROM org_invites WHERE org_id = ? AND multi = 1 ORDER BY created_at DESC, rowid DESC LIMIT 1", oid)
+        if not r or r["revoked_at"] is None or r["revoked_at"] < core.now() - TEAM_LINK_UNDO or r["expires_at"] <= core.now():
+            raise ApiError("not_found", "team_link")
+        con.execute("UPDATE org_invites SET revoked_at = NULL WHERE token = ?", (r["token"],))
+        log_action(con, v.id, "team_link_back", f"org:{oid}")
+    return {"expiresAt": r["expires_at"]}
+
+
 PRESIDENT_LINK_TTL = 7 * 86400
 
 

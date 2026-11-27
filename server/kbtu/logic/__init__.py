@@ -58,7 +58,7 @@ from .organizing import DOC_BYTES, doc_check, drop_doc, put_doc, render_doc  # n
 from .daily import (_next_week, admin_ai, admin_day, admin_stats, ai_retry, day_of, memo, memo_again, memo_item,
     memo_opened, memo_sent, memo_sign, memo_week, saved_day, stats_day, tba_day, visit, wipe_hidden_posts)  # noqa: F401
 from .teams import (accept_invite, banned, decide_removal, delete_role, delete_tag, invite, map_graph, map_rooms,
-    members_export, president_link, remove, remove_member, save_role, save_tag, team, team_link, team_link_off,
+    members_export, president_link, remove, remove_member, save_role, save_tag, team, team_link, team_link_back, team_link_off,
     assign_role, team_setup, transfer, unban, update_member)  # noqa: F401
 from .forum import (add_skill, ask_people, asks, block, close_ask, contact, contacts, create_ask, decide_contact,
     hide_ask, mod_hide_ask, mod_queue, my_forum, release_ask, reported_enough, search_people, set_my_forum, skill_mod,
