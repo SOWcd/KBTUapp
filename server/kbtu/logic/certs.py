@@ -21,6 +21,7 @@ import secrets
 import sqlite3
 import tempfile
 import threading
+import time
 import zipfile
 from pathlib import Path
 
@@ -33,7 +34,8 @@ from .core import ApiError, Viewer, one, rows
 
 TEMPLATE_BYTES = 10 * 1024 * 1024
 CSV_BYTES = 256 * 1024
-SIDE = 3000                 # a template's background, its long side: ~260 dpi on A4, sharp in print
+SIDE = 2480                 # a template's background, its long side: ~210 dpi on A4, sharp in print, and a run's
+                            # ZIP of 300 drawn well inside Cloudflare's 100 s
 MAX_TEMPLATES = 30
 MAX_ROWS = 300              # one run; its ZIP is drawn in one request
 CERTS_A_DAY = 1000          # certificates one org may issue in a rolling day (Zapier's plan was 750 a month)
@@ -253,6 +255,8 @@ def preview(con, v: Viewer, oid: int, tid: int, domain: str) -> bytes:
 # ---------------------------------------------------------------- the bulk run
 
 def _decode(data: bytes) -> str:
+    if data[:2] in (b"\xff\xfe", b"\xfe\xff"):  # Excel's "Unicode text"
+        return data.decode("utf-16", errors="replace")
     try:
         return data.decode("utf-8-sig")
     except UnicodeDecodeError:
@@ -261,17 +265,24 @@ def _decode(data: bytes) -> str:
 
 def parse(data: bytes) -> tuple[list[dict], list[dict]]:
     """The list's rows as {row, name, program, date, number}, and what is wrong in it as [{row, field, why}]. A first row
-    naming the columns (en, ru, kk: i18n/ako.json certColumns) sets their order; without one, the order is name,
-    program, date, number. Blank lines are skipped; row numbers are the lines a spreadsheet shows."""
+    naming the columns (en, ru, kk: i18n/ako.json certColumns) sets their order; one naming only some of them is refused
+    (never issued as a certificate); without one, the order is name, program, date, number. Blank lines are skipped;
+    row numbers are the lines a spreadsheet shows."""
     text = _decode(data)
     first = text.lstrip("\r\n").split("\n", 1)[0]
-    lines = list(csv.reader(io.StringIO(text), delimiter=max(";,\t", key=first.count)))  # the first line's commonest (ties: ";")
+    try:
+        lines = list(csv.reader(io.StringIO(text), delimiter=max(";,\t", key=first.count)))  # the first line's commonest (ties: ";")
+    except csv.Error:  # an unclosed quote running past the field limit
+        raise ApiError("bad_input", "bad_file") from None
     order: list[str | None] = list(COLUMNS)
+    head = next((i for i, cells in enumerate(lines) if any(c.strip() for c in cells)), 0)
     start = 0
     if lines:
-        named = [next((k for k, ws in _HEADERS.items() if " ".join(c.split()).casefold() in ws), None) for c in lines[0]]
+        named = [next((k for k, ws in _HEADERS.items() if " ".join(c.split()).casefold() in ws), None) for c in lines[head]]
         if set(COLUMNS) <= set(named):
-            order, start = named, 1
+            order, start = named, head + 1
+        elif len(set(named) - {None}) >= 2:
+            raise ApiError("bad_input", "cert_columns", {"row": head + 1, "missing": [k for k in COLUMNS if k not in named]})
     out, errors, seen = [], [], {}
     for n, cells in enumerate(lines[start:], start + 1):
         if not any(c.strip() for c in cells):
@@ -381,9 +392,16 @@ def drop_cert(con, v: Viewer, oid: int, cid: int) -> None:
 
 
 def sweep(con) -> None:
-    """Nightly (daily.stats_day): certificates revoked REVOKED_KEEP ago."""
+    """Nightly (daily.stats_day): certificates revoked REVOKED_KEEP ago; a ZIP a dropped download left behind."""
     with tx(con):
         con.execute("DELETE FROM certs WHERE revoked_at < ?", (core.now() - REVOKED_KEEP,))
+    old = time.time() - 86400  # the disk's clock, not the rules'
+    for f in Path(tempfile.gettempdir()).glob("certs-*.zip"):
+        try:
+            if f.stat().st_mtime < old:
+                f.unlink()
+        except FileNotFoundError:
+            pass
 
 
 # ---------------------------------------------------------------- downloads: signed five-minute links
@@ -403,8 +421,11 @@ def link(con, v: Viewer, oid: int, what: str, xid: int, key: bytes) -> dict:
     """A link for a run's ZIP ("z") or one certificate's PDF ("f") of this org (Telegram's downloadFile and a browser tab
     send none of our headers)."""
     team(con, v, oid)
-    if not one(con, f"SELECT 1 FROM {'certs' if what == 'f' else 'cert_runs'} WHERE id = ? AND org_id = ?", xid, oid):
+    r = one(con, f"SELECT {'revoked_at' if what == 'f' else 'NULL'} FROM {'certs' if what == 'f' else 'cert_runs'} WHERE id = ? AND org_id = ?", xid, oid)
+    if not r:
         raise ApiError("not_found")
+    if r[0] is not None:
+        raise ApiError("closed", "cert_revoked")  # never printed again while its page says revoked
     exp = core.now() + LINK_TTL
     core.log_action(con, v.id, "cert_download", f"org:{oid}", json.dumps({what: xid}))
     return {"url": f"/api/certs/{what}/{xid}?e={exp}&s={_sig(key, _bound(con, what, xid), exp)}"}

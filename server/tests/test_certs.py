@@ -98,6 +98,13 @@ def test_a_lists_mistakes_come_back_by_row(env, monkeypatch):
                                   {"row": 4, "field": "name", "why": "long"}]
     assert _run(c, oid, tid, _csv("A,P,D,N1", "B,,D,N2")).status_code == 400
     assert _run(c, oid, tid, b"\n\n").json()["message"] == "cert_empty"
+    # a header naming only some columns is refused, never issued as a certificate
+    part = _run(c, oid, tid, _csv("", "Name,Program,Date", "A,P,D"), dry=True)
+    assert part.status_code == 400 and part.json()["message"] == "cert_columns", part.text
+    assert _run(c, oid, tid, b'A,"P,D,N1\n' + b"x" * 200_000).json()["message"] == "bad_file"  # an unclosed quote
+    # Excel's "Unicode text": UTF-16 with tabs, a header after a blank line
+    u16 = _run(c, oid, tid, ("\n" + RU_HEAD.replace(";", "\t") + f"\n{ALIYA}\tMini MBA\t28.11.2026\tAKO-9\n").encode("utf-16"), dry=True)
+    assert [(r["row"], r["name"]) for r in u16.json()["rows"]] == [(3, ALIYA)] and u16.json()["errors"] == [], u16.text
     assert _run(c, oid, tid, _csv(*[f"A,P,D,N{i}" for i in range(certs.MAX_ROWS + 1)])).json()["message"] == "cert_too_many"
     bare = c.post(f"/api/orgs/{oid}/certs/templates", headers=tma(HEAD), content=_jpeg(1600, 1131)).json()["id"]
     assert _run(c, oid, bare, _csv("A,P,D,N1")).json()["message"] == "cert_no_fields"  # nothing placed: a blank page
@@ -151,6 +158,8 @@ def test_downloads_are_signed_links_of_the_org(env, monkeypatch):
     assert c.get(f"/api/orgs/{other}/certs/{cid}/link", headers=tma(HEAD)).status_code == 403
     first = con.execute("SELECT id FROM certs WHERE number = 'AKO/1'").fetchone()[0]
     c.patch(f"/api/orgs/{oid}/certs/{first}", headers=tma(HEAD), json={"revoked": True})
+    no = c.get(f"/api/orgs/{oid}/certs/{first}/link", headers=tma(HEAD))  # never printed while its page says revoked
+    assert no.status_code == 409 and no.json()["message"] == "cert_revoked"
     z = c.get(c.get(f"/api/orgs/{oid}/certs/runs/{rid}/link", headers=tma(HEAD)).json()["url"])
     assert z.status_code == 200
     names = zipfile.ZipFile(io.BytesIO(z.content)).namelist()
