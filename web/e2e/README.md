@@ -16,8 +16,8 @@ npm run e2e:snap                                       # the screen snapshots (n
 ## Screen snapshots
 
 `snap.spec.ts` takes the key screens at 375x812 in both themes (projects `snap-dark`, `snap-light`): the Afisha, an
-event, Clubs, the Forum, Profile with the badge, the anthem sheet, the assistant's welcome, the campus map, a club's
-Studio, and the Afisha once more at 320x568. The clock is fixed
+event, Clubs (its top, its list, and with clubs of my own), the Forum, Profile with the badge, the anthem sheet, the
+assistant's welcome, the campus map, a club's Studio, and the Afisha once more at 320x568. The clock is fixed
 (Wednesday 25 Nov 2026, 10:00 in Almaty: `qa.py --now` and Playwright's clock), motion is reduced, and a picture may
 differ from its baseline in `snapshots/` by 300 pixels at most. Each screen is also checked for anything running past
 the screen's sides.
@@ -52,6 +52,8 @@ npx playwright test e2e/a11y.spec.ts --project=snap-dark --project=snap-light   
 ## CI
 
 `.github/workflows/ci.yml`, job `e2e`, on every PR that touches `web/` or `server/`: the flows in Chromium 375 dark in
-two shards, and the snapshots and the a11y check beside them, all through `linux.sh`. When it fails, the run's artifact `e2e-<n>` has
+two shards, and the snapshots and the a11y check beside them, and Telegram on Android (`android` project,
+`android.spec.ts`: Telegram's Android launch at 360x800 on a 4x slower CPU; the tab bar under Telegram's insets, the
+LOW phone's light look, a 100-post News's tap-to-frame and main-thread numbers in the job summary), all through `linux.sh`. When it fails, the run's artifact `e2e-<n>` has
 `results/` (for a snapshot: `*-expected.png`, `*-actual.png`, `*-diff.png`; a trace per failed test) and the HTML
 report.

@@ -96,14 +96,15 @@ jobs:
       - run: npm run size  # the first screen's gzipped JS and CSS against size-budget.json; the table goes to the job summary
   e2e:
     # the built app on qa.py's seeded servers, in Chromium at 375x812 from Playwright's Linux image (web/e2e/linux.sh,
-    # the same pixels as on a Mac): the flows in two halves, the screen snapshots (both themes) beside them
+    # the same pixels as on a Mac): the flows in two halves, the screen snapshots (both themes) and Telegram on Android
+    # (e2e/android.spec.ts: its numbers in the job summary) beside them
     needs: changes
     if: needs.changes.outputs.web == 'true' || needs.changes.outputs.server == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        part: ["--project=chromium-375-dark --shard=1/2", "--project=chromium-375-dark --shard=2/2", "--project=snap-dark --project=snap-light"]
+        part: ["--project=chromium-375-dark --shard=1/2", "--project=chromium-375-dark --shard=2/2", "--project=snap-dark --project=snap-light", "--project=android"]
     defaults:
       run:
         working-directory: web
