@@ -53,7 +53,7 @@
   import 'maplibre-gl/dist/maplibre-gl.css';
   import uniqRooms from '../../assets/map/uniq-rooms.json';
   import { UNITS, toPlan, fromPlan } from './planUnits';
-  import { glass, jelly } from '../../ui/glass';
+  import { jelly } from '../../ui/glass';
   import { floorSwipe, railGestures, liftFloor } from './floorSwipe';
   import { camera, MAX, spring } from './mapCamera';
   import { stageGestures } from './mapGestures';
@@ -133,9 +133,9 @@
   let map: GLMap;
   let ready = $state(false);
   const fr = $derived(FRAMES[ver]);
-  let side: HTMLDivElement; // the top row: the plan rests below where it starts
+  let side: HTMLElement | null = null; // the top row (MapTopRow's .side): the plan rests below where it starts
   const { W, H, scale, cam, uvAt, within, follow, head, homeK, middle, out, halt, reset, easeFit, grab, rest, free, fitOf } = camera({
-    map: () => map, fr: () => fr, ver: () => ver, panel: () => panel, stage: () => stage, side: () => side, plan: () => plan, first: () => first, fingers: () => fingers(),
+    map: () => map, fr: () => fr, ver: () => ver, panel: () => panel, stage: () => stage, side: () => (side ??= panel.querySelector<HTMLElement>('.side')!), plan: () => plan, first: () => first, fingers: () => fingers(),
   });
 
   // ---- what MapLibre draws: the floor's tiles, the 2023 plan's original over its redraw when asked, the labels ----
@@ -407,22 +407,9 @@
       <MapMarks {rt} {cur} {ver} ar={AR} {routing} {spots} {near} {card} {cardTitle} {freeHere} {flawsHere} {okId} {seen} {draft} />
     </div>
   </div>
-  <!-- the top row: the floors, the map's look at its end (a lift panel on the right covered the plan) -->
-  <div class="side" bind:this={side}>
-    <!-- the maps, the floors, the look -->
-    <MapTopRow bind:menu bind:knob onWay={!!rt.route} {ver} vers={VERS} onver={setVer} floors={railFloors} {routeFloors} {cur} {kp} {dragging}
-      {swipeable} swiped={railSwiped} onpick={pick} {look} onflip={flip} />
-  </div>
-  <!-- "free now": under the maps button, on the main map only (its rooms' numbers are where the tint goes) -->
-  {#if week && ver === 'main'}
-    <button class="freeb glass glass-pill" class:on={freeOn} class:away={!!rt.route} use:glass onclick={toggleFree} aria-pressed={freeOn}>
-      <i aria-hidden="true"></i>{t('map.freeNow')}</button>
-  {/if}
-  <!-- the 2023 plan as it was given, over our redraw of it, to compare -->
-  {#if ver === 'old'}
-    <button class="freeb glass glass-pill" class:on={orig} use:glass onclick={() => { haptic.select(); orig = !orig; }} aria-pressed={orig}>
-      <i aria-hidden="true"></i>{t('map.orig')}</button>
-  {/if}
+  <!-- the top: the maps, the floors, the look; "free now" and the original plan under them -->
+  <MapTopRow bind:menu bind:knob bind:orig free={!!week && ver === 'main'} {freeOn} ontogglefree={toggleFree} onWay={!!rt.route} {ver} vers={VERS} onver={setVer}
+    floors={railFloors} {routeFloors} {cur} {kp} {dragging} {swipeable} swiped={railSwiped} onpick={pick} {look} onflip={flip} />
   <!-- the credit under the map; the bottom row: the way out, the search, the map's own button -->
   <MapDock away={pad || card || routing} busy={openingRoute} note={ver === 'main' ? t('map.noteMain') : ver === 'kbtu' ? t('map.noteKbtu') : t('map.note')}
     onexit={() => { leaving = true; void openRoute(); }} onfind={openPad} onclose={() => close(overlay.id)} />
@@ -471,12 +458,4 @@
      on a pin still moves the map; as wide as the plan is on screen, moved with the camera */
   .plan { position: absolute; left: 0; top: 0; width: 100%; transform-origin: 0 0; pointer-events: none;
     user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
-  /* right edge: the look button, the floors as a lift panel, "whole floor" */
-  .side { position: absolute; z-index: 2; left: 12px; right: 12px; top: calc(max(48px, var(--top)) + 10px); display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-  .freeb { position: absolute; z-index: 1; left: 12px; top: calc(max(48px, var(--top)) + 66px); height: 36px; padding: 0 14px 0 12px; border-radius: var(--r-full);
-    display: flex; align-items: center; gap: 8px; font: 600 var(--fs-sub)/1 var(--font-text); color: var(--text); transition: transform 0.45s var(--ease-bounce), opacity 0.3s; }
-  .freeb i { width: 10px; height: 10px; border-radius: 50%; box-shadow: inset 0 0 0 2px var(--success); transition: background 0.2s; }
-  .freeb.on i { background: var(--success); }
-  .freeb:active { transform: scale(0.94); transition-duration: 80ms; }
-  .freeb.away { opacity: 0; pointer-events: none; }
 </style>
