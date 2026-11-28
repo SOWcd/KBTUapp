@@ -6,7 +6,7 @@ import ru from '../src/lib/i18n/ru';
 
 type Room = { id: number; v: number; phase: string; role?: string; players: { id: number }[]; me: number };
 
-test('a round of Spy: a room, three players, the role, the vote, the reveal', async ({ open, qa, request }) => {
+test('a round of Spy: a room, three players, the role, the vote, the reveal, one more round', async ({ open, qa, request }) => {
   const dana = await open('Dana'), { page } = dana;
   await page.getByRole('navigation', { name: ru['nav.label'] }).getByRole('button', { name: ru['tab.profile'], exact: true }).click();
   await page.getByRole('button', { name: ru['games.title'], exact: true }).click();
@@ -57,4 +57,7 @@ test('a round of Spy: a room, three players, the role, the vote, the reveal', as
   if (mine.phase === 'guess') await dana.api(`/api/rooms/${mine.id}`, { id: crypto.randomUUID(), v: mine.v, type: 'guess', location: 'library' });
   await expect(sheet.locator('header.end')).toBeVisible();
   await dana.look('spy reveal');
+  await sheet.locator('.foot .btn').click(); // the host: one more round, in the same room
+  await expect(sheet.locator('.digits')).toHaveText(code.split('').join(''));
+  await expect(sheet.locator('.seats li')).toHaveCount(3);
 });
