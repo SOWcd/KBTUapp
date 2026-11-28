@@ -126,7 +126,10 @@ export function timed(screen: Screen, since: number): void {
 /** An uncaught error or rejection on `screen`: its class only; the message is looked at here and never sent. */
 export function crashed(screen: Screen, e: unknown): void {
   if (e && typeof e === 'object' && 'code' in e && 'data' in e) return; // an ApiErr: already counted as a failed call
-  const kind = /dynamically imported module|module script failed|Unable to preload/i.test(e instanceof Error ? e.message : String(e)) ? 'chunk'
+  const text = e instanceof Error ? e.message : String(e);
+  // the browser's notice that some resize callbacks wait for the next frame: nothing broke (ui/fly.ts had one per open)
+  if (/^ResizeObserver loop/.test(text)) return;
+  const kind = /dynamically imported module|module script failed|Unable to preload/i.test(text) ? 'chunk'
     : JS[(e as Error)?.name] ?? 'other';
   count(`js.${screen}.${kind}`);
 }
