@@ -312,6 +312,7 @@ def _chores(cfg: Config, con) -> None:
     logic.clubs.hidden_day(con)  # 11:00: a club too small for the registry, to its president, once
     logic.door_round(con)  # the door is open (early, or at T-30): each guest going hears it once
     logic.daily.guest_age_round(con)  # guest-list data and age marks expire a day after the event
+    logic.rooms.purge_round(con)  # game rooms 3 hours after their last change
     logic.santa.tick(con)  # Secret Santa's clock: the draw at the deadline, the reminders (one read of the games due)
     logic.stats_day(con)  # after midnight: yesterday's row for the admin's stats
     logic.course_day(con)  # September 1: every student's year of study a year on

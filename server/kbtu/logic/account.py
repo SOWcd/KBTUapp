@@ -1385,6 +1385,7 @@ _DEL_GONE = {
     ("fchan_feed_pages", "user_id"), ("broadcast_votes", "user_id"), ("user_platforms", "user_id"), ("android_app", "user_id"),
     ("web_sessions", "user_id"),
     ("identities", "user_id"), ("push_devices", "user_id"),  # my Apple sign-in and my iPhones' push tokens (logic/apple.py)
+    ("game_rooms", "host_id"), ("game_players", "user_id"),  # rooms.gone takes them first
     ("students", "user_id"), ("staff_ok", "user_id"), ("santa_people", "user_id"), ("santa_msgs", "giver_id"), ("santa_msgs", "to_id"), ("santa_sends", "user_id"), ("schedule_classes", "user_id"), ("org_members", "user_id"), ("join_requests", "user_id"),
     ("club_applications", "user_id"), ("subscriptions", "user_id"), ("registrations", "user_id"), ("saved_events", "user_id"),
     ("post_reactions", "user_id"), ("post_reads", "user_id"), ("achievement_grants", "user_id"),
@@ -1597,6 +1598,7 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         from . import vol
         vol.gone(con, v.id)  # my volunteers-ledger records, including ones unlinked since
         santa.gone(con, v.id)  # Secret Santa: my Santa gives to my person instead
+        rooms.gone(con, v.id)  # game rooms I host or play in, whole
         fks = _user_fks(con)
         # my appeals to SG, their words and answers with them (their author links go in the loop below)
         con.execute("DELETE FROM appeals WHERE id IN (SELECT appeal_id FROM appeal_authors WHERE user_id = ?)", (v.id,))
@@ -1795,7 +1797,7 @@ def drop_my_schedule(con, v: Viewer) -> None:
 
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
-from . import chatlist, core, credits, guests, inbox, profiles, santa  # noqa: E402
+from . import chatlist, core, credits, guests, inbox, profiles, rooms, santa  # noqa: E402
 from .clubs import TRANSLIT, stories_open  # noqa: E402
 from .newsfeed import unread_broadcasts  # noqa: E402
 from .organizing import kz_phone, link_door_guests  # noqa: E402

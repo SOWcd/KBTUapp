@@ -17,6 +17,7 @@
   import MessageCircleHeart from '@lucide/svelte/icons/message-circle-heart';
   import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
   import Music from '@lucide/svelte/icons/music';
+  import Gamepad2 from '@lucide/svelte/icons/gamepad-2';
   import MonitorUp from '@lucide/svelte/icons/monitor-up';
   import Megaphone from '@lucide/svelte/icons/megaphone';
   import Armchair from '@lucide/svelte/icons/armchair';
@@ -380,6 +381,8 @@
     {#if session.me?.bigScreen === 'qr' || (session.me?.bigScreen === 'pair' && !session.me.memberships.some((m) => may(m, 'events')))}<Row icon={MonitorUp} title={t('scr.page')} accessory="chevron" onclick={() => sheets.bigScreen()} />{/if}
     <!-- KBTU's anthem: the words and the song -->
     <Row icon={Music} title={t('anthem.title')} accessory="chevron" onclick={() => sheets.anthem()} />
+    <!-- games played together, each on their own phone (Spy) -->
+    <Row icon={Gamepad2} title={t('games.title')} accessory="chevron" onclick={() => sheets.spy()} />
     <!-- appeals to the Student Government (APPEALS): their entry is the Forum tab's card under the composer;
          here only for a person without that tab, so nobody loses it (SG's queue is its panel, top right) -->
     {#if session.me?.appeals && !session.channel}<Row icon={Megaphone} title={t('apl.row')} accessory="chevron" onclick={() => { haptic.tap(); sheets.appeals(); }} />{/if}

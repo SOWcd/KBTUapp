@@ -2906,6 +2906,8 @@ const kk: Dict = {
   'album.added': { one: "{n} фото қосылды", other: "{n} фото қосылды" },
   'rate.count': { one: "{n} баға", other: "{n} баға" },
   'anthem.title': "ҚБТУ әнұраны",
+  // games (screens/games; their own words: i18n/games.ts)
+  'games.title': "Ойындар",
   'anthem.play': "Тыңдау",
   'anthem.pause': "Кідірту",
   'anthem.repeat': "Қайталау",

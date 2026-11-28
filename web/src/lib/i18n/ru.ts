@@ -2929,6 +2929,8 @@ const ru = {
   'album.added': { one: "Добавлено {n} фото", few: "Добавлено {n} фото", many: "Добавлено {n} фото", other: "Добавлено {n} фото" },
   'rate.count': { one: "{n} оценка", few: "{n} оценки", many: "{n} оценок", other: "{n} оценки" },
   'anthem.title': "Гимн КБТУ",
+  // games (screens/games; their own words: i18n/games.ts)
+  'games.title': "Игры",
   'anthem.play': "Слушать",
   'anthem.pause': "Пауза",
   'anthem.repeat': "Повтор",
