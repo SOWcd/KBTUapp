@@ -59,7 +59,7 @@ for (const [screen, tab] of [['clubs', 'page.clubs'], ['forum', 'tab.forum'], ['
 test('an event', async ({ page, open }) => {
   const p = await ali(page, open);
   await p.page.getByRole('button', { name: 'Open Mic: stand-up and music', exact: true }).first().click();
-  await expect(p.page.getByRole('dialog').getByText('Atrium', { exact: true })).toBeVisible();
+  await expect(p.page.getByRole('dialog').getByText('Atrium', { exact: true }).first()).toBeVisible();
   await check(p, 'event', SHEET);
 });
 
