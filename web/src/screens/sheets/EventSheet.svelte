@@ -828,11 +828,7 @@
   .stack :global(.av + .av) { margin-left: -8px; }
   .stack :global(.av) { box-shadow: 0 0 0 2px var(--surface-solid); }
 
-  /* the footer: the one primary action, alone, in a glass island over the content. The main button is calm: white with
-     ink words on the dark, ink with white words on the light (the accent's blue shouted over every poster) */
-  .island { --cta: var(--ink); display: flex; flex-direction: column; padding: 5px; border-radius: var(--r-xl); }
-  :global(:root[data-theme='light']) .island { --cta: var(--on-accent); }
-  .island :global(.btn.k-primary:not(.red):not(.done):not(:disabled)) { --body: var(--text); color: var(--cta); --rim-lo: rgba(11, 20, 51, 0.2); }
+  /* the footer: the one primary action, alone, in a glass island over the content (base.css .island) */
   .actions { display: flex; gap: 8px; align-items: center; }
   .tnote { margin: 6px var(--s-3) 8px; text-align: center; color: var(--text-2); font: 450 var(--fs-sub)/1.3 var(--font-text); }
   .gl { flex: 1; margin: 0; padding: var(--s-2) var(--s-4); text-wrap: pretty; }

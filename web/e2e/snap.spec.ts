@@ -228,14 +228,14 @@ test('Spy, no room yet', async ({ open }) => {
 
 test('Spy, the host\'s lobby', async ({ open }) => {
   const p = await ali(open);
-  const sheet = await spy(p, { phase: 'lobby', players: SPY_PEOPLE.slice(0, 2) });
+  const sheet = await spy(p, { phase: 'lobby', players: SPY_PEOPLE.slice(0, 3) });
   await expect(sheet.locator('.plate .qm')).toBeVisible();
   await shot(p, 'spy-lobby', undefined, true);
 });
 
 test('Spy, the sealed role and the role held open', async ({ open }) => {
   const p = await ali(open);
-  const sheet = await spy(p, { phase: 'play', span: 272, role: 'local', location: 'library', first: 3 });
+  const sheet = await spy(p, { phase: 'play', span: 272, role: 'local', location: 'library', first: 3, calls: [3] });
   await shot(p, 'spy-envelope', undefined, true);
   const box = (await sheet.locator('.env').boundingBox())!;
   await p.page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
@@ -248,7 +248,7 @@ test('Spy, the sealed role and the role held open', async ({ open }) => {
 
 test('Spy, the vote', async ({ open }) => {
   const p = await ali(open);
-  await spy(p, { phase: 'vote', span: 41, role: 'local', location: 'library', voted: [1, 2, 4], myVote: 3 });
+  await spy(p, { phase: 'vote', span: 41, role: 'local', location: 'library', voted: [2, 4], myVote: 3 });
   await shot(p, 'spy-vote', undefined, true);
 });
 
