@@ -31,5 +31,5 @@ export function roomLine(room: string | null, week: Record<string, RoomWeek> | n
   if (!w) return '';
   const n = roomNow(w, clock), time = `${String(n.until).padStart(2, '0')}:00`;
   if (n.free && noFreeHighlight.has(room as string)) return ''; // an office: its card doesn't say "free" either
-  return (n.free ? (n.until == null ? t('map.freeEvening') : t('map.freeUntil', { time })) : t('map.busyUntil', { time })) + ' · ' + t('map.byTimetable');
+  return (n.free ? (n.until == null ? t('map.freeEvening') : t('map.freeUntil', { time })) : t('map.busyUntil', { time })) + ' \u00b7 ' + t('map.byTimetable');
 }

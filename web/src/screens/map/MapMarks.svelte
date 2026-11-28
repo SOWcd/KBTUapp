@@ -6,11 +6,12 @@
   import { t } from '../../lib/i18n/index.svelte';
   import type { Ver } from '../../lib/mapgl';
   import type { RouteView } from './RouteUI.svelte';
+  import { floorName } from './mapFind';
 
-  let { rt, cur, ver, ar, routing, spots, near, card, cardTitle, freeHere, flawsHere, okId, seen, draft, floorName }: {
+  let { rt, cur, ver, ar, routing, spots, near, card, cardTitle, freeHere, flawsHere, okId, seen, draft }: {
     rt: RouteView; cur: number; ver: Ver; ar: number /* the plan's height to its width */; routing: boolean; spots: number[][]; near: number[][]; card: boolean; cardTitle: string;
     freeHere: { r: string; u: number; v: number; free: boolean }[]; flawsHere: { id: number; u: number; v: number; body: string }[];
-    okId: number; seen: number; draft: { ver: Ver; f: number; u: number; v: number } | null; floorName: (n: number) => string;
+    okId: number; seen: number; draft: { ver: Ver; f: number; u: number; v: number } | null;
   } = $props();
   const legsHere = $derived(rt.route ? rt.route.legs.map((l, i) => ({ ...l, i })).filter((l) => l.f === cur) : []);
   const line = (pts: { u: number; v: number }[]) => pts.map((p) => `${p.u * 1000},${p.v * 1000 * ar}`).join(' ');

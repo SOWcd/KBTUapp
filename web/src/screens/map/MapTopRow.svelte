@@ -10,12 +10,13 @@
   import { glass } from '../../ui/glass';
   import type { Theme } from '../../lib/state/theme.svelte';
   import type { Ver } from '../../lib/mapgl';
+  import { floorName } from './mapFind';
 
-  let { menu = $bindable(), knob = $bindable(), onWay, ver, vers, onver, floors, routeFloors, cur, kp, dragging, swipeable, swiped, onpick, floorName, look, onflip }: {
+  let { menu = $bindable(), knob = $bindable(), onWay, ver, vers, onver, floors, routeFloors, cur, kp, dragging, swipeable, swiped, onpick, look, onflip }: {
     menu: boolean; knob: HTMLSpanElement | undefined; onWay: boolean; ver: Ver; vers: Ver[]; onver: (v: Ver) => void;
     floors: number[]; routeFloors: Set<number>; cur: number; kp: number; dragging: boolean;
     swipeable: (el: HTMLElement) => { destroy: () => void }; swiped: () => boolean; onpick: (n: number) => void;
-    floorName: (n: number) => string; look: Theme; onflip: (from: Element) => void;
+    look: Theme; onflip: (from: Element) => void;
   } = $props();
 </script>
 

@@ -45,7 +45,7 @@
   import { close, removeOverlay, hideChrome, say, type Overlay } from '../../lib/state/ui.svelte';
   import { t, i18n, placeOf } from '../../lib/i18n/index.svelte';
   import { haptic, inTelegram } from '../../lib/tg';
-  import { SPOTS, campusPoint, roomOf, floorOf, nearRooms, spotOf } from '../../lib/map';
+  import { campusPoint, roomOf, floorOf, nearRooms, spotOf } from '../../lib/map';
   import { campusPlace } from '../../lib/campusPlace';
   import { FRAMES, HAS, widthAt, overview, roomAt, labelsOf, labelData, type Ver } from '../../lib/mapgl';
   import { Map as GLMap, type MapMouseEvent, type StyleSpecification, type GeoJSONSource } from 'maplibre-gl';
@@ -56,12 +56,13 @@
   import { glass, jelly } from '../../ui/glass';
   import { floorSwipe, railGestures } from './floorSwipe';
   import { camera, MAX, spring } from './mapCamera';
-  import MapPad, { placeGroups, exitTiles, doorHint, adminNote, type PadCheck } from './MapPad.svelte';
+  import MapPad, { placeGroups, exitTiles } from './MapPad.svelte';
   import RouteUI, { type RouteView } from './RouteUI.svelte';
   import MapMarks from './MapMarks.svelte';
   import RoomCard from './RoomCard.svelte';
   import MapTopRow from './MapTopRow.svelte';
   import MapDock from './MapDock.svelte';
+  import { floorName, doorNamed, checkFind as checkFindIn, roomTitle } from './mapFind';
   import { api } from '../../lib/api';
   import { session } from '../../lib/state/session.svelte';
   import { sheets } from '../../lib/state/sheets';
@@ -337,26 +338,15 @@
     const sp = place && !room ? spotOf(place) : null;
     return sp?.f != null ? { f: sp.f, u: sp.u!, v: sp.v!, label: t(`route.spot.${sp.k}` as 'route.spot.canteen') } : null;
   }));
-  const floorName = (n: number) => (n ? t('route.floor', { n }) : t('route.basement'));
-  // The graph also gives the keypad the entrances on the basement floor.
-  const doorNamed = (text: string) => rt.graph?.n.find((n) => n.k === 'x' && n.name === text) ?? null;
   function openPad() {
     haptic.tap(); pad = true;
     void loadGraph();
   }
-  function checkFind(text: string): PadCheck {
-    const dn = doorNamed(text);
-    if (dn) return { ok: true, tone: 'ok', hint: doorHint(dn, floorName(dn.f)) };
-    const sp = spotOf(text);
-    if (sp) return { ok: true, tone: 'ok', hint: floorName(sp.f ?? floorOf(sp.room) ?? 0) + adminNote(sp.room) };
-    const r = roomOf(text), f = floorOf(r);
-    if (!r || f == null) return text.length >= 3 || /[^\d\u0430-\u0433]/.test(text) ? { ok: false, tone: 'no', hint: t('pad.noRoom') } : { ok: false, hint: t('pad.roomHint') };
-    return ROOMS[f]?.[r] ? { ok: true, tone: 'ok', hint: floorName(f) + adminNote(r) } : { ok: true, hint: t('pad.near', { room: r }) };
-  }
+  const checkFind = (text: string) => checkFindIn(text, rt.graph, ROOMS);
   /** the keypad's answer: to its floor, ringed, glided to (the room's own effect below), the card under it */
   function found(text: string) {
     haptic.tap(); pad = false; clearTimeout(glideT);
-    const dn = doorNamed(text), sp = dn ? { f: dn.f, u: dn.u, v: dn.v } : spotOf(text);
+    const dn = doorNamed(rt.graph, text), sp = dn ? { f: dn.f, u: dn.u, v: dn.v } : spotOf(text);
     if (sp && sp.f != null) {
       room = null; at = { f: sp.f, u: sp.u!, v: sp.v!, label: text }; glided = false;
       if (ver !== 'main') { ver = 'main'; reset(); }
@@ -373,7 +363,7 @@
     if (f !== cur) { halt(); cur = f; touched++; }
   }
   const dest = $derived(room ?? (at ? placeOf(at.label) : null));
-  const cardTitle = $derived(at ? dest ?? '' : room ? (SPOTS.find((x) => x.room === room) ? t(`route.spot.${SPOTS.find((x) => x.room === room)!.k}` as 'route.spot.canteen') : t('map.roomTitle', { room })) : '');
+  const cardTitle = $derived(at ? dest ?? '' : room ? roomTitle(room) : '');
   const card = $derived(!pad && !routing && !!dest);
   function clearFound() { haptic.tap(); room = null; at = null; glided = false; clearTimeout(glideT); fit(); }
   /** the whole floor again, gliding */
@@ -492,14 +482,14 @@
     <div class="gl" bind:this={gl}></div>
     <div class="plan" bind:this={plan} style:aspect-ratio="1 / {AR}">
       <!-- what stands on the plan: the room found, the way, the tints, my flaws' marks -->
-      <MapMarks {rt} {cur} {ver} ar={AR} {routing} {spots} {near} {card} {cardTitle} {freeHere} {flawsHere} {okId} {seen} {draft} {floorName} />
+      <MapMarks {rt} {cur} {ver} ar={AR} {routing} {spots} {near} {card} {cardTitle} {freeHere} {flawsHere} {okId} {seen} {draft} />
     </div>
   </div>
   <!-- the top row: the floors, the map's look at its end (a lift panel on the right covered the plan) -->
   <div class="side" bind:this={side}>
     <!-- the maps, the floors, the look -->
     <MapTopRow bind:menu bind:knob onWay={!!rt.route} {ver} vers={VERS} onver={setVer} floors={railFloors} {routeFloors} {cur} {kp} {dragging}
-      {swipeable} swiped={railSwiped} onpick={pick} {floorName} {look} onflip={flip} />
+      {swipeable} swiped={railSwiped} onpick={pick} {look} onflip={flip} />
   </div>
   <!-- "free now": under the maps button, on the main map only (its rooms' numbers are where the tint goes) -->
   {#if week && ver === 'main'}
