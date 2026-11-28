@@ -56,6 +56,7 @@
   import { glass, jelly } from '../../ui/glass';
   import { floorSwipe, railGestures, liftFloor } from './floorSwipe';
   import { camera, MAX, spring } from './mapCamera';
+  import { stageGestures } from './mapGestures';
   import MapPad, { placeGroups, exitTiles } from './MapPad.svelte';
   import RouteUI, { type RouteView } from './RouteUI.svelte';
   import MapMarks from './MapMarks.svelte';
@@ -134,7 +135,7 @@
   const fr = $derived(FRAMES[ver]);
   let side: HTMLDivElement; // the top row: the plan rests below where it starts
   const { W, H, scale, cam, uvAt, within, follow, head, homeK, middle, out, halt, reset, easeFit, grab, rest, free, fitOf } = camera({
-    map: () => map, fr: () => fr, ver: () => ver, panel: () => panel, stage: () => stage, side: () => side, plan: () => plan, first: () => first, fingers: () => fingers,
+    map: () => map, fr: () => fr, ver: () => ver, panel: () => panel, stage: () => stage, side: () => side, plan: () => plan, first: () => first, fingers: () => fingers(),
   });
 
   // ---- what MapLibre draws: the floor's tiles, the 2023 plan's original over its redraw when asked, the labels ----
@@ -155,15 +156,16 @@
     const want = { ver, cur, dark: look === 'dark', fr, wk: wordsNow(), sc: ver === 'old' && orig ? cur : 0, words };
     untrack(() => { layers.sync(want); follow(); });
   });
-  // ---- fingers: MapLibre drags, pinches around the fingers' middle and takes the wheel. Ours on top of it: a hold in
-  // place, the taps, and the floor swipe while zoomed out ----
-  let fingers = 0, held = false;
+  // ---- fingers: MapLibre's, and ours on top (mapGestures.ts): a hold in place, the floor swipe while zoomed out; the
+  // taps (tap below) ----
+  const { down, move, up, fingers, takeHeld, cancel: cancelHold } = stageGestures({
+    stage: () => stage, map: () => map, swipe: () => swipe, out,
+    touch: (primary) => { menu = false; clearTimeout(glideT); touched++; framed = null; grab(primary); }, // a finger first: the glide gives way
+    busy: () => !!(rt.route || rt.pick), hold: flaw, swiped: () => (lastTap = 0),
+  });
   let lastTap = 0, tapAt = { x: 0, y: 0 };
-  const local = (e: PointerEvent) => { const r = stage.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
-  let press: { x: number; y: number } | null = null; // the first finger down, for a hold in place
   // a long press in place: "something's wrong here" (the map's flaws marked in the app, not by screenshots),
   // a line of text, the spot to the admin's list with its floor and the plan's units
-  let holdT: ReturnType<typeof setTimeout> | undefined;
   // where it was marked (the spot was saved, but nothing showed where): a pin at the pressed point while the note
   // is written, a check on it once saved, and my own open ones on the floor as small pins (mapFlaws.ts); a tap on one
   // shows its words
@@ -183,7 +185,7 @@
   function flaw(at: { x: number; y: number }): boolean {
     const [u, v] = uvAt(at.x, at.y);
     if (gone || u < 0 || u > 1 || v < 0 || v > 1 || !canFlaw()) return false; // a hold that fired as the map closed
-    haptic.soft(); held = true; press = null; lastTap = 0; seen = 0;
+    haptic.soft(); lastTap = 0; seen = 0;
     const [px, py] = toPlan(ver, u, v), f = cur, vr = ver;
     draft = { ver: vr, f, u, v };
     // zoomed in, a spot low on the screen comes up above the sheet the note is written in
@@ -195,44 +197,10 @@
     }).finally(() => (draft = null));
     return true;
   }
-  function down(e: PointerEvent) {
-    menu = false; clearTimeout(glideT); touched++; framed = null; // a finger first: the glide gives way
-    grab(e.isPrimary);
-    clearTimeout(holdT); held = false;
-    // the first finger of a new touch: any finger still counted is stale (iOS sends no up for one held while the flaw's
-    // sheet opened over it, so every later press read as a second finger and never held)
-    fingers = e.isPrimary ? 1 : fingers + 1;
-    if (!e.isPrimary) { press = null; swipe.end(true); map.dragPan.enable(); return; } // a second finger: a pinch, never a hold or a floor
-    const at = (press = local(e)), id = e.pointerId;
-    if (rt.route || rt.pick) return; // on the way, or an end being tapped: no note held down
-    // held: the finger is the stage's from here on, and the click its let-go may bring is swallowed, so neither lands
-    // on the note's sheet that has just opened under the finger and shuts it
-    holdT = setTimeout(() => {
-      if (!flaw(at)) return;
-      try { stage.setPointerCapture(id); } catch { /* the finger is gone */ }
-      window.addEventListener('click', eat, { capture: true, once: true });
-    }, 600);
-    // zoomed out one finger is ours alone: MapLibre doesn't pan (the plan would only spring back), a sideways move turns
-    // the floor; a second finger gives the map back its pinch and pan
-    if (out()) { map.dragPan.disable(); swipe.start(e.clientX, e.clientY); }
-  }
-  function move(e: PointerEvent) {
-    if (!e.isPrimary || !press) return;
-    const p = local(e);
-    if (Math.hypot(p.x - press.x, p.y - press.y) > 8) clearTimeout(holdT); // it moved: not a hold
-    if (swipe.move(e.clientX, e.clientY)) lastTap = 0;
-  }
-  const eat = (e: Event) => { e.stopPropagation(); e.preventDefault(); };
-  function up(e: PointerEvent) {
-    clearTimeout(holdT);
-    if (held) setTimeout(() => window.removeEventListener('click', eat, true), 350); // no click came: the next one is a real one
-    fingers = Math.max(0, fingers - 1);
-    if (e.isPrimary) { press = null; swipe.end(); map.dragPan.enable(); }
-  }
   /** a tap (MapLibre's click: a finger that didn't move): my own pin shows what I wrote there, a tinted room opens its
    *  card, a second tap within 300 ms of the first and near it zooms in, or back out to the whole floor */
   function tap(e: MapMouseEvent) {
-    if (held) { held = false; return; } // the let-go of a hold
+    if (takeHeld()) return; // the let-go of a hold
     const el = e.originalEvent.target as Element, p = e.point, now = performance.now();
     if (rt.pick) { // a route's end being picked on the map: what is under the finger (a finger's reach, 24 px at this zoom); a second tap still zooms
       const [u, v] = uvAt(p.x, p.y);
@@ -427,14 +395,14 @@
     if (leaving) void openRoute(); else void loadGraph();
     const clockT = setInterval(() => (clock = nowTs()), 60_000); // "free now" moves on with the hour
     return () => {
-      gone = true; clearTimeout(holdT); clearTimeout(reframeT); clearTimeout(okT); under?.cancel(); // closed without leave(): the page under unscaled
+      gone = true; cancelHold(); clearTimeout(reframeT); clearTimeout(okT); under?.cancel(); // closed without leave(): the page under unscaled
       clearInterval(clockT); delete d.map; underEl?.style.removeProperty('visibility'); ro.disconnect(); clearTimeout(glideT); layers.stop(); undoChrome(); map.remove(); if (own) paintFor(theme.current); };
   });
 
   function leave() {
     if (gone) return;
     gone = true;
-    clearTimeout(holdT); // a finger still down: no note's sheet opens over the closing map
+    cancelHold(); // a finger still down: no note's sheet opens over the closing map
     if (!appeared) { removeOverlay(overlay.id); return; } // closed before it showed
     const a = iris ? irisOut(iris, panel, stage, under, underEl, () => { undoChrome(); undoChrome = () => {}; }) : fadeOut(panel);
     a.onfinish = () => removeOverlay(overlay.id);
