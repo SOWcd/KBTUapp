@@ -641,7 +641,7 @@ def test_post_feed(env, monkeypatch):
     assert feed[2]["nick"] is None
     assert feed[2]["sign"] == "Ann T" and not feed[2]["mine"]
     for p in feed:
-        assert set(p) - {"review"} == {"id", "body", "status", "at", "msg", "anon", "nick", "sign", "person", "mine", "comments", "thread", "faces", "reactions", "hearts", "hearted", "hot", "human", "photos", "edited"}  # no user id
+        assert set(p) - {"review"} == {"id", "body", "status", "at", "msg", "anon", "nick", "sign", "person", "mine", "comments", "thread", "faces", "reactions", "hearts", "hearted", "picks", "pick", "hot", "human", "photos", "edited"}  # no user id
         assert "review" not in p or p["mine"]                                                    # why mine waits: to me alone
     assert feed[2]["person"]["name"] == "Ann T" and feed[2]["person"]["id"] == 1 and feed[0]["person"]["id"] == 3
     # the anonymous row: no person, no avatar, nothing of its author's, to staff too (the Admin sheet's reveal is the one way)
