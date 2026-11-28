@@ -3,6 +3,7 @@ export const notificationSettings = [
   ['nDoor', 'set.door', 'set.doorHint'],
   ['nNewEvents', 'set.newEvents', 'set.newEventsHint'],
   ['nForumComments', 'set.forumComments', 'set.forumCommentsHint'],
+  ['nForumDigest', 'set.forumDigest', 'set.forumDigestHint'],
   ['nBroadcasts', 'set.broadcasts', 'set.broadcastsHint'],
   ['nDigests', 'set.digests', 'set.digestsHint'],
   ['nFriends', 'set.friendNotices', 'set.friendNoticesHint'],

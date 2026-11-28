@@ -101,7 +101,8 @@ def test_hearts_are_private_and_erased(env, monkeypatch, anon):
         assert heart(b, True).json() == {"hearts": 1, "hearted": True}
     for viewer, original in zip(viewers, before):
         assert original["reactions"] == [{"emoji": "x", "n": 7}]
-        assert card(viewer) == original | {"hearts": 1, "hearted": viewer == b}
+        assert card(viewer) == original | {"hearts": 1, "hearted": viewer == b, "picks": [{"emoji": "❤️", "n": 1}],
+                                           "pick": "❤️" if viewer == b else None}
     assert heart(a, True).json() == {"hearts": 2, "hearted": True}
     for _ in range(2):
         assert heart(a, False).json() == {"hearts": 1, "hearted": False}

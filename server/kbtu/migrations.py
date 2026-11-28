@@ -2853,10 +2853,35 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE INDEX IF NOT EXISTS ako_uploads_by_app ON ako_uploads(app_id, at);
     CREATE INDEX IF NOT EXISTS ako_uploads_by_ip ON ako_uploads(ip, at);
     CREATE INDEX IF NOT EXISTS ako_uploads_by_org ON ako_uploads(org_id, at);"""),
+    # Forum reactions: the app's heart becomes one emoji per student per post (the hearts so far stay hearts; the set is
+    # fchannel.REACTIONS, no CHECK: the owner may change it). Polls: a post with 2-6 options, closing days after it
+    # went out (closes_at, written once). A vote is two rows that never meet: that I voted (one each), and the option's
+    # count with no account on it (research_participants' way): no row links a person to a choice (limits: fchannel polls).
+    # The forum's weekly digest gets its own switch (n_forum_digest), apart from the DMP memo's.
+    (266, """ALTER TABLE fchan_hearts ADD COLUMN emoji TEXT NOT NULL DEFAULT '❤️';
+    CREATE TABLE IF NOT EXISTS fchan_polls (  -- IF NOT EXISTS: tests rewind user_version
+      post_id   INTEGER PRIMARY KEY REFERENCES fchan_posts(id) ON DELETE CASCADE,
+      options   TEXT NOT NULL CHECK (json_valid(options)),
+      days      INTEGER NOT NULL CHECK (days IN (1, 3, 7)),
+      closes_at INTEGER
+    ) STRICT;
+    CREATE TABLE IF NOT EXISTS fchan_voted (
+      post_id INTEGER NOT NULL REFERENCES fchan_polls(post_id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (post_id, user_id)
+    ) STRICT, WITHOUT ROWID;
+    CREATE INDEX IF NOT EXISTS fchan_voted_by_user ON fchan_voted(user_id);
+    CREATE TABLE IF NOT EXISTS fchan_tally (
+      post_id INTEGER NOT NULL REFERENCES fchan_polls(post_id) ON DELETE CASCADE,
+      choice  INTEGER NOT NULL CHECK (choice BETWEEN 0 AND 5),
+      n       INTEGER NOT NULL,
+      PRIMARY KEY (post_id, choice)
+    ) STRICT, WITHOUT ROWID;
+    ALTER TABLE users ADD COLUMN n_forum_digest INTEGER NOT NULL DEFAULT 1;"""),
     # Admissions reminders (logic/ako.py due, kbtu/akosend.py): the chat that tapped /start ako_... gets them (gone when
     # decided, a day after the interview, or with a new link), and each send claimed once. No CHECK on kind or channel:
     # a CHECK can't be altered, and WhatsApp is to come
-    (266, """CREATE TABLE IF NOT EXISTS ako_chats (  -- IF NOT EXISTS: tests rewind user_version
+    (267, """CREATE TABLE IF NOT EXISTS ako_chats (  -- IF NOT EXISTS: tests rewind user_version
       app_id INTEGER PRIMARY KEY REFERENCES ako_apps(id) ON DELETE CASCADE,
       chat   INTEGER NOT NULL                         -- the applicant's private chat with the bot
     ) STRICT;

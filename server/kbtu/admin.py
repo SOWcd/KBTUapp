@@ -79,6 +79,9 @@
   .venv/bin/python -m kbtu.admin android-welcome <@who> | on [--dry] | off   the bot's one thanks on the installed Android
                                 app's first launch: <@who> a preview; on (after the creator's yes) also thanks whoever
                                 opened it before; off stops new ones
+  .venv/bin/python -m kbtu.admin forum-digest <@who> | on | off   the Forum's Friday card (counts only): <@who> this week's
+                                card to that one person now (the owner's preview); on (after the owner's yes) every Friday
+                                at 18:00 to students with something unread; off stops it
   .venv/bin/python -m kbtu.admin team add|del <@username | telegram id>   People of the app's Team (core developers), audited
   .venv/bin/python -m kbtu.admin credit add <telegram id | gh:login> <idea | find | code> "<ru>" "<kk>" "<en>" [--gh <login>] [--name "<name>"] [--ai]   "People of the app"
                                 (logic/credits.py): a line in OUR words about what they gave (an account isn't needed;
@@ -777,6 +780,16 @@ def main(args: list[str]) -> None:
             with db.tx(con):
                 notify(con, _user(con, args[1])["id"], WELCOME, f"p{now()}")
             print("queued 1")
+    elif cmd == "forum-digest" and len(args) == 2:  # the Forum's Friday card (fchannel.digest_week)
+        from .logic import fchannel
+        with db.tx(con):
+            if args[1] == "on":
+                con.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, 'on')", (fchannel.DIGEST,))
+            elif args[1] == "off":
+                con.execute("DELETE FROM meta WHERE key = ?", (fchannel.DIGEST,))
+            else:
+                fchannel.digest_preview(con, _user(con, args[1])["id"])
+        print(args[1] if args[1] in ("on", "off") else "queued 1")
     elif cmd == "credit" and args[1:2] in (["add"], ["ai"], ["gh"], ["ship"], ["list"], ["del"], ["ask"]):  # the people of the app (logic/credits.py)
         try:
             if args[1] == "add" and len(args) >= 7:
