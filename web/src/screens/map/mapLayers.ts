@@ -1,8 +1,8 @@
 // What MapLibre draws for the campus map (CampusMap.svelte): the floor's tiles, the labels, the pins' places. Plain
 // builders of MapLibre's sources, layers and paint, from the map's version, frame and look; CampusMap gives them to
 // the map and gives them again when one of those changes.
-import type { LayerSpecification, SourceSpecification } from 'maplibre-gl';
-import { FRAMES, Z0, LEVELS, lngLat, zoomFor, widthAt, tilesOf, tileSize, type Frame, type Ver } from '../../lib/mapgl';
+import type { GeoJSONSource, ImageSource, LayerSpecification, Map as GLMap, SourceSpecification } from 'maplibre-gl';
+import { FRAMES, Z0, LEVELS, SCAN_AT, lngLat, scan, zoomFor, widthAt, tilesOf, tileSize, type Frame, type Ver } from '../../lib/mapgl';
 
 export type RasterPaint = 'raster-brightness-min' | 'raster-brightness-max' | 'raster-hue-rotate';
 const INVERT: Record<RasterPaint, number> = { 'raster-brightness-min': 0.95, 'raster-brightness-max': 0.05, 'raster-hue-rotate': 180 }; // as the CSS did: invert(0.95) hue-rotate(180deg), the colours keep their hue
@@ -66,3 +66,40 @@ export function wordLayers(fr: Frame, ver: Ver): LayerSpecification[] {
 export const pinData = (fr: Frame, pts: { u: number; v: number }[]) => ({ type: 'FeatureCollection' as const, features: pts
   .map(({ u, v }) => ({ type: 'Feature' as const, properties: {}, geometry: { type: 'Point' as const, coordinates: lngLat(fr, u, v) } })) });
 export const pinLayer = { id: 'pins', type: 'symbol', source: 'pins', layout: { 'icon-image': 'pin', 'icon-allow-overlap': true } } as LayerSpecification;
+
+/** what the map should show now; `wk` keys the labels' data, `sc` the 2023 plan's floor laid over (0: none) */
+export type Want = { ver: Ver; cur: number; dark: boolean; fr: Frame; wk: string; sc: number; words: () => Parameters<GeoJSONSource['setData']>[0] };
+
+/** the state the map was last given; whatever changed since (the floor, the version, the look, the language, the
+ *  original) is given again: the source anew for other tiles, paint for the look, the labels' data */
+export function styleSync(map: () => GLMap, gone: () => boolean) {
+  let planKey = '', inkKey = '', wordsKey = '', fadeVer = '', scanOn = 0, scanT = 0;
+  const keys = (w: Pick<Want, 'ver' | 'cur' | 'dark'>) => [`${w.ver}|${w.cur}|${w.ver === 'kbtu' && w.dark}`, `${w.ver}|${w.dark}`];
+  /** the map was just made from this state */
+  function seed(w: Pick<Want, 'ver' | 'cur' | 'dark' | 'wk'>) { [planKey, inkKey] = keys(w); wordsKey = w.wk; fadeVer = w.ver; }
+  function sync(w: Want) {
+    const m = map(), { ver, cur, dark, fr, wk, sc } = w, [pk, ik] = keys(w), ink = inkOf(ver, dark);
+    const inked = (layer: string) => { for (const [k, v] of Object.entries(ink)) m.setPaintProperty(layer, k as RasterPaint, v); };
+    const corner = (u: number, v: number) => lngLat(fr, u, v);
+    if (pk !== planKey) { planKey = pk; inkKey = ik; m.removeLayer('plan'); m.removeSource('plan'); m.addSource('plan', planSource(fr, ver, dark, cur)); m.addLayer(planLayer(ink), m.getLayer('scan') ? 'scan' : 'words3'); }
+    else if (ik !== inkKey) { inkKey = ik; inked('plan'); }
+    if (ver !== fadeVer) { fadeVer = ver; for (const tier of TIERS) { for (const [k, v] of Object.entries(fadeOf(fr, ver, tier))) m.setPaintProperty(`words${tier}`, k as 'text-opacity', v as number); m.setLayoutProperty(`words${tier}`, 'text-size', wordSize(fr) as unknown as number); } }
+    if (wk !== wordsKey) { wordsKey = wk; (m.getSource('words') as GeoJSONSource).setData(w.words()); }
+    if (sc !== scanOn) {
+      clearTimeout(scanT);
+      const [l, tp, r, bt] = SCAN_AT[sc || scanOn];
+      const at = { url: scan(sc || scanOn), coordinates: [corner(l, tp), corner(r, tp), corner(r, bt), corner(l, bt)] as [[number, number], [number, number], [number, number], [number, number]] };
+      const src = m.getSource('scan') as ImageSource | undefined;
+      if (!sc) { m.setPaintProperty('scan', 'raster-opacity', 0); scanT = window.setTimeout(() => { m.removeLayer('scan'); m.removeSource('scan'); }, 350); } // fades out, then goes
+      else if (src) { src.updateImage(at); m.setPaintProperty('scan', 'raster-opacity', 1); }
+      else {
+        m.addSource('scan', { type: 'image', ...at });
+        m.addLayer({ id: 'scan', type: 'raster', source: 'scan', paint: { ...ink, 'raster-opacity': 0, 'raster-opacity-transition': { duration: 300, delay: 0 }, 'raster-fade-duration': 0 } }, 'words3');
+        requestAnimationFrame(() => { if (!gone() && m.getLayer('scan') && scanOn) m.setPaintProperty('scan', 'raster-opacity', 1); });
+      }
+      scanOn = sc;
+    }
+    if (m.getLayer('scan')) inked('scan');
+  }
+  return { seed, sync, stop: () => clearTimeout(scanT) };
+}

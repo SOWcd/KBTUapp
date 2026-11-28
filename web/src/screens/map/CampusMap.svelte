@@ -49,9 +49,9 @@
   import { haptic, inTelegram } from '../../lib/tg';
   import { SPOTS, campusPoint, roomOf, floorOf, nearRooms, spotOf } from '../../lib/map';
   import { campusPlace } from '../../lib/campusPlace';
-  import { FRAMES, HAS, lngLat, widthAt, overview, scan, SCAN_AT, roomAt, labelsOf, labelData, type Ver } from '../../lib/mapgl';
-  import { Map as GLMap, type MapMouseEvent, type StyleSpecification, type GeoJSONSource, type ImageSource } from 'maplibre-gl';
-  import { inkOf, planSource as planSourceOf, planLayer as planLayerOf, wordSize as wordSizeOf, fadeOf as fadeOfTier, TIERS, wordLayers, pinData as pinDataOf, pinLayer, type RasterPaint } from './mapLayers';
+  import { FRAMES, HAS, widthAt, overview, roomAt, labelsOf, labelData, type Ver } from '../../lib/mapgl';
+  import { Map as GLMap, type MapMouseEvent, type StyleSpecification, type GeoJSONSource } from 'maplibre-gl';
+  import { inkOf, planSource as planSourceOf, planLayer as planLayerOf, wordLayers, pinData as pinDataOf, pinLayer, styleSync } from './mapLayers';
   import 'maplibre-gl/dist/maplibre-gl.css';
   import uniqRooms from '../../assets/map/uniq-rooms.json';
   import { UNITS, toPlan, fromPlan } from './planUnits';
@@ -141,46 +141,20 @@
   // ---- what MapLibre draws: the floor's tiles, the 2023 plan's original over its redraw when asked, the labels ----
   // (the builders are mapLayers.ts; these read the map's version, frame and look now)
   const ink = () => inkOf(ver, look === 'dark');
-  const inked = (layer: string) => { for (const [k, v] of Object.entries(ink())) map.setPaintProperty(layer, k as RasterPaint, v); };
-  const corner = (u: number, v: number) => lngLat(fr, u, v);
   const planSource = () => planSourceOf(fr, ver, look === 'dark', cur);
   const planLayer = () => planLayerOf(ink());
   let orig = $state(false); // the 2023 plan as it was given, over our redraw
   // the room looked for is the first to get its place among the labels: its ring is never round nothing
   const words = () => labelData(fr, orig && ver === 'old' ? [] : labelsOf(ver, cur, look === 'dark', (k) => t(`kmap.${k}` as 'kmap.canteen'), room ?? ''));
   const wordsNow = () => `${ver}|${cur}|${look}|${i18n.lang}|${orig}|${room}`;
-  const wordSize = () => wordSizeOf(fr);
-  const fadeOf = (tier: number) => fadeOfTier(fr, ver, tier);
   const pinData = () => pinDataOf(fr, [...flawsHere, ...(draft && draft.f === cur && draft.ver === ver ? [draft] : [])]);
   $effect(() => { const d = pinData(); if (ready) untrack(() => (map.getSource('pins') as GeoJSONSource).setData(d)); });
-  // the state the map was last given; whatever changed since (the floor, the version, the look, the language, the
-  // original) is given again: the source anew for other tiles, paint for the look, the labels' data
-  let planKey = '', inkKey = '', wordsKey = '', fadeVer = '', scanOn = 0, scanT = 0;
+  // the map is given what changed since it was last given it (mapLayers.ts styleSync)
+  const layers = styleSync(() => map, () => gone);
   $effect(() => {
     if (!ready) return;
-    const dark = look === 'dark', pk = `${ver}|${cur}|${ver === 'kbtu' && dark}`, ik = `${ver}|${dark}`, wk = wordsNow(), sc = ver === 'old' && orig ? cur : 0;
-    untrack(() => {
-      if (pk !== planKey) { planKey = pk; inkKey = ik; map.removeLayer('plan'); map.removeSource('plan'); map.addSource('plan', planSource()); map.addLayer(planLayer(), map.getLayer('scan') ? 'scan' : 'words3'); }
-      else if (ik !== inkKey) { inkKey = ik; inked('plan'); }
-      if (ver !== fadeVer) { fadeVer = ver; for (const tier of TIERS) { for (const [k, v] of Object.entries(fadeOf(tier))) map.setPaintProperty(`words${tier}`, k as 'text-opacity', v as number); map.setLayoutProperty(`words${tier}`, 'text-size', wordSize() as unknown as number); } }
-      if (wk !== wordsKey) { wordsKey = wk; (map.getSource('words') as GeoJSONSource).setData(words()); }
-      if (sc !== scanOn) {
-        clearTimeout(scanT);
-        const [l, tp, r, bt] = SCAN_AT[sc || scanOn];
-        const at = { url: scan(sc || scanOn), coordinates: [corner(l, tp), corner(r, tp), corner(r, bt), corner(l, bt)] as [[number, number], [number, number], [number, number], [number, number]] };
-        const src = map.getSource('scan') as ImageSource | undefined;
-        if (!sc) { map.setPaintProperty('scan', 'raster-opacity', 0); scanT = window.setTimeout(() => { map.removeLayer('scan'); map.removeSource('scan'); }, 350); } // fades out, then goes
-        else if (src) { src.updateImage(at); map.setPaintProperty('scan', 'raster-opacity', 1); }
-        else {
-          map.addSource('scan', { type: 'image', ...at });
-          map.addLayer({ id: 'scan', type: 'raster', source: 'scan', paint: { ...ink(), 'raster-opacity': 0, 'raster-opacity-transition': { duration: 300, delay: 0 }, 'raster-fade-duration': 0 } }, 'words3');
-          requestAnimationFrame(() => { if (!gone && map.getLayer('scan') && scanOn) map.setPaintProperty('scan', 'raster-opacity', 1); });
-        }
-        scanOn = sc;
-      }
-      if (map.getLayer('scan')) inked('scan');
-      follow();
-    });
+    const want = { ver, cur, dark: look === 'dark', fr, wk: wordsNow(), sc: ver === 'old' && orig ? cur : 0, words };
+    untrack(() => { layers.sync(want); follow(); });
   });
   // ---- fingers: MapLibre drags, pinches around the fingers' middle and takes the wheel. Ours on top of it: a hold in
   // place, the taps, and the floor swipe while zoomed out ----
@@ -466,7 +440,7 @@
 
   onMount(() => {
     const dark = look === 'dark';
-    planKey = `${ver}|${cur}|${ver === 'kbtu' && dark}`; inkKey = `${ver}|${dark}`; wordsKey = wordsNow(); fadeVer = ver;
+    layers.seed({ ver, cur, dark, wk: wordsNow() });
     map = new GLMap({
       container: gl, ...middle(), attributionControl: false, renderWorldCopies: false, fadeDuration: 250,
       dragRotate: false, pitchWithRotate: false, touchPitch: false, keyboard: false, boxZoom: false, doubleClickZoom: false,
@@ -498,7 +472,7 @@
     const clockT = setInterval(() => (clock = nowTs()), 60_000); // "free now" moves on with the hour
     return () => {
       gone = true; clearTimeout(holdT); clearTimeout(reframeT); clearTimeout(okT); under?.cancel(); // closed without leave(): the page under unscaled
-      clearInterval(clockT); delete d.map; underEl?.style.removeProperty('visibility'); ro.disconnect(); clearTimeout(glideT); clearTimeout(scanT); undoChrome(); map.remove(); if (own) paintFor(theme.current); };
+      clearInterval(clockT); delete d.map; underEl?.style.removeProperty('visibility'); ro.disconnect(); clearTimeout(glideT); layers.stop(); undoChrome(); map.remove(); if (own) paintFor(theme.current); };
   });
 
   function leave() {
