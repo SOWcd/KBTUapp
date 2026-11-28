@@ -1219,7 +1219,6 @@ const kk: Dict = {
   'list.kind.lab': "З",
   'list.dayOff': "Бүгін академиялық күнтізбе бойынша демалыс: сабақтар онлайн, асинхронды.",
   'list.nowLeft': "тағы {n} мин",
-  'list.week': { one: "осы аптада {n}", other: "осы аптада {n}" },
   'list.kind.lectureLong': "Дәріс",
   'list.kind.practiceLong': "Практика",
   'list.kind.labLong': "Зертханалық",

@@ -63,6 +63,31 @@ test('Afisha, the top', async ({ open }) => {
   await shot(await ali(open), 'afisha');
 });
 
+// qa.py's events have no cover: one drawn here is put on them, so the hero's glass is seen over a picture. Two posters:
+// a dark colourful one, and a near-white one (white words on the slab must hold on it)
+const POSTER = {
+  cover: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 1200"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff5a3c"/><stop offset=".55" stop-color="#c2185b"/><stop offset="1" stop-color="#2a0f4f"/></linearGradient></defs>
+    <rect width="900" height="1200" fill="url(#g)"/><circle cx="640" cy="330" r="250" fill="#ffd23f"/><circle cx="640" cy="330" r="250" fill="none" stroke="#fff" stroke-opacity=".35" stroke-width="40"/>
+    <rect x="-80" y="760" width="1100" height="90" fill="#fff" fill-opacity=".9" transform="rotate(-9 450 800)"/>
+    <text x="70" y="1010" font-family="sans-serif" font-weight="800" font-size="170" fill="#fff">OPEN MIC</text><text x="76" y="1090" font-family="sans-serif" font-weight="600" font-size="44" letter-spacing="8" fill="#fff">STAND-UP AND MUSIC</text></svg>`,
+  'cover-bright': `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 1200"><rect width="900" height="1200" fill="#fbfaf5"/><circle cx="250" cy="300" r="170" fill="#ffe45c"/>
+    <rect x="-80" y="520" width="1100" height="70" fill="#e5322d" transform="rotate(-14 450 560)"/>
+    <text x="60" y="900" font-family="sans-serif" font-weight="800" font-size="210" fill="#111">GAMES</text><text x="64" y="1060" font-family="sans-serif" font-weight="800" font-size="150" fill="#111">NIGHT</text>
+    <text x="68" y="1130" font-family="sans-serif" font-weight="600" font-size="40" letter-spacing="8" fill="#555">BOARD GAMES · ROOM 305</text></svg>`,
+};
+for (const [name, svg] of Object.entries(POSTER)) test(`Afisha, the hero over a poster (${name})`, async ({ open }) => {
+  const p = await open('Ali');
+  const cover = { url: `fx/${name}.svg`, thumb: `fx/${name}.svg`, w: 900, h: 1200, blur: '', color: name === 'cover' ? '#c2185b' : '#f4f1e6' };
+  await p.page.route((u) => u.pathname.endsWith(`/fx/${name}.svg`), (route) => route.fulfill({ contentType: 'image/svg+xml', body: svg }));
+  await p.page.route((u) => u.pathname === '/api/events', async (route) => {
+    const r = await route.fetch();
+    await route.fulfill({ response: r, json: ((await r.json()) as object[]).map((e) => ({ ...e, cover })) });
+  });
+  await p.page.reload();
+  await settled(p);
+  await shot(p, `afisha-${name}`); // the whole first screen: the card among the circles and the list
+});
+
 test('an event', async ({ open }) => {
   const p = await ali(open);
   await p.page.getByRole('button', { name: 'Open Mic: stand-up and music', exact: true }).first().click();
