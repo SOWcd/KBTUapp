@@ -243,6 +243,18 @@ def test_limits_leaving_and_account_deletion(env, monkeypatch):
     assert ("game_players", "user_id") in logic.account._DEL_GONE and ("game_rooms", "host_id") in logic.account._DEL_GONE
 
 
+def test_postman_round_purges_after_three_hours(env):
+    c, cfg = env
+    r = _room(c)
+    con = db.connect(cfg.db_path)
+    logic.rooms.purge_round(con)  # fresh: kept
+    assert con.execute("SELECT COUNT(*) FROM game_rooms").fetchone()[0] == 1
+    con.execute("UPDATE game_rooms SET updated_at = updated_at - ? WHERE id = ?", (logic.rooms.KEEP, r["id"]))
+    logic.rooms.purge_round(con)
+    assert con.execute("SELECT COUNT(*) FROM game_rooms").fetchone()[0] == 0
+    assert con.execute("SELECT COUNT(*) FROM game_players").fetchone()[0] == 0  # with its players
+
+
 def test_locations_match_the_app():
     """Every place the server deals has its id in the app's list and a name in each language."""
     web = Path(__file__).parents[2] / "web/src/lib"

@@ -10,7 +10,7 @@ anywhere. Each player's view is built here by the game's own view(), so a secret
 meant. Presence (game_players.seen_at) is written at most every SEEN_EVERY seconds of polling and never moves the version;
 a rematch (`again`: the same room, code and host, another round) keeps only the players seen in the last AWAY seconds,
 and is not a new room for the daily cap.
-A room unchanged for KEEP is gone (purge: each new room and the nightly stats_day sweep), and so is one whose host or any
+A room unchanged for KEEP is gone (purge: each new room, each postman round and the nightly stats_day sweep), and so is one whose host or any
 player deletes their account (account.delete_me)."""
 from __future__ import annotations
 
@@ -72,6 +72,14 @@ def _ticked(con, r, players: list[int]):
 
 def purge(con) -> None:
     con.execute("DELETE FROM game_rooms WHERE updated_at <= ?", (core.now() - KEEP,))
+
+
+def purge_round(con) -> None:
+    """Each postman round (chores._chores): the policy's 3 hours kept even when nobody makes a room; an indexed read,
+    a write only when a room is due."""
+    if one(con, "SELECT 1 FROM game_rooms WHERE updated_at <= ? LIMIT 1", core.now() - KEEP):
+        with tx(con):
+            purge(con)
 
 
 def sweep(con) -> None:

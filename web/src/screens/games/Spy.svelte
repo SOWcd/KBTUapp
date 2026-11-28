@@ -48,17 +48,20 @@
   const left = $derived(Math.ceil(secs));
   const span = $derived(!room ? 1 : room.phase === 'play' ? room.minutes * 60 : room.phase === 'vote' ? 60 : 30); // the phase's whole length (server spy.py)
 
-  // the room this phone is in, kept so the game opened again (Back by mistake, the app relaunched) is the same round
-  const KEY = 'kb-spy';
-  const keep = (c: string | null) => { try { if (c) localStorage.setItem(KEY, c); else localStorage.removeItem(KEY); } catch { /* storage blocked */ } };
-  const kept = () => { try { return localStorage.getItem(KEY); } catch { return null; } };
+  // the room this phone is in, kept so the game opened again (Back by mistake, the app relaunched) is the same round:
+  // by its id, which only its players can read (a code is reused once its room is gone: never a stranger's room)
+  const KEY = 'kb-spy-room';
+  const keep = (id: Id | null) => { try { if (id) localStorage.setItem(KEY, String(id)); else localStorage.removeItem(KEY); } catch { /* storage blocked */ } };
+  const kept = () => { try { return Number(localStorage.getItem(KEY)) || null; } catch { return null; } };
 
   function take(r: Room) {
     if (room && r.id === room.id && r.v < room.v) return; // an answer overtaken by a newer one
     if (r.phase !== room?.phase) { shown = false; pick = null; }
     room = r; skew = r.now - Date.now() / 1000;
-    keep(r.code); // through the reveal too: the host may start one more round in it
+    keep(r.id); // through the reveal too: the host may start one more round in it
   }
+  // out on this phone: at the reveal the server keeps the seat until a rematch drops whoever stopped polling
+  function forget() { room = null; typed = ''; keep(null); clearTimeout(timer); }
   function schedule() { clearTimeout(timer); if (alive && room) timer = setTimeout(poll, room.live ? 1000 : 5000); }
   async function poll() {
     if (!room) return;
@@ -84,10 +87,13 @@
     try {
       let a = await api.roomMove(room.id, room.v, m, id);
       if (!a.applied && a.room) { take(a.room); a = await api.roomMove(a.room.id, a.room.v, m, id); }
-      if (m.type === 'leave') { room = null; typed = ''; keep(null); clearTimeout(timer); return; }
+      if (m.type === 'leave') { forget(); return; }
       if (a.room) take(a.room);
       schedule();
-    } catch (e) { pick = null; haptic.error(); say(why(e), 'pleading_face_3d'); }
+    } catch (e) {
+      if (m.type === 'leave' && e instanceof ApiErr && e.code === 'not_found') { forget(); return; } // a double tap: already out
+      pick = null; haptic.error(); say(why(e), 'pleading_face_3d');
+    }
   }
   function type(e: Event & { currentTarget: HTMLInputElement }) {
     const el = e.currentTarget;
@@ -108,8 +114,9 @@
   const hold = (on: boolean) => { if (on !== shown) { shown = on; if (on) haptic.soft(); } };
 
   onMount(() => {
-    const c = code ?? kept();
-    if (c) { typed = c; void enter(api.roomJoin(c), 'join', !code); }
+    const back = code ? null : kept();
+    if (code) { typed = code; void enter(api.roomJoin(code), 'join'); }
+    else if (back) void enter(api.room(back).then((r) => r ?? Promise.reject(new Error('empty'))), 'join', true);
     const tick = setInterval(() => { clock = Date.now() / 1000; }, 250);
     return () => clearInterval(tick);
   });
@@ -304,8 +311,11 @@
       </div>
     {:else if room?.phase === 'reveal'}
       <!-- one more round in the same room, everyone still in it: the host's -->
-      {#if room.me === room.host}<Button size="l" full lit onclick={() => move({ type: 'again' })}>{gw('spy.again')}</Button>
-      {:else}<p class="note">{gw('spy.waitAgain')}</p>{/if}
+      <div class="ft">
+        {#if room.me === room.host}<Button size="l" full lit onclick={() => move({ type: 'again' })}>{gw('spy.again')}</Button>
+        {:else}<p class="note">{gw('spy.waitAgain')}</p>{/if}
+        <Button kind="plain" destructive full onclick={forget}>{gw('spy.leave')}</Button>
+      </div>
     {/if}
   {/snippet}
 </Sheet>
