@@ -49,6 +49,13 @@
   --ink: #0B1433;
   /* the ground under media (a hero cover, its lit mark): black in both themes */
   --media: #000;
+  /* on media, the same in both themes: the dark under the words on a cover, the lighter one a drawn cover needs, the
+     words' own soft shadow, a clear tag, and the plain shadow a cover the size of a card throws (tokens "light") */
+  --media-scrim: linear-gradient(to top, rgba(0, 0, 0, 0.94), rgba(0, 0, 0, 0.86) 30%, rgba(0, 0, 0, 0.5) 50%, rgba(0, 0, 0, 0) 70%);
+  --media-shade: linear-gradient(rgba(0, 0, 0, 0) 36%, rgba(0, 0, 0, 0.5));
+  --media-text-shadow: 0 1px 8px rgba(0, 0, 0, 0.28);
+  --media-chip: rgba(255, 255, 255, 0.18);
+  --media-lift: 0 1px 2px rgba(0, 0, 0, 0.1), 0 22px 36px -22px rgba(0, 0, 0, 0.42);
 
   /* motion: transform and opacity only, never blur. The language is the context menu's (ui/Menu): things grow out of
      what was tapped on a spring with a small overshoot, opacity catches up fast, and they leave quicker than they came.
@@ -175,7 +182,16 @@
   --glass-in-a: transparent; --glass-in-b: transparent; --glass-in-w: 0px;                 /* the fringe inside the body (light theme) */
   --glass-shade: transparent; --glass-glow: rgba(255, 255, 255, 0.2);
   --sheet: #131314;
-  /* elevation: four neutral steps, never a coloured glow (it would leak onto the neighbours) */
+  /* ---- light: one model for the whole app ----
+     One white light, above and a little to the left (.glass --hx; the phone's tilt moves it). Nothing gives off light.
+     - An edge that faces the light catches it: glass by its rim (--glass-rim-*), media by base.css .lit-rim.
+     - A thing throws a plain shadow down, never a coloured one and never a ring around itself: --elev-1..4. On the
+       black ground a shadow can't show, so depth there is the lit edge alone; on the pale ground it is the shadow.
+     - Colour lives inside its object (a cover, a 3D object's iridescence) and passes through the glass over it
+       (--glass-filter). It leaves its object in one place only: the Afisha hero's cover tints its own shadow, straight
+       under the card in view and narrower than the card.
+     - A press lights glass from inside, at the finger (.glass-bloom), and that is the only light that moves by itself.
+     elevation: four neutral steps */
   --elev-1: inset 0 0 0 1px rgba(255, 255, 255, 0.075);  /* a card: near-black on black shows by its hair rim */
   --elev-2: 0 2px 8px rgba(0, 0, 0, 0.32);               /* a raised control: a knob, a floating solid capsule */
   --elev-3: 0 12px 32px -10px rgba(0, 0, 0, 0.55);       /* a glass island */
@@ -230,9 +246,9 @@
   --lens-top: rgba(255, 255, 255, 0);
   --lens-rim: rgba(255, 255, 255, 1);
   --lens-rim-low: rgba(11, 20, 51, 0.12);
-  --lens-shadow: 0 0 0 0.5px rgba(11, 20, 51, 0.06), inset 0 -1.5px 2px rgba(11, 20, 51, 0.05), 0 2px 8px rgba(11, 20, 51, 0.14);
+  --lens-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.05), inset 0 -1.5px 2px rgba(0, 0, 0, 0.04), 0 2px 8px rgba(0, 0, 0, 0.1);
   --lens-lift: rgba(255, 255, 255, 0.5);
-  --lens-lift-shadow: 0 0 0 0.5px rgba(11, 20, 51, 0.08), inset 0 0 10px rgba(255, 255, 255, 0.85), 0 8px 20px rgba(11, 20, 51, 0.2);
+  --lens-lift-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.06), inset 0 0 10px rgba(255, 255, 255, 0.85), 0 8px 20px rgba(0, 0, 0, 0.16);
   --dock-ink: rgba(11, 20, 51, 0.45);
   --menu-bg: rgba(255, 255, 255, 0.9);
   --text: #0A0A0C;
@@ -246,22 +262,23 @@
   --danger-soft: rgba(240, 82, 74, 0.12);
   --warning-text: #965A00;
   --warning-soft: rgba(255, 178, 61, 0.18);
-  /* floating glass on the pale ground: white rims vanish on white, so it is clearer and shows by its edge (an ink rim the
-     bright arc breaks like glare, the fringes inside the body) */
+  /* floating glass on the pale ground: white rims vanish on white, so it is clearer and shows by its shadow and a hair
+     of neutral edge the bright arc breaks like glare (a dark drawn outline read as a sticker); the fringes, faint,
+     inside the body */
   --glass-filter: blur(8px) saturate(190%);
   --glass-rim-w: 1.4px;
   --glass-rim-hi: #fff; --glass-rim-mid: rgba(255, 255, 255, 0.85);
-  --glass-rim-lo: rgba(11, 20, 51, 0.42); --glass-rim-base: rgba(11, 20, 51, 0.2);
+  --glass-rim-lo: rgba(0, 0, 0, 0.16); --glass-rim-base: rgba(0, 0, 0, 0.09);
   --glass-fringe-a: transparent; --glass-fringe-b: transparent;
   --glass-spot: rgba(255, 255, 255, 0.95); --glass-spot-size: 30% 70%; --glass-wash: transparent;
-  --glass-edge-hi: #fff; --glass-edge-lo: rgba(11, 20, 51, 0.16);
-  --glass-in-a: rgba(255, 110, 190, 0.6); --glass-in-b: rgba(70, 170, 255, 0.65); --glass-in-w: 3px;
-  --glass-shade: rgba(11, 20, 51, 0.22); --glass-glow: transparent;
+  --glass-edge-hi: #fff; --glass-edge-lo: rgba(0, 0, 0, 0.08);
+  --glass-in-a: rgba(255, 110, 190, 0.3); --glass-in-b: rgba(70, 170, 255, 0.34); --glass-in-w: 3px;
+  --glass-shade: rgba(0, 0, 0, 0.1); --glass-glow: transparent;
   --sheet: #F2F2F7; /* Apple's grouped grey: the white cards stand on it as they do on the page */
   --elev-1: inset 0 0 0 0.5px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.03), 0 10px 24px -14px rgba(0, 0, 0, 0.12);
-  --elev-2: 0 3px 8px rgba(24, 36, 90, 0.12), 0 0 0 0.5px rgba(11, 20, 51, 0.05);
-  --elev-3: 0 14px 30px -12px rgba(24, 36, 90, 0.45), 0 2px 5px rgba(24, 36, 90, 0.14);
-  --elev-4: 0 22px 44px -14px rgba(24, 36, 90, 0.28), 0 3px 10px rgba(24, 36, 90, 0.08), 0 0 0 0.5px rgba(11, 20, 51, 0.06);
+  --elev-2: 0 3px 8px rgba(0, 0, 0, 0.1), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
+  --elev-3: 0 16px 32px -14px rgba(0, 0, 0, 0.3), 0 2px 6px rgba(0, 0, 0, 0.08), 0 0 0 0.5px rgba(0, 0, 0, 0.05);
+  --elev-4: 0 22px 44px -14px rgba(0, 0, 0, 0.22), 0 3px 10px rgba(0, 0, 0, 0.06), 0 0 0 0.5px rgba(0, 0, 0, 0.05);
   --glass-bg: rgba(255, 255, 255, 0.78);
   --tint-veil: rgba(242, 242, 247, 0.72);
   --glass-pill-bg: rgba(255, 255, 255, 0.34); /* a pill is clearer than a sheet: there is little to read on it */
@@ -270,8 +287,8 @@
   --glass-bloom: rgba(255, 255, 255, 0.95);
   --glass-sheen: rgba(255, 255, 255, 0.32);
   --glass-shadow: var(--elev-4); --shadow-thumb: var(--elev-2);
-  --shadow-card: 0 1px 2px rgba(24, 36, 90, 0.04), 0 6px 18px rgba(24, 36, 90, 0.05);
-  --scrim: rgba(11, 20, 51, 0.32);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.03), 0 6px 18px rgba(0, 0, 0, 0.04);
+  --scrim: rgba(0, 0, 0, 0.3);
   --card-rim: var(--elev-1);
   --glow: none;
   /* legacy, as in the dark theme */
@@ -279,7 +296,7 @@
   --lg-spot: rgba(255, 255, 255, 0.9); --lg-sheen: rgba(255, 255, 255, 0.7);
   --lg-bevel: inset 0 1.5px 1px #fff, inset 0 -10px 16px -10px rgba(11, 20, 51, 0.14),
     inset 3px 0 3px -1px rgba(255, 110, 190, 0.45), inset -3px 0 3px -1px rgba(70, 170, 255, 0.5);
-  --lg-lift: 0 6px 14px -8px rgba(24, 36, 90, 0.32), 0 1px 2px rgba(24, 36, 90, 0.08);
+  --lg-lift: 0 6px 14px -8px rgba(0, 0, 0, 0.24), 0 1px 2px rgba(0, 0, 0, 0.06);
   /* the orb on the pale ground: a frosted pearl, its shadow under it */
   --orb-shell: radial-gradient(circle, rgba(255, 255, 255, 0) 40%, rgba(255, 255, 255, 0.7) 76%, #fff 97%), #E9ECFB;
   --orb-core-a: rgba(124, 77, 255, 0.78); --orb-core-b: rgba(59, 107, 255, 0.74); --orb-hot: rgba(255, 255, 255, 0.55);

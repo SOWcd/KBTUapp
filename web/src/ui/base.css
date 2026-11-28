@@ -129,6 +129,12 @@ img { max-width: 100%; -webkit-user-drag: none; user-drag: none; -webkit-touch-c
     inset 0 8px 14px -10px var(--glass-glow);
 }
 .glass-pill::after { opacity: 1; }
+/* media's lit edge (tokens.css "light"): a cover is not glass, but its rim catches the same light, bright at the top
+   left, a hair down the sides, a faint return at the foot. On an empty layer over the picture, the picture's radius */
+.lit-rim { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; }
+.lit-rim::after { content: ''; position: absolute; inset: 0; padding: 1px; border-radius: inherit;
+  background: linear-gradient(170deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.14) 28%, rgba(255, 255, 255, 0.04) 60%, rgba(255, 255, 255, 0.1));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
 /* .theme-light / .theme-dark: a part of the page in a theme of its own (the map's switch); the tokens come with it */
 .theme-light, .theme-dark { color: var(--text); }
 /* the touch bloom (glass.ts): sits over the sheen, under the content */

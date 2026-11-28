@@ -354,7 +354,7 @@
     <section class="hero theme-dark" class:lit={i === atCard} class:tix={mine && i === 0} class:nopic={!pic} style:--c={e.cover?.color ?? e.video?.poster?.color ?? e.color ?? e.tint} onclickcapture={() => tap(c)}>
       <button class="hit" onpointerdown={(ev) => touchAhead(ev, () => prefetchEvent(e.id))} onclick={(ev) => sheets.event(e.id, ev.currentTarget.parentElement?.querySelector('.poster'))} aria-label={e.title}></button>
       <span class="art"><HeroArt pic={art} emoji={e.emoji} color={e.color ?? e.tint} first={i === 0} /></span>
-      <div class="shade"></div>
+      <div class="shade lit-rim"></div>
       <div class="slab">
         <span class="hero-tx">
           <b class="clamp-2">{e.title}</b>
@@ -380,7 +380,7 @@
     <section class="hero theme-dark" class:lit={i === atCard} class:nopic={!v.item.cover} style:--c={v.color} onclickcapture={() => tap(c)}>
       <button class="hit" onclick={v.open} aria-label={v.title}></button>
       <span class="art"><HeroArt pic={v.item.cover} emoji={v.item.emoji} color={v.color} first={i === 0} /></span>
-      <div class="shade"></div>
+      <div class="shade lit-rim"></div>
       <div class="slab">
         <span class="hero-tx">
           <b class="clamp-2">{v.title}</b>
@@ -612,28 +612,24 @@
   .dots i { width: 6px; height: 6px; border-radius: var(--r-full); background: var(--text-3); opacity: 0.45; transition: opacity var(--t-fast) var(--ease); }
   .dots i.on { opacity: 1; }
   /* Light (the engine's one model): a white light from above, nothing radiates. The card shows it three ways: its top
-     edge catches it (.shade's rim), it throws a plain shadow down (seen on the pale ground, nothing on black), and its
+     edge catches it (base.css .lit-rim), it throws a plain shadow down (seen on the pale ground, nothing on black), and its
      cover's colour falls only into that shadow: a soft pool straight under the card, narrower than the card, so it never
      reaches the cards beside it, and only under the card in view. The cover's own colour, as it is: no ring, no boost */
-  .hero { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1), 0 22px 36px -22px rgba(0, 0, 0, 0.42); }
+  .hero { box-shadow: var(--media-lift); }
   .hero::before { content: ''; position: absolute; left: 12%; right: 12%; bottom: -10px; height: 40px; z-index: -1; border-radius: 50%; pointer-events: none;
     background: var(--c, transparent); filter: blur(20px); opacity: 0; transition: opacity var(--t-slow) var(--ease); }
   .hero.lit::before { opacity: 0.5; }
   :global(:root[data-theme='light']) .hero.lit::before { opacity: 0.34; }
-  .art, .shade { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; }
+  .art { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; }
   .art { overflow: hidden; }
-  /* the card's rim, lit: bright where it faces the light (the top left), a hair along the sides, a faint return at the
-     foot. With no cover, the mesh deeper toward the words */
-  .shade::after { content: ''; position: absolute; inset: 0; padding: 1px; border-radius: inherit;
-    background: linear-gradient(170deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.14) 28%, rgba(255, 255, 255, 0.04) 60%, rgba(255, 255, 255, 0.1));
-    -webkit-mask: linear-gradient(black 0 0) content-box, linear-gradient(black 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
-  .nopic .shade { background: linear-gradient(rgba(0, 0, 0, 0) 36%, rgba(0, 0, 0, 0.5)); } /* a cover has HeroArt's own scrim */
+  /* the rim is base.css .lit-rim; with no cover, the mesh deeper toward the words */
+  .nopic .shade { background: var(--media-shade); } /* a cover has HeroArt's own scrim */
   /* the words lie on the cover itself, no box inside the card: HeroArt darkens the picture under them */
   .slab { position: relative; z-index: 2; /* over the card's own tap */ isolation: isolate; display: flex; flex-direction: column; padding: 76px 18px var(--s-4);
     border-radius: 0 0 var(--r-xl) var(--r-xl); color: var(--text); pointer-events: none; }
   /* over media the tags are white on a clear chip (the accent's blue on a blue cover was 2:1), the place has no underline
      (the whole card opens the event; the pin says it is a place) */
-  .hsub :global(.chip) { background: rgba(255, 255, 255, 0.18); color: var(--on-accent); }
+  .hsub :global(.chip) { background: var(--media-chip); color: var(--on-accent); }
   .hsub .fr { color: var(--text-2); }
   .hero-place :global(.place) { text-decoration: none; }
   .foot { display: flex; align-items: center; gap: 10px; min-height: var(--ctl-m); margin-top: var(--s-3); }
@@ -643,7 +639,7 @@
   .acts :global(.btn.round > :nth-child(2))::after { inset: -4px; } /* 36 seen, 44 to the finger on every side; 8px apart, so two meet and never overlap */
   /* contain: the words take the width that is left and never ask for more. Without it the one-line meta's full width
      (nowrap) is the card's min-content, and a flex card grows to it: the root of the card past the right edge (PRs 324, 328) */
-  .hero-tx { flex: none; display: flex; flex-direction: column; gap: 3px; min-width: 0; contain: inline-size; text-shadow: 0 1px 8px rgba(0, 0, 0, 0.28); }
+  .hero-tx { flex: none; display: flex; flex-direction: column; gap: 3px; min-width: 0; contain: inline-size; text-shadow: var(--media-text-shadow); }
   .hero-tx > b { margin-bottom: var(--s-1); font: 700 var(--fs-t1)/1.08 var(--font-display); letter-spacing: -0.035em; }
   .where, .hero-place { min-width: 0; font: 500 var(--fs-body)/1.3 var(--font-text); color: var(--text-2); }
   .where { display: flex; flex-wrap: wrap; max-height: 1.3em; overflow: hidden; }
