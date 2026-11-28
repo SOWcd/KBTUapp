@@ -198,7 +198,7 @@
       <button type="button" class="ck" role="checkbox" aria-checked="false" onclick={agree}><span class="box"></span><span>{aw('ako.consentOk')}</span></button>
       <p class="links">
         <button type="button" class="a-quiet" aria-expanded={more} onclick={() => (more = !more)}>{aw('ako.consentMore')}<span class="chev" class:up={more}><ChevronDown size={16} /></span></button>
-        <a class="a-quiet" href="/privacy?lang={i18n.lang}" target="_blank" rel="noopener">{aw('ako.policy')}<ArrowUpRight size={16} /></a>
+        <a class="a-quiet" href="/privacy?lang={i18n.lang}" target="_blank" rel="noopener" aria-label={aw('ako.policy')}>{aw('ako.consentPolicy')}<ArrowUpRight size={16} /></a>
       </p>
       {#if more}<p class="a-sub full">{aw('ako.consentText')}</p>{/if}
     </section>

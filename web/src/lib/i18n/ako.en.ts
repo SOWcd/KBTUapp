@@ -23,6 +23,7 @@ const en: AkoDict = {
   'ako.consentText': "Only the heads of the KBTU Academy of Corporate Education and reviewers from the Academic Programs department, named one by one, see your documents. They include health data, the 075/u certificate and a fluorography: by agreeing, you allow processing these too. Documents are stored on a server in Kazakhstan; traffic goes through Cloudflare. The data operator is KBTU (AKO); KBTU App processes it on their behalf. We delete the application a year after it is sent.",
   'ako.consentOk': "I agree to the processing of my documents, including health data",
   'ako.consentMore': "Details",
+  'ako.consentPolicy': "Policy",
   'ako.policy': "Privacy policy",
   'ako.docsTitle': "Documents",
   'ako.docsLead': "Only your CV and diploma are needed now. Add the rest later through this same link.",
