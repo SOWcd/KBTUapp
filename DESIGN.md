@@ -22,6 +22,12 @@ screen must look like it was always part of it. Apple-level minimalism. Speed co
 - **3D objects** in the app's own style (the orb, the lanyards), with iridescence kept inside the object.
 - The pitch site `web/public/pitch.html` (he called it "gorgeous").
 
+## The design code: Apple's Liquid Glass (iOS 26 HIG), adopted on purpose
+- Controls and navigation are floating glass islands over the content: tab bar, title capsule, sheet actions, toolbars, menus.
+  They never form full-width bars.
+- Content is never glass. Cards, lists and text sit on solid surfaces beneath the islands. Glass on content turns muddy.
+- One glass recipe for every island: the tab bar's.
+
 ## Never (he has rejected each of these, most of them more than once)
 - Coloured rounded-square icon tiles (iOS Settings style): "always childish". Use monochrome line icons, a 3D object, or type.
 - Muddy blur. A blurred copy of a poster under text turns bright posters into a brown or grey smear. Use a clean dark gradient
