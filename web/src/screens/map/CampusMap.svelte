@@ -59,6 +59,7 @@
   import uniqRooms from '../../assets/map/uniq-rooms.json';
   import { UNITS, toPlan, fromPlan } from './planUnits';
   import { glass, jelly } from '../../ui/glass';
+  import { floorSwipe, railGestures } from './floorSwipe';
   import MapPad, { placeGroups, exitTiles, doorHint, adminNote, type PadCheck } from './MapPad.svelte';
   import DoorOpen from '@lucide/svelte/icons/door-open';
   import RouteUI, { type RouteView } from './RouteUI.svelte';
@@ -293,7 +294,7 @@
     // the first finger of a new touch: any finger still counted is stale (iOS sends no up for one held while the flaw's
     // sheet opened over it, so every later press read as a second finger and never held)
     fingers = e.isPrimary ? 1 : fingers + 1;
-    if (!e.isPrimary) { press = null; swipeEnd(true); map.dragPan.enable(); return; } // a second finger: a pinch, never a hold or a floor
+    if (!e.isPrimary) { press = null; swipe.end(true); map.dragPan.enable(); return; } // a second finger: a pinch, never a hold or a floor
     const at = (press = local(e)), id = e.pointerId;
     if (rt.route || rt.pick) return; // on the way, or an end being tapped: no note held down
     // held: the finger is the stage's from here on, and the click its let-go may bring is swallowed, so neither lands
@@ -305,20 +306,20 @@
     }, 600);
     // zoomed out one finger is ours alone: MapLibre doesn't pan (the plan would only spring back), a sideways move turns
     // the floor; a second finger gives the map back its pinch and pan
-    if (out()) { map.dragPan.disable(); swipeStart(e.clientX, e.clientY); }
+    if (out()) { map.dragPan.disable(); swipe.start(e.clientX, e.clientY); }
   }
   function move(e: PointerEvent) {
     if (!e.isPrimary || !press) return;
     const p = local(e);
     if (Math.hypot(p.x - press.x, p.y - press.y) > 8) clearTimeout(holdT); // it moved: not a hold
-    if (swipeMove(e.clientX, e.clientY)) lastTap = 0;
+    if (swipe.move(e.clientX, e.clientY)) lastTap = 0;
   }
   const eat = (e: Event) => { e.stopPropagation(); e.preventDefault(); };
   function up(e: PointerEvent) {
     clearTimeout(holdT);
     if (held) setTimeout(() => window.removeEventListener('click', eat, true), 350); // no click came: the next one is a real one
     fingers = Math.max(0, fingers - 1);
-    if (e.isPrimary) { press = null; swipeEnd(); map.dragPan.enable(); }
+    if (e.isPrimary) { press = null; swipe.end(); map.dragPan.enable(); }
   }
   /** a tap (MapLibre's click: a finger that didn't move): my own pin shows what I wrote there, a tinted room opens its
    *  card, a second tap within 300 ms of the first and near it zooms in, or back out to the whole floor */
@@ -357,7 +358,6 @@
   // changes on the let-go.
   let knob = $state<HTMLSpanElement>();
   let kp = $state(0), dragging = $state(false);
-  let sw: { x0: number; y0: number; dx: number; on: boolean; hist: [number, number][]; rail: boolean; k0: number } | null = null;
   const idxOf = (n: number) => railFloors.indexOf(n);
   // the knob goes wherever the floor comes from (a tap, a search, a route step, the old plan's narrower rail)
   $effect(() => { const i = idxOf(cur); if (!untrack(() => dragging)) { kp = i; jelly(untrack(() => knob)); } });
@@ -391,57 +391,12 @@
     return () => { held.length = 0; };
   });
   function pick(n: number) { void goTo(n); }
-  function swipeStart(px: number, py: number, rail = false) { sw = { x0: px, y0: py, dx: 0, on: false, hist: [], rail, k0: idxOf(cur) }; }
-  /** a finger moved: true once it's a floor swipe (the caller then neither pans nor taps) */
-  function swipeMove(px: number, py: number): boolean {
-    if (!sw) return false;
-    const dx = px - sw.x0, dy = py - sw.y0;
-    if (!sw.on) {
-      if (dx * dx + dy * dy < 100) return false;
-      // on the map more sideways than up or down is a floor (a natural swipe runs a bit diagonal); up or down, nothing:
-      // zoomed out the plan has nowhere to go. Along the rail only a clear drag
-      if (Math.abs(dx) <= Math.abs(dy) * (sw.rail ? 2 : 1)) { sw = null; return false; }
-      sw.on = true; dragging = true;
-    }
-    sw.dx = dx;
-    const now = performance.now();
-    sw.hist.push([now, dx]);
-    while (sw.hist.length > 2 && now - sw.hist[0][0] > 90) sw.hist.shift();
-    const last = railFloors.length - 1, fb = knob?.offsetWidth || 42;
-    // on the rail the knob stays under the finger; on the map a half screen's swipe is one floor, the other way
-    let p = sw.rail ? sw.k0 + dx / fb : sw.k0 - Math.max(-1, Math.min(1, dx / (W() / 2)));
-    if (p < 0) p = -(1 - 1 / (1 - p * 0.6)); else if (p > last) p = last + (1 - 1 / (1 + (p - last) * 0.6)); // a rubber band at the ends
-    kp = p;
-    return true;
-  }
-  /** the finger let go (or a second came): to the nearest floor, a flick carrying it one further */
-  function swipeEnd(cancel = false) {
-    const z = sw; sw = null;
-    if (!z?.on) return;
-    dragging = false;
-    const h = z.hist, last = railFloors.length - 1;
-    const vx = h.length > 1 ? (h[h.length - 1][1] - h[0][1]) / Math.max(16, h[h.length - 1][0] - h[0][0]) : 0;
-    const fling = Math.abs(vx) > 0.4 ? Math.sign(vx) * (z.rail ? 0.4 : -0.6) : 0;
-    const step = Math.round(kp + fling) - z.k0, far = Math.abs(kp - z.k0) > 0.5 || fling !== 0;
-    const i = cancel ? z.k0 : Math.max(0, Math.min(last, z.rail ? z.k0 + step : far ? z.k0 + Math.sign(kp + fling - z.k0) : z.k0)); // the map: one floor a swipe
-    if (i === z.k0) { if (!cancel && (kp < -0.15 || kp > last + 0.15)) haptic.rigid(); kp = i; jelly(knob); return; }
-    void goTo(railFloors[i]);
-  }
-  // the rail: a drag along it, or a tap on a floor (a drag's let-go isn't a tap)
-  let railSwiped = false;
-  function railDown(e: PointerEvent) { if (rt.route) return; railSwiped = false; swipeStart(e.clientX, e.clientY, true); }
-  function railMove(e: PointerEvent) {
-    if (!swipeMove(e.clientX, e.clientY)) return;
-    // held only once it's a drag: captured from the start, a tap's click would go to the rail, not the floor's button
-    if (!railSwiped) (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    railSwiped = true;
-  }
-  function railUp() { swipeEnd(); }
-  function swipeable(el: HTMLElement) { // listeners in code: the rail stays a plain tablist for the screen reader
-    const on = [['pointerdown', railDown], ['pointermove', railMove], ['pointerup', railUp], ['pointercancel', railUp]] as const;
-    on.forEach(([k, f]) => el.addEventListener(k, f as EventListener));
-    return { destroy: () => on.forEach(([k, f]) => el.removeEventListener(k, f as EventListener)) };
-  }
+  // the gestures themselves: floorSwipe.ts (the rail's listeners too: railGestures)
+  const swipe = floorSwipe({
+    floors: () => railFloors, cur: () => cur, knobWidth: () => knob?.offsetWidth || 42, stageWidth: W,
+    kp: () => kp, setKp: (p) => (kp = p), setDragging: (on) => (dragging = on), goTo: (n) => void goTo(n), settle: () => jelly(knob),
+  });
+  const { swipeable, swiped: railSwiped } = railGestures(swipe, () => !!rt.route);
   /** another map: the same part of the building stays on screen at the same size (it zoomed out) */
   function setVer(v: Ver) {
     if (v === ver) return;
@@ -641,7 +596,7 @@
       <!-- all six always there: the old map's missing basement folds away in step with the knob, so the rail narrows
            instead of jumping (owner, Oct 24 video) -->
       {#each [0, 1, 2, 3, 4, 5] as n (n)}{@const gone = !railFloors.includes(n)}<button aria-pressed={cur === n} class:on={cur === n}
-        class:r={routeFloors.has(n)} class:gone tabindex={gone ? -1 : undefined} aria-hidden={gone || undefined} onclick={() => { if (!railSwiped) pick(n); }}
+        class:r={routeFloors.has(n)} class:gone tabindex={gone ? -1 : undefined} aria-hidden={gone || undefined} onclick={() => { if (!railSwiped()) pick(n); }}
         aria-label={floorName(n)}>{n || t('map.bShort')}</button>{/each}
     </div>
     <!-- a tap turns the map light or dark at once (the menu it opened looked foreign and lagged) -->
