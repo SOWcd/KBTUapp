@@ -258,6 +258,40 @@ CREATE TABLE campus_places (
       updated_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
       updated_at  INTEGER NOT NULL
     ) STRICT;
+CREATE TABLE cert_runs (
+      id          INTEGER PRIMARY KEY,
+      org_id      INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      template_id INTEGER NOT NULL REFERENCES cert_templates(id),
+      fields      TEXT NOT NULL,
+      count       INTEGER NOT NULL,
+      by          INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      at          INTEGER NOT NULL
+    ) STRICT;
+CREATE TABLE cert_templates (
+      id         INTEGER PRIMARY KEY,
+      org_id     INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      name       TEXT NOT NULL,
+      image      BLOB NOT NULL,
+      w          INTEGER NOT NULL,
+      h          INTEGER NOT NULL,
+      fields     TEXT NOT NULL DEFAULT '[]',        -- JSON: [{key, x, y, size, align, color, bold, width}]
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at INTEGER NOT NULL
+    ) STRICT;
+CREATE TABLE certs (
+      id          INTEGER PRIMARY KEY,
+      org_id      INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      run_id      INTEGER NOT NULL REFERENCES cert_runs(id) ON DELETE CASCADE,
+      template_id INTEGER NOT NULL REFERENCES cert_templates(id),
+      code        TEXT NOT NULL UNIQUE,              -- the public /c/<code>
+      number      TEXT NOT NULL,
+      name        TEXT NOT NULL,
+      program     TEXT NOT NULL,
+      date        TEXT NOT NULL,                     -- as the list gave it
+      revoked_at  INTEGER,
+      created_at  INTEGER NOT NULL,
+      UNIQUE (org_id, number)
+    ) STRICT;
 CREATE TABLE chat_asks (
       chat_id INTEGER NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -1809,6 +1843,11 @@ CREATE INDEX outbox_due ON bot_outbox(sent_at, send_after);
 CREATE INDEX outbox_todo ON bot_outbox(send_after, id) WHERE sent_at IS NULL AND error IS NULL;
 CREATE INDEX outbox_u18 ON bot_outbox (ref) WHERE kind = 'u18_leave';
 CREATE UNIQUE INDEX campus_places_dean ON campus_places(school) WHERE kind = 'dean';
+CREATE INDEX cert_runs_by_org ON cert_runs(org_id, at);
+CREATE INDEX cert_templates_by_org ON cert_templates(org_id);
+CREATE INDEX certs_by_org ON certs(org_id, created_at);
+CREATE INDEX certs_by_run ON certs(run_id);
+CREATE INDEX certs_by_template ON certs(template_id);
 CREATE UNIQUE INDEX chat_sync_main ON chat_sync(org_id) WHERE kind = 'main';
 CREATE INDEX chat_sync_todo_user ON chat_sync_todo(user_id);
 CREATE INDEX chat_waits_by_chat ON chat_waits(chat_id);

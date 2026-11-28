@@ -1,5 +1,11 @@
 {
-  "_": "KBTU's Academy of Corporate Education: its programs as the admissions show them (logic/ako.py seed). Russian is copied from each program's page (url, read Nov 27, 2026); Kazakh and English are machine translations until the Academy checks them. first: asked before sending; later: needed for enrolment, may come after; optional: welcome. Document names and how-tos are UI strings (web i18n ako.doc.*).",
+  "_": "KBTU's Academy of Corporate Education: its programs as the admissions show them (logic/ako.py seed). Russian is copied from each program's page (url, read Nov 27, 2026); Kazakh and English are machine translations until the Academy checks them. first: asked before sending; later: needed for enrolment, may come after; optional: welcome. Document names and how-tos are UI strings (web i18n ako.doc.*). certColumns: the header words a certificates list's first row may use, per column (logic/certs.py parse; compared case-blind).",
+  "certColumns": {
+    "name": ["name", "full name", "holder", "фио", "ф.и.о.", "имя", "ф.и.о", "аты-жөні", "аты жөні"],
+    "program": ["program", "programme", "course", "программа", "курс", "бағдарлама"],
+    "date": ["date", "issued", "дата", "дата выдачи", "күні", "берілген күні"],
+    "number": ["number", "no", "no.", "#", "№", "номер", "номер сертификата", "нөмірі", "сертификат нөмірі"]
+  },
   "programs": [
     {
       "key": "mba", "kind": "degree", "interview": true,

@@ -10,6 +10,7 @@ h2==4.4.1           # HTTP/2 for httpx: Apple's push service speaks nothing else
 cryptography==50.0.0  # Apple's identity tokens (RS256, logic/apple.py), the push provider token (ES256, apns.py), the Wallet pass signature (wallet.py)
 pillow==13.0.0
 pypdfium2==5.15.1
+segno==1.6.6        # the verify link's QR on a certificate (logic/certs.py): pure Python, no dependencies
 numpy==2.5.4        # the documents search (kbtu/docs.py): cosine over a few thousand embeddings
 telethon==1.45.0    # the userbot: channel mirror, chats directory (owner yes, Oct 22)
 yt-dlp[default]==2026.10.26  # group video replies, including the bundled YouTube challenge solver

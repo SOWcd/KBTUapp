@@ -17,7 +17,7 @@ FROM python:3.14-slim
 # the container reads as unhealthy and the deploy rolls back. Tesseract reads Kaspi receipts (server/kbtu/receipt.py):
 # Debian's rus and kaz models are the "fast" ones the reading was tested with (Oct 11). ffmpeg compresses event videos
 # (server/kbtu/video.py; Debian's build has x264 and zimg for the HDR tone mapping). age encrypts the off-site backups
-# (server/kbtu/offsite.py)
+# (server/kbtu/offsite.py). DejaVu draws the names on certificates (server/kbtu/logic/certs.py: Cyrillic and Kazakh)
 # Keep apt downloads on the builder and restore Debian's cleanup hooks for the runtime image.
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
     set -e; \
@@ -25,7 +25,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked --mount=type=cache,t
     if [ -f "$docker_clean" ]; then mv "$docker_clean" /tmp/docker-clean; fi; \
     apt-get update; \
     apt-get install -y --no-install-recommends -o APT::Keep-Downloaded-Packages=true \
-        curl tesseract-ocr tesseract-ocr-rus tesseract-ocr-kaz ffmpeg age; \
+        curl tesseract-ocr tesseract-ocr-rus tesseract-ocr-kaz ffmpeg age fonts-dejavu-core; \
     if [ -f /tmp/docker-clean ]; then mv /tmp/docker-clean "$docker_clean"; fi
 WORKDIR /app/server
 # yt-dlp uses Node to resolve YouTube's player challenges.
