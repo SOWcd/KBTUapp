@@ -648,7 +648,7 @@
     -webkit-mask-image: linear-gradient(transparent, rgba(0, 0, 0, 0.7) 28px, black 56px); mask-image: linear-gradient(transparent, rgba(0, 0, 0, 0.7) 28px, black 56px); }
   /* the picture runs 64px past the lens on every side but the top: a blurred layer fades out at its own edges, and
      at the card's foot the sharp cover showed through that fade */
-  .lens img { position: absolute; left: -64px; bottom: -64px; width: calc(100% + 128px); height: calc(var(--hh) + 64px); object-fit: cover;
+  .lens img { position: absolute; left: -64px; bottom: -64px; width: calc(100% + 128px); max-width: none; /* base.css caps every img at its box */ height: calc(var(--hh) + 64px); object-fit: cover;
     filter: blur(32px) saturate(1.7) brightness(0.6); }
   /* over media the tags are white on a clear chip (the accent's blue on a blue cover was 2:1), the place has no underline
      (the whole card opens the event; the pin says it is a place) */
