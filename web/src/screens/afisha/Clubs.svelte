@@ -248,7 +248,8 @@
   .medal { position: absolute; top: 14px; right: 14px; width: 52px; height: 52px; }
   .rim { display: block; padding: 3px; border-radius: var(--r-m); background: rgba(255, 255, 255, 0.85); box-shadow: 0 6px 14px -6px rgba(0, 0, 0, 0.4); }
   .rim :global(.logo) { border-radius: var(--r-s) !important; }
-  .id { position: absolute; inset: 18px 80px auto 18px; display: flex; flex-direction: column; }
+  /* the words keep to the left: the medallion and the lanyard's figure own the right (a long name wraps, never runs under them) */
+  .id { position: absolute; inset: 18px 42% auto 18px; display: flex; flex-direction: column; }
   .id b { font: 700 var(--fs-t3)/1.12 var(--font-display); letter-spacing: -0.025em; text-shadow: var(--tsh, 0 1px 10px rgba(0, 0, 0, 0.28)); }
   .id i { margin-top: 6px; font: 700 var(--fs-micro)/1.3 var(--font-text); font-style: normal; letter-spacing: 0.12em; text-transform: uppercase; color: var(--role, inherit); }
   .id small { display: flex; align-items: center; gap: 6px; margin-top: 3px; font: 500 var(--fs-sub)/1.3 var(--font-text); color: var(--ink2, rgba(255, 255, 255, 0.84)); }
