@@ -60,7 +60,6 @@ Criticism of an effect means improve it, never remove it.
    For a full redo, do not show the old screen, so it is not copied.
 2. Build on tokens (`web/src/ui/tokens.css`). The design ratchet keeps new files at 0 raw values. A piece that ui/ lacks is
    added to ui/ in the same PR. A screen-local piece moves to ui/ once a second screen needs it.
-3. Check on REAL content: real posters (the `real-posters` CI artifact), bright, dark and busy ones, long titles, 320 px, both
-   themes. Drawn fixtures alone hide the worst cases.
+3. Check on REAL content: real posters (bright, dark and busy ones), long titles, 320 px, both themes. Drawn fixtures alone hide the worst cases.
 4. Fable builds. An Opus critic reviews against this file. Fable fixes. The owner sees screenshots and picks. An adversarial
    pre-merge review runs. Merge, and the owner judges on prod. One screen per PR.
