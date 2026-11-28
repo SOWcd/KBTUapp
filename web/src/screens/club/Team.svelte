@@ -92,7 +92,7 @@
   const tagOf = $derived(new Map((setup?.tags ?? []).map((g) => [g.id, g])));
   const onProbation = $derived((list ?? []).filter((x) => x.probation).length);
   const ORDERS: Order<TeamMember>[] = [usual('sort.role'), byName((x) => x.fullName), newest((x) => x.joinedAt)]; // the server's: highest role first
-  const shown = $derived(sorted('team', ORDERS, (list ?? []).filter((x) => (filter == null || (filter === 'probation' ? x.probation : x.tags?.includes(filter))) && (!q.trim() || hit(q, [x.fullName, x.person.nick, x.username]))));
+  const shown = $derived(sorted('team', ORDERS, (list ?? []).filter((x) => (filter == null || (filter === 'probation' ? x.probation : x.tags?.includes(filter))) && (!q.trim() || hit(q, [x.fullName, x.person.nick, x.username])))));
   // one list, highest role first (the server's order); departments are their own chips (grouped, the
   // President would sit last under "no department" and the heads would scatter)
   const depts = $derived((setup?.tags ?? []).filter((g) => g.department));
@@ -243,7 +243,7 @@
     {/if}
 
     {#if list}
-      {#if list.length > 8}<SearchField bind:value={q} placeholder={t('door.search')} />{/if}
+      {#if list.length > 8 || q}<SearchField bind:value={q} placeholder={t('door.search')} />{/if}
         {#if depts.length}
           <div class="chips">
             <Chip selected={filter == null} onclick={() => (filter = null)}>{t('common.all')}<span class="n num">{list.length}</span></Chip>
