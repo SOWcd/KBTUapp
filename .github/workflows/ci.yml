@@ -124,12 +124,11 @@ jobs:
         env:
           QA_PYTHON: python
       # what changed, for the maintainer: each failing snapshot's expected, actual and diff pictures, and the traces
-      - if: always()
+      - if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: e2e-${{ strategy.job-index }}
           path: |
             web/e2e/results
-            web/e2e/snapshots
             web/e2e/report
           retention-days: 14
