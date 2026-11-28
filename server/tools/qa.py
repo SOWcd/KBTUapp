@@ -209,7 +209,7 @@ def clubs(path: str) -> None:
     (Ali's friend, so her face is on their rows). Open Mic stays under the bar, as in the flows, which keep the plain seed."""
     con = db.connect(path)
     now, day = int(time.time()), 86400
-    people = range(200, 250)
+    people = range(5000, 5050)  # clear of --big's 100..2099
     con.executemany("INSERT INTO users (id, tg_id, tg_first_name, tg_last_name, created_at, seen_at) VALUES (?, ?, 'Guest', ?, ?, ?)",
                     [(i, 20000 + i, str(i), now - 40 * day, now) for i in people])
     marks, root = SERVER.parent / "web" / "src" / "assets" / "lanyards", Path(path).resolve().parent / "media"

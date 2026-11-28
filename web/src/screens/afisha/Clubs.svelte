@@ -39,6 +39,7 @@
   import OrgMedal from '../../ui/OrgMedal.svelte';
   import PullSearch from '../../ui/PullSearch.svelte';
   import TelegramMark from '../../ui/TelegramMark.svelte';
+  import { SvelteSet } from 'svelte/reactivity';
 
   let q = $state('');
   const searching = $derived(!!q.trim());
@@ -74,6 +75,13 @@
       cta: { label: t(o.myRequest === 'rejected' ? 'join.notNow' : o.myRequest === 'pending' ? 'join.sent' : 'join.apply'), done: !!o.myRequest, off: o.myRequest === 'rejected', run: () => toggleJoin(o.id) } })),
   ]);
   const SHOWN = 10;
+  // a live lanyard is heavy (layered art, filters): a badge mounts its own only as it nears the shelf's view, then keeps it
+  const near = new SvelteSet<string>();
+  const nearing = (key: string) => (el: HTMLElement) => {
+    const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) { near.add(key); io.disconnect(); } }, { root: el.parentElement, rootMargin: '0px 60%' });
+    io.observe(el);
+    return () => io.disconnect();
+  };
   const ctaOf = $derived(new Map(calls.filter((c) => c.cta).map((c) => [c.org.id, c.cta!])));
 
   // the list and its chips: only the chips that have something behind them
@@ -149,8 +157,8 @@
           {@const look = skinOf(c.org)}
           {@const tpl = look ? clubLook(look) : undefined}
           <!-- the club's lanyard as the Profile's badge and its ticket draw it; lookVars: the template's colours and ink -->
-          <div class={['call', { club: tpl }]} style={look && tpl ? lookVars(look) : undefined} style:background={look ? undefined : coverOf(c.org)}>
-            {#if look}<LanyardBand {look} wide qr />{:else}<i class="lit"></i>{/if}
+          <div class={['call', { club: tpl }]} style={look && tpl ? lookVars(look) : undefined} style:background={look ? undefined : coverOf(c.org)} {@attach nearing(c.key)}>
+            {#if look}{#if near.has(c.key)}<LanyardBand {look} wide qr />{/if}{:else}<i class="lit"></i>{/if}
             <button class="open" onclick={c.open} aria-label={c.org.name}></button>
             <span class="medal">{#if look}<OrgMedal {look} logo={c.org.logo ?? null} />{:else}<span class="rim"><OrgLogo org={c.org} size={46} /></span>{/if}</span>
             <span class="id">
