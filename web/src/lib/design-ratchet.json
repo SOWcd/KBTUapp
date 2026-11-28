@@ -52,6 +52,9 @@
   "weight": 0,
   "legacy": 0
  },
+ "screens/admin/AdminOrg.svelte": {
+  "rawColor": 1
+ },
  "screens/admin/AdminStats.svelte": {
   "font": 0,
   "radius": 0,
@@ -127,8 +130,12 @@
  "screens/club/TeamSetupSheet.svelte": {
   "rawColor": 1
  },
+ "screens/forum/Channel.svelte": {
+  "rawColor": 1
+ },
  "screens/forum/ChannelCompose.svelte": {
-  "backdrop": 2
+  "backdrop": 2,
+  "rawColor": 1
  },
  "screens/games/Spy.svelte": {
   "rawColor": 1

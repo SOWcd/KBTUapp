@@ -26,7 +26,7 @@ export function count(src: string, file = ''): Count {
   const legacy = (src.match(/(?<![\w-])set-(?:row|group|cap|foot)(?![\w-])/g) ?? []).length
     + [...src.matchAll(/class="([^"]*)"/g)].filter((m) => /(?<![\w-])(?:field|switch|seg)(?![\w-])/.test(m[1])).length;
   const backdrop = file.startsWith('ui/') ? 0 : (src.match(/(?<![\w-])(?:-webkit-)?backdrop-filter\s*:|\bstyle:(?:-webkit-)?backdrop-filter(?:\|important)?\s*=/gi) ?? []).length;
-  const rawColor = file.startsWith('ui/') ? 0 : (src.match(/(?<![\w-])(?:rgba|hsla)\(/gi) ?? []).length;
+  const rawColor = file.startsWith('ui/') ? 0 : (src.match(/(?<![\w-])(?:(?:rgba|hsla)\(|(?:rgb|hsl)\([^)]*\/)/gi) ?? []).length;
   return { font, radius, hex, mix, weight, legacy, backdrop, rawColor };
 }
 
@@ -50,6 +50,8 @@ describe('design ratchet', () => {
     expect(count(directives, 'screens/Example.svelte').backdrop).toBe(2);
     expect(count(directives, 'ui/Example.svelte').backdrop).toBe(0);
     expect(count('transition: backdrop-filter 1s; --backdrop-filter: none; color: var(--ink);')).toMatchObject({ backdrop: 0, rawColor: 0 });
+    // the slash syntax is the same see-through colour; an opaque rgb() is not
+    expect(count('background: rgb(0 0 0 / .5); color: hsl(0 0% 0% / 50%); border-color: rgb(0, 0, 0);', 'screens/Example.svelte').rawColor).toBe(2);
   });
 
   it('no file has more design violations than its ceiling', async () => {
