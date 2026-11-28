@@ -37,7 +37,7 @@ async def _telegram(cfg: Config, http: httpx.AsyncClient, m: dict) -> str | None
             **({"reply_markup": {"inline_keyboard": keys}} if keys else {})}
     try:
         r = await _tg(cfg, http, "sendMessage", body)
-    except httpx.HTTPError:
+    except (httpx.HTTPError, ValueError):  # ValueError: a reply that isn't JSON
         return "retry"
     if r.status_code == 200:
         return None
@@ -52,7 +52,8 @@ def _mail(cfg: Config, m: dict) -> EmailMessage:
     msg["From"], msg["To"] = cfg.ako_mail_from, m["to"]
     msg["Subject"] = words[m["kind"]].format(program=m["program"])
     msg["Message-ID"] = make_msgid(domain=cfg.domain)
-    msg.set_content(words["body"].format(program=m["program"], when=texts.when(m["at"], m["lang"]), teams=m["teams"] or "", org=m["org"]))
+    msg.set_content(words["body"].format(program=m["program"], when=texts.when(m["at"], m["lang"]), teams=m["teams"] or "", org=m["org"],
+                                         ics=words["ics"] if m["ics"] else ""))
     if m["ics"]:
         msg.add_attachment(m["ics"].encode(), maintype="text", subtype="calendar", filename="interview.ics", params={"method": "PUBLISH"})
     return msg
@@ -75,12 +76,17 @@ def _smtp(cfg: Config, msg: EmailMessage) -> None:
 
 
 async def _email(cfg: Config, http: httpx.AsyncClient, m: dict) -> str | None:
+    """Only the server unreachable retries (and holds the channel for the round); anything about this one message (an
+    address refused, non-ASCII without SMTPUTF8, a header it can't take) is its own end, so it never blocks the rest."""
     try:
         await anyio.to_thread.run_sync(_smtp, cfg, _mail(cfg, m))
-    except (smtplib.SMTPRecipientsRefused, smtplib.SMTPDataError, smtplib.SMTPSenderRefused, smtplib.SMTPAuthenticationError) as exc:
+    except Exception as exc:  # noqa: BLE001
+        # SMTPException is an OSError: the server's own answers first, then the network's (a timeout, no route)
+        if isinstance(exc, (smtplib.SMTPConnectError, smtplib.SMTPServerDisconnected)) or (
+                isinstance(exc, OSError) and not isinstance(exc, smtplib.SMTPException)):
+            log.info("ako: mail server unreachable (%s), package %s waits", type(exc).__name__, m["app"])
+            return "retry"
         return type(exc).__name__  # the class alone: a refused recipient's error carries the address
-    except (OSError, smtplib.SMTPException):  # the network, a timeout, a server gone mid-way
-        return "retry"
     return None
 
 

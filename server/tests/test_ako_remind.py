@@ -255,6 +255,9 @@ def test_email_only_with_a_sender_and_never_over_its_cap(env, monkeypatch):
     assert len(invite) == 1  # the invite carries the .ics; the day's reminder doesn't
     text = invite[0].get_body(("plain",)).get_content()
     assert TEAMS in text and "Erlan" not in text  # never the applicant's typed name
+    day = next(m for m in _Smtp.sent if m is not invite[0]).get_body(("plain",)).get_content()
+    assert any(w["ics"].strip() in text for w in texts.AKO_MAIL.values())                       # "attached" only with the .ics
+    assert not any(w["ics"].strip() in day for w in texts.AKO_MAIL.values())
     # moving the time sends a new invite, at most INVITES_A_DAY a day
     aid = _aid(con, tok)
     _slots(c, oid, t0, times=("11:00", "11:30", "12:00", "12:30"))
@@ -271,6 +274,44 @@ def test_email_only_with_a_sender_and_never_over_its_cap(env, monkeypatch):
     _tick(mail, con, monkeypatch, at - 23 * 3600 + 3600)
     errors = {r[0] for r in con.execute("SELECT error FROM ako_sends WHERE channel = 'email'")}
     assert errors == {"SMTPRecipientsRefused"}
+
+
+def test_only_an_unreachable_mail_server_retries(env, monkeypatch):
+    """One bad message (non-ASCII without SMTPUTF8, a refused address) ends alone; it never holds every e-mail behind it."""
+    c, cfg, con, oid, t0 = _setup(env, monkeypatch)
+    mail = dataclasses.replace(cfg, ako_mail_from="AKO <exed@kbtu.kz>", smtp_host="smtp.example")
+    m = {"kind": "d1", "lang": "en", "program": "EMBA", "at": t0 + 86400, "teams": TEAMS, "to": "a@mail.kz", "org": "KBTU",
+         "ics": None, "app": 1}
+    for exc, want in ((smtplib.SMTPNotSupportedError("SMTPUTF8"), "SMTPNotSupportedError"),
+                      (smtplib.SMTPServerDisconnected("gone"), "retry"), (TimeoutError(), "retry"),
+                      (ConnectionRefusedError(), "retry"), (smtplib.SMTPResponseException(554, b"no"), "SMTPResponseException")):
+        def boom(cfg_, msg, exc=exc):
+            raise exc
+        monkeypatch.setattr(akosend, "_smtp", boom)
+        assert asyncio.run(akosend._email(mail, None, m)) == want, exc
+
+
+def test_a_time_moved_back_sends_its_invite_again(env, monkeypatch):
+    """10:00 invited, 12:00 invited, back to 10:00: the phone's calendar holds 12:00, so 10:00 goes again."""
+    c, cfg, con, oid, t0 = _setup(env, monkeypatch)
+    monkeypatch.setattr(smtplib, "SMTP", _Smtp)
+    monkeypatch.setattr(_Smtp, "sent", [])
+    monkeypatch.setattr(_Smtp, "refuse", False)
+    monkeypatch.setattr(ako, "BOT", "KBTUappBot")
+    tok, at = _sent(c, oid, t0)
+    c.patch("/api/ako/a", headers={"X-Ako": tok}, json={"email": "erlan@mail.kz"})
+    mail = dataclasses.replace(cfg, ako_mail_from="AKO <exed@kbtu.kz>", smtp_host="smtp.example")
+    aid = _aid(con, tok)
+    first = con.execute("SELECT slot_id FROM ako_apps WHERE id = ?", (aid,)).fetchone()[0]
+    _slots(c, oid, t0, times=("12:00",))
+    other = [s for s in c.get(f"/api/orgs/{oid}/ako", headers=tma(HEAD)).json()["slots"] if s["at"] > at][0]
+    t = t0 + 60
+    for n, slot in enumerate((first, other["id"], first)):
+        if n:
+            assert c.patch(f"/api/orgs/{oid}/ako/apps/{aid}", headers=tma(HEAD), json={"slot": slot}).status_code == 200
+        _tick(mail, con, monkeypatch, t + 60 * n)
+    booked = [m for m in _Smtp.sent if any(p.get_content_type() == "text/calendar" for p in m.iter_attachments())]
+    assert len(booked) == 3
 
 
 def test_the_owner_previews_the_texts(env, monkeypatch, capsys):

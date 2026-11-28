@@ -516,7 +516,8 @@ def due(con, mail: bool) -> list[dict]:
     with tx(con):
         for a in rows(con, """SELECT a.*, s.starts_at, s.teams, c.chat AS tg_chat FROM ako_apps a JOIN ako_slots s ON s.id = a.slot_id
                 LEFT JOIN ako_chats c ON c.app_id = a.id WHERE a.status IN ('sent', 'review') AND s.starts_at > ?
-                  AND ((? AND a.email != '') OR (c.chat IS NOT NULL AND s.starts_at <= ?))""", t, mail, t + D1[0]):
+                  AND ((? AND a.email != '') OR (c.chat IS NOT NULL AND s.starts_at <= ?))
+                ORDER BY s.starts_at""", t, mail, t + D1[0]):
             left = a["starts_at"] - t
             kinds = [k for k, (hi, lo) in (("d1", D1), ("h1", H1)) if lo < left <= hi]
             sends = [(k, "telegram") for k in kinds if a["tg_chat"] is not None]
@@ -524,6 +525,9 @@ def due(con, mail: bool) -> list[dict]:
                 sends += [(k, "email") for k in kinds]
                 if one(con, "SELECT COUNT(*) FROM ako_sends WHERE app_id = ? AND kind = 'booked' AND at > ?", a["id"], t - 86400)[0] < INVITES_A_DAY:
                     sends.append(("booked", "email"))
+                    last = one(con, "SELECT slot_at FROM ako_sends WHERE app_id = ? AND kind = 'booked' ORDER BY at DESC LIMIT 1", a["id"])
+                    if last and last[0] != a["starts_at"]:  # moved back to a time invited before: the calendar holds the later one
+                        con.execute("DELETE FROM ako_sends WHERE app_id = ? AND kind = 'booked' AND slot_at = ?", (a["id"], a["starts_at"]))
             teams, program = _teams(con, a["org_id"], a), None  # the row carries its slot's starts_at and teams
             for kind, channel in sends:
                 if not con.execute("INSERT OR IGNORE INTO ako_sends (app_id, kind, channel, slot_at, at) VALUES (?, ?, ?, ?, ?)",

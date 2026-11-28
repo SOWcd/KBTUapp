@@ -1627,14 +1627,11 @@ AKO_ICS = {
 # name or other typed words. {teams} is a line with the link, or nothing
 AKO_MAIL = {
     "ru": {"booked": "Собеседование: {program}", "d1": "Собеседование через сутки: {program}", "h1": "Собеседование через час: {program}",
-           "body": "Здравствуйте!\n\nВаше онлайн-собеседование в Microsoft Teams: {program}\n{when} (время Алматы)\n{teams}\n"
-                   "Приглашение для календаря — во вложении.\n\n{org}"},
+           "body": "Здравствуйте!\n\nВаше онлайн-собеседование в Microsoft Teams: {program}\n{when} (время Алматы)\n{teams}\n{ics}\n{org}", "ics": "Приглашение для календаря — во вложении.\n"},
     "kk": {"booked": "Сұхбат: {program}", "d1": "Сұхбатқа бір тәулік қалды: {program}", "h1": "Сұхбатқа бір сағат қалды: {program}",
-           "body": "Сәлеметсіз бе!\n\nMicrosoft Teams-тегі онлайн сұхбатыңыз: {program}\n{when} (Алматы уақыты)\n{teams}\n"
-                   "Күнтізбеге шақыру тіркемеде.\n\n{org}"},
+           "body": "Сәлеметсіз бе!\n\nMicrosoft Teams-тегі онлайн сұхбатыңыз: {program}\n{when} (Алматы уақыты)\n{teams}\n{ics}\n{org}", "ics": "Күнтізбеге шақыру тіркемеде.\n"},
     "en": {"booked": "Interview: {program}", "d1": "Your interview is in a day: {program}", "h1": "Your interview is in an hour: {program}",
-           "body": "Hello,\n\nYour online interview in Microsoft Teams: {program}\n{when} (Almaty time)\n{teams}\n"
-                   "The calendar invite is attached.\n\n{org}"},
+           "body": "Hello,\n\nYour online interview in Microsoft Teams: {program}\n{when} (Almaty time)\n{teams}\n{ics}\n{org}", "ics": "The calendar invite is attached.\n"},
 }
 
 COMMANDS = {
