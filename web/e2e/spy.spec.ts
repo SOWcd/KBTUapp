@@ -57,7 +57,7 @@ test('a round of Spy: a room, three players, the role, the vote, the reveal, one
   if (mine.phase === 'guess') await dana.api(`/api/rooms/${mine.id}`, { id: crypto.randomUUID(), v: mine.v, type: 'guess', location: 'library' });
   await expect(sheet.locator('header.end')).toBeVisible();
   await dana.look('spy reveal');
-  await sheet.locator('.foot .btn').click(); // the host: one more round, in the same room
+  await sheet.locator('.foot .btn').first().click(); // the host (Leave beside it): one more round, in the same room
   await expect(sheet.locator('.digits')).toHaveText(code.split('').join(''));
   await expect(sheet.locator('.seats li')).toHaveCount(3);
 });
