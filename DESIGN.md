@@ -50,16 +50,20 @@ screen must look like it was always part of it. Apple-level minimalism. Speed co
 - Rainbow gradient text, aurora backgrounds, glass on every card ("too childish").
 
 ## Motion
-Based on the context menu's animation: spring, short, a few px, transform and opacity only, no animated blur or
-clip-path, smooth on a mid-range Android. One motion language for sheets, menus, cards and tabs.
-Criticism of an effect means improve it, never remove it.
+Based on the context menu's animation (`web/src/ui/Menu.svelte`): it grows out of its anchor with a springy overshoot
+(about 400 ms in, 150 ms out), transform and opacity only, no animated blur or clip-path, smooth on a mid-range Android.
+One motion language for sheets, menus, cards and tabs. Criticism of an effect means improve it, never remove it, unless
+it costs speed (goal 1 wins).
 
 ## How design work is done here
 1. Brief: the goal, the anchors above (with their screenshots), keep every function, and full freedom on layout.
    Never "from scratch" with no anchor (it comes out in another style), and never a vague "improve it".
    For a full redo, do not show the old screen, so it is not copied.
-2. Build on tokens (`web/src/ui/tokens.css`). The design ratchet keeps new files at 0 raw values. A piece that ui/ lacks is
+2. Build on tokens (`web/src/ui/tokens.css`). The design ratchet (`web/src/lib/design.test.ts`) keeps new `.svelte`
+   files at 0 raw font sizes, radii, hex colours and off-scale weights. A piece that ui/ lacks is
    added to ui/ in the same PR. A screen-local piece moves to ui/ once a second screen needs it.
-3. Check on REAL content: real posters (bright, dark and busy ones), long titles, 320 px, both themes. Drawn fixtures alone hide the worst cases.
+3. Check on REAL content: real posters (public event art: bright, dark and busy ones), long titles, 320 px, both themes.
+   Drawn fixtures alone hide the worst cases. Never real people's names, photos or handles in screenshots: use the
+   made-up people `server/tools/qa.py` seeds.
 4. Fable builds. An Opus critic reviews against this file. Fable fixes. The owner sees screenshots and picks. An adversarial
    pre-merge review runs. Merge, and the owner judges on prod. One screen per PR.
