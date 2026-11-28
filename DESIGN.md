@@ -14,6 +14,8 @@ screen must look like it was always part of it. Apple-level minimalism. Speed co
   generated background.
 - **Afisha hero** (`web/src/screens/afisha/HeroArt.svelte`, #493 r4). Words sit on the cover itself, with no inner box.
 - **The top-right context menu.** He likes its animation. It is the base for the app's motion language (see Motion).
+- **The bottom tab bar is the gold standard of Liquid Glass**: he finds it gorgeous, juicy and beautiful. The rounded edges,
+  the highlights and the rim light are the look every glass surface should reach.
 - **Floating glass islands.** The tab bar and the title capsule float over content. Bottom actions are islands too, never full-width bars.
 - **Pure black dark theme** (like iOS). Restrained Liquid Glass, monochrome. The pink/blue rim fringe is liked on glass
   capsules, but not on every chip and tile.
