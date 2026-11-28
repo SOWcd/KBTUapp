@@ -841,12 +841,12 @@
   /* where the engine has it, a tab away is skipped whole (no style, layout or paint while it waits; its scroll and
      layout kept): flipping `visibility` restyled every node of the tab on each switch (5k on a full Afisha: 65 ms) */
   @supports (content-visibility: hidden) { .tab { visibility: visible; content-visibility: hidden; } .tab.drawing { content-visibility: visible; opacity: 0; } }
-  /* a crossfade on the nav lens's spring (tokens: --t-tab), one motion with it: the new tab fades in on top, taking
+  /* a crossfade on the nav lens's spring (tokens: --t-slow, --ease-spring), one motion with it: the new tab fades in on top, taking
      taps from its first frame; the one left (.out, App's `leaving`) stays drawn under it and fades out, then is
      skipped again. Opacity only, no forwards fill: a lingering transform fill would pin the pages (prototype bug),
      and .out rests at 0 by itself until its class goes */
-  .tab.on { visibility: visible; content-visibility: visible; z-index: auto; animation: tabIn var(--t-tab) var(--ease-tab) backwards; }
-  .tab.out { visibility: visible; content-visibility: visible; opacity: 0; animation: tabOut var(--t-tab) var(--ease-tab); }
+  .tab.on { visibility: visible; content-visibility: visible; z-index: auto; animation: tabIn var(--t-slow) var(--ease-spring) backwards; }
+  .tab.out { visibility: visible; content-visibility: visible; opacity: 0; animation: tabOut var(--t-slow) var(--ease-spring); }
   .view.off { display: none; }
   @keyframes tabIn { from { opacity: 0; } }
   @keyframes tabOut { from { opacity: 1; } }

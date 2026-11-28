@@ -1,16 +1,7 @@
-<script module lang="ts">
-  // the rise's timing from the design tokens, read once for the app: a computed style read at every sheet's mount
-  // restyled the document inside the tap that opened it
-  let read: { rise: number; spring: string } | null = null;
-  function tokens() {
-    if (read) return read;
-    const root = getComputedStyle(document.documentElement), slow = root.getPropertyValue('--t-slow').trim();
-    return (read = { rise: (parseFloat(slow) || 0.38) * (slow.endsWith('ms') ? 1 : 1000), spring: root.getPropertyValue('--ease-spring').trim() || 'ease-out' });
-  }
-</script>
-
 <script lang="ts">
-  // Bottom sheet (liquid glass without the light spot, floats above everything). Closes by Telegram's Back button, a tap on the
+  // Bottom sheet: a solid surface (--sheet) over a scrim, the same on every platform; the glass is in the islands on it,
+  // never the sheet itself (a blurred, dimmed page read as grey mud and cost a full-screen backdrop on every open).
+  // Its footer is no bar: the actions float over the body, which scrolls under them. Closes by Telegram's Back button, a tap on the
   // scrim, or a pull down — from the grip, or from the content when it is scrolled to the top.
   // The drag writes transform directly (no reactive state per frame); exit runs, then the overlay
   // is removed from the stack.
@@ -19,8 +10,8 @@
   import { onMount, untrack } from 'svelte';
   import { keyboard, KB_MS, kbEase, riseMs, roomAbove } from '../lib/state/keyboard.svelte';
   import { removeOverlay, close, hideChrome, overlays, type Overlay } from '../lib/state/ui.svelte';
-  import { haptic, onAndroid } from '../lib/tg';
-  import { glass } from './glass';
+  import { haptic } from '../lib/tg';
+  import { motion as tokens } from './motion';
   import { unsent } from './guard';
 
   // heading: the sheet's title in its own header row, at the top, wrapping, never cut (the design system: 50 of 56 Russian
@@ -35,19 +26,21 @@
   // pull closes as a pull does, down from under the finger
   // Sizes by one rule: WORK (many steps, minutes: admin, registry, event management, forms) is `full`,
   // the whole screen under the capsule, closed by Back only (a pull must not drop work); LOOKING at one thing is `tall`,
-  // up to the capsule; ONE DECISION is neither: as tall as its content.
-  type Props = { overlay: Overlay; title?: string; heading?: string; actions?: Snippet; icon?: Component<any>; tint?: string | null; tall?: boolean; full?: boolean; see?: boolean; shut?: boolean;
+  // up to the capsule; ONE DECISION is neither: as tall as its content. A sheet whose content arrives after it opens is
+  // `tall` too: its height then never changes under the eye.
+  // tint: once a wash of the event's colour over the sheet's top; a sheet is never tinted now (DESIGN.md), the prop is
+  // accepted for its callers. float: every footer floats now; accepted likewise.
+  type Props = { overlay: Overlay; title?: string; heading?: string; actions?: Snippet; icon?: Component<any>; tint?: string | null; tall?: boolean; full?: boolean; see?: boolean; shut?: boolean; float?: boolean;
     children: Snippet; footer?: Snippet; opener?: HTMLElement | null; hold?: () => boolean; onhold?: () => void };
-  let { overlay, title = '', heading, actions, icon, tint = null, tall = false, full = false, see = false, shut = false, children, footer, opener, hold, onhold }: Props = $props();
+  let { overlay, title = '', heading, actions, icon, tall = false, full = false, see = false, shut = false, children, footer, opener, hold, onhold }: Props = $props();
   const iris = takeIris(); // opened out of a round button (lib/state/sheets irisFrom) instead of the rise
   $effect(() => { overlay.title = heading ?? title; overlay.icon = icon; overlay.mark = heading != null; });
-  // opened over a tinted page (the event editor) without a tint of its own: the page's colour, not plain navy
-  const ground = $derived(tint ? null : ([...overlays].reverse().find((o) => o.id < overlay.id && o.tint)?.tint ?? null));
 
   let panel: HTMLDivElement;
   let scrim: HTMLDivElement;
   let body: HTMLDivElement;
   let foot = $state<HTMLDivElement>();
+  let footH = $state(0); // the floating footer's height: the body runs under it by that much
   let room: HTMLDivElement;
   let gone = false;
   const born = performance.now();
@@ -61,7 +54,7 @@
   // property (translate, added on), so the rise runs on untouched; the rise in pixels: a percentage of the height
   // would jump with it.
   let lift: Animation | null = null, height = 0;
-  const motion = () => ({ duration: matchMedia('(prefers-reduced-motion: reduce)').matches ? 1 : tokens().rise, easing: tokens().spring });
+  const motion = () => ({ duration: matchMedia('(prefers-reduced-motion: reduce)').matches ? 1 : tokens().slow, easing: tokens().easeSpring });
   // the first call comes after the browser's own layout and before the first paint: the rise starts there, with the
   // height already known (reading it at mount forced a layout of the whole sheet a step early)
   function resized() {
@@ -155,21 +148,21 @@
     }
     const h = panel.getBoundingClientRect().height;
     const a = panel.animate([{ transform: start }, { transform: `translateY(${h + 40}px)` }],
-      { duration: 260, easing: 'cubic-bezier(.4,0,1,1)', fill: 'forwards' });
-    scrim.animate([{ opacity: dim }, { opacity: 0 }], { duration: 260, easing: 'ease-in', fill: 'forwards' });
+      { duration: tokens().base, easing: tokens().easeIn, fill: 'forwards' });
+    scrim.animate([{ opacity: dim }, { opacity: 0 }], { duration: tokens().base, easing: 'ease-in', fill: 'forwards' });
     a.onfinish = () => removeOverlay(overlay.id);
   }
 
   let chrome = () => {}; // gives the app's bars back (hideChrome)
+  // back to rest on the sheet's own spring (a pull let go, a close turned back)
+  function home() { panel.style.transition = `transform ${tokens().slow}ms ${tokens().easeSpring}`; panel.style.transform = 'translate3d(0,0,0)'; currentY = 0; }
   const guard = unsent(() => overlay);
 
   $effect(() => {
     if (!overlay.closing) return;
     if (hold ? hold() : guard.typed()) {
       overlay.closing = false;
-      panel.style.transition = 'transform 320ms cubic-bezier(.32,.72,0,1)';
-      panel.style.transform = 'translate3d(0,0,0)';
-      currentY = 0;
+      home();
       (hold ? onhold : guard.ask)?.();
       return;
     }
@@ -213,9 +206,7 @@
     stop();
     if (!decided) return;
     if (currentY > 120 || v > 0.6) { haptic.soft(); close(overlay.id, true); return; }
-    panel.style.transition = 'transform 320ms cubic-bezier(.32,.72,0,1)';
-    panel.style.transform = 'translate3d(0,0,0)';
-    currentY = 0;
+    home();
   }
 
   // keyboard and screen readers: focus goes into the sheet as it opens (unless a field in it took it) and back to what
@@ -240,8 +231,7 @@
 
 <!-- (the second tap of a double tap on what opened it lands on the new scrim: not a close) -->
 <div class="scrim" class:clear={see} bind:this={scrim} onclick={(e) => { if (e.timeStamp - born > 350) close(overlay.id, true); }} role="presentation"></div>
-<div class="sheet glass glass-sheet" use:glass class:tall class:full class:see class:hasfoot={!!footer} class:flat={onAndroid} class:under class:ground bind:this={panel} role="dialog" aria-modal="true" aria-label={title || undefined} tabindex="-1" style={tint ? `--tint:${tint}` : ground ? `--ground:${ground}` : ''}>
-  {#if tint}<div class="tint" aria-hidden="true"></div>{/if}
+<div class="sheet" class:tall class:full class:see class:hasfoot={!!footer} class:under bind:this={panel} role="dialog" aria-modal="true" aria-label={title || undefined} tabindex="-1" style:--foot-h="{footH}px">
   {#if !full}<div class="grip" aria-hidden="true"></div>{/if}
   <!-- the scroll edge: what scrolls up fades out under the top (the grip, the capsule) instead of running into it -->
   <!-- (past the keyboard's room: the assistant's greeting lifted over the keyboard is not "scrolled under the top") -->
@@ -250,7 +240,7 @@
     {@render children()}
     <div class="kbroom" bind:this={room} aria-hidden="true"></div>
   </div>
-  {#if footer}<div class="foot" bind:this={foot}>{@render footer()}</div>{/if}
+  {#if footer}<div class="foot" bind:this={foot} bind:offsetHeight={footH}>{@render footer()}</div>{/if}
 </div>
 
 <style>
@@ -261,48 +251,46 @@
     max-width: 560px; margin: 0 auto; max-height: calc(100% - max(var(--top), 48px) - 10px);
     display: flex; flex-direction: column; overflow: hidden; overflow: clip; /* clip: the browser's reveal of a focused field must not scroll the panel */
     border-radius: var(--r-xl) var(--r-xl) 0 0;
+    /* solid: the top edge catches the light, and its own colour runs on 80 px below the bottom edge (off screen at
+       rest), so a sheet lifted for a moment (shorter content gliding to its new height, the keyboard's ride) never
+       shows the page under its foot */
+    background: var(--sheet);
+    box-shadow: inset 0 1px 0 var(--line-2), 0 80px 0 var(--sheet), var(--elev-4);
     will-change: transform;
   }
   .under { --sheet-loop: paused; }
   .under, .under :global(*) { --gx: 0 !important; --gy: 0 !important; }
-  /* Android (the sheet's blur dropped tiles frame by frame, bands and whole cards blinked blank as a
-     person's card opened over the member list): the sheet stays solid there, as under power saving. ponytail: no glass on
-     Android sheets; a one-off blurred snapshot behind them is the upgrade */
-  .flat { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; background-color: var(--glass-solid); will-change: auto; }
   .tall { height: calc(100% - max(var(--top), 48px) - 10px); }
   .sheet:focus { outline: none; }
-  .full { top: 0; max-height: none; max-width: none; border-radius: 0; background: var(--glow), var(--bg); -webkit-backdrop-filter: none; backdrop-filter: none; }
-  .full::before, .full::after { display: none; }
+  .full { top: 0; max-height: none; max-width: none; border-radius: 0; background: var(--glow), var(--bg); box-shadow: none; }
   .full .body { padding-top: var(--page-top); }
   .scrim.clear { background: transparent; }
   .see { max-height: 56%; }
-  .tint {
-    position: absolute; inset: 0 0 auto; height: 320px; pointer-events: none;
-    background: linear-gradient(180deg, var(--tint), transparent);
-    opacity: 0.5;
-  }
-  /* the tinted page's own colour (its tint under the ground's veil), so the sheet reads as part of it */
-  .ground { background: linear-gradient(var(--tint-veil), var(--tint-veil)), var(--ground); --surface-solid: transparent; }
-  .grip { position: relative; flex: none; width: 38px; height: 5px; border-radius: 3px; background: var(--line-2); margin: 8px auto 4px; }
-  .body { position: relative; flex: 1; --pb: calc(var(--s-6) + var(--safe-bottom)); padding: 6px var(--gutter) var(--pb); scroll-padding-bottom: var(--kb-room, 0px); }
+  .grip { position: relative; flex: none; width: 38px; height: 5px; border-radius: var(--r-full); background: var(--line-2); margin: 8px auto 4px; }
+  .body { position: relative; flex: 1; --pb: calc(var(--s-6) + var(--safe-bottom)); padding: 6px var(--gutter) var(--pb); scroll-padding-bottom: calc(var(--kb-room, 0px) + var(--foot-h, 0px)); }
   /* (scroll-padding: a scrollIntoView to the end, the newest message, stops above the raised footer) */
   /* the keyboard's room to scroll: no height in the flow (a short sheet keeps its size), its box reaching that much past
      the end, the padding included, so the scroll goes exactly --kb-room further */
   .kbroom { height: calc(var(--kb-room, 0px) + var(--pb)); margin-bottom: calc(-1 * (var(--kb-room, 0px) + var(--pb))); pointer-events: none; }
-  .foot {
-    position: relative; flex: none; padding: var(--s-3) var(--gutter) calc(var(--s-3) + var(--safe-bottom));
-    border-top: 1px solid var(--line);
-  }
-  /* a footer with nothing in it (its {#if} false: a club I'm in) is no bar at all: never an empty strip over the bottom */
+  /* the footer is islands, not a bar (DESIGN.md): no strip, no border. It keeps its place in the flow, so the sheet is as
+     tall as before, and the body runs on under it by its height (the margin and the padding cancel: nothing moves
+     when the height is first measured); what scrolls there dissolves into the sheet's own colour, a soft edge with
+     no blur. Taps between the islands reach the content. */
+  .foot { position: relative; z-index: 1; flex: none; padding: var(--s-3) var(--gutter) calc(var(--s-3) + var(--safe-bottom)); pointer-events: none; }
+  .foot > :global(*) { pointer-events: auto; }
+  .foot::before { content: ''; position: absolute; inset: calc(var(--s-5) * -1) 0 0; z-index: -1; pointer-events: none;
+    background: linear-gradient(transparent, var(--sheet) 55%); }
+  .full .foot::before { background: linear-gradient(transparent, var(--bg) 55%); }
+  /* a footer with nothing in it (its {#if} false: a club I'm in) is nothing at all: never an empty band over the bottom */
   .foot:not(:has(*)) { display: none; }
-  .hasfoot .body { --pb: var(--s-4); }
-  /* Keep the moving scroll body free of an extra masked layer on Android. */
-  .sheet:not(.flat) .scrolled { -webkit-mask-image: linear-gradient(transparent, black 18px); mask-image: linear-gradient(transparent, black 18px); }
-  .full:not(.flat) .scrolled { -webkit-mask-image: linear-gradient(transparent var(--edge-from), black var(--edge-to));
+  .hasfoot .body { --pb: calc(var(--s-4) + var(--foot-h, 0px)); margin-bottom: calc(var(--foot-h, 0px) * -1); }
+  /* the scroll edge under the top: a mask on the body (the sheet is solid now, so on Android too) */
+  .scrolled { -webkit-mask-image: linear-gradient(transparent, black 18px); mask-image: linear-gradient(transparent, black 18px); }
+  .full .scrolled { -webkit-mask-image: linear-gradient(transparent var(--edge-from), black var(--edge-to));
     mask-image: linear-gradient(transparent var(--edge-from), black var(--edge-to)); }
   /* the heading row: the title wraps (a long word at its soft hyphen or the edge), the actions keep their place */
   .hd { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s-3); margin: var(--s-1) 2px var(--s-4); }
-  .hdt { min-width: 0; padding-top: 8px; font: 700 var(--fs-sec)/1.18 var(--font-display); letter-spacing: -0.018em; overflow-wrap: break-word; }
+  .hdt { min-width: 0; padding-top: 8px; font: var(--type-section); letter-spacing: var(--track-section); overflow-wrap: break-word; }
   .hda { flex: none; display: inline-flex; gap: var(--s-2); }
   @keyframes fade { from { opacity: 0; } }
 </style>

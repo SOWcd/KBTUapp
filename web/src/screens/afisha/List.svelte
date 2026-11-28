@@ -660,7 +660,7 @@
   .foot:not(:has(.acts, .hsub *)) { display: none; }
   .acts { position: relative; z-index: 2; flex: none; display: flex; gap: 8px; max-width: 60%; margin-left: auto; pointer-events: auto; }
   .acts :global(.btn) { min-width: 0; }
-  .acts :global(.btn.round)::before { inset: -4px; } /* 36 seen, 44 to the finger on every side; 8px apart, so two meet and never overlap */
+  .acts :global(.btn.round > :nth-child(2))::after { inset: -4px; } /* 36 seen, 44 to the finger on every side; 8px apart, so two meet and never overlap */
   /* contain: the words take the width that is left and never ask for more. Without it the one-line meta's full width
      (nowrap) is the card's min-content, and a flex card grows to it: the root of the card past the right edge (PRs 324, 328) */
   .hero-tx { flex: none; display: flex; flex-direction: column; gap: 3px; min-width: 0; contain: inline-size; text-shadow: 0 1px 8px rgba(0, 0, 0, 0.28); }

@@ -18,8 +18,8 @@
 {/if}
 
 <style>
-  .card { position: relative; padding: var(--card-pad, var(--s-4)); border-radius: var(--r-l); background: var(--surface); box-shadow: var(--card-rim, var(--shadow-card)); text-align: left; }
-  .tap { cursor: pointer; transition: transform 450ms var(--ease-bounce); }
-  .tap:active:not(:has(button:active)) { transform: scale(0.98); transition-duration: 80ms; }
+  .card { position: relative; padding: var(--card-pad, var(--s-4)); border-radius: var(--r-l); background: var(--surface); box-shadow: var(--elev-1); text-align: left; }
+  .tap { cursor: pointer; transition: transform var(--t-spring) var(--ease-bounce); }
+  .tap:active:not(:has(button:active)) { transform: scale(0.98); transition-duration: var(--t-press); }
   .tap:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 </style>
