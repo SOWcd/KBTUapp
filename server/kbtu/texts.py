@@ -1646,15 +1646,15 @@ AKO_MAIL = {
 
 # the public page of a certificate an org issued (logic/certs.py page, /c/<code>)
 CERT_PAGE = {
-    "ru": {"title": "Проверка сертификата", "valid": "✓ Сертификат действителен", "revoked": "✕ Сертификат отозван",
+    "ru": {"title": "Проверка сертификата", "valid": "Сертификат действителен", "revoked": "Сертификат отозван",
            "none": "Сертификат не найден", "noneLine": "Проверьте ссылку или код на сертификате.",
-           "name": "Владелец", "program": "Программа", "date": "Дата", "number": "Номер"},
-    "kk": {"title": "Сертификатты тексеру", "valid": "✓ Сертификат жарамды", "revoked": "✕ Сертификат кері қайтарылды",
+           "name": "Владелец", "program": "Программа", "date": "Дата", "number": "Номер", "by": "Выдан"},
+    "kk": {"title": "Сертификатты тексеру", "valid": "Сертификат жарамды", "revoked": "Сертификат кері қайтарылды",
            "none": "Сертификат табылмады", "noneLine": "Сертификаттағы сілтемені немесе кодты тексеріңіз.",
-           "name": "Иесі", "program": "Бағдарлама", "date": "Күні", "number": "Нөмірі"},
-    "en": {"title": "Certificate check", "valid": "✓ The certificate is valid", "revoked": "✕ The certificate was revoked",
+           "name": "Иесі", "program": "Бағдарлама", "date": "Күні", "number": "Нөмірі", "by": "Берген"},
+    "en": {"title": "Certificate check", "valid": "The certificate is valid", "revoked": "The certificate was revoked",
            "none": "No such certificate", "noneLine": "Check the link or the code on the certificate.",
-           "name": "Holder", "program": "Program", "date": "Date", "number": "Number"},
+           "name": "Holder", "program": "Program", "date": "Date", "number": "Number", "by": "Issued by"},
 }
 
 COMMANDS = {

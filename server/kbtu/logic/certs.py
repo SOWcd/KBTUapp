@@ -506,26 +506,42 @@ def page(con, code: str, lang: str) -> tuple[int, str]:
     c = one(con, "SELECT * FROM certs WHERE code = ?", code.upper()) if _CODE.fullmatch(code.upper()) else None
     t, e = texts.CERT_PAGE[lang], html.escape
     if not c:
-        body = f'<h1>{e(t["none"])}</h1><p>{e(t["noneLine"])}</p>'
+        body = f'<div class="head">{_ICON % _MARK["none"]}<h1>{e(t["none"])}</h1><p class="line">{e(t["noneLine"])}</p></div>'
     elif c["revoked_at"] is not None:
-        body = f'<p class="bad">{e(t["revoked"])}</p><dl><dt>{e(t["number"])}</dt><dd>{e(c["number"])}</dd></dl>'
+        body = (f'<div class="head bad">{_ICON % _MARK["bad"]}<h1>{e(t["revoked"])}</h1></div>'
+                f'<dl><div><dt>{e(t["number"])}</dt><dd>{e(c["number"])}</dd></div></dl>')
     else:
         org = ako._org(con, c["org_id"])["name"]
-        facts = "".join(f"<dt>{e(t[k])}</dt><dd>{e(c[k])}</dd>" for k in ("program", "date", "number"))
-        body = (f'<p class="ok">{e(t["valid"])}</p><h1>{e(c["name"])}</h1><dl>{facts}</dl>'
-                f'<p class="by">{e(org.get(lang) or org["ru"])}</p>')
+        facts = "".join(f"<div><dt>{e(t[k])}</dt><dd>{e(v)}</dd></div>" for k, v in (
+            *((k, c[k]) for k in ("program", "date", "number")), ("by", org.get(lang) or org["ru"])))
+        body = (f'<div class="head ok">{_ICON % _MARK["ok"]}<p class="st">{e(t["valid"])}</p>'
+                f'<p class="cap">{e(t["name"])}</p><h1>{e(c["name"])}</h1></div><dl>{facts}</dl>')
     return (200 if c else 404), _HTML.replace("__LANG__", lang).replace("__TITLE__", e(t["title"])).replace("__BODY__", body)
 
 
-# ponytail: a plain page in the forms page's colours (logic/forms.py); the designer's brief is .claude/handoff/ako-certs.md
-_CSS = """:root{color-scheme:light dark;--bg:#F2F2F7;--card:#FFF;--text:#0A0A0C;--t2:rgba(60,60,67,.86);--ok:#1F8A4C;--bad:#BA342E}
-@media(prefers-color-scheme:dark){:root{--bg:#000;--card:#131314;--text:#FFF;--t2:rgba(235,235,245,.74);--ok:#5FD08A;--bad:#FF8A80}}
-body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 -apple-system,system-ui,'Segoe UI',Roboto,sans-serif}
-main{max-width:560px;margin:0 auto;padding:32px 16px}section{padding:24px;border-radius:24px;background:var(--card)}
-h1{margin:8px 0 16px;font-size:26px;line-height:1.2}.ok{color:var(--ok);font-weight:700}.bad{color:var(--bad);font-weight:700}
-dl{margin:0}dt{color:var(--t2);font-size:13px}dd{margin:0 0 12px}.by{color:var(--t2);margin:0}"""
+# The app's look without its bundle: the grouped ground, one solid 24 px card, hairline rows, a monochrome line seal
+# (tokens.css's colours by hand: this page loads nothing). No style attributes: the CSP allows this one sheet by hash.
+_ICON = ('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" '
+         'aria-hidden="true"><path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 '
+         '4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/><path d="%s"/></svg>')
+_MARK = {"ok": "m9 12 2 2 4-4", "bad": "m15 9-6 6m0-6 6 6", "none": "M9.1 9a3 3 0 0 1 5.8 1c0 2-2.9 2.6-2.9 3.6M12 17h.01"}
+_CSS = """:root{color-scheme:light dark;--bg:#F2F2F7;--card:#FFF;--rim:transparent;--sep:rgba(60,60,67,.14);--text:#0A0A0C;--t2:rgba(60,60,67,.86);--ok:#1F8A4C;--bad:#BA342E}
+@media(prefers-color-scheme:dark){:root{--bg:#000;--card:#131314;--rim:rgba(255,255,255,.08);--sep:rgba(255,255,255,.1);--text:#FFF;--t2:rgba(235,235,245,.74);--ok:#5FD08A;--bad:#FF8A80}}
+*{box-sizing:border-box}html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.4 -apple-system,system-ui,'Segoe UI',Roboto,sans-serif}
+main{max-width:480px;margin:0 auto;padding:max(24px,9vh) 16px 32px}
+.top{margin:0 0 16px;text-align:center;color:var(--t2);font-size:13px;font-weight:600}
+section{padding:28px 20px;border:1px solid var(--rim);border-radius:24px;background:var(--card)}
+.head{text-align:center}svg{display:block;width:44px;height:44px;margin:0 auto 12px;color:var(--t2)}
+h1{margin:0;font-size:22px;line-height:1.2;font-weight:700;letter-spacing:-.01em;overflow-wrap:anywhere}p{margin:0}
+.ok svg,.ok .st{color:var(--ok)}.bad svg,.bad h1{color:var(--bad)}.st{font-weight:600}
+.cap{margin-top:20px;color:var(--t2);font-size:13px}.ok h1{margin-top:2px;font-size:clamp(22px,7vw,28px);text-wrap:balance;line-height:1.15;letter-spacing:-.02em}
+.line{margin-top:8px;color:var(--t2)}dl{margin:24px 0 -13px}dl div{display:flex;justify-content:space-between;gap:16px;padding:13px 0;border-top:1px solid var(--sep)}
+dt{flex:none;color:var(--t2)}dd{margin:0;text-align:right;font-weight:500;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}"""
 CSP = (f"default-src 'none'; style-src 'sha256-{base64.b64encode(hashlib.sha256(_CSS.encode()).digest()).decode()}'; "
        "base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
 _HTML = ('<!doctype html><html lang="__LANG__"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
+         '<meta name="theme-color" media="(prefers-color-scheme: light)" content="#F2F2F7">'
+         '<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#000000">'
          f'<meta name="robots" content="noindex"><title>__TITLE__</title><style>{_CSS}</style></head>'
-         '<body><main><section>__BODY__</section></main></body></html>')
+         '<body><main><p class="top">__TITLE__</p><section>__BODY__</section></main></body></html>')
