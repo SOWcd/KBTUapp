@@ -30,6 +30,14 @@ const LAT: Record<string, string> = {
   '\u00e7': 'ch', '\u0107': 'ch', '\u010d': 'ch', '\u017e': 'zh', j: 'zh', q: 'k',
 };
 const latinChars = new RegExp(`[${Object.keys(LAT).join('')}]`, 'g');
+// LAT turned around for sorting names: a Latin letter becomes its Cyrillic one (m, i, q to the Cyrillic em, i, ka), so "Misgarli"
+// sorts among the Cyrillic M names instead of before all Cyrillic ones.
+// ponytail: single letters only; c, w, x, j stay Latin (no one-letter Cyrillic in LAT), add them there if lists ask
+const CYR: Record<string, string> = {};
+for (const [k, v] of Object.entries(LAT)) if (k >= '\u0400' && v.length === 1) CYR[v] ??= k;
+for (const [k, v] of Object.entries(LAT)) if (k < '\u0400' && CYR[v]) CYR[k] ??= CYR[v];
+/** A name's sort key: lower case, Latin letters as Cyrillic. */
+export const cyrKey = (s: string) => lower(s).replace(/./gu, (c) => CYR[c] ?? c);
 const aliases: Record<string, string> = { shch: 'sh', kh: 'h', gh: 'g', ng: 'n', yu: 'iu', ye: 'e', y: 'i' };
 const undouble = (s: string) => s.replace(/(\p{L})\1+/gu, '$1');
 const skeleton = (s: string) => undouble(undouble(s).replace(latinChars, (c) => LAT[c])
