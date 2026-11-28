@@ -63,7 +63,7 @@ jobs:
       - if: needs.changes.outputs.server == 'true'
         uses: awalsh128/cache-apt-pkgs-action@v1.6.3
         with:
-          packages: ffmpeg tesseract-ocr tesseract-ocr-rus tesseract-ocr-kaz
+          packages: ffmpeg tesseract-ocr tesseract-ocr-rus tesseract-ocr-kaz fonts-dejavu-core
       - if: needs.changes.outputs.server == 'true'
         run: pip install -r server/requirements.txt pytest==9.1.1 pytest-xdist==3.8.0
       - if: needs.changes.outputs.server == 'true'
