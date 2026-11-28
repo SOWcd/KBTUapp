@@ -505,10 +505,6 @@ def test_app_team(env):
     assert ban(A, "O", True, "env admin test").status_code == 200
     assert c.get("/api/me", headers=O).status_code == 403 and logic.one(con, "SELECT role FROM users WHERE id = ?", ids["O"])["role"] == "user"
     assert ban(A, "O", False).status_code == 200 and c.get("/api/me", headers=O).json()["role"] == "admin"   # back at the next sign-in
-    # migration 61 keeps the owner's admin role, takes the rest
-    con.execute("UPDATE users SET role = 'admin' WHERE id = ?", (ids["X"],))
-    con.executescript(dict(db.MIGRATIONS)[61])
-    assert [r["role"] for r in con.execute("SELECT role FROM users WHERE id IN (?, ?, ?) ORDER BY id", (ids["O"], ids["A"], ids["X"]))] == ["user", "admin", "user"]
 
 
 def test_profile_privacy(env, monkeypatch):

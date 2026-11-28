@@ -33,7 +33,7 @@ screen per PR, never slower than before, checked on a phone in both themes.
 | --- | --- |
 | API routes | `server/kbtu/app.py`; find one without reading it: `python3 server/tools/routes.py <text>` prints `METHOD path  app.py:line  handler → the rule calls` (no venv needed) |
 | Rules by area | `server/kbtu/logic/*.py` (`core` shared helpers; `seats` sign-up and tickets; `organizing` Studio, the door; `fchannel` the forum channel's posts; `tgcomments` its comments; `forum` find-people; `account` me, settings, deleting an account; `moderation` reports; `daily` the weekly DMP memo and `stats_day` (the nightly retention sweep: a new cleanup goes there; the scheduler is `chores.py::_chores`); `clubs` clubs and join requests (`join_requests`; not `club_applications` = a new club, nor `casting` = recruitment rounds); `stats` anonymous usage counters; `credits` the people of the app, its own consent; `helpus` to the creator from the app: an anonymous line (no author kept, by design) and a signed offer to help) |
-| Schema | read `server/kbtu/schema.current.sql` (generated: today's tables); change it only by appending to `MIGRATIONS` in `server/kbtu/migrations.py` (read that file with `tail`), then run `server/tools/schema_dump.py` |
+| Schema | read `server/kbtu/schema.current.sql` (generated: today's tables); append changes to `MIGRATIONS` in `server/kbtu/migrations.py`, starting at `BASE + 1`, then run `server/tools/schema_dump.py` |
 | Telegram bot | `server/kbtu/bot.py` (polling, the ears, the Telegram call `_tg`), `outbox.py` (the postman: `bot_outbox` rows into messages), `bot_dm.py` (private chats), `bot_groups.py` (group chats, `/all`, video links), `chores.py` (the postman's chores: backup, retention sweep, chat cards, userpics) |
 | Bot texts | `server/kbtu/texts.py` (ru, kk, en, the same placeholders in each) |
 | Privacy policy, terms | `server/kbtu/i18n/legal/*.html` (Russian binding) |
@@ -56,7 +56,7 @@ One line per top-level module (`logic/` is in the table above). Each module's do
 | `app.py` | the HTTP routes, the app's setup and error handlers; no rules of its own |
 | `config.py` | settings from the environment |
 | `db.py` | SQLite pool, `tx` (BEGIN IMMEDIATE), `init` running the migrations |
-| `migrations.py` | `MIGRATIONS`, append only (read with `tail`); `schema.sql` is the base, `schema.current.sql` today's tables |
+| `migrations.py` | `BASE` is the version of the frozen `schema.sql`; `MIGRATIONS` holds the steps after it |
 | `auth.py` | who is calling: Telegram initData and Login Widget checks (not `msauth`, not `logic/web_auth`) |
 | `msauth.py` | signing in with the KBTU Microsoft account (PKCE) |
 | `admin.py` | the owner's CLI (`python -m kbtu.admin ...`), not the in-app Admin sheet's API |

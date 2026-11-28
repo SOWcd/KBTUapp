@@ -514,32 +514,14 @@ def test_cli(env, capsys, monkeypatch):
     assert con.execute("SELECT COUNT(*) FROM credits").fetchone()[0] == 0
 
 
-
-def test_ai_tag_migration(tmp_path, monkeypatch):
-    """An existing line is untagged after the upgrade; its text and release date survive."""
-    path = str(tmp_path / "credits.db")
-    with monkeypatch.context() as m:
-        m.setattr(db, "MIGRATIONS", [step for step in db.MIGRATIONS if step[0] < 251])
-        db.init(path)
-    con = db.connect(path)
-    con.execute("INSERT INTO credits (tg_id, kind, ru, kk, en, shipped_on, created_at) VALUES (7000601, 'code', 'a', 'b', 'c', '2026-11-01', 1)")
-    before = dict(con.execute("SELECT * FROM credits").fetchone())
-    con.close()
-    db.init(path)
-    con = db.connect(path)
-    assert dict(con.execute("SELECT * FROM credits").fetchone()) == {**before, "via_ai": 0}
-    con.execute("INSERT INTO credits (tg_id, kind, ru, kk, en, created_at) VALUES (7000602, 'find', 'a', 'b', 'c', 2)")
-    assert con.execute("SELECT via_ai FROM credits WHERE tg_id = 7000602").fetchone()[0] == 0
-    con.close()
-
-
 def test_ai_tag_cli_and_api(env, capsys, monkeypatch):
     """Only the tag changes: it follows each line through naming, hiding and the owner's CLI."""
     c, cfg = env
     con = _con(cfg)
     monkeypatch.setattr(admin.config, "load", lambda: cfg)
     login(c, 7000601, "helper")
-    plain = _line(con, 7000601, kind="code", word="plain")
+    plain = con.execute("""INSERT INTO credits (tg_id, kind, ru, kk, en, shipped_on, created_at)
+        VALUES (7000601, 'code', 'ru plain', 'kk plain', 'en plain', '2026-11-01', 1)""").lastrowid
     base = ["credit", "add", "7000601", "code", "ru line", "kk line", "en line"]
     for opts in (["--ai", "--gh", "helper", "--name", "Helper"], ["--name", "Helper", "--ai", "--gh", "helper"],
                  ["--gh", "helper", "--name", "Helper", "--ai"]):

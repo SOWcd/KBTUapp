@@ -1,7 +1,6 @@
--- KBTU App schema: the frozen base. Applied once to an empty database (PRAGMA user_version 0 → 1);
--- later changes go into kbtu/migrations.py as numbered migrations; today's tables: schema.current.sql.
+-- KBTU App schema at the frozen base version (migrations.BASE), applied to a new database.
+-- Changes go into migrations.py. Read schema.current.sql for the latest schema.
 
--- Telegram account; exists for guests too (created on the first API call).
 CREATE TABLE users (
   id              INTEGER PRIMARY KEY,
   tg_id           INTEGER NOT NULL UNIQUE,
@@ -26,9 +25,7 @@ CREATE TABLE users (
   ban_reason      TEXT,
   created_at      INTEGER NOT NULL,
   seen_at         INTEGER NOT NULL
-) STRICT;
-
--- KBTU-verified profile from the portal (1:1, absent for guests).
+, qr_code TEXT, cal_token TEXT, card_no INTEGER, nick TEXT CHECK (nick IS NULL OR length(nick) BETWEEN 2 AND 24), avatar_tg INTEGER NOT NULL DEFAULT 1, mark TEXT, skin_org INTEGER REFERENCES orgs(id) ON DELETE SET NULL, skin_pick TEXT CHECK (skin_pick IN ('kbtu', 'org', 'sower')), delete_at INTEGER, city TEXT, city_hidden INTEGER NOT NULL DEFAULT 0, open_projects INTEGER NOT NULL DEFAULT 0, ask_pings INTEGER NOT NULL DEFAULT 0, referred_by INTEGER REFERENCES users(id) ON DELETE SET NULL, tg_photo_path TEXT, tg_photo_src TEXT, n_forum INTEGER NOT NULL DEFAULT 1, link_code TEXT, frame TEXT, can_friend INTEGER NOT NULL DEFAULT 1, announce_ok INTEGER, tg_photo_at INTEGER, forum_seen_msg INTEGER NOT NULL DEFAULT 0, n_forum_comments INTEGER NOT NULL DEFAULT 1, n_broadcasts INTEGER NOT NULL DEFAULT 1, n_digests INTEGER NOT NULL DEFAULT 1, n_door INTEGER NOT NULL DEFAULT 1, notification_undo TEXT NOT NULL DEFAULT '{}', notify_via TEXT NOT NULL DEFAULT 'app' CHECK (notify_via IN ('app', 'telegram')), skin_look TEXT, n_forum_digest INTEGER NOT NULL DEFAULT 1) STRICT;
 CREATE TABLE students (
   user_id         INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   student_id      TEXT NOT NULL UNIQUE,             -- e.g. 24B031234
@@ -45,8 +42,7 @@ CREATE TABLE students (
   consent_at      INTEGER NOT NULL,
   verified_at     INTEGER NOT NULL,
   synced_at       INTEGER NOT NULL
-) STRICT;
-
+, manual INTEGER NOT NULL DEFAULT 0, ms_oid TEXT, ms_profile TEXT, course_year INTEGER, fixed TEXT NOT NULL DEFAULT '', last_lat TEXT, first_lat TEXT, middle_lat TEXT, once_was TEXT NOT NULL DEFAULT '{}') STRICT;
 CREATE TABLE schedule_classes (
   id      INTEGER PRIMARY KEY,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -58,9 +54,7 @@ CREATE TABLE schedule_classes (
   kind    TEXT,                                     -- lecture / practice / lab
   room    TEXT,
   teacher TEXT
-) STRICT;
-CREATE INDEX schedule_by_user ON schedule_classes(user_id, weekday);
-
+, names TEXT) STRICT;
 CREATE TABLE orgs (
   id               INTEGER PRIMARY KEY,
   slug             TEXT NOT NULL UNIQUE,            -- [a-z0-9]{2,24}, used in deep links
@@ -75,22 +69,17 @@ CREATE TABLE orgs (
   can_broadcast    INTEGER NOT NULL DEFAULT 0,      -- posts to every club member (DMP, KBTU App)
   can_oversee      INTEGER NOT NULL DEFAULT 0,      -- clubs registry (DMP)
   official         INTEGER NOT NULL DEFAULT 0,      -- registered with DMP: ✓ badge; others are "student initiative"
-  recruiting_until INTEGER,                         -- "Recruiting until …"; NULL = not recruiting
   status           TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','hidden','archived')),
   created_by       INTEGER REFERENCES users(id) ON DELETE SET NULL,
   created_at       INTEGER NOT NULL
-) STRICT;
-
+, links TEXT NOT NULL DEFAULT '[]', recruiting INTEGER NOT NULL DEFAULT 1, memo_opened_at INTEGER, memo_opened_by INTEGER REFERENCES users(id) ON DELETE SET NULL, i18n TEXT, lang TEXT, ai_tries INTEGER NOT NULL DEFAULT 0, members_hidden INTEGER NOT NULL DEFAULT 0, abbr TEXT, join_questions TEXT, top_at INTEGER, category TEXT) STRICT;
 CREATE TABLE org_members (
   org_id    INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
   user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   role      TEXT NOT NULL CHECK (role IN ('member','head','vice','president')),
-  joined_at INTEGER NOT NULL,
+  joined_at INTEGER NOT NULL, role_id INTEGER REFERENCES org_roles(id) ON DELETE SET NULL, probation INTEGER NOT NULL DEFAULT 0, memo_sign TEXT,
   PRIMARY KEY (org_id, user_id)
 ) STRICT;
-CREATE UNIQUE INDEX one_president ON org_members(org_id) WHERE role = 'president';
-CREATE INDEX members_by_user ON org_members(user_id);
-
 CREATE TABLE org_invites (
   token      TEXT PRIMARY KEY,                      -- random, ≥ 96 bits
   org_id     INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
@@ -100,8 +89,7 @@ CREATE TABLE org_invites (
   expires_at INTEGER,                               -- president links: 7 days
   used_by    INTEGER REFERENCES users(id) ON DELETE SET NULL,   -- president links are single-use
   revoked_at INTEGER
-) STRICT;
-
+, dept_id INTEGER REFERENCES org_tags(id) ON DELETE SET NULL, multi INTEGER NOT NULL DEFAULT 0, consumed INTEGER NOT NULL DEFAULT 0) STRICT;
 CREATE TABLE join_requests (
   id         INTEGER PRIMARY KEY,
   org_id     INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
@@ -110,36 +98,13 @@ CREATE TABLE join_requests (
   created_at INTEGER NOT NULL,
   decided_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
   decided_at INTEGER
-) STRICT;
-CREATE UNIQUE INDEX one_pending_request ON join_requests(org_id, user_id) WHERE status = 'pending';
-
-CREATE TABLE club_applications (
-  id          INTEGER PRIMARY KEY,
-  user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  name        TEXT NOT NULL,
-  short       TEXT NOT NULL,
-  description TEXT NOT NULL,
-  emoji       TEXT NOT NULL,
-  cover       INTEGER NOT NULL,
-  link        TEXT,
-  why         TEXT NOT NULL CHECK (length(why) BETWEEN 1 AND 500),   -- "why this club, what in the first month": the creator's filter
-  status      TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
-  reason      TEXT,
-  org_id      INTEGER REFERENCES orgs(id) ON DELETE SET NULL,
-  created_at  INTEGER NOT NULL,
-  decided_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
-  decided_at  INTEGER
-) STRICT;
-CREATE UNIQUE INDEX one_pending_application ON club_applications(user_id) WHERE status = 'pending';
-
+, answers TEXT) STRICT;
 CREATE TABLE subscriptions (
   user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   org_id     INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
   created_at INTEGER NOT NULL,
   PRIMARY KEY (user_id, org_id)
 ) STRICT;
-CREATE INDEX subs_by_org ON subscriptions(org_id, created_at);
-
 CREATE TABLE events (
   id            INTEGER PRIMARY KEY,
   org_id        INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
@@ -170,13 +135,10 @@ CREATE TABLE events (
   updated_at    INTEGER NOT NULL,
   published_at  INTEGER,
   cancelled_at  INTEGER,
-  hidden_at     INTEGER,                            -- hidden by a moderator
+  hidden_at     INTEGER, cover_focus TEXT, reg_until INTEGER, free_first INTEGER CHECK (free_first > 0), meeting INTEGER NOT NULL DEFAULT 0, meeting_tag INTEGER REFERENCES org_tags(id) ON DELETE SET NULL, memo TEXT, album_open INTEGER NOT NULL DEFAULT 1, memo_sent_at INTEGER, memo_sent_by INTEGER REFERENCES users(id) ON DELETE SET NULL, video_id INTEGER REFERENCES videos(id) ON DELETE SET NULL, memo_only INTEGER NOT NULL DEFAULT 0, volunteers INTEGER, volunteers_senior INTEGER NOT NULL DEFAULT 0, chat_id INTEGER, chat_link TEXT, chat_token TEXT, channel_msg INTEGER, channel_photo INTEGER NOT NULL DEFAULT 0, channel_sig TEXT, channel_link TEXT, wide_video_id INTEGER REFERENCES videos(id) ON DELETE SET NULL, i18n TEXT, lang TEXT, ai_tries INTEGER NOT NULL DEFAULT 0, needs_phone INTEGER NOT NULL DEFAULT 0, guest_host TEXT, questions TEXT, late_signup INTEGER NOT NULL DEFAULT 0, channel_via INTEGER, for_board INTEGER NOT NULL DEFAULT 0, door_open_at INTEGER, team_min INTEGER, team_max INTEGER, school TEXT, door_audience TEXT CHECK (door_audience IN ('guests', 'team', 'both')), team_cap INTEGER, online TEXT, guest_list INTEGER NOT NULL DEFAULT 0, age_check INTEGER NOT NULL DEFAULT 0, silent_publish INTEGER NOT NULL DEFAULT 0, door_extra INTEGER NOT NULL DEFAULT 0 CHECK (door_extra >= 0),                            -- hidden by a moderator
   CHECK (status = 'draft' OR starts_at IS NOT NULL),
   CHECK (status = 'draft' OR price IS NULL OR (pay_to_name IS NOT NULL AND pay_phone IS NOT NULL))
 ) STRICT;
-CREATE INDEX events_upcoming ON events(status, starts_at);
-CREATE INDEX events_by_org ON events(org_id, starts_at);
-
 CREATE TABLE registrations (
   id            INTEGER PRIMARY KEY,
   event_id      INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
@@ -190,13 +152,9 @@ CREATE TABLE registrations (
   created_at    INTEGER NOT NULL,
   updated_at    INTEGER NOT NULL,
   checked_in_at INTEGER,
-  checked_in_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  checked_in_by INTEGER REFERENCES users(id) ON DELETE SET NULL, walk_in INTEGER NOT NULL DEFAULT 0, checkin_manual INTEGER NOT NULL DEFAULT 0, free INTEGER NOT NULL DEFAULT 0, note TEXT CHECK (note IS NULL OR length(note) <= 140), answers TEXT, team_want TEXT, phone_shared INTEGER NOT NULL DEFAULT 0, door_team TEXT CHECK (door_team IS NULL OR length(door_team) <= 80), rating_dismissed INTEGER NOT NULL DEFAULT 0 CHECK (rating_dismissed IN (0, 1)),
   UNIQUE (event_id, user_id)
 ) STRICT;
-CREATE INDEX regs_by_user ON registrations(user_id, status);
-CREATE INDEX regs_by_event ON registrations(event_id, status);
--- taken seats = COUNT(*) WHERE status IN ('hold','going'); count + insert in one BEGIN IMMEDIATE transaction
-
 CREATE TABLE receipts (
   id              INTEGER PRIMARY KEY,
   registration_id INTEGER NOT NULL REFERENCES registrations(id) ON DELETE CASCADE,
@@ -213,16 +171,12 @@ CREATE TABLE receipts (
   reviewed_at     INTEGER,                          -- NULL = organizer hasn't looked yet
   created_at      INTEGER NOT NULL
 ) STRICT;
-CREATE INDEX receipts_by_reg ON receipts(registration_id);
-CREATE INDEX receipts_by_no ON receipts(receipt_no);
-
 CREATE TABLE saved_events (
   user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   event_id   INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
   created_at INTEGER NOT NULL,
   PRIMARY KEY (user_id, event_id)
 ) STRICT;
-
 CREATE TABLE event_photos (
   event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
   file_id  INTEGER NOT NULL REFERENCES files(id),
@@ -230,7 +184,6 @@ CREATE TABLE event_photos (
   added_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
   PRIMARY KEY (event_id, file_id)
 ) STRICT;
-
 CREATE TABLE posts (
   id             INTEGER PRIMARY KEY,
   org_id         INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
@@ -246,24 +199,19 @@ CREATE TABLE posts (
   created_at     INTEGER NOT NULL,
   edited_at      INTEGER,
   hidden_at      INTEGER
-) STRICT;
-CREATE INDEX posts_by_org ON posts(org_id, created_at);
-CREATE INDEX posts_recent ON posts(audience, created_at);
-
+, tg_channel INTEGER, tg_url TEXT, tg_views INTEGER, tg_reactions TEXT, tg_media TEXT, i18n TEXT, lang TEXT, tr_by TEXT, ai_tries INTEGER NOT NULL DEFAULT 0, casting_from INTEGER, casting_to INTEGER, casting_place TEXT, casting_cancelled_at INTEGER, tg_fmt TEXT) STRICT;
 CREATE TABLE post_reactions (
   post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   kind    TEXT NOT NULL CHECK (kind IN ('fire','heart')),
   PRIMARY KEY (post_id, user_id, kind)
 ) STRICT;
-
 CREATE TABLE post_reads (                            -- views count + unread marks on broadcasts
   post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   read_at INTEGER NOT NULL,
   PRIMARY KEY (post_id, user_id)
 ) STRICT;
-
 CREATE TABLE comments (                            -- under a post or under an event
   id         INTEGER PRIMARY KEY,
   post_id    INTEGER REFERENCES posts(id) ON DELETE CASCADE,
@@ -273,26 +221,9 @@ CREATE TABLE comments (                            -- under a post or under an e
   body       TEXT NOT NULL CHECK (length(body) BETWEEN 1 AND 500),
   created_at INTEGER NOT NULL,
   deleted_at INTEGER,
-  deleted_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  deleted_by INTEGER REFERENCES users(id) ON DELETE SET NULL, reply_to INTEGER REFERENCES comments(id) ON DELETE SET NULL,
   CHECK ((post_id IS NULL) <> (event_id IS NULL))
 ) STRICT;
-CREATE INDEX comments_by_post ON comments(post_id, created_at);
-CREATE INDEX comments_by_event ON comments(event_id, created_at);
-
-CREATE TABLE reports (
-  id          INTEGER PRIMARY KEY,
-  reporter_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-  target      TEXT NOT NULL CHECK (target IN ('post','comment','event','user','org')),
-  target_id   INTEGER NOT NULL,
-  reason      TEXT NOT NULL CHECK (reason IN ('spam','insult','danger','other')),
-  note        TEXT,
-  status      TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','actioned','dismissed')),
-  created_at  INTEGER NOT NULL,
-  resolved_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
-  resolved_at INTEGER
-) STRICT;
-CREATE UNIQUE INDEX one_report ON reports(reporter_id, target, target_id);
-
 CREATE TABLE friendships (
   a          INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   b          INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -300,27 +231,14 @@ CREATE TABLE friendships (
   PRIMARY KEY (a, b),
   CHECK (a < b)
 ) STRICT;
-CREATE INDEX friendships_b ON friendships(b);
-
-CREATE TABLE friend_links (                          -- one-time invite link / QR
-  token      TEXT PRIMARY KEY,                      -- random, ≥ 96 bits
-  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  created_at INTEGER NOT NULL,
-  expires_at INTEGER NOT NULL,                      -- 7 days
-  used_by    INTEGER REFERENCES users(id) ON DELETE SET NULL,
-  used_at    INTEGER
-) STRICT;
-
 CREATE TABLE friend_requests (
   from_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   to_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   status     TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','accepted','declined')),
   created_at INTEGER NOT NULL,
-  decided_at INTEGER,
+  decided_at INTEGER, hidden INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (from_id, to_id)                      -- one row per direction; re-ask after 30 days updates it
 ) STRICT;
-CREATE INDEX friend_requests_to ON friend_requests(to_id, status);
-
 CREATE TABLE friend_invites (                        -- "Bring a friend"
   from_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   to_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -329,7 +247,6 @@ CREATE TABLE friend_invites (                        -- "Bring a friend"
   created_at INTEGER NOT NULL,
   PRIMARY KEY (from_id, to_id, event_id)
 ) STRICT;
-
 CREATE TABLE achievement_grants (                    -- manual achievements; one row = +1
   id         INTEGER PRIMARY KEY,
   user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -337,17 +254,14 @@ CREATE TABLE achievement_grants (                    -- manual achievements; one
   granted_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
   note       TEXT,
   created_at INTEGER NOT NULL
-) STRICT;
-CREATE INDEX grants_by_user ON achievement_grants(user_id, code);
-
+, batch TEXT) STRICT;
 CREATE TABLE achievement_levels (                    -- last notified level, so "new achievement" is sent once
   user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   code       TEXT NOT NULL,
   level      INTEGER NOT NULL,
-  reached_at INTEGER NOT NULL,
+  reached_at INTEGER NOT NULL, seen INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (user_id, code)
 ) STRICT;
-
 CREATE TABLE chats (
   id         INTEGER PRIMARY KEY,
   title      TEXT NOT NULL,
@@ -360,15 +274,13 @@ CREATE TABLE chats (
   sort       INTEGER NOT NULL DEFAULT 0,
   added_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
   created_at INTEGER NOT NULL
-) STRICT;
-
+, photo TEXT, forum INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'live', org_id INTEGER REFERENCES orgs(id) ON DELETE SET NULL, main INTEGER NOT NULL DEFAULT 0, about TEXT, mirror INTEGER NOT NULL DEFAULT 1, section TEXT CHECK (section IN ('study', 'reviews', 'admission', 'schools', 'clubs', 'fun')), section_ai INTEGER NOT NULL DEFAULT 0, section_try INTEGER, swear INTEGER NOT NULL DEFAULT 0, swear_miss TEXT, news_topic INTEGER) STRICT;
 CREATE TABLE chat_opens (
   user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   chat_id   INTEGER NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
   opened_at INTEGER NOT NULL,
   PRIMARY KEY (user_id, chat_id)
 ) STRICT;
-
 CREATE TABLE files (
   id         INTEGER PRIMARY KEY,
   sha256     TEXT NOT NULL,
@@ -380,9 +292,7 @@ CREATE TABLE files (
   path       TEXT NOT NULL,                         -- receipts live in a private directory
   owner_id   INTEGER REFERENCES users(id) ON DELETE SET NULL,
   created_at INTEGER NOT NULL
-) STRICT;
-CREATE INDEX files_by_hash ON files(sha256);
-
+, color TEXT, taken_at REAL) STRICT;
 CREATE TABLE bot_outbox (
   id         INTEGER PRIMARY KEY,
   user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -394,8 +304,6 @@ CREATE TABLE bot_outbox (
   error      TEXT,
   UNIQUE (user_id, kind, ref)
 ) STRICT;
-CREATE INDEX outbox_due ON bot_outbox(sent_at, send_after);
-
 CREATE TABLE audit_log (
   id       INTEGER PRIMARY KEY,
   actor_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -404,3 +312,1897 @@ CREATE TABLE audit_log (
   data     TEXT NOT NULL DEFAULT '{}',
   at       INTEGER NOT NULL
 ) STRICT;
+CREATE TABLE event_updates (
+        id INTEGER PRIMARY KEY,
+        event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+        author_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        body TEXT NOT NULL CHECK (length(body) BETWEEN 2 AND 300),
+        created_at INTEGER NOT NULL
+    ) STRICT;
+CREATE TABLE event_ratings (
+        event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        score INTEGER NOT NULL CHECK (score BETWEEN 1 AND 5),
+        comment TEXT NOT NULL DEFAULT '' CHECK (length(comment) <= 300),
+        created_at INTEGER NOT NULL, public_after INTEGER,
+        PRIMARY KEY (event_id, user_id)
+    ) STRICT;
+CREATE TABLE org_roles (
+        id INTEGER PRIMARY KEY,
+        org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        color TEXT NOT NULL,
+        level TEXT NOT NULL CHECK (level IN ('member','head','vice')),
+        created_at INTEGER NOT NULL
+    , rights TEXT, fixed INTEGER NOT NULL DEFAULT 0, name_kk TEXT, name_en TEXT, src TEXT, hand TEXT NOT NULL DEFAULT '', ai_wait INTEGER NOT NULL DEFAULT 0, ai_tries INTEGER NOT NULL DEFAULT 0) STRICT;
+CREATE TABLE org_tags (
+        id INTEGER PRIMARY KEY,
+        org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        color TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+    , department INTEGER NOT NULL DEFAULT 0) STRICT;
+CREATE TABLE member_tags (
+        tag_id INTEGER NOT NULL REFERENCES org_tags(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, sync INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (tag_id, user_id)
+    ) STRICT;
+CREATE TABLE removal_requests (
+        id INTEGER PRIMARY KEY,
+        org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        by_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        ban INTEGER NOT NULL DEFAULT 0,
+        note TEXT NOT NULL DEFAULT '' CHECK (length(note) <= 140),
+        status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','done','declined')),
+        created_at INTEGER NOT NULL,
+        decided_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        decided_at INTEGER
+    ) STRICT;
+CREATE TABLE org_bans (
+        org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        by_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at INTEGER NOT NULL,
+        PRIMARY KEY (org_id, user_id)
+    ) STRICT;
+CREATE TABLE comment_reads (
+        event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        last_id INTEGER NOT NULL,
+        PRIMARY KEY (event_id, user_id)
+    ) STRICT;
+CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE rounds (
+        id INTEGER PRIMARY KEY,
+        org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+        title TEXT NOT NULL,
+        picks INTEGER NOT NULL DEFAULT 2 CHECK (picks BETWEEN 1 AND 3),
+        closes_at INTEGER NOT NULL,
+        results_by INTEGER,
+        decline_text TEXT NOT NULL DEFAULT '' CHECK (length(decline_text) <= 500),
+        status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'closed', 'done')),
+        created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at INTEGER NOT NULL,
+        sent_at INTEGER
+    , next_text TEXT NOT NULL DEFAULT '' CHECK (length(next_text) <= 300), group_link TEXT) STRICT;
+CREATE TABLE round_departments (
+        round_id INTEGER NOT NULL REFERENCES rounds(id) ON DELETE CASCADE,
+        tag_id INTEGER NOT NULL REFERENCES org_tags(id) ON DELETE CASCADE,
+        pos INTEGER NOT NULL,
+        about TEXT NOT NULL DEFAULT '' CHECK (length(about) <= 200),
+        places INTEGER CHECK (places > 0),
+        PRIMARY KEY (round_id, tag_id)
+    ) STRICT;
+CREATE TABLE round_questions (
+        id INTEGER PRIMARY KEY,
+        round_id INTEGER NOT NULL REFERENCES rounds(id) ON DELETE CASCADE,
+        pos INTEGER NOT NULL,
+        kind TEXT NOT NULL CHECK (kind IN ('short', 'long', 'one', 'many', 'link')),
+        text TEXT NOT NULL CHECK (length(text) BETWEEN 1 AND 200),
+        options TEXT,
+        required INTEGER NOT NULL DEFAULT 1,
+        tag_id INTEGER REFERENCES org_tags(id) ON DELETE SET NULL
+    ) STRICT;
+CREATE TABLE round_apps (
+        id INTEGER PRIMARY KEY,
+        round_id INTEGER NOT NULL REFERENCES rounds(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        departments TEXT NOT NULL,
+        answers TEXT NOT NULL,
+        source TEXT,
+        stage TEXT NOT NULL DEFAULT 'new' CHECK (stage IN ('new', 'maybe', 'next', 'yes', 'no', 'withdrawn')),
+        taken_tag INTEGER REFERENCES org_tags(id) ON DELETE SET NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL, slot_id INTEGER REFERENCES round_slots(id) ON DELETE SET NULL, invited_at INTEGER, came INTEGER, sent_at INTEGER,
+        UNIQUE (round_id, user_id)
+    ) STRICT;
+CREATE TABLE round_votes (
+        app_id INTEGER NOT NULL REFERENCES round_apps(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        verdict TEXT NOT NULL CHECK (verdict IN ('no', 'maybe', 'next')),
+        stars INTEGER CHECK (stars BETWEEN 1 AND 5),
+        note TEXT NOT NULL DEFAULT '' CHECK (length(note) <= 500),
+        at INTEGER NOT NULL,
+        PRIMARY KEY (app_id, user_id)
+    ) STRICT;
+CREATE TABLE round_slots (
+        id INTEGER PRIMARY KEY,
+        round_id INTEGER NOT NULL REFERENCES rounds(id) ON DELETE CASCADE,
+        starts_at INTEGER NOT NULL,
+        minutes INTEGER NOT NULL CHECK (minutes BETWEEN 5 AND 180),
+        capacity INTEGER NOT NULL DEFAULT 1 CHECK (capacity BETWEEN 1 AND 50),
+        place TEXT NOT NULL DEFAULT '' CHECK (length(place) <= 120)
+    ) STRICT;
+CREATE TABLE stats_days (
+        day INTEGER PRIMARY KEY,                -- days since 1970-01-01 in Almaty
+        active INTEGER NOT NULL,                -- people who opened the app that day
+        new INTEGER NOT NULL,                   -- people who opened it for the first time
+        students INTEGER NOT NULL               -- signed in with KBTU by the day's end
+    ) STRICT;
+CREATE TABLE grant_links (
+        token TEXT PRIMARY KEY,
+        code TEXT NOT NULL,
+        created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL,
+        used_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        used_at INTEGER
+    , multi INTEGER NOT NULL DEFAULT 0, max_uses INTEGER, qr INTEGER NOT NULL DEFAULT 0, lease_until INTEGER) STRICT;
+CREATE TABLE videos (
+      id         INTEGER PRIMARY KEY,
+      owner_id   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      status     TEXT NOT NULL CHECK (status IN ('uploading','queued','working','ready','failed')),
+      size       INTEGER NOT NULL,
+      path       TEXT,
+      width      INTEGER,
+      height     INTEGER,
+      duration   REAL,
+      bytes      INTEGER,
+      color      TEXT,
+      error      TEXT,
+      created_at INTEGER NOT NULL
+    , wide INTEGER NOT NULL DEFAULT 0) STRICT;
+CREATE TABLE volunteers (
+      event_id   INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      status     TEXT NOT NULL CHECK (status IN ('asked', 'yes', 'no')),
+      note       TEXT NOT NULL DEFAULT '',
+      created_at INTEGER NOT NULL,
+      decided_at INTEGER,
+      PRIMARY KEY (event_id, user_id));
+CREATE TABLE map_graph (id INTEGER PRIMARY KEY CHECK (id = 1), body TEXT NOT NULL, ver INTEGER NOT NULL,
+    updated_by INTEGER, updated_at INTEGER NOT NULL);
+CREATE TABLE org_history (
+      id      INTEGER PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      org_id  INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      role    TEXT NOT NULL,
+      since   INTEGER NOT NULL,
+      until   INTEGER                                -- NULL: still so
+    ) STRICT;
+CREATE TABLE event_slides (
+      event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      pos      INTEGER NOT NULL,
+      file_id  INTEGER NOT NULL REFERENCES files(id),
+      PRIMARY KEY (event_id, pos)
+    ) STRICT;
+CREATE TABLE visits (
+      day     INTEGER NOT NULL,   -- Almaty day number
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (day, user_id)
+    ) WITHOUT ROWID;
+CREATE TABLE profile_views (
+      day       INTEGER NOT NULL,   -- Almaty day number
+      viewer_id INTEGER NOT NULL,
+      user_id   INTEGER NOT NULL,
+      PRIMARY KEY (day, viewer_id, user_id)
+    ) WITHOUT ROWID;
+CREATE TABLE "club_applications" (
+      id          INTEGER PRIMARY KEY,
+      user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name        TEXT NOT NULL,
+      short       TEXT NOT NULL,
+      description TEXT NOT NULL,
+      emoji       TEXT NOT NULL,
+      cover       INTEGER NOT NULL,
+      links       TEXT NOT NULL DEFAULT '[]',
+      why         TEXT CHECK (length(why) BETWEEN 1 AND 500),
+      status      TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
+      reason      TEXT,
+      org_id      INTEGER REFERENCES orgs(id) ON DELETE SET NULL,
+      created_at  INTEGER NOT NULL,
+      decided_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      decided_at  INTEGER
+    ) STRICT;
+CREATE TABLE door_guests (
+      id         INTEGER PRIMARY KEY,
+      event_id   INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      full_name  TEXT NOT NULL,
+      norm       TEXT NOT NULL,                     -- logic._norm_name: the words sorted, lowercase, yo as e
+      added_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at INTEGER NOT NULL,
+      user_id    INTEGER REFERENCES users(id) ON DELETE SET NULL
+    ) STRICT;
+CREATE TABLE short_links (
+        slug       TEXT PRIMARY KEY,                   -- logic.SHORT; never an orgs.slug or one a club had before
+        org_id     INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+        kind       TEXT NOT NULL CHECK (kind IN ('club', 'event', 'round')),
+        event_id   INTEGER REFERENCES events(id) ON DELETE CASCADE,
+        created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at INTEGER NOT NULL,
+        CHECK ((kind = 'event') = (event_id IS NOT NULL))
+    ) STRICT;
+CREATE TABLE tg_channels (
+        id        INTEGER PRIMARY KEY,                -- Telegram's channel id (Telethon's, without -100)
+        username  TEXT NOT NULL,                      -- lowercase, the t.me name it was joined by
+        joined_at INTEGER NOT NULL,
+        last_msg  INTEGER NOT NULL DEFAULT 0          -- the newest post taken: the catch-up after a restart starts there
+    , stay INTEGER NOT NULL DEFAULT 0) STRICT;
+CREATE TABLE tg_post_msgs (
+        channel  INTEGER NOT NULL,
+        msg_id   INTEGER NOT NULL,
+        post_id  INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+        grouped  INTEGER, lang TEXT,                             -- the album it belongs to
+        PRIMARY KEY (channel, msg_id)
+    ) STRICT;
+CREATE TABLE roster_pending (
+        id         INTEGER PRIMARY KEY,
+        key        TEXT NOT NULL UNIQUE,              -- the sheet's row, so a second load adds nothing
+        org_id     INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+        sheet      TEXT NOT NULL,
+        position   TEXT,                              -- as written
+        title      TEXT,                              -- the position as a club role's name (none for a plain member)
+        role       TEXT NOT NULL CHECK (role IN ('member', 'head', 'vice', 'president')),
+        dept       TEXT,
+        full_name  TEXT,
+        school     TEXT,
+        year       TEXT,                              -- as written: 2, 23BD, 3rd year
+        course     INTEGER,
+        city       TEXT,
+        phone      TEXT,                              -- +7XXXXXXXXXX
+        tg         TEXT,                              -- lowercase, no @
+        email      TEXT,                              -- lowercase
+        rejected_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        claimed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,  -- "Yes, it's me" on another name: for the club to confirm
+        created_at INTEGER NOT NULL
+    , door_key TEXT) STRICT;
+CREATE TABLE roster_toasts (
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        org_id  INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+        title   TEXT,
+        at      INTEGER NOT NULL
+    ) STRICT;
+CREATE TABLE takedowns (
+        id        INTEGER PRIMARY KEY,
+        target    TEXT NOT NULL CHECK (target IN ('photo', 'user')),
+        target_id INTEGER NOT NULL,
+        user_id   INTEGER REFERENCES users(id) ON DELETE CASCADE,   -- whose it was: the photo's uploader, the person
+        data      TEXT NOT NULL,                                     -- JSON: the album row / nick, bio, avatar
+        file_id   INTEGER REFERENCES files(id),                      -- the picture kept for the undo
+        at        INTEGER NOT NULL
+    ) STRICT;
+CREATE TABLE skills (
+        id         INTEGER PRIMARY KEY,
+        name       TEXT NOT NULL UNIQUE,                  -- normalised: lowercase, single spaces
+        approved   INTEGER NOT NULL DEFAULT 0,            -- a moderator's yes; else public at 3 people (forum.PUBLIC_AT)
+        created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_at INTEGER NOT NULL,
+        used_at    INTEGER NOT NULL                       -- last added to someone or a request: unused 30 days, out of suggestions
+    ) STRICT;
+CREATE TABLE user_skills (
+        user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        skill_id INTEGER NOT NULL REFERENCES skills(id) ON DELETE CASCADE,
+        PRIMARY KEY (user_id, skill_id)
+    ) STRICT;
+CREATE TABLE asks (
+        id         INTEGER PRIMARY KEY,
+        user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        kind       TEXT NOT NULL CHECK (kind IN ('project', 'help')),
+        title      TEXT NOT NULL,
+        body       TEXT NOT NULL DEFAULT '',
+        status     TEXT NOT NULL CHECK (status IN ('live', 'held', 'hidden', 'closed')),
+        why        TEXT,                                  -- held / hidden: what the author is told
+        found      INTEGER,                               -- closed: found someone through the app (1), elsewhere (0)
+        created_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL
+    , subject TEXT) STRICT;
+CREATE TABLE ask_skills (
+        ask_id   INTEGER NOT NULL REFERENCES asks(id) ON DELETE CASCADE,
+        skill_id INTEGER NOT NULL REFERENCES skills(id) ON DELETE CASCADE,
+        PRIMARY KEY (ask_id, skill_id)
+    ) STRICT;
+CREATE TABLE contacts (                               -- "I can help" / "write to them": nothing shared until accepted
+        id         INTEGER PRIMARY KEY,
+        from_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        to_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        ask_id     INTEGER REFERENCES asks(id) ON DELETE CASCADE,
+        status     TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'declined')),
+        created_at INTEGER NOT NULL,
+        decided_at INTEGER
+    , token TEXT, withdrawn_at INTEGER, offer_message TEXT) STRICT;
+CREATE TABLE blocks (
+        user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        blocked_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at INTEGER NOT NULL,
+        PRIMARY KEY (user_id, blocked_id)
+    ) STRICT;
+CREATE TABLE ask_pings (
+        ask_id  INTEGER NOT NULL REFERENCES asks(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        at      INTEGER NOT NULL,
+        PRIMARY KEY (ask_id, user_id)
+    ) STRICT;
+CREATE TABLE qr_sessions (
+      id         INTEGER PRIMARY KEY,
+      title      TEXT NOT NULL,
+      pin_hash   TEXT NOT NULL UNIQUE,
+      started_at INTEGER,
+      ended_at   INTEGER,
+      created_at INTEGER NOT NULL
+    , org_id INTEGER REFERENCES orgs(id) ON DELETE SET NULL, event_id INTEGER REFERENCES events(id) ON DELETE SET NULL, phase TEXT NOT NULL DEFAULT 'in' CHECK (phase IN ('in', 'out')), lease_until INTEGER, help_until INTEGER, help_gen INTEGER NOT NULL DEFAULT 0, crew_event_id INTEGER REFERENCES events(id) ON DELETE SET NULL, meetup INTEGER NOT NULL DEFAULT 0 CHECK (meetup IN (0, 1)), department_id INTEGER REFERENCES org_tags(id) ON DELETE SET NULL, department_name TEXT) STRICT;
+CREATE TABLE qr_marks (
+      session_id INTEGER NOT NULL REFERENCES qr_sessions(id) ON DELETE CASCADE,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      scanned_at INTEGER NOT NULL,
+      done_at    INTEGER, left_at INTEGER, marked_by INTEGER REFERENCES users(id) ON DELETE SET NULL, hand INTEGER NOT NULL DEFAULT 0, meetup_review TEXT CHECK (meetup_review IN ('added', 'declined')),
+      PRIMARY KEY (session_id, user_id)
+    ) STRICT;
+CREATE TABLE qr_expected (
+      session_id INTEGER NOT NULL REFERENCES qr_sessions(id) ON DELETE CASCADE,
+      email      TEXT NOT NULL,
+      full_name  TEXT NOT NULL,
+      student_id TEXT,
+      school     TEXT,
+      course     INTEGER,
+      phone      TEXT,
+      tg         TEXT,
+      extra      TEXT NOT NULL DEFAULT '{}', door_key TEXT,
+      PRIMARY KEY (session_id, email)
+    ) STRICT;
+CREATE TABLE qr_screens (
+      code       TEXT PRIMARY KEY,
+      secret     TEXT NOT NULL UNIQUE,
+      session_id INTEGER REFERENCES qr_sessions(id) ON DELETE CASCADE,
+      paired_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at INTEGER NOT NULL
+    , ip TEXT) STRICT;
+CREATE TABLE threads (
+      id         INTEGER PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      topic      TEXT NOT NULL CHECK (topic IN ('thing', 'go', 'help', 'vol', 'talk')),
+      body       TEXT NOT NULL CHECK (status = 'gone' OR length(body) BETWEEN 2 AND 1000),
+      anon       INTEGER NOT NULL DEFAULT 0,
+      status     TEXT NOT NULL CHECK (status IN ('live', 'held', 'hidden', 'gone')),  -- gone: its author deleted it (words wiped; still counts toward the allowance)
+      why        TEXT,                                  -- held / hidden: 'ai', 'check' (no AI answer), 'reports', 'moderator'
+      created_at INTEGER NOT NULL,
+      bumped_at  INTEGER NOT NULL,                      -- the last live reply: the feed's order
+      expires_at INTEGER NOT NULL
+    ) STRICT;
+CREATE TABLE thread_replies (
+      id         INTEGER PRIMARY KEY,
+      thread_id  INTEGER NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      body       TEXT NOT NULL CHECK (status = 'gone' OR length(body) BETWEEN 1 AND 500),
+      anon       INTEGER NOT NULL DEFAULT 0,
+      status     TEXT NOT NULL CHECK (status IN ('live', 'held', 'hidden', 'gone')),
+      why        TEXT,
+      created_at INTEGER NOT NULL
+    ) STRICT;
+CREATE TABLE thread_joins (
+      thread_id INTEGER NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+      user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      at        INTEGER NOT NULL,
+      PRIMARY KEY (thread_id, user_id)
+    ) STRICT;
+CREATE TABLE map_flaws (
+      id         INTEGER PRIMARY KEY,
+      user_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      ver        TEXT NOT NULL CHECK (ver IN ('main', 'old', 'kbtu')),
+      floor      INTEGER NOT NULL CHECK (floor BETWEEN 0 AND 5),
+      u          REAL NOT NULL, v REAL NOT NULL, px REAL, py REAL,
+      body       TEXT NOT NULL CHECK (length(body) BETWEEN 2 AND 300),
+      created_at INTEGER NOT NULL,
+      done_at    INTEGER
+    ) STRICT;
+CREATE TABLE assist_uses (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      at      INTEGER NOT NULL
+    ) STRICT;
+CREATE TABLE campus_places (
+      id          INTEGER PRIMARY KEY,
+      kind        TEXT NOT NULL CHECK (kind IN ('place', 'dean', 'office')),
+      code        TEXT NOT NULL UNIQUE,
+      name_en     TEXT NOT NULL,
+      name_ru     TEXT,
+      name_kk     TEXT,
+      aliases     TEXT,
+      room        TEXT,
+      location    TEXT,
+      school      TEXT,
+      verified_at INTEGER,
+      updated_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      updated_at  INTEGER NOT NULL
+    ) STRICT;
+CREATE TABLE assist_marks (
+      day   INTEGER NOT NULL,
+      kind  TEXT NOT NULL CHECK (kind IN ('unknown', 'up', 'down')),
+      topic TEXT NOT NULL
+    ) STRICT;
+CREATE TABLE assist_sent (
+      id  INTEGER PRIMARY KEY,
+      day INTEGER NOT NULL,
+      q   TEXT NOT NULL,
+      a   TEXT NOT NULL
+    ) STRICT;
+CREATE TABLE assist_care (
+      week INTEGER PRIMARY KEY,
+      n    INTEGER NOT NULL
+    ) STRICT;
+CREATE TABLE assist_votes (
+      nonce TEXT PRIMARY KEY,
+      day   INTEGER NOT NULL,
+      kind  TEXT NOT NULL CHECK (kind IN ('up', 'down', 'sent'))
+    ) STRICT;
+CREATE TABLE prefill (
+      email       TEXT PRIMARY KEY,
+      student_id  TEXT NOT NULL,
+      last_name   TEXT,
+      first_name  TEXT,
+      middle_name TEXT,
+      school      TEXT,
+      phone       TEXT,
+      came        INTEGER NOT NULL DEFAULT 0 CHECK (came IN (0, 1))
+    , loaded_at INTEGER NOT NULL DEFAULT 0) STRICT;
+CREATE TABLE prefill_rest (
+      id          INTEGER PRIMARY KEY,
+      email       TEXT,
+      student_id  TEXT,
+      raw_id      TEXT,
+      last_name   TEXT,
+      first_name  TEXT,
+      middle_name TEXT,
+      school      TEXT,
+      phone       TEXT,
+      came        INTEGER NOT NULL DEFAULT 0 CHECK (came IN (0, 1))
+    , loaded_at INTEGER NOT NULL DEFAULT 0) STRICT;
+CREATE TABLE tgc_saved (
+      tg_id INTEGER PRIMARY KEY,
+      body  TEXT NOT NULL,
+      link  TEXT,
+      at    INTEGER NOT NULL
+    ) STRICT;
+CREATE TABLE tgc_strangers (
+      tg_id     INTEGER PRIMARY KEY,
+      seen_at   INTEGER NOT NULL,
+      warned_at INTEGER,
+      banned_at INTEGER
+    , warned_msg INTEGER) STRICT;
+CREATE TABLE tgc_comments (
+      id         INTEGER PRIMARY KEY,
+      chat_id    INTEGER NOT NULL,
+      msg_id     INTEGER NOT NULL,
+      author_id  INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      author_tg  INTEGER NOT NULL,
+      body       TEXT NOT NULL,                         -- the latest text seen (a report's snapshot, an edit)
+      link       TEXT,
+      status     TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'queued', 'deleting', 'deleted', 'kept', 'restored')),
+      ai         TEXT CHECK (ai IN ('ok', 'flag', 'none')),
+      ai_hash    TEXT,                                  -- the text the AI last looked at: the same text isn't sent again
+      created_at INTEGER NOT NULL,
+      decided_at INTEGER,
+      review     INTEGER NOT NULL DEFAULT 0 CHECK (review IN (0, 1)),  -- deleted on the reports and the AI: a moderator confirms or restores
+      shown      INTEGER NOT NULL DEFAULT 0 CHECK (shown IN (0, 1)),   -- deleted, and its author (whom the bot can't write to) saw it in the app
+      rule       TEXT CHECK (rule IN ('spam', 'insult', 'danger', 'other')),  -- the rule it broke: the AI's guess, then the moderator's word
+      dm_id      INTEGER, clause TEXT CHECK (clause IN ('abuse', 'fake', 'spam', 'pdata', 'disrupt', 'other')), dm_chat_id INTEGER,                               -- the bot's message to its author: a verdict edits it in place
+      UNIQUE (chat_id, msg_id)
+    ) STRICT;
+CREATE TABLE tgc_reports (
+      comment_id  INTEGER NOT NULL REFERENCES tgc_comments(id) ON DELETE CASCADE,
+      reporter_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      body        TEXT NOT NULL,                        -- the text as this reporter saw it
+      at          INTEGER NOT NULL,
+      outcome     TEXT CHECK (outcome IN ('confirmed', 'overturned', 'abuse')),
+      PRIMARY KEY (comment_id, reporter_id)
+    ) STRICT;
+CREATE TABLE tgc_closed (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      at      INTEGER NOT NULL,
+      by_id   INTEGER REFERENCES users(id) ON DELETE SET NULL
+    ) STRICT;
+CREATE TABLE fchan_posts (
+      id         INTEGER PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      body       TEXT NOT NULL CHECK (status = 'gone' OR length(body) BETWEEN 2 AND 1000),
+      anon       INTEGER NOT NULL DEFAULT 0,
+      status     TEXT NOT NULL CHECK (status IN ('held', 'live', 'hidden', 'gone')),  -- gone: the author deleted it (words wiped; still counts toward the day)
+      why        TEXT,                                  -- held: 'check' (no AI answer yet), 'ai', 'person', 'busy'; hidden: 'moderator'
+      tg_msg     INTEGER,                               -- the channel message, once sent
+      created_at INTEGER NOT NULL
+    , rules_for INTEGER, rules_msg INTEGER, comments INTEGER NOT NULL DEFAULT 0, sign TEXT, reactions TEXT, nick_a INTEGER, nick_n INTEGER, appealed_at INTEGER, refused TEXT, explained INTEGER, ai_reason TEXT, posted_at INTEGER, ai_fix TEXT, ai_quote TEXT, help_until INTEGER, edited_at INTEGER, edit_sync INTEGER) STRICT;
+CREATE TABLE tg_unpost (
+      msg_id INTEGER PRIMARY KEY,
+      why    TEXT NOT NULL CHECK (why IN ('author', 'moderator')),
+      at     INTEGER NOT NULL
+    , photo INTEGER NOT NULL DEFAULT 0) STRICT;
+CREATE TABLE receipt_replaced (
+      registration_id INTEGER NOT NULL REFERENCES registrations(id) ON DELETE CASCADE,
+      sha256          TEXT NOT NULL,
+      receipt_no      TEXT,
+      at              INTEGER NOT NULL
+    ) STRICT;
+CREATE TABLE tgc_undel (
+      chat_id INTEGER NOT NULL,
+      msg_id  INTEGER NOT NULL,
+      at      INTEGER NOT NULL,
+      PRIMARY KEY (chat_id, msg_id)
+    ) STRICT;
+CREATE TABLE chat_asks (
+      chat_id INTEGER NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (chat_id, user_id)
+    ) STRICT;
+CREATE TABLE fchan_comments (
+      msg_id  INTEGER PRIMARY KEY,
+      post_id INTEGER NOT NULL REFERENCES fchan_posts(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      at      INTEGER NOT NULL,
+      gone    INTEGER NOT NULL DEFAULT 0
+    ) STRICT;
+CREATE TABLE fchan_replies (
+      id          INTEGER PRIMARY KEY,
+      post_id     INTEGER NOT NULL REFERENCES fchan_posts(id) ON DELETE CASCADE,
+      comment_msg INTEGER,
+      body        TEXT NOT NULL CHECK (status = 'gone' OR length(body) BETWEEN 2 AND 1000),
+      status      TEXT NOT NULL CHECK (status IN ('held', 'live', 'hidden', 'gone')),
+      why         TEXT,
+      tg_msg      INTEGER,
+      send_at     INTEGER,
+      drop_at     INTEGER,
+      created_at  INTEGER NOT NULL
+    , explained INTEGER, ai_reason TEXT) STRICT;
+CREATE TABLE fchan_reply_reports (
+      reply_id INTEGER NOT NULL REFERENCES fchan_replies(id) ON DELETE CASCADE,
+      user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      at       INTEGER NOT NULL,
+      PRIMARY KEY (reply_id, user_id)
+    ) STRICT;
+CREATE TABLE grant_link_uses (
+      id      INTEGER PRIMARY KEY,
+      token   TEXT NOT NULL REFERENCES grant_links(token) ON DELETE CASCADE,
+      user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      at      INTEGER NOT NULL,
+      UNIQUE (token, user_id)
+    ) STRICT;
+CREATE TABLE event_cohosts (
+      event_id   INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      org_id     INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      status     TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'declined')),
+      invited_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      decided_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at INTEGER NOT NULL,
+      decided_at INTEGER,
+      PRIMARY KEY (event_id, org_id)
+    ) STRICT;
+CREATE TABLE official_requests (
+      id         INTEGER PRIMARY KEY,
+      org_id     INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      status     TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+      reason     TEXT CHECK (length(reason) <= 300),
+      created_at INTEGER NOT NULL,
+      decided_at INTEGER
+    ) STRICT;
+CREATE TABLE org_mutes (
+      org_id       INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      muted_org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      by_id        INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at   INTEGER NOT NULL,
+      PRIMARY KEY (org_id, muted_org_id)
+    ) STRICT;
+CREATE TABLE event_crew (
+      event_id   INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      org_id     INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      kind       TEXT NOT NULL CHECK (kind IN ('scan', 'door')),
+      added_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at INTEGER NOT NULL,
+      PRIMARY KEY (event_id, user_id)
+    ) STRICT;
+CREATE TABLE staff_mutes (
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        kind    TEXT NOT NULL,
+        PRIMARY KEY (user_id, kind)
+    ) STRICT, WITHOUT ROWID;
+CREATE TABLE team_asks (
+      event_id   INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      status     TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','yes','no')),
+      created_at INTEGER NOT NULL,
+      decided_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      decided_at INTEGER,
+      PRIMARY KEY (event_id, user_id)
+    ) STRICT;
+CREATE TABLE qr_helpers (
+      session_id INTEGER NOT NULL REFERENCES qr_sessions(id),
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      added_by INTEGER REFERENCES users(id),
+      created_at INTEGER NOT NULL,
+      PRIMARY KEY (session_id, user_id));
+CREATE TABLE star_gifts (
+      charge_id TEXT PRIMARY KEY,
+      amount INTEGER NOT NULL CHECK (amount > 0),
+      created_at INTEGER NOT NULL) WITHOUT ROWID;
+CREATE TABLE usage_days (
+      day INTEGER NOT NULL,
+      key TEXT NOT NULL,
+      n INTEGER NOT NULL,
+      PRIMARY KEY (day, key)) WITHOUT ROWID;
+CREATE TABLE vol_batches (
+      id INTEGER PRIMARY KEY,
+      org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      source TEXT NOT NULL,
+      sha TEXT NOT NULL,
+      counts TEXT NOT NULL DEFAULT '{}',
+      created_at INTEGER NOT NULL,
+      undone_at INTEGER) STRICT;
+CREATE TABLE vol_people (
+      id INTEGER PRIMARY KEY,
+      org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      user_id INTEGER REFERENCES users(id),
+      name TEXT NOT NULL DEFAULT '',
+      tg TEXT,
+      raw TEXT NOT NULL DEFAULT '{}',
+      balance INTEGER NOT NULL DEFAULT 0,
+      batch_id INTEGER REFERENCES vol_batches(id) ON DELETE SET NULL,
+      created_at INTEGER NOT NULL) STRICT;
+CREATE TABLE vol_keys (
+      org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      ikey TEXT NOT NULL,
+      vol_id INTEGER NOT NULL REFERENCES vol_people(id) ON DELETE CASCADE,
+      PRIMARY KEY (org_id, ikey)) STRICT;
+CREATE TABLE vol_ties (
+      vol_id INTEGER NOT NULL REFERENCES vol_people(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      PRIMARY KEY (vol_id, user_id)) STRICT, WITHOUT ROWID;
+CREATE TABLE vol_gone (
+      org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      khash TEXT NOT NULL,
+      PRIMARY KEY (org_id, khash)) STRICT, WITHOUT ROWID;
+CREATE TABLE vol_meets (
+      session_id INTEGER PRIMARY KEY REFERENCES qr_sessions(id) ON DELETE CASCADE,
+      org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      team INTEGER NOT NULL DEFAULT 0,
+      expected_n INTEGER NOT NULL DEFAULT 0,
+      held INTEGER,
+      created_at INTEGER NOT NULL) STRICT;
+CREATE TABLE vol_expected (
+      session_id INTEGER NOT NULL REFERENCES vol_meets(session_id) ON DELETE CASCADE,
+      vol_id INTEGER NOT NULL REFERENCES vol_people(id) ON DELETE CASCADE,
+      PRIMARY KEY (session_id, vol_id)) STRICT, WITHOUT ROWID;
+CREATE TABLE vol_shifts (
+      id INTEGER PRIMARY KEY,
+      vol_id INTEGER NOT NULL REFERENCES vol_people(id) ON DELETE CASCADE,
+      session_id INTEGER REFERENCES qr_sessions(id) ON DELETE SET NULL,
+      in_at INTEGER NOT NULL,
+      out_at INTEGER,
+      in_by INTEGER REFERENCES users(id),
+      out_by INTEGER REFERENCES users(id),
+      gone_at INTEGER) STRICT;
+CREATE TABLE vol_misses (
+      id INTEGER PRIMARY KEY,
+      vol_id INTEGER NOT NULL REFERENCES vol_people(id) ON DELETE CASCADE,
+      session_id INTEGER REFERENCES qr_sessions(id) ON DELETE SET NULL,
+      n INTEGER NOT NULL CHECK (n IN (1, -1)),
+      by INTEGER REFERENCES users(id),
+      at INTEGER NOT NULL,
+      gone_at INTEGER) STRICT;
+CREATE TABLE vol_edits (
+      id INTEGER PRIMARY KEY,
+      vol_id INTEGER NOT NULL REFERENCES vol_people(id) ON DELETE CASCADE,
+      what TEXT NOT NULL,
+      ref INTEGER,
+      old TEXT,
+      new TEXT,
+      reason TEXT NOT NULL DEFAULT '',
+      by INTEGER REFERENCES users(id),
+      at INTEGER NOT NULL) STRICT;
+CREATE TABLE vol_access (
+      org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      granted_by INTEGER REFERENCES users(id),
+      at INTEGER NOT NULL,
+      PRIMARY KEY (org_id, user_id)) STRICT;
+CREATE TABLE appeals (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,  -- never reused: SG's answer to a deleted one can't land on the next one
+      topic TEXT,
+      body TEXT NOT NULL,
+      anon INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'work', 'closed')),
+      answer TEXT,
+      created_at INTEGER NOT NULL,
+      due_at INTEGER NOT NULL,
+      answered_at INTEGER,
+      closed_at INTEGER,
+      nonce TEXT, desk TEXT NOT NULL DEFAULT 'sg' CHECK (desk IN ('sg', 'help'))) STRICT;
+CREATE TABLE appeal_authors (
+      appeal_id INTEGER PRIMARY KEY REFERENCES appeals(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id)) STRICT;
+CREATE TABLE appeal_sends (
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      at INTEGER NOT NULL, desk TEXT NOT NULL DEFAULT 'sg') STRICT;
+CREATE TABLE appeal_consents (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id),
+      version TEXT NOT NULL,
+      at INTEGER NOT NULL) STRICT;
+CREATE TABLE appeal_staff (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id),
+      at INTEGER NOT NULL) STRICT;
+CREATE TABLE gallery_photos (
+      file_id    INTEGER PRIMARY KEY REFERENCES files(id),
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      event_id   INTEGER REFERENCES events(id) ON DELETE SET NULL,  -- its event gone: still the student's, a plain KBTU photo
+      created_at INTEGER NOT NULL, topic TEXT CHECK (topic IN ('campus', 'study', 'life', 'other')), place TEXT CHECK (place IN ('main', 'b2', 'dorm', 'away'))) STRICT;
+CREATE TABLE chat_sync (
+      chat_id INTEGER PRIMARY KEY,
+      org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL CHECK (kind IN ('main', 'dept')),
+      tag_id INTEGER REFERENCES org_tags(id) ON DELETE CASCADE,
+      paused TEXT,
+      sweep TEXT CHECK (sweep IN ('dry', 'apply', 'night')),
+      sweep_pos INTEGER NOT NULL DEFAULT 0,
+      result TEXT,
+      last_update INTEGER NOT NULL DEFAULT 0,
+      last_date INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      CHECK ((kind = 'dept') = (tag_id IS NOT NULL))) STRICT;
+CREATE TABLE chat_sync_todo (
+      chat_id INTEGER NOT NULL REFERENCES chat_sync(chat_id) ON DELETE CASCADE ON UPDATE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      op TEXT NOT NULL CHECK (op IN ('add', 'drop')),
+      PRIMARY KEY (chat_id, user_id)) STRICT, WITHOUT ROWID;
+CREATE TABLE chat_sync_ask (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id),
+      at INTEGER NOT NULL) STRICT;
+CREATE TABLE fchan_photos (
+      id         INTEGER PRIMARY KEY,
+      user_id    INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      post_id    INTEGER REFERENCES fchan_posts(id) ON DELETE CASCADE,
+      n          INTEGER NOT NULL DEFAULT 0,
+      path       TEXT NOT NULL,
+      width      INTEGER NOT NULL,
+      height     INTEGER NOT NULL,
+      color      TEXT,
+      msg        INTEGER,
+      created_at INTEGER NOT NULL, edit_id INTEGER, sync INTEGER NOT NULL DEFAULT 0 CHECK (sync IN (0, 1))) STRICT;
+CREATE TABLE vol_hands (
+      id INTEGER PRIMARY KEY,
+      session_id INTEGER NOT NULL REFERENCES qr_sessions(id) ON DELETE CASCADE,
+      token TEXT NOT NULL UNIQUE,
+      made_by INTEGER REFERENCES users(id),
+      user_id INTEGER REFERENCES users(id),
+      created_at INTEGER NOT NULL,
+      taken_at INTEGER,
+      revoked_at INTEGER) STRICT;
+CREATE TABLE report_consents (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id),
+      version TEXT NOT NULL,
+      at INTEGER NOT NULL) STRICT;
+CREATE TABLE club_reports (
+      event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      dept_id INTEGER REFERENCES org_tags(id) ON DELETE SET NULL,
+      guests INTEGER CHECK (guests BETWEEN 0 AND 100000),
+      note TEXT NOT NULL DEFAULT '',
+      filled_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      filled_at INTEGER NOT NULL,
+      edited_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      edited_at INTEGER NOT NULL,
+      PRIMARY KEY (event_id, org_id)) STRICT;
+CREATE TABLE club_report_marks (
+      event_id INTEGER NOT NULL,
+      org_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      status TEXT NOT NULL CHECK (status IN ('present', 'late', 'absent', 'excused')), comment TEXT NOT NULL DEFAULT '' CHECK (length(comment) <= 300), comment_by INTEGER REFERENCES users(id) ON DELETE SET NULL, comment_at INTEGER, comment_edited_by INTEGER REFERENCES users(id) ON DELETE SET NULL, comment_edited_at INTEGER,
+      PRIMARY KEY (event_id, org_id, user_id),
+      FOREIGN KEY (event_id, org_id) REFERENCES club_reports(event_id, org_id) ON DELETE CASCADE) STRICT;
+CREATE TABLE event_teams (
+      id INTEGER PRIMARY KEY,
+      event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      name_key TEXT NOT NULL,
+      token TEXT NOT NULL UNIQUE,
+      open INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      UNIQUE (event_id, name_key)) STRICT;
+CREATE TABLE event_team_members (
+      id INTEGER PRIMARY KEY,
+      team_id INTEGER NOT NULL REFERENCES event_teams(id) ON DELETE CASCADE,
+      event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      UNIQUE (event_id, user_id)) STRICT;
+CREATE TABLE team_consents (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      version TEXT NOT NULL,
+      at INTEGER NOT NULL) STRICT;
+CREATE TABLE swear_hits (
+      id INTEGER PRIMARY KEY,
+      chat_id INTEGER NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+      tg_id INTEGER NOT NULL,
+      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      stem TEXT NOT NULL,
+      at INTEGER NOT NULL,
+      warn INTEGER NOT NULL,
+      muted INTEGER NOT NULL DEFAULT 0) STRICT;
+CREATE TABLE chat_seen (
+  chat_id INTEGER NOT NULL,
+  tg_id INTEGER NOT NULL,
+  org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+  seen_at INTEGER NOT NULL,
+  PRIMARY KEY (chat_id, tg_id)) STRICT, WITHOUT ROWID;
+CREATE TABLE appeal_solved (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      raised TEXT NOT NULL,
+      changed TEXT NOT NULL,
+      topic TEXT,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at INTEGER NOT NULL,
+      gone_at INTEGER) STRICT;
+CREATE TABLE chat_waits (
+      id INTEGER PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      chat_id INTEGER NOT NULL,
+      chat TEXT NOT NULL,
+      invite TEXT,
+      until INTEGER NOT NULL,
+      UNIQUE (user_id, chat_id)) STRICT;
+CREATE TABLE chat_seen_free (
+      chat_id INTEGER NOT NULL,
+      tg_id INTEGER NOT NULL,
+      seen_at INTEGER NOT NULL,
+      PRIMARY KEY (chat_id, tg_id)) STRICT, WITHOUT ROWID;
+CREATE TABLE qr_hand_marks (
+      session_id INTEGER NOT NULL REFERENCES qr_sessions(id) ON DELETE CASCADE,
+      who        TEXT NOT NULL,
+      marked_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      at         INTEGER NOT NULL,
+      PRIMARY KEY (session_id, who)) STRICT;
+CREATE TABLE help_staff (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id),
+      at INTEGER NOT NULL) STRICT;
+CREATE TABLE help_consents (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id),
+      version TEXT NOT NULL,
+      at INTEGER NOT NULL) STRICT;
+CREATE TABLE chat_place (
+      chat_id INTEGER PRIMARY KEY REFERENCES chats(id) ON DELETE CASCADE,
+      org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      place TEXT NOT NULL CHECK (place IN ('main', 'dept', 'other')),
+      tag_id INTEGER REFERENCES org_tags(id) ON DELETE CASCADE,
+      at INTEGER NOT NULL,
+      CHECK ((place = 'dept') = (tag_id IS NOT NULL))) STRICT;
+CREATE TABLE subject_holds (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      subject TEXT NOT NULL,
+      title TEXT NOT NULL,
+      by_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      why TEXT NOT NULL,
+      at INTEGER NOT NULL,
+      until INTEGER NOT NULL,
+      UNIQUE (user_id, subject)) STRICT;
+CREATE TABLE staff_ok (  -- IF NOT EXISTS: tests rewind user_version to rerun older ones
+      user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      granted_at INTEGER NOT NULL) STRICT;
+CREATE TABLE round_wide (  -- IF NOT EXISTS: tests rewind user_version
+      slot_id INTEGER PRIMARY KEY REFERENCES round_slots(id) ON DELETE CASCADE,
+      minutes INTEGER NOT NULL CHECK (minutes BETWEEN 5 AND 840)) STRICT;
+CREATE TABLE auto_events (  -- IF NOT EXISTS: tests rewind user_version
+      post_id  INTEGER PRIMARY KEY REFERENCES posts(id) ON DELETE CASCADE,
+      org_id   INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      event_id INTEGER REFERENCES events(id) ON DELETE SET NULL,  -- NULL: no event in it, or its draft deleted (never proposed again)
+      at       INTEGER NOT NULL) STRICT;
+CREATE TABLE santa_events (  -- IF NOT EXISTS: tests rewind user_version
+      event_id INTEGER PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE,
+      drawn_at INTEGER) STRICT;
+CREATE TABLE santa_people (
+      event_id INTEGER NOT NULL REFERENCES santa_events(event_id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      wish TEXT NOT NULL,
+      gives_to INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      PRIMARY KEY (event_id, user_id)) STRICT, WITHOUT ROWID;
+CREATE TABLE org_awards (  -- IF NOT EXISTS: tests rewind user_version
+      org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      year INTEGER NOT NULL,
+      title TEXT NOT NULL,  -- the nomination's English name as the ceremony gives it
+      created_at INTEGER NOT NULL,
+      PRIMARY KEY (org_id, year, title)) STRICT;
+CREATE TABLE event_docs (  -- IF NOT EXISTS: tests rewind user_version
+      event_id INTEGER PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE,
+      title TEXT,
+      pages TEXT NOT NULL,
+      created_at INTEGER NOT NULL) STRICT;
+CREATE TABLE santa_games (  -- IF NOT EXISTS: tests rewind user_version
+      event_id INTEGER PRIMARY KEY REFERENCES santa_events(event_id) ON DELETE CASCADE,
+      budget INTEGER CHECK (budget IS NULL OR budget > 0),
+      checked INTEGER,
+      soon INTEGER,
+      eve INTEGER,
+      late INTEGER,
+      nudged_at INTEGER) STRICT;
+CREATE TABLE credits (  -- IF NOT EXISTS: tests rewind user_version
+      id INTEGER PRIMARY KEY,
+      tg_id INTEGER,
+      kind TEXT NOT NULL CHECK (kind IN ('idea', 'find', 'code')),
+      ru TEXT NOT NULL,
+      kk TEXT NOT NULL,
+      en TEXT NOT NULL,
+      shipped_on TEXT,  -- YYYY-MM-DD; NULL: suggested, not listed
+      created_at INTEGER NOT NULL, gh TEXT, name TEXT, via_ai INTEGER NOT NULL DEFAULT 0 CHECK (via_ai IN (0, 1))) STRICT;
+CREATE TABLE credit_consents (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,  -- never reused: a yes names the answer it follows (credits.answer's rev)
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      show INTEGER NOT NULL CHECK (show IN (0, 1)),  -- 0: a no, a withdrawal, or a grant ended by an account move
+      version TEXT NOT NULL,  -- the consent text it answered
+      at INTEGER NOT NULL) STRICT;
+CREATE TABLE receipt_auto_checks (  -- IF NOT EXISTS: tests rewind user_version
+      receipt_id INTEGER PRIMARY KEY REFERENCES receipts(id) ON DELETE CASCADE
+    ) STRICT;
+CREATE TABLE kri_consents (  -- IF NOT EXISTS: tests rewind user_version
+      user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      version TEXT NOT NULL,
+      at INTEGER NOT NULL) STRICT;
+CREATE TABLE ev_groups (  -- IDs are never reused after a draw.
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      advance INTEGER NOT NULL DEFAULT 2 CHECK (advance >= 0),
+      position INTEGER NOT NULL,
+      UNIQUE (event_id, position)) STRICT;
+CREATE TABLE ev_group_teams (
+      group_id INTEGER NOT NULL REFERENCES ev_groups(id) ON DELETE CASCADE,
+      team_id INTEGER NOT NULL UNIQUE REFERENCES event_teams(id) ON DELETE CASCADE,
+      PRIMARY KEY (group_id, team_id)) STRICT;
+CREATE TABLE ev_matches (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      group_id INTEGER REFERENCES ev_groups(id) ON DELETE CASCADE,
+      stage TEXT NOT NULL DEFAULT 'group' CHECK (stage IN ('group', 'upper', 'lower', 'final')),
+      round INTEGER,
+      slot INTEGER,
+      next_win INTEGER REFERENCES ev_matches(id),
+      next_lose INTEGER REFERENCES ev_matches(id),
+      home INTEGER REFERENCES event_teams(id) ON DELETE SET NULL,
+      away INTEGER REFERENCES event_teams(id) ON DELETE SET NULL,
+      home_score INTEGER CHECK (home_score >= 0),
+      away_score INTEGER CHECK (away_score >= 0),
+      played_at INTEGER,
+      updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      CHECK ((home_score IS NULL) = (away_score IS NULL)),
+      CHECK ((stage = 'group' AND group_id IS NOT NULL AND home IS NOT NULL AND away IS NOT NULL AND home < away
+              AND round IS NULL AND slot IS NULL AND next_win IS NULL AND next_lose IS NULL)
+          OR (stage != 'group' AND group_id IS NULL AND round IS NOT NULL AND round > 0 AND slot IS NOT NULL AND slot > 0
+              AND (stage = 'upper' AND round = 1 OR home IS NULL AND away IS NULL)
+              AND (home_score IS NULL OR home_score != away_score))),
+      UNIQUE (group_id, home, away),
+      UNIQUE (event_id, stage, round, slot)) STRICT;
+CREATE TABLE event_guests (
+      event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      student_id TEXT NOT NULL,
+      adult INTEGER CHECK (adult IN (0, 1)),
+      surname_hash BLOB, came_at INTEGER, name TEXT CHECK (name IS NULL OR length(name) <= 120), username TEXT CHECK (username IS NULL OR length(username) <= 40), team TEXT CHECK (team IS NULL OR length(team) <= 80), walk_in INTEGER NOT NULL DEFAULT 0 CHECK (walk_in IN (0, 1)), door_key TEXT,
+      PRIMARY KEY (event_id, student_id)
+    ) STRICT;
+CREATE TABLE reg_age (
+      registration_id INTEGER PRIMARY KEY REFERENCES registrations(id) ON DELETE CASCADE,
+      adult INTEGER NOT NULL CHECK (adult IN (0, 1)),
+      set_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      set_at INTEGER NOT NULL
+    ) STRICT;
+CREATE TABLE appeal_ai_consents (
+      user_id INTEGER PRIMARY KEY REFERENCES students(user_id) ON DELETE CASCADE,
+      version TEXT NOT NULL, at INTEGER NOT NULL) STRICT;
+CREATE TABLE retired_tickets (
+        ticket_code TEXT PRIMARY KEY,
+        event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE
+    ) STRICT;
+CREATE TABLE door_misses (
+        event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        misses INTEGER NOT NULL,
+        last_at INTEGER NOT NULL,
+        PRIMARY KEY (event_id, user_id)
+    ) STRICT;
+CREATE TABLE fchan_hearts (
+      post_id INTEGER NOT NULL REFERENCES fchan_posts(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, emoji TEXT NOT NULL DEFAULT '❤️',
+      PRIMARY KEY (post_id, user_id)
+    ) STRICT;
+CREATE TABLE notification_days (
+      day INTEGER NOT NULL,
+      category TEXT NOT NULL,
+      sent INTEGER NOT NULL DEFAULT 0,
+      useful INTEGER NOT NULL DEFAULT 0,
+      turned_off INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (day, category)
+    ) STRICT;
+CREATE TABLE web_sessions (
+      digest BLOB PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at INTEGER NOT NULL,
+      last_used_at INTEGER NOT NULL
+    ) STRICT;
+CREATE TABLE web_login_used (
+      digest BLOB PRIMARY KEY,
+      expires_at INTEGER NOT NULL
+    ) STRICT;
+CREATE TABLE fchan_feed_pages (
+      token TEXT PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      sort TEXT NOT NULL,
+      expires_at INTEGER NOT NULL,
+      post_ids BLOB NOT NULL
+    ) STRICT;
+CREATE TABLE "reports" (
+        id INTEGER PRIMARY KEY,
+        reporter_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        target TEXT NOT NULL CHECK (target IN ('post', 'comment', 'event', 'user', 'org', 'photo', 'ask', 'thread', 'reply', 'fpost')),
+        target_id INTEGER NOT NULL,
+        reason TEXT NOT NULL CHECK (reason IN ('spam', 'insult', 'danger', 'other', 'rules', 'offtopic', 'me')),
+        note TEXT,
+        status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'actioned', 'dismissed')),
+        created_at INTEGER NOT NULL,
+        resolved_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        resolved_at INTEGER
+    , body TEXT) STRICT;
+CREATE TABLE forms (
+      id INTEGER PRIMARY KEY,
+      slug TEXT NOT NULL UNIQUE,
+      spec TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      closed_at INTEGER
+    ) STRICT;
+CREATE TABLE form_answers (
+      id INTEGER PRIMARY KEY,
+      form_id INTEGER NOT NULL REFERENCES forms(id) ON DELETE CASCADE,
+      answers TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    ) STRICT;
+CREATE TABLE chat_call_admins (chat_id INTEGER PRIMARY KEY REFERENCES chats(id) ON DELETE CASCADE) STRICT;
+CREATE TABLE santa_msgs (
+      id INTEGER PRIMARY KEY,
+      event_id INTEGER NOT NULL REFERENCES santa_events(event_id) ON DELETE CASCADE,
+      giver_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      to_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      from_giver INTEGER NOT NULL CHECK (from_giver IN (0, 1)),
+      text TEXT CHECK (length(text) BETWEEN 1 AND 500),
+      created_at INTEGER NOT NULL,
+      done_at INTEGER) STRICT;
+CREATE TABLE santa_sends (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      at INTEGER NOT NULL) STRICT;
+CREATE TABLE santa_chats (  -- its own table, not a column: tests rewind user_version
+      event_id INTEGER PRIMARY KEY REFERENCES santa_events(event_id) ON DELETE CASCADE,
+      until INTEGER NOT NULL) STRICT;
+CREATE TABLE anon_feedback (
+      id INTEGER PRIMARY KEY,
+      body TEXT NOT NULL CHECK (length(body) <= 1000),
+      day INTEGER NOT NULL
+    ) STRICT;
+CREATE TABLE helper_offers (
+      id INTEGER PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      kinds TEXT NOT NULL,
+      note TEXT CHECK (note IS NULL OR length(note) <= 500),
+      consent TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    ) STRICT;
+CREATE TABLE gallery_consents (
+        user_id INTEGER PRIMARY KEY NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        version TEXT NOT NULL,
+        allowed INTEGER NOT NULL CHECK (allowed IN (0, 1)),
+        at INTEGER NOT NULL
+    ) STRICT;
+CREATE TABLE broadcast_votes (
+      name TEXT NOT NULL,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      vote INTEGER NOT NULL CHECK (vote IN (0, 1)),
+      at INTEGER NOT NULL,
+      PRIMARY KEY (name, user_id)
+    ) STRICT;
+CREATE TABLE credit_team (
+      user_id INTEGER PRIMARY KEY NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      added_at INTEGER NOT NULL
+    ) STRICT;
+CREATE TABLE pymk_consents (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      version TEXT NOT NULL,
+      at INTEGER NOT NULL) STRICT;
+CREATE TABLE pymk (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      other_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      clubs INTEGER NOT NULL,
+      score INTEGER NOT NULL,
+      PRIMARY KEY (user_id, other_id)) STRICT;
+CREATE TABLE pymk_dismissed (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      other_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      at INTEGER NOT NULL,
+      PRIMARY KEY (user_id, other_id)) STRICT;
+CREATE TABLE yt_channels (
+      org_id     INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      path       TEXT NOT NULL,
+      channel_id TEXT,
+      seen_until INTEGER,
+      checked_at INTEGER NOT NULL,
+      PRIMARY KEY (org_id, path)
+    ) STRICT;
+CREATE TABLE yt_videos (
+      video_id     TEXT PRIMARY KEY,
+      org_id       INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      channel_id   TEXT NOT NULL,
+      post_id      INTEGER REFERENCES posts(id) ON DELETE SET NULL,
+      title        TEXT NOT NULL,
+      published_at INTEGER NOT NULL
+    ) STRICT;
+CREATE TABLE donations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      source TEXT NOT NULL CHECK (source IN ('stars', 'receipt')),
+      status TEXT NOT NULL CHECK (status IN ('pending', 'confirmed', 'rejected')),
+      amount INTEGER CHECK (amount > 0),
+      stars INTEGER CHECK (stars > 0),
+      star_rate INTEGER CHECK (star_rate > 0),
+      charge_id TEXT UNIQUE,
+      file_id INTEGER REFERENCES files(id),
+      sha256 TEXT,
+      receipt_no TEXT,
+      read_amount INTEGER,
+      recipient_name TEXT,
+      sender_name TEXT,
+      paid_at INTEGER,
+      flags TEXT NOT NULL DEFAULT '',
+      auto INTEGER NOT NULL DEFAULT 0 CHECK (auto IN (0, 1)),
+      consent TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      reviewed_at INTEGER,
+      reviewed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      purge_at INTEGER,
+      revision INTEGER NOT NULL DEFAULT 0,
+      undo TEXT,
+      CHECK (status != 'confirmed' OR amount IS NOT NULL)
+    ) STRICT;
+CREATE TABLE sponsor_consents (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      version TEXT NOT NULL,
+      show INTEGER NOT NULL CHECK (show IN (0, 1)),
+      at INTEGER NOT NULL
+    , amount TEXT CHECK (amount IS NULL OR show = 1)) STRICT;
+CREATE TABLE fchan_signed (
+      reply_id INTEGER PRIMARY KEY REFERENCES fchan_replies(id) ON DELETE CASCADE,
+      user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE
+    ) STRICT;
+CREATE TABLE qr_meet_scans (
+      id INTEGER PRIMARY KEY,
+      session_id INTEGER NOT NULL REFERENCES qr_sessions(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      scanned_at INTEGER NOT NULL,
+      phase TEXT NOT NULL CHECK (phase IN ('in', 'out')),
+      flag TEXT CHECK (flag IN ('outsider', 'department', 'unassigned'))
+    ) STRICT;
+CREATE TABLE research_forms (
+      form_id INTEGER PRIMARY KEY REFERENCES forms(id) ON DELETE CASCADE,
+      about TEXT NOT NULL CHECK (length(about) BETWEEN 1 AND 200)
+    ) STRICT;
+CREATE TABLE research_requests (
+      id INTEGER PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title TEXT NOT NULL CHECK (length(title) BETWEEN 1 AND 120),
+      goal TEXT NOT NULL CHECK (length(goal) BETWEEN 1 AND 1200),
+      questions TEXT NOT NULL CHECK (length(questions) BETWEEN 1 AND 4000),
+      organizer TEXT NOT NULL CHECK (length(organizer) BETWEEN 1 AND 200),
+      consent TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      approved_at INTEGER
+    ) STRICT;
+CREATE TABLE research_answers (
+      id TEXT PRIMARY KEY NOT NULL,
+      form_id INTEGER NOT NULL REFERENCES forms(id) ON DELETE CASCADE,
+      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      answers TEXT NOT NULL,
+      consent TEXT NOT NULL,
+      day INTEGER CHECK ((day IS NULL) = (user_id IS NULL))
+    ) STRICT, WITHOUT ROWID;
+CREATE TABLE research_participants (
+      form_id INTEGER NOT NULL REFERENCES forms(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (form_id, user_id)
+    ) STRICT, WITHOUT ROWID;
+CREATE TABLE event_covers (
+      event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      format TEXT NOT NULL CHECK (format IN ('feed', 'card', 'list')),
+      file_id INTEGER REFERENCES files(id),
+      focus TEXT,
+      PRIMARY KEY (event_id, format)
+    ) STRICT;
+CREATE TABLE event_reviews (
+      event_id INTEGER PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE,
+      asked_at INTEGER,
+      reason TEXT CHECK (reason IN ('details', 'when', 'cover', 'repeat', 'later')),
+      returned_at INTEGER
+    ) STRICT;
+CREATE TABLE dmp_list (  -- IF NOT EXISTS: tests rewind user_version
+      id INTEGER PRIMARY KEY,
+      tg_id INTEGER UNIQUE,
+      tg_username TEXT UNIQUE COLLATE NOCASE,
+      added_at INTEGER NOT NULL,
+      greeted_at INTEGER,
+      CHECK (tg_id IS NOT NULL OR tg_username IS NOT NULL)) STRICT;
+CREATE TABLE ig_accounts (
+      org_id     INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      handle     TEXT NOT NULL,
+      ig_id      TEXT,
+      seen_until INTEGER,
+      checked_at INTEGER NOT NULL,
+      PRIMARY KEY (org_id, handle)
+    ) STRICT;
+CREATE TABLE ig_media (
+      media_id     TEXT PRIMARY KEY,
+      org_id       INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      handle       TEXT NOT NULL,
+      post_id      INTEGER REFERENCES posts(id) ON DELETE SET NULL,
+      published_at INTEGER NOT NULL
+    ) STRICT;
+CREATE TABLE user_platforms (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      kind    TEXT NOT NULL CHECK (kind IN ('android', 'ios', 'desktop', 'web')),
+      seen_at INTEGER NOT NULL,
+      PRIMARY KEY (user_id, kind)
+    ) STRICT;
+CREATE TABLE identities (
+      provider TEXT NOT NULL,
+      subject TEXT NOT NULL,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      consent TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      PRIMARY KEY (provider, subject),
+      UNIQUE (user_id, provider)
+    ) STRICT;
+CREATE TABLE push_devices (
+      token TEXT PRIMARY KEY,
+      session BLOB NOT NULL REFERENCES web_sessions(digest) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      consent TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    , provider TEXT NOT NULL DEFAULT 'apns' CHECK (provider IN ('apns', 'fcm')), dead_at INTEGER) STRICT;
+CREATE TABLE fchan_coming (
+      post_id INTEGER NOT NULL REFERENCES fchan_posts(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      at      INTEGER NOT NULL,
+      PRIMARY KEY (post_id, user_id)
+    ) STRICT;
+CREATE TABLE app_chats (
+      user_id    INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      channel    INTEGER NOT NULL DEFAULT 0 CHECK (channel IN (0, 1)),
+      grp        INTEGER NOT NULL DEFAULT 0 CHECK (grp IN (0, 1)),
+      checked_at INTEGER NOT NULL DEFAULT 0
+    ) STRICT;
+CREATE TABLE fchan_edits (
+      id         INTEGER PRIMARY KEY,
+      post_id    INTEGER NOT NULL REFERENCES fchan_posts(id) ON DELETE CASCADE,
+      body       TEXT NOT NULL,
+      photos     TEXT,
+      status     TEXT NOT NULL CHECK (status IN ('check', 'held', 'done', 'refused', 'declined', 'gone')),
+      why        TEXT,
+      created_at INTEGER NOT NULL
+    ) STRICT;
+CREATE TABLE android_app (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      seen_at INTEGER NOT NULL
+    ) STRICT;
+CREATE TABLE chat_topics (
+      chat_id INTEGER NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+      topic   INTEGER NOT NULL,
+      title   TEXT NOT NULL,
+      PRIMARY KEY (chat_id, topic)
+    ) STRICT;
+CREATE TABLE lib_rooms (
+      id         INTEGER PRIMARY KEY,
+      name       TEXT NOT NULL,
+      screen     TEXT NOT NULL UNIQUE,
+      created_at INTEGER NOT NULL,
+      gone_at    INTEGER
+    ) STRICT;
+CREATE TABLE lib_tables (
+      id         INTEGER PRIMARY KEY,
+      room_id    INTEGER NOT NULL REFERENCES lib_rooms(id) ON DELETE CASCADE,
+      label      TEXT NOT NULL,
+      seats      INTEGER NOT NULL CHECK (seats BETWEEN 1 AND 12),
+      code       TEXT NOT NULL UNIQUE,
+      created_at INTEGER NOT NULL,
+      gone_at    INTEGER
+    ) STRICT;
+CREATE TABLE lib_sits (
+      id         INTEGER PRIMARY KEY,
+      table_id   INTEGER NOT NULL REFERENCES lib_tables(id) ON DELETE CASCADE,
+      seat       INTEGER NOT NULL,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      started_at INTEGER NOT NULL,
+      until      INTEGER NOT NULL,
+      ended_at   INTEGER,
+      why        TEXT
+    ) STRICT;
+CREATE TABLE lib_reports (
+      id          INTEGER PRIMARY KEY,
+      sit_id      INTEGER NOT NULL REFERENCES lib_sits(id) ON DELETE CASCADE,
+      reporter_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at  INTEGER NOT NULL,
+      answered_at INTEGER,
+      still_at    INTEGER,
+      false_at    INTEGER
+    ) STRICT;
+CREATE TABLE lib_consents (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      version TEXT NOT NULL,
+      at      INTEGER NOT NULL
+    ) STRICT;
+CREATE TABLE org_flags (  -- IF NOT EXISTS: tests rewind user_version
+      org_id         INTEGER PRIMARY KEY REFERENCES orgs(id) ON DELETE CASCADE,
+      auto_publish   INTEGER NOT NULL DEFAULT 0 CHECK (auto_publish IN (0, 1)),
+      guests_private INTEGER NOT NULL DEFAULT 0 CHECK (guests_private IN (0, 1))
+    ) STRICT;
+CREATE TABLE roster_rejections (
+      row_id  INTEGER NOT NULL REFERENCES roster_pending(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (row_id, user_id)
+    ) STRICT;
+CREATE TABLE game_rooms (
+      id         INTEGER PRIMARY KEY,
+      game       TEXT NOT NULL,
+      code       TEXT NOT NULL UNIQUE,
+      host_id    INTEGER NOT NULL REFERENCES users(id),
+      state      TEXT NOT NULL,
+      version    INTEGER NOT NULL DEFAULT 1,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    ) STRICT;
+CREATE TABLE game_players (
+      room_id INTEGER NOT NULL REFERENCES game_rooms(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      seen_at INTEGER NOT NULL,
+      PRIMARY KEY (room_id, user_id)
+    ) STRICT;
+CREATE TABLE ako_programs (  -- IF NOT EXISTS: tests rewind user_version
+      id        INTEGER PRIMARY KEY,
+      org_id    INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      key       TEXT NOT NULL,
+      kind      TEXT NOT NULL CHECK (kind IN ('degree', 'short')),
+      info      TEXT NOT NULL,                      -- {"ru": {"title", "sub", "price", "length", "format"}, "kk": ..., "en": ...}
+      url       TEXT NOT NULL DEFAULT '',          -- the program's page on the org's site, the source of the info
+      interview INTEGER NOT NULL DEFAULT 0 CHECK (interview IN (0, 1)),
+      first     TEXT NOT NULL DEFAULT '',          -- document keys asked before sending, comma-separated
+      later     TEXT NOT NULL DEFAULT '',          -- needed for enrolment, may come after sending
+      optional  TEXT NOT NULL DEFAULT '',          -- welcome, never asked for
+      sort      INTEGER NOT NULL DEFAULT 0,
+      open      INTEGER NOT NULL DEFAULT 1 CHECK (open IN (0, 1)),
+      UNIQUE (org_id, key)
+    ) STRICT;
+CREATE TABLE ako_slots (
+      id         INTEGER PRIMARY KEY,
+      org_id     INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      starts_at  INTEGER NOT NULL,
+      minutes    INTEGER NOT NULL CHECK (minutes BETWEEN 5 AND 240),
+      cap        INTEGER NOT NULL DEFAULT 1 CHECK (cap BETWEEN 1 AND 50),
+      who        TEXT NOT NULL DEFAULT '',          -- the interviewer, for the managers
+      teams      TEXT,                              -- this slot's own meeting link, else its day's
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at INTEGER NOT NULL,
+      UNIQUE (org_id, starts_at, who)
+    ) STRICT;
+CREATE TABLE ako_days (
+      org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      day    TEXT NOT NULL,                         -- YYYY-MM-DD in Almaty
+      teams  TEXT NOT NULL,
+      PRIMARY KEY (org_id, day)
+    ) STRICT;
+CREATE TABLE ako_apps (
+      id           INTEGER PRIMARY KEY,
+      org_id       INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      token        BLOB NOT NULL UNIQUE,            -- SHA-256 of the link's secret, never the secret
+      program_id   INTEGER REFERENCES ako_programs(id) ON DELETE SET NULL,
+      name         TEXT NOT NULL DEFAULT '',
+      phone        TEXT NOT NULL DEFAULT '',
+      email        TEXT NOT NULL DEFAULT '',
+      lang         TEXT NOT NULL DEFAULT 'ru' CHECK (lang IN ('ru', 'kk', 'en')),
+      status       TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'sent', 'review', 'accepted', 'declined')),
+      slot_id      INTEGER REFERENCES ako_slots(id) ON DELETE SET NULL,
+      rebook       TEXT,                            -- the managers took the booked time away: their reason, until a new pick
+      consent      TEXT,                            -- the notice's version agreed to (CONSENT), before any document
+      consent_at   INTEGER,
+      note         TEXT NOT NULL DEFAULT '',        -- the managers' own
+      created_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at   INTEGER NOT NULL,
+      updated_at   INTEGER NOT NULL,
+      sent_at      INTEGER
+    ) STRICT;
+CREATE TABLE ako_starts (
+      org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      ip     TEXT NOT NULL,
+      at     INTEGER NOT NULL
+    ) STRICT;
+CREATE TABLE ako_reviewers (
+      org_id  INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (org_id, user_id)
+    ) STRICT;
+CREATE TABLE ako_files (
+      id         INTEGER PRIMARY KEY,
+      app_id     INTEGER NOT NULL REFERENCES ako_apps(id) ON DELETE CASCADE,
+      doc        TEXT NOT NULL,
+      path       TEXT NOT NULL UNIQUE,              -- under the private ako/ folder
+      mime       TEXT NOT NULL CHECK (mime IN ('image/jpeg', 'application/pdf')),
+      bytes      INTEGER NOT NULL,
+      created_at INTEGER NOT NULL
+    ) STRICT;
+CREATE TABLE ako_uploads (
+      id     INTEGER PRIMARY KEY,
+      org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      app_id INTEGER NOT NULL,
+      ip     TEXT NOT NULL,                         -- a keyed hash of the uploader's address (an IPv6 /64), as ako_starts
+      bytes  INTEGER NOT NULL DEFAULT 0,            -- kept; 0 for a try refused or failed
+      at     INTEGER NOT NULL
+    ) STRICT;
+CREATE TABLE fchan_polls (  -- IF NOT EXISTS: tests rewind user_version
+      post_id   INTEGER PRIMARY KEY REFERENCES fchan_posts(id) ON DELETE CASCADE,
+      options   TEXT NOT NULL CHECK (json_valid(options)),
+      days      INTEGER NOT NULL CHECK (days IN (1, 3, 7)),
+      closes_at INTEGER
+    ) STRICT;
+CREATE TABLE fchan_voted (
+      post_id INTEGER NOT NULL REFERENCES fchan_polls(post_id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (post_id, user_id)
+    ) STRICT, WITHOUT ROWID;
+CREATE TABLE fchan_tally (
+      post_id INTEGER NOT NULL REFERENCES fchan_polls(post_id) ON DELETE CASCADE,
+      choice  INTEGER NOT NULL CHECK (choice BETWEEN 0 AND 5),
+      n       INTEGER NOT NULL,
+      PRIMARY KEY (post_id, choice)
+    ) STRICT, WITHOUT ROWID;
+CREATE TABLE ako_chats (  -- IF NOT EXISTS: tests rewind user_version
+      app_id INTEGER PRIMARY KEY REFERENCES ako_apps(id) ON DELETE CASCADE,
+      chat   INTEGER NOT NULL                         -- the applicant's private chat with the bot
+    ) STRICT;
+CREATE TABLE ako_sends (
+      app_id  INTEGER NOT NULL REFERENCES ako_apps(id) ON DELETE CASCADE,
+      kind    TEXT NOT NULL,                          -- booked (the invite), d1 (a day before), h1 (an hour before)
+      channel TEXT NOT NULL,                          -- telegram, email
+      slot_at INTEGER NOT NULL,                       -- the interview's start it was for: a moved one is another send
+      at      INTEGER NOT NULL,                       -- claimed
+      sent_at INTEGER,
+      error   TEXT,                                   -- why it never went (an exception's class, never an address)
+      PRIMARY KEY (app_id, kind, channel, slot_at)
+    ) STRICT;
+
+-- Indexes in their original creation order for the query planner.
+CREATE INDEX schedule_by_user ON schedule_classes(user_id, weekday);
+CREATE UNIQUE INDEX one_president ON org_members(org_id) WHERE role = 'president';
+CREATE INDEX members_by_user ON org_members(user_id);
+CREATE UNIQUE INDEX one_pending_request ON join_requests(org_id, user_id) WHERE status = 'pending';
+CREATE INDEX subs_by_org ON subscriptions(org_id, created_at);
+CREATE INDEX events_upcoming ON events(status, starts_at);
+CREATE INDEX events_by_org ON events(org_id, starts_at);
+CREATE INDEX regs_by_user ON registrations(user_id, status);
+CREATE INDEX regs_by_event ON registrations(event_id, status);
+CREATE INDEX receipts_by_reg ON receipts(registration_id);
+CREATE INDEX receipts_by_no ON receipts(receipt_no);
+CREATE INDEX posts_by_org ON posts(org_id, created_at);
+CREATE INDEX posts_recent ON posts(audience, created_at);
+CREATE INDEX comments_by_post ON comments(post_id, created_at);
+CREATE INDEX comments_by_event ON comments(event_id, created_at);
+CREATE INDEX friendships_b ON friendships(b);
+CREATE INDEX friend_requests_to ON friend_requests(to_id, status);
+CREATE INDEX grants_by_user ON achievement_grants(user_id, code);
+CREATE INDEX files_by_hash ON files(sha256);
+CREATE INDEX outbox_due ON bot_outbox(sent_at, send_after);
+CREATE UNIQUE INDEX users_qr ON users(qr_code);
+CREATE INDEX event_updates_by_event ON event_updates(event_id, created_at);
+CREATE UNIQUE INDEX users_cal_token ON users(cal_token);
+CREATE UNIQUE INDEX users_card_no ON users(card_no);
+CREATE UNIQUE INDEX org_roles_name ON org_roles(org_id, lower(name));
+CREATE UNIQUE INDEX org_tags_name ON org_tags(org_id, lower(name));
+CREATE UNIQUE INDEX one_removal_ask ON removal_requests(org_id, user_id) WHERE status = 'pending';
+CREATE INDEX regs_holds ON registrations(hold_until) WHERE status = 'hold';
+CREATE INDEX regs_by_inviter ON registrations(invited_by) WHERE invited_by IS NOT NULL;
+CREATE UNIQUE INDEX one_live_round ON rounds(org_id) WHERE status != 'done';
+CREATE INDEX slots_by_round ON round_slots(round_id, starts_at);
+CREATE UNIQUE INDEX events_chat_token ON events(chat_token) WHERE chat_token IS NOT NULL;
+CREATE INDEX history_by_user ON org_history(user_id, org_id);
+CREATE UNIQUE INDEX students_ms_oid ON students(ms_oid) WHERE ms_oid IS NOT NULL;
+CREATE UNIQUE INDEX one_pending_application ON club_applications(user_id) WHERE status = 'pending';
+CREATE INDEX door_guests_by_norm ON door_guests(norm) WHERE user_id IS NULL;
+CREATE INDEX short_links_by_org ON short_links(org_id);
+CREATE INDEX chats_by_org ON chats(org_id);
+CREATE UNIQUE INDEX chats_main ON chats(org_id) WHERE main = 1;
+CREATE INDEX tg_post_msgs_by_post ON tg_post_msgs(post_id);
+CREATE INDEX tg_post_msgs_by_album ON tg_post_msgs(channel, grouped);
+CREATE INDEX roster_by_tg ON roster_pending(tg);
+CREATE INDEX roster_by_email ON roster_pending(email);
+CREATE INDEX roster_by_org ON roster_pending(org_id);
+CREATE INDEX takedowns_by_target ON takedowns(target, target_id);
+CREATE INDEX user_skills_by_skill ON user_skills(skill_id);
+CREATE INDEX asks_live ON asks(status, expires_at);
+CREATE INDEX ask_pings_by_user ON ask_pings(user_id, at);
+CREATE INDEX users_by_referrer ON users(referred_by) WHERE referred_by IS NOT NULL;
+CREATE INDEX qr_expected_by_email ON qr_expected(email);
+CREATE INDEX qr_screens_by_session ON qr_screens(session_id);
+CREATE UNIQUE INDEX qr_sessions_by_event ON qr_sessions(event_id) WHERE event_id IS NOT NULL;
+CREATE INDEX threads_feed ON threads(status, bumped_at);
+CREATE INDEX threads_by_user ON threads(user_id, created_at);
+CREATE INDEX thread_replies_by_thread ON thread_replies(thread_id, id);
+CREATE INDEX thread_replies_by_user ON thread_replies(user_id, created_at);
+CREATE INDEX qr_screens_by_ip ON qr_screens(ip) WHERE session_id IS NULL;
+CREATE INDEX map_flaws_open ON map_flaws(done_at, created_at);
+CREATE INDEX assist_uses_by_user ON assist_uses(user_id, at);
+CREATE UNIQUE INDEX users_link ON users(link_code);
+CREATE UNIQUE INDEX campus_places_dean ON campus_places(school) WHERE kind = 'dean';
+CREATE INDEX assist_marks_day ON assist_marks(day);
+CREATE INDEX prefill_rest_email ON prefill_rest(email);
+CREATE INDEX prefill_rest_sid ON prefill_rest(student_id);
+CREATE INDEX tgc_strangers_seen ON tgc_strangers(seen_at);
+CREATE INDEX tgc_reports_by ON tgc_reports(reporter_id, at);
+CREATE INDEX fchan_posts_by_user ON fchan_posts(user_id, created_at);
+CREATE INDEX fchan_posts_by_status ON fchan_posts(status, id);
+CREATE INDEX receipt_replaced_by_reg ON receipt_replaced(registration_id);
+CREATE INDEX receipt_replaced_by_sha ON receipt_replaced(sha256);
+CREATE INDEX receipt_replaced_by_no ON receipt_replaced(receipt_no) WHERE receipt_no IS NOT NULL;
+CREATE INDEX fchan_comments_by_post ON fchan_comments(post_id, at);
+CREATE INDEX fchan_comments_by_user ON fchan_comments(user_id);
+CREATE INDEX outbox_todo ON bot_outbox(send_after, id) WHERE sent_at IS NULL AND error IS NULL;
+CREATE INDEX join_requests_by_user ON join_requests(user_id);
+CREATE INDEX posts_feed ON posts(audience, pinned, created_at);
+CREATE INDEX events_by_start ON events(starts_at);
+CREATE INDEX fchan_reply_reports_by_user ON fchan_reply_reports(user_id);
+CREATE INDEX fchan_replies_by_post ON fchan_replies(post_id, created_at);
+CREATE INDEX fchan_replies_by_msg ON fchan_replies(tg_msg) WHERE tg_msg > 0;
+CREATE INDEX fchan_replies_todo ON fchan_replies(status, send_at) WHERE tg_msg IS NULL;
+CREATE INDEX grants_by_batch ON achievement_grants(batch) WHERE batch IS NOT NULL;
+CREATE INDEX grant_link_uses_by_user ON grant_link_uses(user_id);
+CREATE INDEX audit_by_target ON audit_log(target, id);
+CREATE INDEX audit_by_at ON audit_log(at);
+CREATE UNIQUE INDEX one_cohost ON event_cohosts(event_id) WHERE status != 'declined';
+CREATE INDEX cohosts_by_org ON event_cohosts(org_id, status);
+CREATE UNIQUE INDEX one_official_request ON official_requests(org_id) WHERE status = 'pending';
+CREATE INDEX official_requests_by_org ON official_requests(org_id, id);
+CREATE INDEX crew_by_user ON event_crew(user_id);
+CREATE INDEX fchan_posts_by_message ON fchan_posts(status, tg_msg, id);
+CREATE INDEX posts_casting ON posts(casting_to) WHERE casting_to IS NOT NULL;
+CREATE UNIQUE INDEX vol_people_user ON vol_people(org_id, user_id) WHERE user_id IS NOT NULL;
+CREATE INDEX vol_keys_by_vol ON vol_keys(vol_id);
+CREATE INDEX vol_ties_by_user ON vol_ties(user_id);
+CREATE INDEX vol_shifts_by_vol ON vol_shifts(vol_id);
+CREATE INDEX vol_shifts_by_session ON vol_shifts(session_id);
+CREATE INDEX vol_misses_by_vol ON vol_misses(vol_id);
+CREATE INDEX vol_edits_by_vol ON vol_edits(vol_id);
+CREATE INDEX appeal_authors_user ON appeal_authors(user_id);
+CREATE INDEX appeal_sends_user ON appeal_sends(user_id, at);
+CREATE INDEX gallery_by_user ON gallery_photos(user_id, created_at);
+CREATE UNIQUE INDEX chat_sync_main ON chat_sync(org_id) WHERE kind = 'main';
+CREATE INDEX chat_sync_todo_user ON chat_sync_todo(user_id);
+CREATE INDEX fchan_photos_by_post ON fchan_photos(post_id, n);
+CREATE INDEX fchan_photos_by_user ON fchan_photos(user_id);
+CREATE INDEX fchan_photos_by_msg ON fchan_photos(msg) WHERE msg > 0;
+CREATE UNIQUE INDEX vol_hands_live ON vol_hands(session_id) WHERE revoked_at IS NULL;
+CREATE INDEX vol_hands_by_user ON vol_hands(user_id);
+CREATE INDEX club_report_marks_by_user ON club_report_marks(user_id);
+CREATE INDEX event_team_members_by_team ON event_team_members(team_id);
+CREATE INDEX event_team_members_by_user ON event_team_members(user_id);
+CREATE INDEX swear_hits_by_person ON swear_hits(chat_id, tg_id, at);
+CREATE INDEX swear_hits_by_user ON swear_hits(user_id);
+CREATE INDEX chats_by_tg ON chats(tg_chat_id);
+CREATE UNIQUE INDEX qr_sessions_by_crew ON qr_sessions(crew_event_id) WHERE crew_event_id IS NOT NULL;
+CREATE INDEX chat_waits_by_chat ON chat_waits(chat_id);
+CREATE UNIQUE INDEX asks_subject ON asks(subject, user_id) WHERE subject IS NOT NULL;
+CREATE INDEX auto_events_org ON auto_events(org_id, at);
+CREATE INDEX auto_events_event ON auto_events(event_id);
+CREATE INDEX santa_people_user ON santa_people (user_id);
+CREATE INDEX santa_people_to ON santa_people (gives_to);
+CREATE INDEX credits_tg ON credits (tg_id);
+CREATE INDEX credit_consents_user ON credit_consents (user_id, id);
+CREATE INDEX users_handle ON users (lower(tg_username));
+CREATE INDEX round_apps_by_user ON round_apps (user_id);
+CREATE INDEX event_photos_by_file ON event_photos (file_id);
+CREATE INDEX members_by_role ON org_members (role_id);
+CREATE INDEX ev_matches_home ON ev_matches(home);
+CREATE INDEX ev_matches_away ON ev_matches(away);
+CREATE INDEX ev_matches_editor ON ev_matches(updated_by);
+CREATE INDEX ev_matches_next_win ON ev_matches(next_win);
+CREATE INDEX ev_matches_next_lose ON ev_matches(next_lose);
+CREATE INDEX event_guests_by_student ON event_guests (student_id);
+CREATE INDEX outbox_u18 ON bot_outbox (ref) WHERE kind = 'u18_leave';
+CREATE INDEX retired_tickets_event ON retired_tickets(event_id);
+CREATE UNIQUE INDEX qr_expected_door_key ON qr_expected(door_key);
+CREATE INDEX fchan_hearts_by_user ON fchan_hearts(user_id);
+CREATE INDEX qr_running ON qr_sessions(id) WHERE started_at IS NOT NULL AND ended_at IS NULL;
+CREATE INDEX registrations_wait_order ON registrations(event_id, waitlisted_at, id) WHERE status = 'waitlist';
+CREATE INDEX reg_first_checkin ON registrations(event_id, checked_in_at) WHERE checked_in_at IS NOT NULL;
+CREATE INDEX saved_by_event ON saved_events(event_id);
+CREATE INDEX web_sessions_user ON web_sessions(user_id);
+CREATE INDEX web_sessions_last_used ON web_sessions(last_used_at);
+CREATE INDEX web_login_used_expires ON web_login_used(expires_at);
+CREATE INDEX fchan_feed_pages_by_user ON fchan_feed_pages(user_id, sort, expires_at DESC);
+CREATE INDEX fchan_feed_pages_expiry ON fchan_feed_pages(expires_at);
+CREATE UNIQUE INDEX one_report ON reports(reporter_id, target, target_id) WHERE status = 'open';
+CREATE INDEX reports_by_target ON reports (target, target_id);
+CREATE INDEX form_answers_by_form ON form_answers(form_id, created_at);
+CREATE INDEX santa_msgs_thread ON santa_msgs (event_id, giver_id, to_id);
+CREATE INDEX santa_msgs_to ON santa_msgs (to_id);
+CREATE INDEX santa_msgs_giver ON santa_msgs (giver_id);
+CREATE INDEX santa_sends_by_user ON santa_sends (user_id, at);
+CREATE INDEX helper_offers_by_user ON helper_offers(user_id, created_at);
+CREATE INDEX anon_feedback_by_day ON anon_feedback(day);
+CREATE INDEX pymk_other ON pymk (other_id);
+CREATE INDEX pymk_dismissed_other ON pymk_dismissed (other_id);
+CREATE INDEX yt_videos_by_org ON yt_videos(org_id, channel_id);
+CREATE UNIQUE INDEX one_contact ON contacts(from_id, to_id, COALESCE(ask_id, 0)) WHERE withdrawn_at IS NULL;
+CREATE INDEX contacts_by_sender ON contacts(from_id, created_at);
+CREATE INDEX withdrawn_offer_messages ON contacts(id) WHERE withdrawn_at IS NOT NULL AND offer_message IS NOT NULL;
+CREATE INDEX donations_by_user ON donations(user_id, created_at);
+CREATE INDEX donations_by_status ON donations(source, status, created_at);
+CREATE INDEX donations_by_sha ON donations(sha256) WHERE sha256 IS NOT NULL;
+CREATE INDEX donations_by_no ON donations(receipt_no) WHERE receipt_no IS NOT NULL;
+CREATE INDEX donations_by_payment ON donations(paid_at, read_amount, recipient_name);
+CREATE INDEX sponsor_consents_by_user ON sponsor_consents(user_id, id);
+CREATE INDEX qr_meet_scans_session ON qr_meet_scans(session_id, id);
+CREATE INDEX qr_meet_scans_user ON qr_meet_scans(user_id);
+CREATE INDEX research_requests_by_user ON research_requests(user_id, created_at);
+CREATE INDEX research_answers_by_form ON research_answers(form_id);
+CREATE INDEX research_answers_by_user ON research_answers(user_id);
+CREATE INDEX research_participants_by_user ON research_participants(user_id);
+CREATE INDEX ig_media_by_org ON ig_media(org_id, handle);
+CREATE UNIQUE INDEX event_guests_door_key ON event_guests(door_key);
+CREATE UNIQUE INDEX roster_pending_door_key ON roster_pending(door_key);
+CREATE INDEX user_platforms_by_kind ON user_platforms(kind, user_id);
+CREATE INDEX push_devices_session ON push_devices(session);
+CREATE INDEX push_devices_user ON push_devices(user_id);
+CREATE INDEX fchan_posts_help ON fchan_posts(help_until) WHERE help_until IS NOT NULL;
+CREATE INDEX fchan_coming_by_user ON fchan_coming(user_id);
+CREATE INDEX fchan_edits_by_post ON fchan_edits(post_id, created_at);
+CREATE INDEX fchan_edits_waiting ON fchan_edits(status) WHERE status IN ('check', 'held');
+CREATE INDEX fchan_posts_edit_sync ON fchan_posts(edit_sync) WHERE edit_sync IS NOT NULL;
+CREATE INDEX fchan_photos_by_edit ON fchan_photos(edit_id) WHERE edit_id IS NOT NULL;
+CREATE INDEX rounds_by_org ON rounds(org_id, status);
+CREATE INDEX lib_tables_by_room ON lib_tables(room_id);
+CREATE UNIQUE INDEX lib_sits_seat ON lib_sits(table_id, seat) WHERE ended_at IS NULL;
+CREATE UNIQUE INDEX lib_sits_mine ON lib_sits(user_id) WHERE ended_at IS NULL;
+CREATE INDEX lib_sits_until ON lib_sits(until) WHERE ended_at IS NULL;
+CREATE INDEX lib_sits_by_user ON lib_sits(user_id, started_at);
+CREATE INDEX lib_reports_by_sit ON lib_reports(sit_id);
+CREATE INDEX lib_reports_by_reporter ON lib_reports(reporter_id, created_at);
+CREATE INDEX lib_reports_open ON lib_reports(created_at) WHERE answered_at IS NULL AND still_at IS NULL;
+CREATE INDEX roster_rejections_by_user ON roster_rejections(user_id);
+CREATE INDEX game_rooms_by_host ON game_rooms(host_id);
+CREATE INDEX game_rooms_by_age ON game_rooms(updated_at);
+CREATE INDEX game_players_by_user ON game_players(user_id);
+CREATE INDEX ako_slots_by_time ON ako_slots(org_id, starts_at);
+CREATE INDEX ako_apps_by_org ON ako_apps(org_id, status, updated_at);
+CREATE INDEX ako_apps_by_slot ON ako_apps(slot_id) WHERE slot_id IS NOT NULL;
+CREATE INDEX ako_starts_by_ip ON ako_starts(ip, at);
+CREATE INDEX ako_starts_by_org ON ako_starts(org_id, at);
+CREATE INDEX ako_reviewers_by_user ON ako_reviewers(user_id);
+CREATE INDEX ako_files_by_app ON ako_files(app_id, doc, id);
+CREATE INDEX ako_uploads_by_app ON ako_uploads(app_id, at);
+CREATE INDEX ako_uploads_by_ip ON ako_uploads(ip, at);
+CREATE INDEX ako_uploads_by_org ON ako_uploads(org_id, at);
+CREATE INDEX fchan_voted_by_user ON fchan_voted(user_id);
+
+-- Triggers in their original creation order.
+CREATE TRIGGER history_in AFTER INSERT ON org_members BEGIN
+      INSERT INTO org_history (user_id, org_id, role, since) VALUES (NEW.user_id, NEW.org_id, NEW.role, CAST(strftime('%s', 'now') AS INTEGER));
+    END;
+CREATE TRIGGER history_role AFTER UPDATE OF role ON org_members WHEN OLD.role != NEW.role BEGIN
+      UPDATE org_history SET until = CAST(strftime('%s', 'now') AS INTEGER) WHERE user_id = OLD.user_id AND org_id = OLD.org_id AND until IS NULL;
+      INSERT INTO org_history (user_id, org_id, role, since) VALUES (NEW.user_id, NEW.org_id, NEW.role, CAST(strftime('%s', 'now') AS INTEGER));
+    END;
+CREATE TRIGGER history_out AFTER DELETE ON org_members BEGIN
+      UPDATE org_history SET until = CAST(strftime('%s', 'now') AS INTEGER) WHERE user_id = OLD.user_id AND org_id = OLD.org_id AND until IS NULL;
+    END;
+CREATE TRIGGER fchan_comment_gone AFTER UPDATE OF status ON tgc_comments
+      WHEN (NEW.status IN ('deleting', 'deleted', 'restored')) != (OLD.status IN ('deleting', 'deleted', 'restored'))
+    BEGIN
+      UPDATE fchan_posts SET comments = MAX(0, comments + CASE WHEN NEW.status IN ('deleting', 'deleted', 'restored') THEN -1 ELSE 1 END)
+        WHERE id = (SELECT post_id FROM fchan_comments WHERE msg_id = NEW.msg_id AND gone = (NEW.status NOT IN ('deleting', 'deleted', 'restored')));
+      UPDATE fchan_comments SET gone = (NEW.status IN ('deleting', 'deleted', 'restored')) WHERE msg_id = NEW.msg_id;
+    END;
+CREATE TRIGGER sid_freed_fix AFTER UPDATE OF student_id ON students WHEN OLD.student_id IS NOT NEW.student_id
+    BEGIN
+      UPDATE bot_outbox SET send_after = 0 WHERE kind = 'sid_free' AND ref = 'sf:' || OLD.student_id AND sent_at IS NULL;
+    END;
+CREATE TRIGGER sid_freed_gone AFTER DELETE ON students
+    BEGIN
+      UPDATE bot_outbox SET send_after = 0 WHERE kind = 'sid_free' AND ref = 'sf:' || OLD.student_id AND sent_at IS NULL;
+    END;
+CREATE TRIGGER vol_access_gone AFTER DELETE ON org_members BEGIN
+      DELETE FROM vol_access WHERE org_id = OLD.org_id AND user_id = OLD.user_id;
+    END;
+CREATE TRIGGER fchan_photo_gone AFTER DELETE ON fchan_photos BEGIN
+      INSERT OR IGNORE INTO meta (key, value) VALUES ('fchpic:' || OLD.path, '1');
+    END;
+CREATE TRIGGER event_team_reg_out AFTER UPDATE OF status ON registrations WHEN NEW.status != 'going' BEGIN
+      DELETE FROM event_team_members WHERE event_id = NEW.event_id AND user_id = NEW.user_id;
+    END;
+CREATE TRIGGER event_team_reg_gone AFTER DELETE ON registrations BEGIN
+      DELETE FROM event_team_members WHERE event_id = OLD.event_id AND user_id = OLD.user_id;
+    END;
+CREATE TRIGGER event_team_empty AFTER DELETE ON event_team_members BEGIN
+      DELETE FROM event_teams WHERE id = OLD.team_id AND NOT EXISTS (SELECT 1 FROM event_team_members WHERE team_id = OLD.team_id);
+    END;
+CREATE TRIGGER chat_seen_chat_sync_insert AFTER INSERT ON chat_sync BEGIN
+  DELETE FROM chat_seen WHERE chat_id = NEW.chat_id AND org_id IS NOT COALESCE((SELECT org_id FROM chat_sync WHERE chat_id = NEW.chat_id),
+      (SELECT org_id FROM chats WHERE tg_chat_id = NEW.chat_id AND org_id IS NOT NULL ORDER BY id LIMIT 1),
+      (SELECT org_id FROM events WHERE chat_id = NEW.chat_id AND org_id IS NOT NULL ORDER BY id DESC LIMIT 1));
+END;
+CREATE TRIGGER chat_seen_chat_sync_delete AFTER DELETE ON chat_sync BEGIN
+  DELETE FROM chat_seen WHERE chat_id = OLD.chat_id AND org_id IS NOT COALESCE((SELECT org_id FROM chat_sync WHERE chat_id = OLD.chat_id),
+      (SELECT org_id FROM chats WHERE tg_chat_id = OLD.chat_id AND org_id IS NOT NULL ORDER BY id LIMIT 1),
+      (SELECT org_id FROM events WHERE chat_id = OLD.chat_id AND org_id IS NOT NULL ORDER BY id DESC LIMIT 1));
+END;
+CREATE TRIGGER chat_seen_chat_sync_update AFTER UPDATE OF chat_id, org_id ON chat_sync WHEN OLD.chat_id IS NOT NEW.chat_id OR OLD.org_id IS NOT NEW.org_id BEGIN
+  DELETE FROM chat_seen WHERE chat_id = OLD.chat_id AND org_id IS NOT COALESCE((SELECT org_id FROM chat_sync WHERE chat_id = OLD.chat_id),
+      (SELECT org_id FROM chats WHERE tg_chat_id = OLD.chat_id AND org_id IS NOT NULL ORDER BY id LIMIT 1),
+      (SELECT org_id FROM events WHERE chat_id = OLD.chat_id AND org_id IS NOT NULL ORDER BY id DESC LIMIT 1));
+  DELETE FROM chat_seen WHERE chat_id = NEW.chat_id AND org_id IS NOT COALESCE((SELECT org_id FROM chat_sync WHERE chat_id = NEW.chat_id),
+      (SELECT org_id FROM chats WHERE tg_chat_id = NEW.chat_id AND org_id IS NOT NULL ORDER BY id LIMIT 1),
+      (SELECT org_id FROM events WHERE chat_id = NEW.chat_id AND org_id IS NOT NULL ORDER BY id DESC LIMIT 1));
+END;
+CREATE TRIGGER chat_seen_chats_insert AFTER INSERT ON chats BEGIN
+  DELETE FROM chat_seen WHERE chat_id = NEW.tg_chat_id AND org_id IS NOT COALESCE((SELECT org_id FROM chat_sync WHERE chat_id = NEW.tg_chat_id),
+      (SELECT org_id FROM chats WHERE tg_chat_id = NEW.tg_chat_id AND org_id IS NOT NULL ORDER BY id LIMIT 1),
+      (SELECT org_id FROM events WHERE chat_id = NEW.tg_chat_id AND org_id IS NOT NULL ORDER BY id DESC LIMIT 1));
+END;
+CREATE TRIGGER chat_seen_chats_delete AFTER DELETE ON chats BEGIN
+  DELETE FROM chat_seen WHERE chat_id = OLD.tg_chat_id AND org_id IS NOT COALESCE((SELECT org_id FROM chat_sync WHERE chat_id = OLD.tg_chat_id),
+      (SELECT org_id FROM chats WHERE tg_chat_id = OLD.tg_chat_id AND org_id IS NOT NULL ORDER BY id LIMIT 1),
+      (SELECT org_id FROM events WHERE chat_id = OLD.tg_chat_id AND org_id IS NOT NULL ORDER BY id DESC LIMIT 1));
+END;
+CREATE TRIGGER chat_seen_chats_update AFTER UPDATE OF tg_chat_id, org_id ON chats WHEN OLD.tg_chat_id IS NOT NEW.tg_chat_id OR OLD.org_id IS NOT NEW.org_id BEGIN
+  DELETE FROM chat_seen WHERE chat_id = OLD.tg_chat_id AND org_id IS NOT COALESCE((SELECT org_id FROM chat_sync WHERE chat_id = OLD.tg_chat_id),
+      (SELECT org_id FROM chats WHERE tg_chat_id = OLD.tg_chat_id AND org_id IS NOT NULL ORDER BY id LIMIT 1),
+      (SELECT org_id FROM events WHERE chat_id = OLD.tg_chat_id AND org_id IS NOT NULL ORDER BY id DESC LIMIT 1));
+  DELETE FROM chat_seen WHERE chat_id = NEW.tg_chat_id AND org_id IS NOT COALESCE((SELECT org_id FROM chat_sync WHERE chat_id = NEW.tg_chat_id),
+      (SELECT org_id FROM chats WHERE tg_chat_id = NEW.tg_chat_id AND org_id IS NOT NULL ORDER BY id LIMIT 1),
+      (SELECT org_id FROM events WHERE chat_id = NEW.tg_chat_id AND org_id IS NOT NULL ORDER BY id DESC LIMIT 1));
+END;
+CREATE TRIGGER chat_seen_events_insert AFTER INSERT ON events BEGIN
+  DELETE FROM chat_seen WHERE chat_id = NEW.chat_id AND org_id IS NOT COALESCE((SELECT org_id FROM chat_sync WHERE chat_id = NEW.chat_id),
+      (SELECT org_id FROM chats WHERE tg_chat_id = NEW.chat_id AND org_id IS NOT NULL ORDER BY id LIMIT 1),
+      (SELECT org_id FROM events WHERE chat_id = NEW.chat_id AND org_id IS NOT NULL ORDER BY id DESC LIMIT 1));
+END;
+CREATE TRIGGER chat_seen_events_delete AFTER DELETE ON events BEGIN
+  DELETE FROM chat_seen WHERE chat_id = OLD.chat_id AND org_id IS NOT COALESCE((SELECT org_id FROM chat_sync WHERE chat_id = OLD.chat_id),
+      (SELECT org_id FROM chats WHERE tg_chat_id = OLD.chat_id AND org_id IS NOT NULL ORDER BY id LIMIT 1),
+      (SELECT org_id FROM events WHERE chat_id = OLD.chat_id AND org_id IS NOT NULL ORDER BY id DESC LIMIT 1));
+END;
+CREATE TRIGGER chat_seen_events_update AFTER UPDATE OF chat_id, org_id ON events WHEN OLD.chat_id IS NOT NEW.chat_id OR OLD.org_id IS NOT NEW.org_id BEGIN
+  DELETE FROM chat_seen WHERE chat_id = OLD.chat_id AND org_id IS NOT COALESCE((SELECT org_id FROM chat_sync WHERE chat_id = OLD.chat_id),
+      (SELECT org_id FROM chats WHERE tg_chat_id = OLD.chat_id AND org_id IS NOT NULL ORDER BY id LIMIT 1),
+      (SELECT org_id FROM events WHERE chat_id = OLD.chat_id AND org_id IS NOT NULL ORDER BY id DESC LIMIT 1));
+  DELETE FROM chat_seen WHERE chat_id = NEW.chat_id AND org_id IS NOT COALESCE((SELECT org_id FROM chat_sync WHERE chat_id = NEW.chat_id),
+      (SELECT org_id FROM chats WHERE tg_chat_id = NEW.chat_id AND org_id IS NOT NULL ORDER BY id LIMIT 1),
+      (SELECT org_id FROM events WHERE chat_id = NEW.chat_id AND org_id IS NOT NULL ORDER BY id DESC LIMIT 1));
+END;
+CREATE TRIGGER event_team_want_done AFTER INSERT ON event_team_members BEGIN
+      UPDATE registrations SET team_want = NULL WHERE event_id = NEW.event_id AND user_id = NEW.user_id AND team_want IS NOT NULL;
+    END;
+CREATE TRIGGER santa_left_upd AFTER UPDATE OF status, user_id ON registrations WHEN OLD.status = 'going' AND (NEW.status != 'going' OR NEW.user_id != OLD.user_id) BEGIN
+      UPDATE santa_people SET gives_to = (SELECT gives_to FROM santa_people WHERE event_id = OLD.event_id AND user_id = OLD.user_id)
+        WHERE event_id = OLD.event_id AND gives_to = OLD.user_id;
+      DELETE FROM santa_people WHERE event_id = OLD.event_id AND user_id = OLD.user_id;
+    END;
+CREATE TRIGGER santa_left_del AFTER DELETE ON registrations WHEN OLD.status = 'going' BEGIN
+      UPDATE santa_people SET gives_to = (SELECT gives_to FROM santa_people WHERE event_id = OLD.event_id AND user_id = OLD.user_id)
+        WHERE event_id = OLD.event_id AND gives_to = OLD.user_id;
+      DELETE FROM santa_people WHERE event_id = OLD.event_id AND user_id = OLD.user_id;
+    END;
+CREATE TRIGGER santa_moved_upd BEFORE UPDATE OF status, user_id ON registrations WHEN OLD.status = 'going' AND (NEW.status != 'going' OR NEW.user_id != OLD.user_id)
+        AND EXISTS (SELECT 1 FROM santa_events WHERE event_id = OLD.event_id AND drawn_at IS NOT NULL)
+        AND EXISTS (SELECT 1 FROM santa_people WHERE event_id = OLD.event_id AND user_id = OLD.user_id) BEGIN
+      DELETE FROM bot_outbox WHERE kind = 'santa_wish' AND sent_at IS NULL AND ref LIKE 'event:' || OLD.event_id || ':%'
+        AND user_id IN (SELECT user_id FROM santa_people WHERE event_id = OLD.event_id AND gives_to = OLD.user_id);  -- "their wishlist changed": not theirs any more
+      INSERT OR IGNORE INTO bot_outbox (user_id, kind, ref, payload, send_after)
+        SELECT g.user_id, 'santa_changed', 'event:' || OLD.event_id || ':' || lower(hex(randomblob(6))), '{}', 0
+        FROM santa_people g WHERE g.event_id = OLD.event_id AND g.gives_to = OLD.user_id AND g.user_id != OLD.user_id
+          AND (SELECT COUNT(*) FROM santa_people x WHERE x.event_id = OLD.event_id AND x.user_id != OLD.user_id) >= 3;
+      INSERT OR IGNORE INTO bot_outbox (user_id, kind, ref, payload, send_after)
+        SELECT p.user_id, CASE (SELECT COUNT(*) FROM santa_people x WHERE x.event_id = OLD.event_id AND x.user_id != OLD.user_id)
+          WHEN 2 THEN 'santa_two' ELSE 'santa_alone' END, 'event:' || OLD.event_id, '{}', 0
+        FROM santa_people p WHERE p.event_id = OLD.event_id AND p.user_id != OLD.user_id
+          AND (SELECT COUNT(*) FROM santa_people x WHERE x.event_id = OLD.event_id AND x.user_id != OLD.user_id) IN (1, 2)
+        ORDER BY p.user_id;
+    END;
+CREATE TRIGGER santa_moved_del BEFORE DELETE ON registrations WHEN OLD.status = 'going'
+        AND EXISTS (SELECT 1 FROM santa_events WHERE event_id = OLD.event_id AND drawn_at IS NOT NULL)
+        AND EXISTS (SELECT 1 FROM santa_people WHERE event_id = OLD.event_id AND user_id = OLD.user_id) BEGIN
+      DELETE FROM bot_outbox WHERE kind = 'santa_wish' AND sent_at IS NULL AND ref LIKE 'event:' || OLD.event_id || ':%'
+        AND user_id IN (SELECT user_id FROM santa_people WHERE event_id = OLD.event_id AND gives_to = OLD.user_id);  -- "their wishlist changed": not theirs any more
+      INSERT OR IGNORE INTO bot_outbox (user_id, kind, ref, payload, send_after)
+        SELECT g.user_id, 'santa_changed', 'event:' || OLD.event_id || ':' || lower(hex(randomblob(6))), '{}', 0
+        FROM santa_people g WHERE g.event_id = OLD.event_id AND g.gives_to = OLD.user_id AND g.user_id != OLD.user_id
+          AND (SELECT COUNT(*) FROM santa_people x WHERE x.event_id = OLD.event_id AND x.user_id != OLD.user_id) >= 3;
+      INSERT OR IGNORE INTO bot_outbox (user_id, kind, ref, payload, send_after)
+        SELECT p.user_id, CASE (SELECT COUNT(*) FROM santa_people x WHERE x.event_id = OLD.event_id AND x.user_id != OLD.user_id)
+          WHEN 2 THEN 'santa_two' ELSE 'santa_alone' END, 'event:' || OLD.event_id, '{}', 0
+        FROM santa_people p WHERE p.event_id = OLD.event_id AND p.user_id != OLD.user_id
+          AND (SELECT COUNT(*) FROM santa_people x WHERE x.event_id = OLD.event_id AND x.user_id != OLD.user_id) IN (1, 2)
+        ORDER BY p.user_id;
+    END;
+CREATE TRIGGER kri_consents_student_gone AFTER DELETE ON students BEGIN
+      DELETE FROM kri_consents WHERE user_id = OLD.user_id;
+    END;
+CREATE TRIGGER ev_matches_drop_group_team BEFORE DELETE ON event_teams BEGIN
+      DELETE FROM ev_matches WHERE stage = 'group' AND home = OLD.id;
+      DELETE FROM ev_matches WHERE stage = 'group' AND away = OLD.id;
+    END;
+CREATE TRIGGER signup_phone_changed AFTER UPDATE OF phone ON students WHEN old.phone IS NOT new.phone BEGIN
+        UPDATE registrations SET phone_shared = 0 WHERE user_id = old.user_id AND phone_shared = 1;
+    END;
+CREATE TRIGGER signup_phone_unlinked AFTER DELETE ON students BEGIN
+        UPDATE registrations SET phone_shared = 0 WHERE user_id = old.user_id AND phone_shared = 1;
+    END;
+CREATE TRIGGER qr_expected_key AFTER INSERT ON qr_expected WHEN new.door_key IS NULL BEGIN
+        UPDATE qr_expected SET door_key = lower(hex(randomblob(16))) WHERE rowid = new.rowid;
+    END;
+CREATE TRIGGER qr_hand_expected_gone AFTER DELETE ON qr_expected BEGIN
+        DELETE FROM qr_hand_marks WHERE session_id = old.session_id AND who = 'x' || old.door_key;
+    END;
+CREATE TRIGGER web_sessions_revoke AFTER UPDATE OF banned_at, tg_id ON users
+      WHEN new.banned_at IS NOT NULL OR old.tg_id != new.tg_id BEGIN
+        DELETE FROM web_sessions WHERE user_id = old.id;
+      END;
+CREATE TRIGGER santa_msgs_gone AFTER DELETE ON santa_people BEGIN
+      UPDATE santa_chats SET until = 0 WHERE event_id = OLD.event_id;
+      DELETE FROM santa_msgs WHERE event_id = OLD.event_id AND NOT EXISTS (SELECT 1 FROM santa_msgs r
+        WHERE r.event_id = santa_msgs.event_id AND r.giver_id = santa_msgs.giver_id AND r.to_id = santa_msgs.to_id AND r.text IS NULL);
+    END;
+CREATE TRIGGER event_guests_key AFTER INSERT ON event_guests WHEN new.door_key IS NULL BEGIN
+        UPDATE event_guests SET door_key = lower(hex(randomblob(16))) WHERE rowid = new.rowid;
+    END;
+CREATE TRIGGER roster_pending_key AFTER INSERT ON roster_pending WHEN new.door_key IS NULL BEGIN
+        UPDATE roster_pending SET door_key = lower(hex(randomblob(16))) WHERE id = new.id;
+    END;
+CREATE TRIGGER qr_hand_roster_gone AFTER DELETE ON roster_pending BEGIN
+        DELETE FROM qr_hand_marks WHERE who = 'r' || old.door_key;
+    END;
+CREATE TRIGGER sponsor_moved AFTER UPDATE OF tg_id ON users
+      WHEN old.tg_id != new.tg_id AND new.tg_id > 0 AND (EXISTS (SELECT 1 FROM donations WHERE user_id = old.id)
+                                                         OR EXISTS (SELECT 1 FROM sponsor_consents WHERE user_id = old.id)) BEGIN
+        INSERT INTO sponsor_consents (user_id, version, show, at) VALUES (old.id, 'sp1', 0, unixepoch());
+    END;
+CREATE TRIGGER report_body_off AFTER UPDATE OF status ON reports WHEN new.status != 'open' AND new.body IS NOT NULL BEGIN
+        UPDATE reports SET body = NULL WHERE id = new.id;
+    END;
+
+-- Fresh-database seed rows. Timestamps are set at initialization.
+INSERT INTO skills (name, approved, created_at, used_at) SELECT value, 1, CAST(strftime('%s', 'now') AS INTEGER),
+        CAST(strftime('%s', 'now') AS INTEGER) FROM json_each('["ios", "android", "web", "backend", "ml", "data", "ui design", "graphic design", "3d", "photo", "video", "editing", "texts", "translation", "smm", "music", "events"]');
+INSERT INTO campus_places (kind, code, name_en, room, location, school, updated_at)
+      SELECT *, CAST(strftime('%s', 'now') AS INTEGER) FROM (VALUES
+        ('place', 'canteen', 'Canteen', NULL, 'the basement, floor 0', NULL), ('place', 'library', 'Library', '158', NULL, NULL),
+        ('place', 'career', 'Career Center', '152', NULL, NULL), ('place', 'students', 'Student services', '155', NULL, NULL),
+        ('place', 'cowork', 'Halyk Co-working', NULL, 'floor 1, the middle block', NULL),
+        ('place', 'kunaev', 'Kunaev auditorium', '400a', NULL, NULL), ('place', 'farabi', 'Al-Farabi hall', '470', NULL, NULL),
+        ('place', 'indep', 'Independence hall', NULL, 'floor 2', NULL), ('place', 'gamedev', 'Gamedev lab', '47', NULL, NULL),
+        ('place', 'honeywell', 'Honeywell lab', '140', NULL, NULL), ('office', 'security', 'Security', '250a', NULL, NULL),
+        ('office', 'dispatch', 'Dispatcher', '1', NULL, NULL), ('office', 'rector', 'Rector', '466', NULL, NULL),
+        ('office', 'vrScience', 'Vice-rector for science', '415', NULL, NULL),
+        ('office', 'vrSocial', 'Vice-rector for social affairs', '472', NULL, NULL),
+        ('office', 'legal', 'Legal department', '503', NULL, NULL), ('office', 'accounting', 'Accounting', '523', NULL, NULL),
+        ('dean', 'site', 'School of IT and Engineering', '180', NULL, 'SITE'),
+        ('dean', 'energy', 'School of Energy and Petroleum Industry', '356', NULL, 'SEOGI'),
+        ('dean', 'marine', 'Kazakhstan Maritime Academy', '255', NULL, 'KMA'));
+INSERT INTO meta (key, value) VALUES
+    ('vol_resolve_from', CAST(strftime('%s', 'now') AS TEXT)),
+    ('seq:asks', '0'),
+    ('seq:contacts', '0'),
+    ('seq:receipts', '0');
+INSERT INTO sqlite_sequence (name, seq) VALUES ('ev_matches', 0);

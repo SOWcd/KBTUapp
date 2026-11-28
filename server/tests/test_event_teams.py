@@ -11,7 +11,7 @@ import time
 
 import pytest
 
-from kbtu import db, logic, outbox
+from kbtu import logic, outbox
 from test_core import env, login, set_clock, tma  # noqa: F401  (env is a fixture)
 from test_team_guests import PAID, _club, _uid
 
@@ -383,8 +383,8 @@ def test_lists_read_once(club):
     assert small == big, (small, big)
 
 
-def test_migration_triggers(club):
-    """161's triggers: any way out of the event takes the person out of the team, whatever code did it."""
+def test_registration_triggers_remove_players(club):
+    """Any way out of the event takes the person out of the team, whatever code did it."""
     c, con = club
     a, b = _people(c, 2)
     eid = _event(c, **TEAMS)
@@ -394,7 +394,22 @@ def test_migration_triggers(club):
     assert [p["id"] for p in _mine(c, eid, a)["members"]] == _ids(con, [a])
     con.execute("DELETE FROM registrations WHERE event_id = ? AND user_id = ?", (eid, _uid(con, a)))
     assert con.execute("SELECT COUNT(*) FROM event_teams").fetchone()[0] == 0
-    assert 161 in [n for n, _ in db.MIGRATIONS]
+
+
+def test_group_matches_retire_ids_and_go_with_a_team(club):
+    c, con = club
+    eid = _event(c, **TEAMS)
+    con.execute("""INSERT INTO event_teams (id, event_id, name, name_key, token, created_at)
+        VALUES (1, ?, 'Owls', 'owls', 'owls', 0), (2, ?, 'Hawks', 'hawks', 'hawks', 0)""", (eid, eid))
+    gid = con.execute("INSERT INTO ev_groups (event_id, name, position) VALUES (?, 'A', 0)", (eid,)).lastrowid
+    fixture = "INSERT INTO ev_matches (event_id, group_id, home, away) VALUES (?, ?, 1, 2)"
+    retired = con.execute(fixture, (eid, gid)).lastrowid
+    con.execute("DELETE FROM ev_matches WHERE id = ?", (retired,))
+    match = con.execute(fixture, (eid, gid)).lastrowid
+    assert match > retired
+    con.execute("DELETE FROM event_teams WHERE id = 2")
+    assert con.execute("SELECT COUNT(*) FROM ev_matches WHERE id = ?", (match,)).fetchone()[0] == 0
+    assert con.execute("PRAGMA foreign_key_check").fetchall() == []
 
 
 def test_names_unique_by_key(club):

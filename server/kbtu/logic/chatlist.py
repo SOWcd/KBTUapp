@@ -726,7 +726,7 @@ def _with_live(con, known: list[int], tg_from: int, live) -> list[int]:
 
 def _holder(con, tg_chat: int) -> tuple:
     """The club that holds a chat: (its chat_sync link, its chats card, the club's id or None). The same order as
-    migrations.held_by (chat_seen's triggers)."""
+    the chat_seen triggers in schema.sql."""
     link = one(con, "SELECT org_id, tag_id FROM chat_sync WHERE chat_id = ?", tg_chat)
     card = one(con, "SELECT org_id FROM chats WHERE tg_chat_id = ? AND org_id IS NOT NULL ORDER BY id LIMIT 1", tg_chat)
     ev = one(con, "SELECT org_id FROM events WHERE chat_id = ? AND org_id IS NOT NULL ORDER BY id DESC LIMIT 1", tg_chat)

@@ -1,5 +1,5 @@
 """The host club's own people are never its guests (owner, Nov 7): no sign-up to its public events, joining gives the seat
-back to the waitlist, migration 135 did the same once; a paid seat stays; the door still counts a member who came."""
+back to the waitlist, paid and past seats stay, and the door still counts a member who came."""
 from __future__ import annotations
 
 import time
@@ -79,38 +79,31 @@ def test_joining_frees_the_seat_for_the_waitlist(env):
     assert not con.execute("SELECT 1 FROM bot_outbox WHERE user_id = ? AND ref LIKE ?", (_uid(con, 10), f"event:{eid}%")).fetchone()
 
 
-def test_paid_seat_stays(env):
+def test_paid_and_past_seats_stay(env):
     c, cfg = env
     con = _club(c, cfg)
-    eid = _event(c, **PAID)
-    assert _go(c, eid, 10)["my"]["status"] == "hold"
-    logic.set_role(con, None, _uid(con, 10), 1, "member", "test")
-    assert _reg(con, eid, 10)["status"] == "hold"  # money: theirs to pay or give back
-
-
-def test_migration_135(env):
-    c, cfg = env
-    con = _club(c, cfg)
-    free, paid, team, past = _event(c, seats=2), _event(c, **PAID), _event(c, visibility="members"), _event(c)
-    for tg in (10, 11):
-        assert _go(c, free, tg)["my"]["status"] == "going"
-    assert _go(c, free, 12)["my"]["status"] == "waitlist"
+    paid, past = _event(c, **PAID), _event(c)
     assert _go(c, paid, 10)["my"]["status"] == "hold"
     assert _go(c, past, 10)["my"]["status"] == "going"
-    # tg 10 became a member before the rule (written directly: no joined()), his club's team event too
-    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, ?, 'member', 0)", (_uid(con, 10),))
-    assert _go(c, team, 10)["my"]["status"] == "going"
     con.execute("UPDATE events SET starts_at = starts_at - 86400, ends_at = ends_at - 86400 WHERE id = ?", (past,))
-    sql = dict(db.MIGRATIONS)[135]
-    con.executescript(f"BEGIN;\n{sql}\nCOMMIT;")
-    assert tuple(_reg(con, free, 10)) == ("cancelled", "removed")
-    assert _reg(con, free, 11)["status"] == "going"  # not a member
-    assert _reg(con, paid, 10)["status"] == "hold" and _reg(con, team, 10)["status"] == "going" and _reg(con, past, 10)["status"] == "going"
-    assert not con.execute("SELECT 1 FROM bot_outbox WHERE kind = 'remind_2h' AND user_id = ? AND ref LIKE ?", (_uid(con, 10), f"event:{free}:%")).fetchone()
+    logic.set_role(con, None, _uid(con, 10), 1, "member", "test")
+    assert _reg(con, paid, 10)["status"] == "hold"  # money: theirs to pay or give back
+    assert _reg(con, past, 10)["status"] == "going"
+
+
+def test_startup_refill_promotes_after_a_removed_seat_once(env):
+    c, cfg = env
+    con = _club(c, cfg)
+    eid = _event(c, seats=2)
+    for tg in (10, 11):
+        assert _go(c, eid, tg)["my"]["status"] == "going"
+    assert _go(c, eid, 12)["my"]["status"] == "waitlist"
+    con.execute("UPDATE registrations SET status = 'cancelled', cancel_reason = 'removed' WHERE event_id = ? AND user_id = ?",
+                (eid, _uid(con, 10)))
     logic.refill(con)
-    assert _reg(con, free, 12)["status"] == "going"
+    assert _reg(con, eid, 12)["status"] == "going"
     logic.refill(con)  # again: nothing left to move
-    assert con.execute("SELECT COUNT(*) FROM registrations WHERE event_id = ? AND status = 'going'", (free,)).fetchone()[0] == 2
+    assert con.execute("SELECT COUNT(*) FROM registrations WHERE event_id = ? AND status = 'going'", (eid,)).fetchone()[0] == 2
 
 
 def test_member_at_the_door_still_counts(env):

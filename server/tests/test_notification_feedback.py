@@ -121,17 +121,3 @@ def test_preference_undo_respects_subsequent_settings_changes(env):
     assert not any(r["sent"] for r in notifications.summary(con, now + 30 * 86400))
     assert not list(con.execute("PRAGMA foreign_key_list(notification_days)"))
     con.close()
-
-
-def test_door_preference_survives_migration(env, before_notification_migration):
-    c, cfg = env
-    login(c, 10, "ann")
-    login(c, 11, "ben")
-    con = db.connect(cfg.db_path)
-    con.execute("UPDATE users SET n_remind = 0 WHERE tg_id = 10")
-    before_notification_migration(con)
-    con.execute("PRAGMA user_version = 212")
-    con.close()
-    db.init(cfg.db_path)
-    assert c.get("/api/me", headers=tma(10)).json()["settings"]["nDoor"] is False
-    assert c.get("/api/me", headers=tma(11)).json()["settings"]["nDoor"] is True

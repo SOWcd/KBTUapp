@@ -482,11 +482,6 @@ def test_verdict_edits_the_first_message(env, monkeypatch):
 
 
 def test_rules_are_the_terms_clauses():
-    """The AI answers with a clause of the terms' section 3; rows from before (insult, danger) read as abuse."""
+    """The AI answers with a clause of the terms' section 3."""
     assert all(tgc.ai._comment_word(f"VIOLATION {r.upper()}") for r in logic.tgcomments.RULES)
     assert not tgc.ai._comment_word("VIOLATION INSULT")
-    con = db.connect(":memory:")
-    con.executescript("CREATE TABLE tgc_comments (id INTEGER PRIMARY KEY, rule TEXT);"
-                      "INSERT INTO tgc_comments (rule) VALUES ('spam'), ('insult'), ('danger'), ('other'), (NULL);")
-    con.executescript(dict(db.MIGRATIONS)[101])
-    assert [r[0] for r in con.execute("SELECT clause FROM tgc_comments ORDER BY id")] == ["spam", "abuse", "abuse", "other", None]

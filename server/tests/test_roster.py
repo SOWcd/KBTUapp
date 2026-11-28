@@ -37,23 +37,6 @@ def test_prefill_intake_clock_survives_reloads_and_delayed_rest(env, monkeypatch
     assert not con.execute("SELECT 1 FROM meta WHERE key = 'prefill_rest:second'").fetchone()
 
 
-@pytest.mark.parametrize("known_load", [False, True])
-def test_prefill_retention_migration_dates_legacy_rows(env, known_load):
-    _, cfg = env
-    con = db.connect(cfg.db_path)
-    for table in ("prefill", "prefill_rest"):
-        con.execute(f"ALTER TABLE {table} DROP COLUMN loaded_at")
-        con.execute(f"INSERT INTO {table} (email, student_id) VALUES ('example@kbtu.kz', '25B010001')")
-    if known_load:
-        con.execute("INSERT INTO meta (key, value) VALUES ('prefill_list:old', '100'), ('prefill_list:new', '200')")
-    con.execute("ALTER TABLE fchan_hearts DROP COLUMN emoji")  # 263's columns, added again on the way up
-    con.execute("ALTER TABLE users DROP COLUMN n_forum_digest")
-    con.execute("PRAGMA user_version = 260")
-    db.init(cfg.db_path)
-    for table in ("prefill", "prefill_rest"):
-        assert con.execute(f"SELECT loaded_at FROM {table}").fetchone()[0] == (100 if known_load else 0)
-
-
 def test_roster_name_match():
     """The roster load's name check (made-up names): two words shared in any order and spelling, Cyrillic or Latin, Kazakh
     letters, a patronymic more; one shared word isn't enough."""
