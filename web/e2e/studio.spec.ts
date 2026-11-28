@@ -51,18 +51,18 @@ async function newEvent(dana: Phone) {
 /** Publish; the editor's check before it (no cover, no description here) is answered "as is" */
 async function publish(ph: Phone) {
   const p = ph.page;
-  await p.getByRole('button', { name: tr('ed.publish'), exact: true }).click();
+  // the action at the form's end (its island may float up too: either does the same)
+  await p.getByRole('button', { name: tr('ed.publish'), exact: true }).first().click();
   const anyway = p.getByRole('button', { name: tr('ex.publishAnyway'), exact: true });
   await expect(anyway).toBeVisible();
   await ph.look('check before publishing');
   await anyway.click();
 }
 
-/** the editor's focused panel (one at a time): its Done, under its fields */
-const doneOf = (p: Phone['page']) => p.getByRole('button', { name: tr('ex.done'), exact: true }).filter({ visible: true }).last();
-async function panelDone(p: Phone['page'], inside: ReturnType<Phone['page']['locator']>) {
-  await doneOf(p).click();
-  await expect(inside, 'the panel closed').toBeHidden(); // panels nest (More settings -> a co-host): its own Done
+/** the editor's pushed page (one at a time) closes with Telegram's Back, the only Back */
+async function panelDone(ph: Phone, inside: ReturnType<Phone['page']['locator']>) {
+  await ph.back.press();
+  await expect(inside, 'the page closed').toBeHidden(); // pages nest (More settings -> a co-host): Back pops one
 }
 
 async function place(ph: Phone, where: string) {
@@ -76,12 +76,8 @@ async function place(ph: Phone, where: string) {
   await p.getByRole('button', { name: tr('ed.placeMain'), exact: true }).click();
   await ph.look('main building place fields');
   await field.fill(where);
-  const done = doneOf(p);
-  // the keyboard's own Done first (the field blurred), as on a phone: with the field focused the sheet rides up over
-  // the keyboard it expects, and an emulated press blurs the field and drops the sheet from under the pointer
   await keyboardDown(p);
-  await done.click();
-  await expect(field).toBeHidden();
+  await panelDone(ph, field);
 }
 
 test('Studio: a new event by hand, published, edited, on the Afisha for a student', async ({ open }) => {
@@ -96,7 +92,7 @@ test('Studio: a new event by hand, published, edited, on the Afisha for a studen
   await p.getByRole('button', { name: new RegExp(`^${esc(tr('ed.seats'))}`) }).click();
   const unlimited = p.getByRole('radio', { name: tr('ex.unlimited'), exact: true });
   await unlimited.click();
-  await panelDone(p, unlimited);
+  await panelDone(dana, unlimited);
   await dana.look('filled in');
   await publish(dana);
   // published: Studio lists it
@@ -138,7 +134,7 @@ test('Studio: a co-host club is invited from the editor and accepts in its own S
   await p.getByRole('button', { name: new RegExp(`^${esc(tr('ed.seats'))}`) }).click();
   const unlimited = p.getByRole('radio', { name: tr('ex.unlimited'), exact: true });
   await unlimited.click();
-  await panelDone(p, unlimited);
+  await panelDone(dana, unlimited);
   await p.getByRole('button', { name: new RegExp(`^${esc(tr('ex.more'))}`) }).click(); // the co-host lives in More settings
   await p.getByRole('button', { name: new RegExp(`^${esc(tr('co.invite'))}`) }).click();
   await p.getByRole('textbox', { name: tr('co.search') }).or(p.getByPlaceholder(tr('co.search'))).first().fill('Debate');
@@ -146,8 +142,8 @@ test('Studio: a co-host club is invited from the editor and accepts in its own S
   await p.getByRole('button', { name: 'DS', exact: true }).click(); // a school shows by its short name
   await expect(p.getByText(tr('co.afterSave'))).toBeVisible();
   await dana.look('co-host picked');
-  await panelDone(p, p.getByText(tr('co.afterSave')));
-  await panelDone(p, p.getByRole('button', { name: new RegExp(`^${esc(tr('co.invite'))}`) })); // and More settings
+  await panelDone(dana, p.getByText(tr('co.afterSave')));
+  await panelDone(dana, p.getByRole('button', { name: new RegExp(`^${esc(tr('co.invite'))}`) })); // and More settings
   await publish(dana);
   await expect(p.getByRole('region', { name: 'Open Mic Club' }).getByRole('button', { name: /Chess and jokes/ })).toBeVisible();
 

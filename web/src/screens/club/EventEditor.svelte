@@ -1,9 +1,10 @@
 <script lang="ts">
-  // Studio → a new event or an edit, full screen. One calm page does the common case: KRI's line on top (paste the
-  // announcement or say it in a few words: the card below fills in, and KRI asks only what is still missing, in that
-  // same line; no second mode), the event's card itself with the name typed on its cover, when, where, a few words,
-  // tickets, and Publish always under the thumb. Everything else is a named row that pushes its own page, as iOS
-  // Settings does (Telegram's Back pops it; one Back). The cover is one photo aimed by itself (lib/photo autoFocus);
+  // Studio → a new event or an edit, full screen, on the app's solid ground. One calm page does the common case: KRI
+  // first (paste the announcement or say it in a few words: the card below fills in, and KRI asks only what is still
+  // missing, in that same line; no second mode), the event's card itself with the name typed on its cover, one surface
+  // with when, where and a few words, tickets, and the actions at the page's end (a small island floats up once it is
+  // ready and that end is out of sight). Everything else is a named row that pushes its own page, as iOS Settings
+  // does (Telegram's Back pops it; one Back, no Done). The cover is one photo aimed by itself (lib/photo autoFocus);
   // each format, the Feed's tall slide, the card and a list's thumbnail, can take its own crop or its own photo.
   // Publishing runs an instant check first (lib/eventCheck.ts: a trip once went out free while its text asked 7500
   // tenge) with a one-tap fix per note. A new event or a draft: "Publish" or "Draft"; a published one: "Save" (the
@@ -30,6 +31,8 @@
   import Ticket from '@lucide/svelte/icons/ticket';
   import Users from '@lucide/svelte/icons/users';
   import Clock from '@lucide/svelte/icons/clock';
+  import Calendar from '@lucide/svelte/icons/calendar';
+  import Flag from '@lucide/svelte/icons/flag';
   import Globe from '@lucide/svelte/icons/globe';
   import Crown from '@lucide/svelte/icons/crown';
   import CalendarCheck from '@lucide/svelte/icons/calendar-check';
@@ -74,7 +77,9 @@
   import CampusPlacePicker from './CampusPlacePicker.svelte';
   import { hit } from '../../lib/clubs';
   import { nowTs, time, relDay, dateInput, fromInputs, weekdayShort, dayMonthShort, multiDay, endTime } from '../../lib/time';
-  import { haptic, inTelegram } from '../../lib/tg';
+  import { haptic } from '../../lib/tg';
+  import { scale } from 'svelte/transition';
+  import { backOut } from 'svelte/easing';
   import { autoFocus, coverFor, shrink } from '../../lib/photo';
   import { shade, coverColor } from '../../lib/color';
   import { burst } from '../../ui/burst';
@@ -171,8 +176,7 @@
   let said = $state(''); // what is being written to KRI: kept with the text draft, so a failed try or a closed app loses nothing
   let loading = $state(!!untrack(() => id)); // an edit until the server's copy is in: the blank form is inert (Publish made a second event)
   const live = $derived(!!saved && saved.status !== 'draft');
-  const tint = $derived(shade(f.color));
-  $effect(() => { overlay.tint = tint; }); // the sheets it opens take its colour
+  const tint = $derived(shade(f.color)); // the cover's own ground under its picture, nowhere else
   let tried = $state(false); // errors show after the first submit
   let busy = $state('');
 
@@ -779,7 +783,6 @@
   const dayText = $derived(Number.isFinite(dayTs) ? `${weekdayShort(dayTs)}, ${dayMonthShort(dayTs)}` : '—');
   // the end's day: its own date when set, else the day the end time falls on (dimmed: nothing chosen)
   const endDay = $derived(f.endDate ? fromInputs(f.endDate, '12:00') : endTs != null ? endTs : Number.isFinite(dayTs) ? dayTs : null);
-  const endDayText = $derived(endDay != null ? `${weekdayShort(endDay)}, ${dayMonthShort(endDay)}` : '—');
   const whoVal = $derived(f.leaders ? sw('ed.whoLeaders') : f.teamOnly ? sw('ed.whoTeam') : sw('ed.whoAll'));
   const audienceVal = $derived([whoVal, f.teamOnly && (f.forBoard ? sw('ed.meetingBoard') : tags.find(g => g.id === f.meetingTag)?.name),
     (schoolOnly ?? !!saved?.school) && school && sw('ed.schoolOnly', { school: nameOf(school) })].filter(Boolean).join(' · '));
@@ -879,48 +882,77 @@
       close(overlay.id);
     } catch { say(t('common.error'), 'warning_3d'); } finally { busy = ''; }
   }
+
+  // ---- the way out: the actions sit at the page's end, after the last card, where filling it in top to bottom
+  // finishes. A small glass island with the main action floats up only once the event is ready to go and that end is
+  // out of sight (never while typing, never for a Save with nothing changed)
+  let finish = $state<HTMLElement>();
+  let finishSeen = $state(true);
+  $effect(() => {
+    if (!finish) return;
+    const io = new IntersectionObserver(([x]) => { finishSeen = x.isIntersecting; });
+    io.observe(finish);
+    return () => io.disconnect();
+  });
+  const ready = $derived(!Object.values(err).some(Boolean));
+  const island = $derived(ready && !finishSeen && !pick && !loading && !keyboard.h && (goKind !== 'save' || dirty));
+  // the description's first words on its row: the row stays one line high however long the text
+  const aboutLine = $derived.by(() => { const d = f.description.trim().replace(/\s+/g, ' '); return d.length > 90 ? d.slice(0, 88).trimEnd() + '…' : d; });
 </script>
 
 {#snippet tintPhoto()}<button class="tp" class:on={f.color === photoColor} style="--c:{photoColor}" onclick={() => (f.color = photoColor!)} aria-label={sw('ed.tintPhoto')}><ImageIcon size={15} strokeWidth={2.4} /></button>{/snippet}
+<!-- KRI filled this row: a quiet monochrome mark until the organiser touches it -->
+{#snippet aiMark(k: Marked)}{#if ai.includes(k)}<span class="aim"><Sparkles size={14} strokeWidth={2.2} /></span>{/if}{/snippet}
+<!-- a day on its chip: the weekday gives way on a narrow phone, the date never does -->
+{#snippet day(ts: number | null)}{#if ts != null && Number.isFinite(ts)}<span class="wd">{`${weekdayShort(ts)}, `}</span>{dayMonthShort(ts)}{:else}—{/if}{/snippet}
+{#snippet startAt()}
+  <label class="tv">{@render day(dayTs)}<input type="date" bind:value={f.date} aria-label={sw('ed.date')} /></label>
+  <label class="tv">{f.start || '—'}<input type="time" bind:value={f.start} aria-label={sw('ed.start')} /></label>
+{/snippet}
+{#snippet endAt()}
+  <label class="tv" class:ph={!f.endDate}>{@render day(endDay)}<input type="date" bind:value={f.endDate} min={f.date} aria-label={sw('ed.endDate')} /></label>
+  <label class="tv" class:ph={!f.end}>{f.end || '—'}<input type="time" bind:value={f.end} aria-label={sw('ed.end')} /></label>
+{/snippet}
+{#snippet placeMark()}{@render aiMark('place')}{#if f.placeUrl && !f.tba && !f.online}<Tag tone="success">{t('event.route')}</Tag>{/if}{/snippet}
+{#snippet whenMark()}{@render aiMark('when')}{/snippet}
+{#snippet aboutMark()}{@render aiMark('about')}{/snippet}
 
-<!-- engine: Field has no date/time type (nor min): these few by hand, in Field's look (.fl) -->
-<div class="panel" class:hinted={member && goKind === 'send'} bind:this={panel} inert={loading} style:--tint={tint} style:--kbh="{keyboard.h}px" oninputcapture={touch} onchangecapture={touch} onclickcapture={touch}>
-  <!-- the sheet tinted by the event: its colour, the cover blurred over it, the page's ground on top for contrast -->
-  <div class="wash" aria-hidden="true">{#if f.cover}<img draggable="false" src={f.cover.thumb} alt="" />{/if}<i></i></div>
-  <header class="bar">
-    {#if !inTelegram}<span class="x"><IconButton icon={X} label={t('common.close')} onclick={() => close(overlay.id)} /></span>{/if}
-  </header>
-
+<!-- One solid page, the app's ground (no wash in the event's colour: that stays inside its cover). Top to bottom: the
+     announcement that fills it, the event itself as the Afisha will show it (its name typed on the cover), the few facts
+     every event needs on one surface, tickets, the rest behind two rows, and the way out at the end. Telegram's Back
+     is the only Back: it pops a pushed page first, and asks before dropping changes. -->
+<div class="panel" bind:this={panel} inert={loading} style:--kbh="{keyboard.h}px" oninputcapture={touch} onchangecapture={touch} onclickcapture={touch}>
   <div class="body scroll" inert={!!pick}>
     {#if kriOn}
-      <!-- KRI: one line that says what it needs next, one field to answer in; the card below is the result -->
-      <div class="kri" class:busy={filling}>
-        <p class="kq"><Sparkles size={15} strokeWidth={2.4} /><span>{filling ? t('as.thinking') : sw(`ed.chat.${kriNext}`)}</span></p>
+      <!-- step one: paste the announcement or say it in a few words; KRI fills the card and asks only what is missing -->
+      <section class="kri" class:busy={filling}>
+        <p class="kq"><Sparkles size={16} strokeWidth={2.2} /><span>{filling ? t('as.thinking') : sw(`ed.chat.${kriNext}`)}</span></p>
         <Composer bind:value={said} placeholder={sw(kriNext === 'payTo' ? 'ed.payTo' : kriNext === 'payPhone' ? 'ed.payPhone' : turns ? 'ed.chatPh' : 'ed.kriPh')}
           maxlength={4000} sending={filling} onsend={tell} pill />
-      </div>
-    {/if}
-    {#if lacks.length}
-      <!-- what the announcement didn't say: each one tapped goes to its field -->
-      <div class="miss">
-        <span>{sw('ed.missing')}</span>
-        {#each lacks as k (k)}<button class="mk" onclick={() => jump(k)}>{sw(k === 'date' ? 'ed.date' : k === 'time' ? 'ed.time' : 'ed.place')}</button>{/each}
-      </div>
-    {/if}
-    {#if differs.length}
-      <!-- the new text says otherwise: the form's value stays; a tap takes the new one -->
-      <div class="miss">
-        <span>{sw('ed.differs')}</span>
-        {#each differs as d (d.k)}<button class="mk" onclick={() => take(d)}>{sw(DIFF_KEY[d.k])}: {d.k === 'price' ? `${d.v} ₸` : d.v}</button>{/each}
-      </div>
+        {#if lacks.length}
+          <!-- what the announcement didn't say: each one tapped goes to its field -->
+          <div class="miss">
+            <span>{sw('ed.missing')}</span>
+            {#each lacks as k (k)}<button class="mk" onclick={() => jump(k)}>{sw(k === 'date' ? 'ed.date' : k === 'time' ? 'ed.time' : 'ed.place')}</button>{/each}
+          </div>
+        {/if}
+        {#if differs.length}
+          <!-- the new text says otherwise: the form's value stays; a tap takes the new one -->
+          <div class="miss">
+            <span>{sw('ed.differs')}</span>
+            {#each differs as d (d.k)}<button class="mk" onclick={() => take(d)}>{sw(DIFF_KEY[d.k])}: {d.k === 'price' ? `${d.v} ₸` : d.v}</button>{/each}
+          </div>
+        {/if}
+      </section>
     {/if}
 
     {#if review?.reason && review.mine}<Notice tone="warning" text={t('rv.returned', { why: t(`rv.why.${review.reason}`) })} />
     {:else if review?.askedAt && review.mine}<Notice tone="accent" text={t('rv.waiting')} />
     {:else if judge}<Notice tone="accent" text={t('rv.from')} />{/if}
 
-    <!-- the event's card as the Afisha shows it, and the form's first field: the name is typed on the cover itself -->
-    <div class="card" class:bad={tried && err.title} class:busy={uploading === 'cover'}>
+    <!-- the event as the Afisha shows it: the cover, the name typed on it, its line under the name; two round glass
+         controls float over the picture (the preview, the cover's page) -->
+    <div class="card" class:bad={tried && err.title} class:marked={ai.includes('title')} class:busy={uploading === 'cover'} style:--c={tint}>
       <button class="art" onclick={() => open('cover')} aria-label={sw('ed.cover')}><Poster item={art} big radius={0} fmt="card" /></button>
       <i class="veil" aria-hidden="true"></i>
       <div class="tools">
@@ -928,8 +960,7 @@
         <button class="tool glass glass-pill" onclick={() => open('cover')}><ImagePlus size={18} /><span>{sw('ed.cover')}</span></button>
       </div>
       <div class="words">
-        <!-- engine: Field size="title" with its label for screen readers only (the card's big name has none in sight) -->
-        <textarea class="name" class:ai={ai.includes('title')} oninput={() => unmark('title')} rows="1" bind:value={f.title} maxlength="80" placeholder={t('ex.name')} aria-label={t('ex.name')} enterkeyhint="done"></textarea>
+        <textarea class="name" oninput={() => unmark('title')} rows="1" bind:value={f.title} maxlength="80" placeholder={t('ex.name')} aria-label={t('ex.name')} enterkeyhint="done"></textarea>
         <p class="line ellipsis">{cardLine}</p>
       </div>
     </div>
@@ -942,23 +973,17 @@
       <Notice tone="accent" text={sw('ed.castHint')} action={{ label: sw('ed.castOpen'), onclick: () => { close(overlay.id); sheets.roundSetup(org); } }} />
     {/if}
 
-    <div class="pill when" class:bad={tried && err.when} class:ai={ai.includes('when')} onchangecapture={() => unmark('when')}>
-      <i class="rail" aria-hidden="true"></i>
-      <!-- one line of text ("Mon, 9 Nov  18:00"); the phone's own pickers sit under each part -->
-      <div class="wr"><span class="dot"></span><b>{sw('ed.start')}</b>
-        <label class="tv">{dayText}<input type="date" bind:value={f.date} aria-label={sw('ed.date')} /></label>
-        <label class="tv">{f.start || '—'}<input type="time" bind:value={f.start} aria-label={sw('ed.start')} /></label></div>
-      <div class="wr"><span class="dot o"></span><b>{sw('ed.end')}</b>
-        <label class="tv" class:ph={!f.endDate}>{endDayText}<input type="date" bind:value={f.endDate} min={f.date} aria-label={sw('ed.endDate')} /></label>
-        <label class="tv" class:ph={!f.end}>{f.end || '—'}<input type="time" bind:value={f.end} aria-label={sw('ed.end')} /></label></div>
+    <!-- what every event needs, on one surface: when it starts and ends (the phone's own pickers under each part),
+         where, and a few words -->
+    <div class="when" onchangecapture={() => unmark('when')}>
+      <Group>
+        <Row icon={Calendar} title={sw('ed.start')} trailing={startAt} detail={whenMark} />
+        <Row icon={Flag} title={sw('ed.end')} trailing={endAt} />
+        <Row icon={f.online ? VideoCall : MapPin} title={placeVal || ''} placeholder={t('ex.placeAdd')} invalid={tried && !!err.place} detail={placeMark} accessory="chevron" onclick={() => open('place')} />
+        <Row icon={AlignLeft} title={aboutLine} placeholder={t('ex.aboutAdd')} detail={aboutMark} accessory="chevron" onclick={() => open('about')} />
+      </Group>
     </div>
     {#if tried && err.when}<p class="err">{err.when}</p>{/if}
-
-    <button class="pill go" class:bad={tried && err.place} class:ai={ai.includes('place')} onclick={() => open('place')}>{#if f.online}<VideoCall size={20} />{:else}<MapPin size={20} />{/if}
-      <span class="gt ellipsis" class:ph={!placeVal}>{placeVal || t('ex.placeAdd')}</span>
-      {#if f.placeUrl && !f.tba && !f.online}<Tag tone="success">{t('event.route')}</Tag>{/if}</button>
-    <button class="pill go" class:ai={ai.includes('about')} onclick={() => open('about')}><AlignLeft size={20} />
-      <span class="gt clamp-2" class:ph={!f.description.trim()}>{f.description.trim() || t('ex.aboutAdd')}</span></button>
 
     {#if tickets}
       <Group caption={t('ex.tickets')} footnote={!canPrice && !isMeeting && !member ? (full ? sw('ed.paidRight') : sw('ed.paidOfficial')) : undefined}>
@@ -974,31 +999,35 @@
       <Row icon={SlidersHorizontal} title={t('ex.more')} value={tried && moreBad ? '' : moreVal} invalid={tried && moreBad} accessory="chevron" onclick={() => open('more')} />
     </Group>
 
+    <!-- the way out, at the end of the form: the main action (a calm ink capsule), the draft beside it in the quiet fill -->
+    <div class="finish" bind:this={finish}>
+      {#if member && goKind === 'send'}<p class="dh">{t('rv.sendHint')}</p>{/if}
+      <Button kind="primary" size="l" full loading={busy === goKind} disabled={goKind === 'save' && !dirty} onclick={publish}>{goLabel}</Button>
+      {#if !live && goKind !== 'save' || judge}
+        <div class="alt">
+          {#if !live && goKind !== 'save'}<Button kind="gray" full loading={busy === 'draft'} disabled={!!busy && busy !== 'draft'} onclick={() => submit('draft')}>{sw('ed.saveDraft')}</Button>{/if}
+          {#if judge}<Button kind="gray" full onclick={giveBack}>{t('rv.return')}</Button>{/if}
+        </div>
+      {/if}
+    </div>
+
     {#if saved?.status === 'draft' && (!member || review?.mine)}
-      <Button kind="plain" destructive full onclick={remove}>{#snippet icon()}<Trash size={18} />{/snippet}{sw('ed.delete')}</Button>
+      <Group><Row icon={Trash} title={sw('ed.delete')} tone="destructive" onclick={remove} /></Group>
     {/if}
   </div>
 
-  <!-- the main action, always under the thumb -->
-  {#if !pick}
-    <footer class="dock">
-      {#if member && goKind === 'send'}<p class="dh">{t('rv.sendHint')}</p>{/if}
-      <div class="acts glass glass-pill">
-        {#if !live && goKind !== 'save'}<Button kind="gray" size="l" loading={busy === 'draft'} disabled={!!busy && busy !== 'draft'} onclick={() => submit('draft')}>{sw('ed.saveDraft')}</Button>{/if}
-        {#if judge}<Button kind="gray" size="l" onclick={giveBack}>{t('rv.return')}</Button>{/if}
-        <span class="main"><Button kind="filled" size="l" full loading={busy === goKind} disabled={goKind === 'save' && !dirty} onclick={publish}>{goLabel}</Button></span>
-      </div>
-    </footer>
+  {#if island}
+    <!-- ready to go and the end out of sight: the main action floats up as a small island, never a bar -->
+    <div class="dock"><div class="island glass glass-pill" in:scale={{ duration: 400, start: 0.6, easing: backOut }} out:scale={{ duration: 150, start: 0.9 }}>
+      <Button kind="primary" loading={busy === goKind} onclick={publish}>{goLabel}</Button>
+    </div></div>
   {/if}
 
-  <!-- a page pushed over the main one: one thing at a time; Telegram's Back or Done pops it -->
+  <!-- a page pushed over the main one: one thing at a time; Telegram's Back pops it -->
   {#if pick}
     {#key pick}
     <div class="page">
-      <!-- the same ground as the main page: no seam between the two as one slides over the other -->
-      <div class="wash" aria-hidden="true">{#if f.cover}<img draggable="false" src={f.cover.thumb} alt="" />{/if}<i></i></div>
       <div class="pg scroll">
-        {#if !inTelegram}<h2 class="pt">{pageTitle}</h2>{/if}
         {#if pick === 'cover'}
           <!-- one photo, three formats: each as it will look, each a tap from its own crop or its own photo -->
           <div class="fmts">
@@ -1287,18 +1316,14 @@
             <p class="okay"><CircleCheck size={20} />{t('ex.checkOk')}</p>
           {/if}
         {/if}
+        {#if pick === 'check'}
+          <!-- the check's own way out: the action itself, at the end of what it found -->
+          <div class="finish">
+            <Button kind="primary" size="l" full loading={busy === goKind} onclick={() => { only(); void submit(goKind); }}>
+              {found.length && goKind !== 'send' ? t(live ? 'ex.saveAnyway' : 'ex.publishAnyway') : goLabel}</Button>
+          </div>
+        {/if}
       </div>
-      <!-- the page's one button: Done, or on the check the action itself -->
-      <footer class="dock">
-        <div class="acts glass glass-pill">
-          {#if pick === 'check'}
-            <span class="main"><Button kind="filled" size="l" full loading={busy === goKind} onclick={() => { only(); void submit(goKind); }}>
-              {found.length && goKind !== 'send' ? t(live ? 'ex.saveAnyway' : 'ex.publishAnyway') : goLabel}</Button></span>
-          {:else}
-            <span class="main"><Button kind="filled" size="l" full onclick={back}>{t('ex.done')}</Button></span>
-          {/if}
-        </div>
-      </footer>
     </div>
     {/key}
   {/if}
@@ -1307,52 +1332,41 @@
 
 <style>
   .doc-in { display: none; }
+  /* the app's own ground, solid: the event's colour stays inside its cover */
   .panel { position: absolute; inset: 0; z-index: var(--z-sheet); display: flex; flex-direction: column; overflow: hidden; background: var(--bg);
-    --pill: var(--surface-2); --surface-solid: transparent; /* its buttons on the event's colour, not navy (Button's solid ground) */
-    --up: max(0px, var(--kbh, 0px) - var(--safe-bottom)); --dock-h: calc(var(--safe-bottom) + 84px); }
-  .panel.hinted { --dock-h: calc(var(--safe-bottom) + 108px); } /* the line over the bar: who publishes a member's draft */
-  :global(:root[data-theme='light']) .panel { --pill: rgba(255, 255, 255, 0.62); }
-  .wash { position: absolute; inset: 0; background: var(--tint); overflow: hidden; pointer-events: none; }
-  .wash img { position: absolute; inset: -20%; width: 140%; height: 140%; object-fit: cover; filter: blur(48px) saturate(1.3); }
-  .wash i { position: absolute; inset: 0; background: var(--bg); opacity: 0.5; }
-  :global(:root[data-theme='light']) .wash i { opacity: 0.72; }
-  .bar { position: absolute; left: 0; right: 0; top: max(8px, calc(var(--safe-top) + (var(--tg-head) - 38px) / 2)); height: 38px; z-index: 3;
-    display: flex; align-items: center; justify-content: center; pointer-events: none; }
-  .x { position: absolute; left: var(--s-3); pointer-events: auto; }
+    --up: max(0px, var(--kbh, 0px) - var(--safe-bottom)); }
 
-  /* the main page: the lists on the event's tinted ground, the pills' glass, Settings' rows */
-  .body, .pg { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--s-3);
-    padding: calc(max(48px, var(--top)) + var(--s-2)) var(--gutter) calc(var(--dock-h) + var(--s-5) + var(--up)); /* up to the screen's edge under Telegram's buttons, never cut at them */
-    --group-bg: var(--pill); }
+  /* the main page and a pushed one: surfaces on a 16 px rhythm, up to the screen's edge under Telegram's buttons */
+  .body, .pg { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--s-4);
+    padding: calc(max(48px, var(--top)) + var(--s-2)) var(--gutter) calc(var(--safe-bottom) + var(--s-8) + var(--up)); }
   .body > :global(*), .pg > :global(*) { flex-shrink: 0; } /* a scrolling column must not squeeze its rows */
-  .body > :global(section), .pg > :global(section) { margin-top: var(--s-2); }
+  .body > :global(section:not(.kri)), .pg > :global(section) { margin-top: var(--s-1); }
   .ph { color: var(--text-3); }
-  .err { margin: -6px var(--s-4) 0; font: 450 var(--fs-sub)/1.3 var(--font-text); color: var(--danger-text); }
-  .capn { margin: -6px var(--s-4) 0; }
+  .err { margin: calc(var(--s-2) * -1) var(--s-4) 0; font: 450 var(--fs-sub)/1.3 var(--font-text); color: var(--danger-text); }
+  .capn { margin: calc(var(--s-2) * -1) var(--s-4) 0; }
   .hint { margin: 0 var(--s-4); font: 450 var(--fs-sub)/1.4 var(--font-text); font-style: normal; color: var(--text-3); }
   .bad { box-shadow: inset 0 0 0 1.5px var(--danger); }
-  /* the AI filled it: a quiet accent ring and dot until the organiser touches it */
-  .ai:not(.bad) { box-shadow: inset 0 0 0 1px var(--accent-text); }
-  .pill.ai::after { content: ''; position: absolute; top: 8px; right: 8px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
-  .miss { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); padding: 0 var(--s-1); }
-  .miss > span { font: 600 var(--fs-sub)/1.3 var(--font-text); color: var(--text-2); }
-  .mk { padding: 6px var(--s-3); border-radius: var(--r-full); border: 1.5px dashed var(--text-3); color: var(--text); font: 600 var(--fs-sub)/1 var(--font-text); }
-  .mk:active { background: var(--fill); }
+  .aim { display: inline-flex; color: var(--text-2); }
 
-  /* KRI: its line, then the field (Composer's pill) */
-  .kri { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3) var(--s-3) var(--s-2); border-radius: var(--r-l); background: var(--pill); box-shadow: var(--card-rim); }
-  .kq { display: flex; align-items: flex-start; gap: var(--s-2); padding: 0 var(--s-1); font: 500 var(--fs-body)/1.35 var(--font-text); color: var(--text); }
-  .kq > :global(svg) { flex: none; margin-top: 3px; color: var(--accent-text); }
+  /* step one, KRI: its question as the surface's head, the field under it, then what is missing or differs */
+  .kri { display: flex; flex-direction: column; gap: var(--s-3); padding: var(--s-4); border-radius: var(--r-group); background: var(--surface); box-shadow: var(--card-rim); }
+  .kq { display: flex; align-items: flex-start; gap: var(--s-2); font: 500 var(--fs-body)/1.35 var(--font-text); color: var(--text); }
+  .kq > :global(svg) { flex: none; margin-top: 3px; color: var(--text-2); }
   .kq span { animation: say 320ms var(--ease) backwards; }
   .kri.busy .kq span { color: var(--text-2); animation: think 1.2s ease-in-out infinite; }
   @keyframes say { from { opacity: 0; transform: translate3d(0, 4px, 0); } }
   @keyframes think { 50% { opacity: 0.5; } }
+  .miss { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
+  .miss > span { font: 600 var(--fs-sub)/1.3 var(--font-text); color: var(--text-2); }
+  .mk { padding: 6px var(--s-3); border-radius: var(--r-full); background: var(--fill); color: var(--text); font: 600 var(--fs-sub)/1 var(--font-text); }
+  .mk:active { background: var(--fill-2, var(--fill)); transform: scale(0.96); }
 
-  /* the card: the cover in the Afisha card's shape, the name typed over it */
+  /* the event's cover, as the Afisha card: the words on the picture itself over a clean dark scrim, no box */
   .card { position: relative; isolation: isolate; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; min-height: 216px;
-    border-radius: var(--r-xl); background: var(--tint); box-shadow: var(--shadow-card), var(--card-rim); transition: opacity var(--t-base) var(--ease); }
+    border-radius: var(--r-group); background: var(--c); box-shadow: var(--shadow-card), var(--card-rim); transition: opacity var(--t-base) var(--ease); }
   .card.busy { opacity: 0.6; }
   .card.bad { box-shadow: inset 0 0 0 1.5px var(--danger); }
+  .card.marked:not(.bad) { box-shadow: var(--shadow-card), inset 0 0 0 1px var(--text-2); }
   .art { position: absolute; inset: 0; z-index: -2; }
   .art:active { transform: none; }
   .veil { position: absolute; inset: 0; z-index: -1; pointer-events: none; background: linear-gradient(to top, rgba(0, 0, 0, 0.74), rgba(0, 0, 0, 0.28) 48%, rgba(0, 0, 0, 0) 76%); }
@@ -1360,46 +1374,34 @@
   .tool { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 38px; height: 38px; padding: 0 var(--s-3); border-radius: var(--r-full);
     color: var(--text); font: 600 var(--fs-sub)/1 var(--font-text); }
   .tool:active { transform: scale(0.94); }
-  .words { display: flex; flex-direction: column; gap: 2px; padding: 72px var(--s-4) var(--s-4); pointer-events: none; }
+  .words { display: flex; flex-direction: column; gap: 2px; padding: 72px var(--s-5) var(--s-5); pointer-events: none; }
   .name { pointer-events: auto; width: 100%; resize: none; field-sizing: content; min-height: 1.18em; padding: 0; background: none; border-radius: var(--r-xs);
     color: var(--on-accent); font: 700 var(--fs-t1)/1.18 var(--font-display); letter-spacing: -0.02em; text-shadow: 0 1px 12px rgba(0, 0, 0, 0.35); }
   .name::placeholder { color: rgba(255, 255, 255, 0.62); }
-  .card:has(.name.ai):not(.bad) { box-shadow: inset 0 0 0 1.5px var(--accent-text); }
   .line { font: 500 var(--fs-body)/1.3 var(--font-text); color: rgba(255, 255, 255, 0.82); }
-
-  .who { align-self: center; max-width: 100%; display: inline-flex; align-items: center; gap: 5px; padding: 2px var(--s-2);
+  .who { align-self: center; max-width: 100%; display: inline-flex; align-items: center; gap: 5px; padding: 2px var(--s-2); margin-top: calc(var(--s-2) * -1);
     font: 500 var(--fs-sub)/1.3 var(--font-text); color: var(--text-2); }
 
-  .pill { position: relative; display: flex; align-items: center; gap: var(--s-3); width: 100%; min-height: 54px; padding: 0 var(--s-4);
-    border-radius: var(--r-l); background: var(--pill); color: var(--text); text-align: left; font: var(--fw-row) var(--fs-row)/1.3 var(--font-text); }
-  .pill > :global(svg) { flex: none; color: var(--text-2); }
-  .go { padding-block: var(--s-3); }
-  .gt { flex: 1; min-width: 0; }
-  .go:active { background: var(--fill); transform: none; }
-  .when { flex-direction: column; align-items: stretch; gap: 0; padding: 0; }
-  .wr { position: relative; display: flex; align-items: center; gap: var(--s-2); min-height: 54px; padding: 0 var(--s-3) 0 44px; }
-  .wr + .wr::before { content: ''; position: absolute; left: 44px; right: 0; top: 0; height: 0.5px; background: var(--separator); }
-  .wr b { flex: 1; min-width: 0; font-weight: var(--fw-row); color: var(--text-2); }
+  /* the start and the end: the day and the time as two small fills, the phone's picker under each */
   .tv { position: relative; flex: none; padding: 7px var(--s-2); border-radius: var(--r-xs); background: var(--fill); color: var(--text); font: 600 var(--fs-body)/1 var(--font-text); white-space: nowrap; }
   .tv input { position: absolute; inset: 0; width: 100%; opacity: 0; }
   .tv.ph { color: var(--text-3); } /* nothing chosen: the end's day as it follows from the start */
-  .dot { position: absolute; left: 20px; width: 9px; height: 9px; border-radius: 50%; background: var(--text-2); }
-  .dot.o { background: none; box-shadow: inset 0 0 0 1.5px var(--text-2); }
-  .rail { position: absolute; left: 24px; top: 33px; bottom: 33px; border-left: 1.5px dotted var(--text-3); }
+  .when :global(.end) { display: inline-flex; align-items: center; gap: 6px; }
+  .when :global(.tt) { white-space: nowrap; } /* "Start" whole beside its two chips */
+  @media (max-width: 359px) { .wd { display: none; } }
 
-  /* the action bar: glass over the page's end, above the home indicator; under the keyboard while one is up */
-  .dock { position: absolute; left: 0; right: 0; bottom: 0; z-index: 2; display: flex; flex-direction: column; gap: var(--s-2);
-    padding: 0 var(--s-3) calc(var(--safe-bottom) + var(--s-3)); pointer-events: none; }
-  .acts { display: flex; align-items: center; gap: var(--s-2); padding: 6px; border-radius: var(--r-xl); pointer-events: auto; }
-  .main { flex: 1; min-width: 0; display: flex; }
+  /* the way out at the form's end; the island that floats up while that end is out of sight */
+  .finish { display: flex; flex-direction: column; gap: var(--s-2); margin-top: var(--s-2); }
+  .alt { display: flex; gap: var(--s-2); }
   .dh { align-self: center; padding: 0 var(--s-4); text-align: center; font: 500 var(--fs-cap)/1.3 var(--font-text); color: var(--text-2); }
+  .dock { position: absolute; left: 0; right: 0; bottom: calc(var(--safe-bottom) + var(--s-3)); z-index: 2; display: flex; justify-content: center; pointer-events: none; }
+  .island { padding: 6px; border-radius: var(--r-full); pointer-events: auto; }
 
-  /* a pushed page: the same tinted ground, in from the right as iOS pushes */
+  /* a pushed page: the same solid ground, in from the right as iOS pushes */
   .page { position: absolute; inset: 0; z-index: 1; display: flex; flex-direction: column; background: var(--bg);
     animation: push 340ms var(--ease-spring) backwards; }
   @keyframes push { from { transform: translate3d(100%, 0, 0); } }
   :global(html.lowfx) .page { animation: none; }
-  .pt { padding: 0 var(--s-1); font: 700 var(--fs-t1)/1.15 var(--font-display); letter-spacing: -0.02em; }
   .lone { align-self: flex-start; }
   .two { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-2); }
   .sum { margin: 0 var(--s-1); font: 600 var(--fs-body)/1.3 var(--font-text); color: var(--text-2); }
