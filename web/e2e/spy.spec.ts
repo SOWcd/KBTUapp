@@ -14,7 +14,7 @@ test('a round of Spy: a room, three players, the role, the vote, the reveal', as
   await sheet.locator('.home .btn').click();
   const code = (await sheet.locator('.digits').innerText()).replace(/\D/g, '');
   expect(code).toMatch(/^\d{4}$/);
-  await expect(sheet.locator('.ft .btn').first()).toBeDisabled(); // alone: no Start yet
+  await expect(sheet.locator('.go .btn.full')).toBeDisabled(); // alone: no Start yet
   await dana.look('spy lobby');
 
   // the other two, as their phones would call
@@ -32,8 +32,8 @@ test('a round of Spy: a room, three players, the role, the vote, the reveal', as
   };
   for (const c of others) await act(c, () => null);
 
-  await sheet.locator('.ft .btn').first().click(); // Start, once her phone has seen the three
-  const secret = sheet.locator('.secret');
+  await sheet.locator('.go .btn.full').click(); // Start, once her phone has seen the three
+  const secret = sheet.locator('.env');
   await expect(secret).toBeVisible();
   const box = (await secret.boundingBox())!;
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
@@ -43,12 +43,13 @@ test('a round of Spy: a room, three players, the role, the vote, the reveal', as
   await page.mouse.up();
   await expect(secret.locator('.big')).toHaveCount(0);
 
-  await sheet.locator('.foot .btn').click(); // the host: to the vote
+  await sheet.locator('.skip').click(); // the host: to the vote, asked first (the app's Ask, either of its shapes)
+  await page.locator('.act.yes, .row.btns .btn:last-child').click();
   await expect(sheet.locator('.cand')).toHaveCount(2);
   await sheet.locator('.cand').first().click();
   await expect(sheet.locator('.cand').first()).toHaveAttribute('aria-pressed', 'true');
   await dana.look('spy vote');
-  await expect(sheet.locator('.ballot .sh')).toContainText('1'); // her vote is in before the others' end the vote
+  await expect(sheet.locator('.sum span')).toContainText('1'); // her vote is in before the others' end the vote
   // each of the others votes for Dana; whoever the spy is, the round then ends in a guess or at once
   for (const c of others) await act(c, (r) => ({ type: 'vote', target: r.players[0].id }));
   for (const c of others) await act(c, (r) => (r.phase === 'guess' && r.role === 'spy' ? { type: 'guess', location: 'library' } : null));

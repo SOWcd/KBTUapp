@@ -155,13 +155,13 @@ test('Spy, the role held open', async ({ open }) => {
   const p = await ali(open);
   const sheet = await spy(p, { phase: 'play', span: 272, role: 'local', location: 'library', first: 3 });
   await p.look('spy-cover');
-  const box = (await sheet.locator('.secret').boundingBox())!;
+  const box = (await sheet.locator('.env').boundingBox())!;
   await p.page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await p.page.mouse.down();
-  await expect(sheet.locator('.secret .big')).toBeVisible();
+  await expect(sheet.locator('.env .big')).toBeVisible();
   await shot(p, 'spy-role', undefined, true);
   await p.page.mouse.up();
-  await expect(sheet.locator('.secret .big')).toHaveCount(0); // let go: the role is out of the page
+  await expect(sheet.locator('.env .big')).toHaveCount(0); // let go: the role is out of the page
 });
 
 test('Spy, the vote', async ({ open }) => {
