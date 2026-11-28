@@ -277,6 +277,8 @@ export const openers = {
   library: () => lazy(() => import('../../screens/library/Library.svelte'), {}),
   /** Admin → Library: rooms, tables, the sticker PDF, the live view and the big screen's link */
   libraryAdmin: () => lazy(() => import('../../screens/library/LibraryAdmin.svelte'), {}),
+  /** Games: Spy, a room made or joined by its code (Profile's row; startapp=g_<code> joins at once) */
+  spy: (code?: string) => lazy(() => import('../../screens/games/Spy.svelte'), { code }),
   /** KBTU's anthem to listen to and learn: Profile's row, startapp=anthem */
   anthem: () => lazy(() => import('../../screens/sheets/AnthemSheet.svelte'), {}),
   /** my whole award collection and the showcase picker (Profile: the badge's numbers) */
@@ -477,6 +479,7 @@ export function openDeepLink(p: string, app: AppLinks, afterSignIn = false): boo
     tm: [(id) => team(Number(id)), false, REF],
     st: [(id) => studio(Number(id)), false, REF],
     sn: [(id) => santaHi(Number(id)), false, REF],
+    g: [(code) => sheets.spy(code), false, /^(\d{4})$/], // a game room's QR or shared link: straight into the room (server rooms.join)
     // mg_<event>: the bot's "a member asks to come as a guest": the event's organizer screen, its asks on top
     mg: [(s) => { const ev = Number(s); asStudent(() => { void eventDetails(ev).then(() => sheets.manage(ev), () => sheets.event(ev)); }); }, false, REF],
   };

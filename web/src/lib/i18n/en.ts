@@ -2906,6 +2906,8 @@ const en: Dict = {
   'album.added': { one: "{n} photo added", other: "{n} photos added" },
   'rate.count': { one: "{n} rating", other: "{n} ratings" },
   'anthem.title': "KBTU anthem",
+  // games (screens/games; their own words: i18n/games.ts)
+  'games.title': "Games",
   'anthem.play': "Play",
   'anthem.pause': "Pause",
   'anthem.repeat': "Repeat",
