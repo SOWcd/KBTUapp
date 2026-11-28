@@ -90,7 +90,8 @@
     const id = Math.random().toString(36).slice(2) + Date.now().toString(36);
     try {
       let a = await api.roomMove(room.id, room.v, m, id);
-      if (!a.applied && a.room) { take(a.room); a = await api.roomMove(a.room.id, a.room.v, m, id); }
+      // (a few times: in a vote every phone moves the room twice within the same minute)
+      for (let i = 0; i < 4 && !a.applied && a.room; i++) { take(a.room); a = await api.roomMove(a.room.id, a.room.v, m, id); }
       if (m.type === 'leave') { forget(); return; }
       if (a.room) take(a.room);
       schedule();
@@ -119,7 +120,7 @@
     return !!c;
   });
   // anyone's call for the vote: more than half of the players end the talk (server spy.py), so one tap ends nothing alone
-  function callVote() { called = true; haptic.select(); void move({ type: 'vote_now' }); }
+  function callVote() { if (called || room?.calls?.includes(room.me)) return; called = true; haptic.select(); void move({ type: 'vote_now' }); }
   const mySure = $derived(sure || !!room?.voted?.includes(room.me));
   function vote(id: Id) { if (mySure) return; pick = id; haptic.select(); void move({ type: 'vote', target: id }); }
   function confirm() { sure = true; haptic.ok(); void move({ type: 'confirm' }); }

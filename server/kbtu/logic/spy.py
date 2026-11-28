@@ -101,8 +101,9 @@ def act(s: dict, players: list[int], host: int, uid: int, body: dict, t: int) ->
         if s["phase"] != "play":
             raise ApiError("conflict", "phase")
         calls = s.setdefault("calls", [])  # (setdefault, and .get below: a round dealt before these keys came)
-        if uid not in calls:
-            calls.append(uid)
+        if uid in calls:  # refused, not a quiet yes: a repeated call would move the version under everyone's moves
+            raise ApiError("conflict", "called")
+        calls.append(uid)
         if len(calls) * 2 > len(players):
             s.update(phase="vote", deadline=t + VOTE_S)
     elif kind == "vote":
@@ -120,8 +121,9 @@ def act(s: dict, players: list[int], host: int, uid: int, body: dict, t: int) ->
         if str(uid) not in s["votes"]:
             raise ApiError("conflict", "vote")
         sure = s.setdefault("sure", [])
-        if uid not in sure:
-            sure.append(uid)
+        if uid in sure:
+            raise ApiError("conflict", "confirmed")
+        sure.append(uid)
         if len(sure) == len(players):
             _count(s, players, t)
     elif kind == "guess":

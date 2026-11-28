@@ -102,6 +102,7 @@ def test_spy_never_gets_the_place(env, monkeypatch):
         room = _act(c, tg, room, f"sure-000{i}", type="confirm").json()["room"]
         assert room["me"] in room["voted"]
         assert _act(c, tg, room, f"late-000{i}", type="vote", target=s["spy"]).json()["message"] == "confirmed"  # final
+        assert _act(c, tg, room, f"twice-00{i}", type="confirm").json()["message"] == "confirmed"
     room = _get(c, spy, room["id"]).json()
     assert room["phase"] == "vote" and len(room["voted"]) == 3  # everyone confirms before the count, the spy too
     assert _act(c, spy, room, "vote-spy-01", type="vote", target=room["me"]).status_code == 400  # not for oneself
@@ -134,8 +135,8 @@ def test_stale_and_duplicate_moves(env):
     assert moved["room"]["calls"] == [room["me"]]  # one of three: a call, not the vote yet
     dup = _act(c, HOST, room, "vote-now-03", type="vote_now").json()
     assert dup["applied"] and dup["room"]["v"] == v + 1  # sent twice: moved once
-    more = _act(c, HOST, moved["room"], "vote-now-04", type="vote_now").json()["room"]
-    assert more["phase"] == "play" and more["calls"] == [room["me"]]  # the same player again: still one call
+    assert _act(c, HOST, moved["room"], "vote-now-04", type="vote_now").json()["message"] == "called"  # one call each
+    assert _get(c, HOST, room["id"]).json()["v"] == v + 1  # and a refused one moves nothing
     p2 = _act(c, P2, _get(c, P2, room["id"]).json(), "vote-now-05", type="vote_now").json()["room"]
     assert p2["phase"] == "vote" and "calls" not in p2  # the second of three, not the host: more than half
     assert _state(cfg, room["id"])["spy"] == s["spy"]
@@ -222,6 +223,7 @@ def test_one_more_round_in_the_same_room(env, monkeypatch):
     room = _start(c, _room(c, (HOST, P2, P3, P4)))
     first = _state(cfg, room["id"])
     assert _act(c, HOST, room, "again-0000", type="again").json()["message"] == "phase"  # not before the reveal
+    assert _act(c, P2, _get(c, P2, room["id"]).json(), "call-0001", type="vote_now").json()["room"]["calls"]  # one of four
     set_clock(monkeypatch, lambda: t0 + 300 + logic.spy.VOTE_S)  # nobody voted: the spy wins
     for tg in (HOST, P2, P3):  # P4 put the phone away a while ago
         end = _get(c, tg, room["id"]).json()
@@ -241,6 +243,7 @@ def test_one_more_round_in_the_same_room(env, monkeypatch):
     # the room keeps its action ids across rounds: the first round's start-0001 would be a double tap
     nxt = _act(c, HOST, _get(c, HOST, room["id"]).json(), "start-0002", type="start", minutes=5).json()["room"]
     assert nxt["phase"] == "play" and _state(cfg, room["id"])["loc"] != first["loc"]  # never the same place twice in a row
+    assert nxt["calls"] == [] and _state(cfg, room["id"])["sure"] == []  # the last round's calls are not this one's
     # straight into the next round with minutes, and no room counted against the day's cap (A_DAY 1, used)
     set_clock(monkeypatch, lambda: t0 + 2 * (300 + logic.spy.VOTE_S))
     for tg in (HOST, P2, P3, P4):
