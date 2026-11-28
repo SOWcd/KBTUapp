@@ -66,7 +66,8 @@ const staffOf = (method: string, path: string, event?: Id): Record<string, strin
 /** told of each failed call by its class only (App counts it against the screen in front, lib/stats.ts) */
 export const onFail: { fn: ((kind: ApiKind) => void) | null } = { fn: null };
 
-async function call<T>(method: string, path: string, body?: unknown, staffEvent?: Id): Promise<T> {
+// exported for lib/api/akoTeam.ts, the admissions desk's calls: kept out of the start bundle
+export async function call<T>(method: string, path: string, body?: unknown, staffEvent?: Id): Promise<T> {
   if (accountClosed()) throw new ApiErr('forbidden', 'init_data');
   const account = accountRequest();
   let r: Response, data: unknown;
@@ -116,7 +117,8 @@ async function call<T>(method: string, path: string, body?: unknown, staffEvent?
   if (r.status === 403 && (data as ApiError | null)?.message === 'banned') dispatchEvent(new CustomEvent('kb:banned', { detail: data }));
   // held for the policy in force: the gate asks now, in place (App: sheets.consent), never on opening the app
   if (!r.ok && (data as ApiError | null)?.error === 'forbidden' && (data as ApiError | null)?.message === 'consent') sheets.consent();
-  if (!r.ok) onFail.fn?.(r.status >= 500 ? 'server' : (data as ApiError | null)?.error ?? 'unavailable');
+  const why = r.status === 403 ? (data as ApiError | null)?.message : undefined; // a 400's 'consent' is a stale version sent: an error
+  if (!r.ok) onFail.fn?.(r.status >= 500 ? 'server' : why === 'consent' ? 'consent' : why === 'init_data' ? 'expired' : (data as ApiError | null)?.error ?? 'unavailable');
   if (!r.ok) throw new ApiErr((data as ApiError | null)?.error ?? 'unavailable', (data as ApiError | null)?.message || undefined, (data as Record<string, unknown> | null) ?? {});
   // an event the creator made in the Studio: its routes go as the club's from here on
   if (staffOrg.full && method === 'POST' && path === `/orgs/${staffOrg.id}/events`) staffOrg.events.add((data as { id: Id }).id);

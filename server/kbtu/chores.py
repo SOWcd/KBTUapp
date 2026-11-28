@@ -275,7 +275,9 @@ def offsite_round(cfg: Config, con) -> None:
     elif not alert and local % 86400 >= 10 * 3600 and not done("offsite_db") and not one(con, "SELECT 1 FROM meta WHERE key = 'offsite_db' AND value = ?", yday):
         logic.notify_staff(con, [r[0] for r in admins()], "backup_failed", f"bf:{date}")
         con.execute("INSERT INTO meta (key, value) VALUES ('offsite_alert', ?)", (date,))
-    # deletions.log and its salt ride along: a copy restored from R2 alone must still re-run the deletions since (redelete)
+    # deletions.log and its salt ride along: a copy restored from R2 alone must still re-run the deletions since (redelete).
+    # Never the admissions' documents (home/ako, logic/ako.py): the policy (section 17) promises they are in no backup;
+    # test_offsite_backup pins these lists
     jobs = ([("offsite_db", [copy, home / "receipts", home / "deletions.log", home / "deletions.salt"], f"db/{stamp}.tar.age")]
             if copy.exists() and not done("offsite_db") else [])
     if time.gmtime(local).tm_wday == 6 and not done("offsite_media"):
@@ -326,3 +328,5 @@ def _chores(cfg: Config, con) -> None:
     logic.close_gone(con)  # reports of what went by itself (the queue, a GET, never writes)
     logic.tgcomments.sweep(con)  # the policy's retention even with the forum switched off (its old rows still go)
     logic.fchannel.sweep(con)
+    if cfg.forum_channel:
+        logic.fchannel.digest_week(con)  # Friday evening: the Forum's week, counts only (off until the owner's yes)

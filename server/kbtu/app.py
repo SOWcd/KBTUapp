@@ -34,6 +34,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
+from starlette.background import BackgroundTask
 from starlette.middleware.gzip import GZipMiddleware
 
 from . import ai, auth, bot, bot_dm, bot_groups, calpage, casting, checkin as qr, config, db, docs, llm, logic, media, mirror, msauth, receipt, roster, texts, video, wallet
@@ -366,6 +367,13 @@ def _visitor_ip(request: Request) -> str:
     return request.headers.get("cf-connecting-ip") or peer
 
 
+def _attachment(name: str) -> str:
+    """A download's name in any script (RFC 6266: an ASCII stand-in, then the UTF-8 one)."""
+    from urllib.parse import quote
+    plain = re.sub(r"[^A-Za-z0-9 ._-]", "_", name) or "file"
+    return f"attachment; filename=\"{plain}\"; filename*=UTF-8''{quote(name, safe='')}"
+
+
 def _web_cookie(response: Response, token: str) -> None:
     response.set_cookie(web_auth.COOKIE, token, max_age=web_auth.IDLE if token else 0,
                         secure=True, httponly=True, samesite="lax", path="/")
@@ -631,6 +639,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     # the "To calendar" link is signed by one worker and may be opened on another: one key for all, from the env
     logic.seats.ICS_KEY = hmac.new(cfg.token_key, b"kbtu-ics", hashlib.sha256).digest()
     logic.seats.REF_KEY = hmac.new(cfg.token_key, b"kbtu-event-ref", hashlib.sha256).digest()  # "My link"'s code
+    logic.ako.KEY = hmac.new(cfg.token_key, b"kbtu-ako", hashlib.sha256).digest()  # an applicant's one-tap invite and bot link
+    logic.ako.BOT = cfg.bot_username if cfg.ako_remind else ""  # AKO_REMIND off: no reminders anywhere
     logic.appeals.ASK = cfg.ask  # the bot's help-desk answer message goes only where the desk opens (ASK)
     logic.library.MODE = cfg.library  # LIBRARY: the bot's seat messages go only while it is on
     logic.gallery.MODE = cfg.gallery  # GALLERY: who posts to the Gallery ("all", "staff"); empty: the albums alone
@@ -3346,7 +3356,15 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.put("/api/forum-posts/{pid}/heart")
     def fchan_heart(pid: int, con: Con, v: FChanWrite, body: dict = Body(...)):
-        return F.set_heart(con, v, pid, body.get("hearted"))
+        return F.set_heart(con, v, pid, body.get("hearted"))  # builds before reactions
+
+    @app.put("/api/forum-posts/{pid}/react")
+    def fchan_react(pid: int, con: Con, v: FChanWrite, body: dict = Body(...)):
+        return F.set_reaction(con, v, pid, body.get("emoji"))  # one of fchannel.REACTIONS, or null: mine taken back
+
+    @app.put("/api/forum-posts/{pid}/vote")
+    def fchan_vote(pid: int, con: Con, v: FChanWrite, body: dict = Body(...)):
+        return F.vote(con, v, pid, body.get("choice"))  # final; the poll as my card shows it now
 
     @app.put("/api/forum-posts/{pid}/coming")
     def fchan_coming(pid: int, con: Con, v: FChanWrite, body: dict = Body(...)):
@@ -3358,7 +3376,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         verdict = await ai.screen_post(cfg, ai_http(), text, **_ai_eu())
         p = await run_in_threadpool(F.settle, con, v, pid, verdict)  # live: the bot's round publishes it within seconds
         if p["status"] == "gone":  # the AI saw no message in it, or an ad: said, never silently (the app gives the words back)
-            raise ApiError("bad_input", "ad" if verdict == "ad" else "noise", {"post": pid, "appeal": await run_in_threadpool(F.appeals_left, con, v.id) > 0})
+            raise ApiError("bad_input", "ad" if verdict == "ad" else "noise", {"post": pid, "appeal": body.get("poll") is None  # a poll: written anew
+                                                                                   and await run_in_threadpool(F.appeals_left, con, v.id) > 0})
         return p | {"ai": verdict in ("person", "flag")}  # held by the AI's word: the app asks why (/why)
 
     @app.post("/api/forum-posts/{pid}/edit")
@@ -3650,6 +3669,132 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
 .ver {{ color: var(--dim); font-size: 14px; margin-top: 0; }} a {{ color: var(--accent); }} li {{ margin: 6px 0; }} ul {{ padding-left: 22px; }}
 </style></head><body><main><nav><a href="{other}?lang={lang}">{LEGAL_NAMES[other][lang]}</a><span>{langs}</span></nav>{body}</main></body></html>"""
         return Response(html, media_type="text/html", headers={"Cache-Control": "no-cache"})
+
+    # admissions (logic/ako.py). The applicant has no account: the secret in /ako#<secret> is the credential. A fragment
+    # never leaves the browser, so no access log (ours, Cloudflare's) holds it; the page sends it as X-Ako (never in an
+    # API path or a query); the page itself never leaks its address (no-referrer) nor is kept or indexed. A GET changes
+    # nothing (WhatsApp previews fetch links).
+    def ako_token(request: Request) -> str:
+        return request.headers.get("x-ako", "")
+
+    @app.get("/ako", include_in_schema=False)
+    @app.get("/ako/{rest:path}", include_in_schema=False)
+    def ako_page(rest: str = ""):
+        # the build's links are relative (./assets/...): from /ako/o/<org> they'd resolve under /ako/, so the page says
+        # where it lives
+        html = (dist / "index.html").read_text(encoding="utf-8").replace("<head>", '<head><base href="/">', 1)
+        return Response(html, media_type="text/html", headers={"Cache-Control": "no-store", "Referrer-Policy": "no-referrer",
+                                                               "X-Robots-Tag": "noindex"})
+
+    @app.get("/api/ako/o/{slug}")
+    def ako_public(slug: str, con: Con):
+        return logic.ako.public(con, slug)
+
+    @app.post("/api/ako/o/{slug}")
+    def ako_start(slug: str, request: Request, con: Con, body: dict = Depends(json_body(4096))):
+        return logic.ako.start(con, slug, body if isinstance(body, dict) else {}, _visitor_ip(request), cfg.token_key)
+
+    @app.get("/api/ako/a")
+    def ako_view(request: Request, con: Con):
+        return logic.ako.view(con, ako_token(request))
+
+    @app.patch("/api/ako/a", status_code=204)
+    def ako_patch(request: Request, con: Con, body: dict = Depends(json_body(4096))):
+        logic.ako.patch(con, ako_token(request), body if isinstance(body, dict) else {})
+
+    @app.post("/api/ako/a/files")
+    async def ako_file(request: Request, con: Con, doc: str = ""):
+        token, who = ako_token(request), logic.ako.who_of(_visitor_ip(request), cfg.token_key)
+        # a stranger's body, or one with no room, is never read; a try counts before it is
+        tried = await run_in_threadpool(logic.ako.may_add, con, token, doc, who)
+        data = await read_upload(request, logic.ako.FILE_BYTES)
+        return await run_in_threadpool(logic.ako.add_file, con, token, doc, data, who, tried)
+
+    @app.delete("/api/ako/a/files/{fid}", status_code=204)
+    def ako_file_drop(fid: int, request: Request, con: Con):
+        logic.ako.drop_file(con, ako_token(request), fid)
+
+    @app.post("/api/ako/a/slot")
+    def ako_book(request: Request, con: Con, body: dict = Depends(json_body(1024))):
+        return logic.ako.book(con, ako_token(request), body.get("slot") if isinstance(body, dict) else None)
+
+    @app.post("/api/ako/a/submit")
+    def ako_submit(request: Request, con: Con):
+        return logic.ako.submit(con, ako_token(request))
+
+    @app.get("/api/ako/a/ics")
+    def ako_ics(request: Request, con: Con):
+        return Response(logic.ako.ics(con, ako_token(request)), media_type="text/calendar; charset=utf-8", headers={
+            "Cache-Control": "no-store", "Content-Disposition": 'attachment; filename="interview.ics"'})
+
+    @app.get("/api/ako/ics/{aid}")
+    def ako_ics_tap(aid: int, con: Con, s: str = ""):
+        # the invite in one tap: a plain link the phone hands to its calendar (no header); the signature opens it alone
+        return Response(logic.ako.signed_ics(con, aid, s), media_type="text/calendar; charset=utf-8", headers={
+            "Cache-Control": "no-store", "Referrer-Policy": "no-referrer", "Content-Disposition": 'inline; filename="interview.ics"'})
+
+    # the org's own people (Studio): head and up run it, a member reads (logic/ako.py _team)
+    @app.get("/api/orgs/{oid}/ako")
+    def ako_desk(oid: int, con: Con, v: Me):
+        return logic.ako.desk(con, v, oid)
+
+    @app.post("/api/orgs/{oid}/ako/apps")
+    def ako_new(oid: int, con: Con, v: Me, body: dict = Body(...)):
+        return logic.ako.new_app(con, v, oid, body)
+
+    @app.get("/api/orgs/{oid}/ako/apps/{aid}")
+    def ako_package(oid: int, aid: int, con: Con, v: Me):
+        return logic.ako.package(con, v, oid, aid)
+
+    @app.patch("/api/orgs/{oid}/ako/apps/{aid}")
+    def ako_update(oid: int, aid: int, con: Con, v: Me, body: dict = Body(...)):
+        return logic.ako.update_app(con, v, oid, aid, body)
+
+    @app.delete("/api/orgs/{oid}/ako/apps/{aid}", status_code=204)
+    def ako_drop(oid: int, aid: int, con: Con, v: Me):
+        logic.ako.drop_app(con, v, oid, aid)
+
+    # a document or a whole package for the team: a signed five-minute link (logic.ako.link), opened by Telegram's
+    # downloadFile or a browser tab, neither of which sends our headers
+    @app.get("/api/orgs/{oid}/ako/files/{fid}/link")
+    def ako_file_link(oid: int, fid: int, con: Con, v: Me):
+        return logic.ako.link(con, v, oid, "f", fid, cfg.token_key)
+
+    @app.get("/api/orgs/{oid}/ako/apps/{aid}/link")
+    def ako_zip_link(oid: int, aid: int, con: Con, v: Me):
+        return logic.ako.link(con, v, oid, "z", aid, cfg.token_key)
+
+    @app.get("/api/ako/f/{fid}")
+    def ako_file_get(fid: int, con: Con, e: str = "", s: str = ""):
+        logic.ako.signed(con, "f", fid, e, s, cfg.token_key)
+        path, mime, name = logic.ako.file_for(con, fid)
+        if not path.is_file():
+            raise ApiError("not_found")
+        return FileResponse(path, media_type=mime, headers={"Cache-Control": "private, no-store", "Content-Disposition": _attachment(name),
+                                                            "Referrer-Policy": "no-referrer", "X-Content-Type-Options": "nosniff"})
+
+    @app.get("/api/ako/z/{aid}")
+    def ako_zip(aid: int, con: Con, e: str = "", s: str = ""):
+        logic.ako.signed(con, "z", aid, e, s, cfg.token_key)
+        path, name = logic.ako.zip_of(con, aid)
+        return FileResponse(path, media_type="application/zip", background=BackgroundTask(path.unlink, missing_ok=True),
+                            headers={"Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer", "Content-Disposition": _attachment(name)})
+
+    @app.post("/api/orgs/{oid}/ako/slots", status_code=204)
+    def ako_slots(oid: int, con: Con, v: Me, body: dict = Body(...)):
+        logic.ako.add_slots(con, v, oid, body)
+
+    @app.put("/api/orgs/{oid}/ako/days", status_code=204)
+    def ako_day(oid: int, con: Con, v: Me, body: dict = Body(...)):
+        logic.ako.set_day(con, v, oid, body)
+
+    @app.patch("/api/orgs/{oid}/ako/slots/{sid}", status_code=204)
+    def ako_slot(oid: int, sid: int, con: Con, v: Me, body: dict = Body(...)):
+        logic.ako.update_slot(con, v, oid, sid, body)
+
+    @app.delete("/api/orgs/{oid}/ako/slots/{sid}")
+    def ako_slot_drop(oid: int, sid: int, con: Con, v: Me, force: bool = False, reason: str = ""):
+        return {"booked": logic.ako.drop_slot(con, v, oid, sid, force, reason)}
 
     # public forms (logic/forms.py): no account, nothing about the sender kept
     @app.get("/f/{slug}")

@@ -4,7 +4,10 @@ paid event, starts the real server on it with the postman off, and prints a link
 them: Telegram's initData rides in the link's hash, signed with a made-up bot token, the way Telegram passes it, so
 the real telegram-web-app.js reads it. Nothing leaves this machine.
 
-    cd server && .venv/bin/python tools/qa.py [--port 8790] [--db /tmp/qa.db] [--fake-ai] [--big] [--clubs] [--now 1795582800]
+    cd server && .venv/bin/python tools/qa.py [--port 8790] [--db /tmp/qa.db] [--fake-ai] [--big] [--clubs] [--now 1795582800] [--ako]
+
+--ako: KBTU's Academy of Corporate Education takes applications (logic/ako.py): Dana runs them, Bota reviews; it
+prints the applicant pages' paths (a manager's prefilled link, a sent package, the website's start).
 
 --now sets the clock (the seed's and the server's) to that moment, running on from there: the same "in 2 days, 18:30"
 on every run, for the web's screen snapshots (web/e2e/snap.spec.ts).
@@ -34,7 +37,7 @@ SERVER = Path(__file__).resolve().parents[1]
 PEOPLE = [(1, 1001, "Dana", "Seitova"), (2, 1002, "Ali", "Nurlanov"), (3, 1003, "Bota", "Askarova")]  # Dana runs the club
 
 
-def seed(path: str) -> None:
+def seed(path: str, admissions: bool = False) -> None:
     if os.path.exists(path):
         os.remove(path)
     db.init(path)
@@ -51,8 +54,9 @@ def seed(path: str) -> None:
         con.execute("INSERT INTO org_roles (org_id, name, color, level, fixed, created_at) VALUES (1, ?, ?, ?, 1, ?)", (rn, color, lv, now))
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at, role_id) VALUES (1, 1, 'vice', ?, (SELECT id FROM org_roles WHERE org_id = 1 AND level = 'vice'))", (now - 50 * day,))
     start = (now // day + 2) * day + 13 * 3600 + 1800  # the day after tomorrow, 18:30 in Almaty
-    con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, ends_at, emoji, color, tint, seats, price, pay_to_name, pay_phone,
-            created_by, created_at, updated_at, published_at) VALUES (1, 1, 'published', 'Open Mic: stand-up and music', 'Atrium', ?, ?, 'microphone_3d',
+    con.execute("""INSERT INTO events (id, org_id, status, title, description, place, starts_at, ends_at, emoji, color, tint, seats, price, pay_to_name, pay_phone,
+            created_by, created_at, updated_at, published_at) VALUES (1, 1, 'published', 'Open Mic: stand-up and music',
+            'Stand-up, songs and poetry by students. Come to listen, or take five minutes on stage: sign up at the door.', 'Atrium', ?, ?, 'microphone_3d',
             '#7A4A22', '#5C3719', 80, 2000, 'Arman A.', '+77071234567', 1, ?, ?, ?)""", (start, start + 3 * 3600, now - day, now - day, now - day))
     # Dana's friends go to a free event: her Friends page has its "where friends are going" cards
     con.execute("INSERT INTO friendships (a, b, created_at) VALUES (1, 2, ?), (1, 3, ?)", (now - 20 * day, now - 10 * day))
@@ -155,6 +159,8 @@ def seed(path: str) -> None:
         saved = media.save(raw.getvalue(), Path(path).resolve().parent / "media", os.urandom(32))
         con.execute("INSERT INTO fchan_photos (post_id, n, path, width, height, color, msg, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                     (pid, n, saved["path"], saved["width"], saved["height"], saved["color"], 100 + pid if n == 0 else 900 + pid, now))
+    if admissions:
+        ako(con, path, now)
     con.close()
 
 
@@ -252,6 +258,58 @@ def clubs(path: str) -> None:
     con.close()
 
 
+# KBTU's Academy of Corporate Education takes applications (logic/ako.py): Dana runs its admissions (head), Bota reviews
+# (a member, as the Academic Programs department would). Interview days next week; two packages sent with their files, one
+# passed on; and a link a manager made after a consultation, nothing filled in yet (AKO_LINK, printed for the e2e).
+AKO_LINK = "QaAkoPrefilledLinkForTheE2eTests01234567890"
+AKO_SENT = "QaAkoSentPackageLinkForTheE2eTests012345678"
+
+
+def ako(con, path: str, now: int) -> None:
+    from kbtu.logic import ako as admissions
+    con.execute("""INSERT INTO orgs (id, slug, kind, name, short, description, emoji, official, created_at, i18n, lang)
+        VALUES (2, 'ako', 'office', ?, 'A', '', 'briefcase_3d', 1, ?, ?, 'ru')""",
+                ("\u0410\u043a\u0430\u0434\u0435\u043c\u0438\u044f \u043a\u043e\u0440\u043f\u043e\u0440\u0430\u0442\u0438\u0432\u043d\u043e\u0433\u043e \u043e\u0431\u0440\u0430\u0437\u043e\u0432\u0430\u043d\u0438\u044f \u041a\u0411\u0422\u0423", now - 400 * 86400,
+                 json.dumps({"kk": {"name": "\u049a\u0411\u0422\u0423 \u041a\u043e\u0440\u043f\u043e\u0440\u0430\u0442\u0438\u0432\u0442\u0456\u043a \u0431\u0456\u043b\u0456\u043c \u0431\u0435\u0440\u0443 \u0430\u043a\u0430\u0434\u0435\u043c\u0438\u044f\u0441\u044b"}, "en": {"name": "KBTU Academy of Corporate Education"}})))
+    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (2, 1, 'head', ?), (2, 3, 'member', ?)", (now, now))
+    con.execute("INSERT INTO ako_reviewers (org_id, user_id) VALUES (2, 3)")
+    admissions.seed(con, 2)
+    pid = {r[0]: r[1] for r in con.execute("SELECT key, id FROM ako_programs WHERE org_id = 2")}
+    base = (now + 5 * 3600) // 86400 * 86400 - 5 * 3600  # today 00:00 in Almaty
+    teams = "https://teams.microsoft.com/l/meetup-join/19%3ameeting_qa%40thread.v2/0"
+    slots = []
+    for d in (6, 7):
+        day = time.strftime("%Y-%m-%d", time.gmtime(base + d * 86400 + 5 * 3600))
+        con.execute("INSERT INTO ako_days (org_id, day, teams) VALUES (2, ?, ?)", (day, teams))
+        for hm in ("10:00", "10:30", "11:00", "11:30", "12:00", "15:00", "15:30", "16:00"):
+            h, m = map(int, hm.split(":"))
+            slots.append(con.execute("""INSERT INTO ako_slots (org_id, starts_at, minutes, cap, who, created_by, created_at)
+                VALUES (2, ?, 30, 1, ?, 1, ?)""", (base + d * 86400 + h * 3600 + m * 60, "Dr. Seitkali" if d == 6 else "Dr. Omarova", now)).lastrowid)
+    page = Image.new("RGB", (1240, 1754), (250, 250, 247))
+    for y in range(180, 1600, 64):
+        page.paste((214, 214, 210), (140, y, 1100 - (y * 37 % 300), y + 14))
+    shot = io.BytesIO()
+    page.save(shot, "JPEG", quality=80)
+    root = Path(path).resolve().parent / "ako"
+    for n, (name, phone, key, status, slot) in enumerate([
+            ("\u0415\u0440\u043b\u0430\u043d \u0421\u0430\u043f\u0430\u0440\u043e\u0432", "+77012345671", "emba", "sent", 1),
+            ("\u0413\u0443\u043b\u044c\u043d\u0430\u0440\u0430 \u0410\u0445\u043c\u0435\u0442\u043e\u0432\u0430", "+77017778899", "dba", "review", 3),
+            ("\u0422\u0438\u043c\u0443\u0440 \u041a\u0430\u0441\u044b\u043c\u043e\u0432", "+77052223344", "mba-law", "sent", None)]):
+        at = now - (3 - n) * 86400
+        aid = con.execute("""INSERT INTO ako_apps (org_id, token, program_id, name, phone, status, slot_id, consent, consent_at,
+            created_by, created_at, updated_at, sent_at) VALUES (2, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)""",
+                          (admissions._digest(AKO_SENT if n == 0 else f"qa-sent-{n}"), pid[key], name, phone, status,
+                           slots[slot] if slot is not None else None, admissions.CONSENT, at, at, at, at)).lastrowid
+        for doc in ("cv", "diploma", "id") if n == 1 else ("cv", "diploma"):
+            rel = f"qa/{aid}-{doc}.jpg"
+            (root / "qa").mkdir(parents=True, exist_ok=True)
+            (root / rel).write_bytes(shot.getvalue())
+            con.execute("INSERT INTO ako_files (app_id, doc, path, mime, bytes, created_at) VALUES (?, ?, ?, 'image/jpeg', ?, ?)",
+                        (aid, doc, rel, len(shot.getvalue()), at))
+    con.execute("""INSERT INTO ako_apps (org_id, token, program_id, name, phone, created_by, created_at, updated_at)
+        VALUES (2, ?, ?, ?, ?, 1, ?, ?)""", (admissions._digest(AKO_LINK), pid["emba"], "\u0410\u0439\u0433\u0435\u0440\u0438\u043c \u041d\u0443\u0440\u043b\u0430\u043d\u043e\u0432\u0430", "+77071112233", now, now))
+
+
 def link(port: int, tg: int, first: str) -> str:
     data = auth.sign_init_data({"id": tg, "first_name": first, "language_code": "ru"}, BOT)
     theme = json.dumps({"bg_color": "#000000", "text_color": "#ffffff"})
@@ -315,17 +373,22 @@ def main() -> None:
     ap.add_argument("--big", action="store_true", help="2000 more people on the long lists (big); Dana is the app's admin")
     ap.add_argument("--clubs", action="store_true", help="a dozen real-looking clubs for the Clubs tab (clubs)")
     ap.add_argument("--now", type=int, help="the clock starts at this Unix time (stable screens for snapshots)")
+    ap.add_argument("--ako", action="store_true", help="the Academy of Corporate Education takes applications (ako)")
     a = ap.parse_args()
     if a.now:
         os.environ["QA_CLOCK"] = str(a.now - time.time())
         shift_clock()
-    seed(a.db)
+    seed(a.db, a.ako)
     if a.big:
         big(a.db)
     if a.clubs:
         clubs(a.db)
     for _, tg, first, _ in PEOPLE:
         print(f"{first}: {link(a.port, tg, first)}", flush=True)
+    if a.ako:  # the admissions' pages open in any browser, no Telegram: a manager's prefilled link, a sent package, the website's start
+        print(f"AKO link: /ako#{AKO_LINK}", flush=True)
+        print(f"AKO sent: /ako#{AKO_SENT}", flush=True)
+        print("AKO start: /ako/o/ako", flush=True)
     env = {**os.environ, "DB_PATH": a.db, "BOT_TOKEN": BOT, "TOKEN_KEY": base64.b64encode(os.urandom(32)).decode(), "BACKGROUND": "0",
            "ADMIN_TG_IDS": os.environ.get("QA_ADMIN_TG_IDS", "1001" if a.big else ""), "WEB_DIST": str(SERVER.parent / "web" / "dist"),
            "BOARD": os.environ.get("BOARD", "1"), "FORUM_CHANNEL": os.environ.get("FORUM_CHANNEL", "-1001"), "FORUM_GROUP": os.environ.get("FORUM_GROUP", "-1002"),

@@ -20,7 +20,8 @@ function sticksOut(page: Page): Promise<string[]> {
 
     for (const el of document.body.querySelectorAll<HTMLElement>('*')) {
       const r = el.getBoundingClientRect(), cs = getComputedStyle(el);
-      if (!r.width || !r.height || cs.visibility === 'hidden' || el.closest('[aria-hidden="true"], [inert]')) continue;
+      // (.pane-under: the page a pushed one covers, drifted left on purpose, base.css)
+      if (!r.width || !r.height || cs.visibility === 'hidden' || el.closest('[aria-hidden="true"], [inert], .pane-under')) continue;
       if (r.left >= -1 && r.right <= vw + 1) continue;
       let clipped = false;
       for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
@@ -78,26 +79,44 @@ const POSTER = {
     <text x="60" y="900" font-family="sans-serif" font-weight="800" font-size="210" fill="#111">GAMES</text><text x="64" y="1060" font-family="sans-serif" font-weight="800" font-size="150" fill="#111">NIGHT</text>
     <text x="68" y="1130" font-family="sans-serif" font-weight="600" font-size="40" letter-spacing="8" fill="#555">BOARD GAMES · ROOM 305</text></svg>`,
 };
-for (const [name, svg] of Object.entries(POSTER)) test(`Afisha, the hero over a poster (${name})`, async ({ open }) => {
-  const p = await open('Ali');
-  const cover = { url: `fx/${name}.svg`, thumb: `fx/${name}.svg`, w: 900, h: 1200, blur: '', color: name === 'cover' ? '#c2185b' : '#f4f1e6' };
-  await p.page.route((u) => u.pathname.endsWith(`/fx/${name}.svg`), (route) => route.fulfill({ contentType: 'image/svg+xml', body: svg }));
+type Ev = { startsAt: number };
+/** every event as `change` makes it (what qa.py's seed has none of) */
+async function changed(p: Phone, change: (e: Ev) => object) {
   await p.page.route((u) => u.pathname === '/api/events', async (route) => {
     const r = await route.fetch();
-    await route.fulfill({ response: r, json: ((await r.json()) as object[]).map((e) => ({ ...e, cover })) });
+    await route.fulfill({ response: r, json: ((await r.json()) as Ev[]).map((e) => ({ ...e, ...change(e) })) });
   });
   await p.page.reload();
-  await settled(p);
-  await shot(p, `afisha-${name}`); // the whole first screen: the card among the circles and the list
+  return settled(p);
+}
+/** every event wears the drawn poster `name` */
+async function covered(p: Phone, name: keyof typeof POSTER, more: object = {}) {
+  const cover = { url: `fx/${name}.svg`, thumb: `fx/${name}.svg`, w: 900, h: 1200, blur: '', color: name === 'cover' ? '#c2185b' : '#f4f1e6' };
+  await p.page.route((u) => u.pathname.endsWith(`/fx/${name}.svg`), (route) => route.fulfill({ contentType: 'image/svg+xml', body: POSTER[name] }));
+  return changed(p, () => ({ cover, ...more }));
+}
+for (const name of ['cover', 'cover-bright'] as const) test(`Afisha, the hero over a poster (${name})`, async ({ open }) => {
+  await shot(await covered(await open('Ali'), name), `afisha-${name}`); // the whole first screen: the card among the circles and the list
 });
 
-test('an event', async ({ open }) => {
-  const p = await ali(open);
-  await p.page.getByRole('button', { name: 'Open Mic: stand-up and music', exact: true }).first().click();
+/** the Open Mic's sheet, alone: the Afisha under it scrolls to the card the tap found */
+async function eventSheet(p: Phone, name: string, end = false, linked = false) {
+  if (!linked) await p.page.getByRole('button', { name: 'Open Mic: stand-up and music', exact: true }).first().click();
   const sheet = p.page.getByRole('dialog').filter({ hasText: 'Atrium' });
   await expect(sheet).toBeVisible();
-  await shot(p, 'event', sheet); // the sheet alone: the Afisha under it scrolls to the card the tap found
-});
+  if (end) {
+    await expect(sheet.getByRole('button', { name: tr('cm.report') })).toBeAttached(); // its last row is in
+    await sheet.locator('.body').first().evaluate((b) => b.scrollTo(0, b.scrollHeight));
+  }
+  await shot(p, name, sheet);
+}
+test('an event', async ({ open }) => eventSheet(await ali(open), 'event'));
+// its words lie on the picture: over a dark poster and a near-white one
+for (const name of ['cover', 'cover-bright'] as const) test(`an event over a poster (${name})`, async ({ open }) => eventSheet(await covered(await open('Ali'), name), `event-${name}`));
+// called off: its cover goes grey. By its link: the Afisha lists no cancelled event to tap
+test('a cancelled event', async ({ open }) => eventSheet(await covered(await open('Ali', { path: '/?startapp=ev_1' }), 'cover', { status: 'cancelled' }), 'event-cancelled', false, true));
+// the island with a note in it (a sign-up deadline), the sheet scrolled to its end: the last row stays clear of the island
+test('an event, its end over the island', async ({ open }) => eventSheet(await changed(await open('Ali'), (e) => ({ regUntil: e.startsAt - 3600 })), 'event-end', true));
 
 test('Clubs', async ({ open }) => {
   const p = await ali(open);
@@ -148,6 +167,30 @@ test('the assistant\'s welcome', async ({ open }) => {
   await p.page.getByRole('button', { name: tr('as.askAi'), exact: true }).click();
   await expect(p.page.getByRole('dialog', { name: tr('as.title') })).toBeVisible();
   await shot(p, 'assistant');
+});
+
+test('the campus map', async ({ open }) => {
+  const p = await ali(open);
+  // the map's "free now" rooms are off on this server: it answers 404 by design (client.ts mapRooms)
+  p.allow(/\/api\/map\/rooms 404$/);
+  p.allow(/status of 404 \(Not Found\)$/);
+  await p.page.locator('[data-more]').click(); // the map opens from the Afisha's "More"
+  await p.page.getByRole('menuitem', { name: tr('map.open'), exact: true }).click();
+  await expect(p.page.getByRole('group', { name: tr('map.floors') })).toBeVisible();
+  await shot(p, 'map');
+});
+
+test('a club\'s Studio', async ({ open }) => {
+  const p = await settled(await open('Dana')); // Dana runs the Open Mic Club
+  await nav(p.page).getByRole('button', { name: tr('page.clubs'), exact: true }).click();
+  await p.page.getByRole('button', { name: /^Open Mic Club\b/ }).first().click();
+  await expect(p.page.getByRole('region', { name: 'Open Mic Club' })).toBeVisible();
+  await shot(p, 'studio');
+});
+
+test('Afisha on the smallest phone', async ({ open, page }) => {
+  await page.setViewportSize({ width: 320, height: 568 }); // the one 320 px picture: what fits at 375 may not here
+  await shot(await ali(open), 'afisha-320');
 });
 
 // Spy (screens/games/Spy.svelte): each state from a made-up room the test answers the API with. A real room's code,

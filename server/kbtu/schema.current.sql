@@ -14,6 +14,100 @@ CREATE TABLE achievement_levels (                    -- last notified level, so 
   reached_at INTEGER NOT NULL, seen INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (user_id, code)
 ) STRICT;
+CREATE TABLE ako_apps (
+      id           INTEGER PRIMARY KEY,
+      org_id       INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      token        BLOB NOT NULL UNIQUE,            -- SHA-256 of the link's secret, never the secret
+      program_id   INTEGER REFERENCES ako_programs(id) ON DELETE SET NULL,
+      name         TEXT NOT NULL DEFAULT '',
+      phone        TEXT NOT NULL DEFAULT '',
+      email        TEXT NOT NULL DEFAULT '',
+      lang         TEXT NOT NULL DEFAULT 'ru' CHECK (lang IN ('ru', 'kk', 'en')),
+      status       TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'sent', 'review', 'accepted', 'declined')),
+      slot_id      INTEGER REFERENCES ako_slots(id) ON DELETE SET NULL,
+      rebook       TEXT,                            -- the managers took the booked time away: their reason, until a new pick
+      consent      TEXT,                            -- the notice's version agreed to (CONSENT), before any document
+      consent_at   INTEGER,
+      note         TEXT NOT NULL DEFAULT '',        -- the managers' own
+      created_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at   INTEGER NOT NULL,
+      updated_at   INTEGER NOT NULL,
+      sent_at      INTEGER
+    ) STRICT;
+CREATE TABLE ako_chats (  -- IF NOT EXISTS: tests rewind user_version
+      app_id INTEGER PRIMARY KEY REFERENCES ako_apps(id) ON DELETE CASCADE,
+      chat   INTEGER NOT NULL                         -- the applicant's private chat with the bot
+    ) STRICT;
+CREATE TABLE ako_days (
+      org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      day    TEXT NOT NULL,                         -- YYYY-MM-DD in Almaty
+      teams  TEXT NOT NULL,
+      PRIMARY KEY (org_id, day)
+    ) STRICT;
+CREATE TABLE ako_files (
+      id         INTEGER PRIMARY KEY,
+      app_id     INTEGER NOT NULL REFERENCES ako_apps(id) ON DELETE CASCADE,
+      doc        TEXT NOT NULL,
+      path       TEXT NOT NULL UNIQUE,              -- under the private ako/ folder
+      mime       TEXT NOT NULL CHECK (mime IN ('image/jpeg', 'application/pdf')),
+      bytes      INTEGER NOT NULL,
+      created_at INTEGER NOT NULL
+    ) STRICT;
+CREATE TABLE ako_programs (  -- IF NOT EXISTS: tests rewind user_version
+      id        INTEGER PRIMARY KEY,
+      org_id    INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      key       TEXT NOT NULL,
+      kind      TEXT NOT NULL CHECK (kind IN ('degree', 'short')),
+      info      TEXT NOT NULL,                      -- {"ru": {"title", "sub", "price", "length", "format"}, "kk": ..., "en": ...}
+      url       TEXT NOT NULL DEFAULT '',          -- the program's page on the org's site, the source of the info
+      interview INTEGER NOT NULL DEFAULT 0 CHECK (interview IN (0, 1)),
+      first     TEXT NOT NULL DEFAULT '',          -- document keys asked before sending, comma-separated
+      later     TEXT NOT NULL DEFAULT '',          -- needed for enrolment, may come after sending
+      optional  TEXT NOT NULL DEFAULT '',          -- welcome, never asked for
+      sort      INTEGER NOT NULL DEFAULT 0,
+      open      INTEGER NOT NULL DEFAULT 1 CHECK (open IN (0, 1)),
+      UNIQUE (org_id, key)
+    ) STRICT;
+CREATE TABLE ako_reviewers (
+      org_id  INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (org_id, user_id)
+    ) STRICT;
+CREATE TABLE ako_sends (
+      app_id  INTEGER NOT NULL REFERENCES ako_apps(id) ON DELETE CASCADE,
+      kind    TEXT NOT NULL,                          -- booked (the invite), d1 (a day before), h1 (an hour before)
+      channel TEXT NOT NULL,                          -- telegram, email
+      slot_at INTEGER NOT NULL,                       -- the interview's start it was for: a moved one is another send
+      at      INTEGER NOT NULL,                       -- claimed
+      sent_at INTEGER,
+      error   TEXT,                                   -- why it never went (an exception's class, never an address)
+      PRIMARY KEY (app_id, kind, channel, slot_at)
+    ) STRICT;
+CREATE TABLE ako_slots (
+      id         INTEGER PRIMARY KEY,
+      org_id     INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      starts_at  INTEGER NOT NULL,
+      minutes    INTEGER NOT NULL CHECK (minutes BETWEEN 5 AND 240),
+      cap        INTEGER NOT NULL DEFAULT 1 CHECK (cap BETWEEN 1 AND 50),
+      who        TEXT NOT NULL DEFAULT '',          -- the interviewer, for the managers
+      teams      TEXT,                              -- this slot's own meeting link, else its day's
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at INTEGER NOT NULL,
+      UNIQUE (org_id, starts_at, who)
+    ) STRICT;
+CREATE TABLE ako_starts (
+      org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      ip     TEXT NOT NULL,
+      at     INTEGER NOT NULL
+    ) STRICT;
+CREATE TABLE ako_uploads (
+      id     INTEGER PRIMARY KEY,
+      org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      app_id INTEGER NOT NULL,
+      ip     TEXT NOT NULL,                         -- a keyed hash of the uploader's address (an IPv6 /64), as ako_starts
+      bytes  INTEGER NOT NULL DEFAULT 0,            -- kept; 0 for a try refused or failed
+      at     INTEGER NOT NULL
+    ) STRICT;
 CREATE TABLE android_app (
       user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
       seen_at INTEGER NOT NULL
@@ -559,7 +653,7 @@ CREATE TABLE fchan_feed_pages (
     ) STRICT;
 CREATE TABLE fchan_hearts (
       post_id INTEGER NOT NULL REFERENCES fchan_posts(id) ON DELETE CASCADE,
-      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, emoji TEXT NOT NULL DEFAULT '❤️',
       PRIMARY KEY (post_id, user_id)
     ) STRICT;
 CREATE TABLE fchan_photos (
@@ -573,6 +667,12 @@ CREATE TABLE fchan_photos (
       color      TEXT,
       msg        INTEGER,
       created_at INTEGER NOT NULL, edit_id INTEGER, sync INTEGER NOT NULL DEFAULT 0 CHECK (sync IN (0, 1))) STRICT;
+CREATE TABLE fchan_polls (  -- IF NOT EXISTS: tests rewind user_version
+      post_id   INTEGER PRIMARY KEY REFERENCES fchan_posts(id) ON DELETE CASCADE,
+      options   TEXT NOT NULL CHECK (json_valid(options)),
+      days      INTEGER NOT NULL CHECK (days IN (1, 3, 7)),
+      closes_at INTEGER
+    ) STRICT;
 CREATE TABLE fchan_posts (
       id         INTEGER PRIMARY KEY,
       user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -605,6 +705,17 @@ CREATE TABLE fchan_signed (
       reply_id INTEGER PRIMARY KEY REFERENCES fchan_replies(id) ON DELETE CASCADE,
       user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE
     ) STRICT;
+CREATE TABLE fchan_tally (
+      post_id INTEGER NOT NULL REFERENCES fchan_polls(post_id) ON DELETE CASCADE,
+      choice  INTEGER NOT NULL CHECK (choice BETWEEN 0 AND 5),
+      n       INTEGER NOT NULL,
+      PRIMARY KEY (post_id, choice)
+    ) STRICT, WITHOUT ROWID;
+CREATE TABLE fchan_voted (
+      post_id INTEGER NOT NULL REFERENCES fchan_polls(post_id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (post_id, user_id)
+    ) STRICT, WITHOUT ROWID;
 CREATE TABLE files (
   id         INTEGER PRIMARY KEY,
   sha256     TEXT NOT NULL,
@@ -1532,7 +1643,7 @@ CREATE TABLE users (
   ban_reason      TEXT,
   created_at      INTEGER NOT NULL,
   seen_at         INTEGER NOT NULL
-, qr_code TEXT, cal_token TEXT, card_no INTEGER, nick TEXT CHECK (nick IS NULL OR length(nick) BETWEEN 2 AND 24), avatar_tg INTEGER NOT NULL DEFAULT 1, mark TEXT, skin_org INTEGER REFERENCES orgs(id) ON DELETE SET NULL, skin_pick TEXT CHECK (skin_pick IN ('kbtu', 'org', 'sower')), delete_at INTEGER, city TEXT, city_hidden INTEGER NOT NULL DEFAULT 0, open_projects INTEGER NOT NULL DEFAULT 0, ask_pings INTEGER NOT NULL DEFAULT 0, referred_by INTEGER REFERENCES users(id) ON DELETE SET NULL, tg_photo_path TEXT, tg_photo_src TEXT, n_forum INTEGER NOT NULL DEFAULT 1, link_code TEXT, frame TEXT, can_friend INTEGER NOT NULL DEFAULT 1, announce_ok INTEGER, tg_photo_at INTEGER, forum_seen_msg INTEGER NOT NULL DEFAULT 0, n_forum_comments INTEGER NOT NULL DEFAULT 1, n_broadcasts INTEGER NOT NULL DEFAULT 1, n_digests INTEGER NOT NULL DEFAULT 1, n_door INTEGER NOT NULL DEFAULT 1, notification_undo TEXT NOT NULL DEFAULT '{}', notify_via TEXT NOT NULL DEFAULT 'app' CHECK (notify_via IN ('app', 'telegram')), skin_look TEXT) STRICT;
+, qr_code TEXT, cal_token TEXT, card_no INTEGER, nick TEXT CHECK (nick IS NULL OR length(nick) BETWEEN 2 AND 24), avatar_tg INTEGER NOT NULL DEFAULT 1, mark TEXT, skin_org INTEGER REFERENCES orgs(id) ON DELETE SET NULL, skin_pick TEXT CHECK (skin_pick IN ('kbtu', 'org', 'sower')), delete_at INTEGER, city TEXT, city_hidden INTEGER NOT NULL DEFAULT 0, open_projects INTEGER NOT NULL DEFAULT 0, ask_pings INTEGER NOT NULL DEFAULT 0, referred_by INTEGER REFERENCES users(id) ON DELETE SET NULL, tg_photo_path TEXT, tg_photo_src TEXT, n_forum INTEGER NOT NULL DEFAULT 1, link_code TEXT, frame TEXT, can_friend INTEGER NOT NULL DEFAULT 1, announce_ok INTEGER, tg_photo_at INTEGER, forum_seen_msg INTEGER NOT NULL DEFAULT 0, n_forum_comments INTEGER NOT NULL DEFAULT 1, n_broadcasts INTEGER NOT NULL DEFAULT 1, n_digests INTEGER NOT NULL DEFAULT 1, n_door INTEGER NOT NULL DEFAULT 1, notification_undo TEXT NOT NULL DEFAULT '{}', notify_via TEXT NOT NULL DEFAULT 'app' CHECK (notify_via IN ('app', 'telegram')), skin_look TEXT, n_forum_digest INTEGER NOT NULL DEFAULT 1) STRICT;
 CREATE TABLE videos (
       id         INTEGER PRIMARY KEY,
       owner_id   INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -1672,6 +1783,16 @@ CREATE TABLE yt_videos (
     ) STRICT;
 CREATE INDEX grants_by_batch ON achievement_grants(batch) WHERE batch IS NOT NULL;
 CREATE INDEX grants_by_user ON achievement_grants(user_id, code);
+CREATE INDEX ako_apps_by_org ON ako_apps(org_id, status, updated_at);
+CREATE INDEX ako_apps_by_slot ON ako_apps(slot_id) WHERE slot_id IS NOT NULL;
+CREATE INDEX ako_files_by_app ON ako_files(app_id, doc, id);
+CREATE INDEX ako_reviewers_by_user ON ako_reviewers(user_id);
+CREATE INDEX ako_slots_by_time ON ako_slots(org_id, starts_at);
+CREATE INDEX ako_starts_by_ip ON ako_starts(ip, at);
+CREATE INDEX ako_starts_by_org ON ako_starts(org_id, at);
+CREATE INDEX ako_uploads_by_app ON ako_uploads(app_id, at);
+CREATE INDEX ako_uploads_by_ip ON ako_uploads(ip, at);
+CREATE INDEX ako_uploads_by_org ON ako_uploads(org_id, at);
 CREATE INDEX anon_feedback_by_day ON anon_feedback(day);
 CREATE INDEX appeal_authors_user ON appeal_authors(user_id);
 CREATE INDEX appeal_sends_user ON appeal_sends(user_id, at);
@@ -1748,6 +1869,7 @@ CREATE INDEX fchan_replies_by_msg ON fchan_replies(tg_msg) WHERE tg_msg > 0;
 CREATE INDEX fchan_replies_by_post ON fchan_replies(post_id, created_at);
 CREATE INDEX fchan_replies_todo ON fchan_replies(status, send_at) WHERE tg_msg IS NULL;
 CREATE INDEX fchan_reply_reports_by_user ON fchan_reply_reports(user_id);
+CREATE INDEX fchan_voted_by_user ON fchan_voted(user_id);
 CREATE INDEX files_by_hash ON files(sha256);
 CREATE INDEX form_answers_by_form ON form_answers(form_id, created_at);
 CREATE INDEX friend_requests_to ON friend_requests(to_id, status);

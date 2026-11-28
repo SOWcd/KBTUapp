@@ -2756,4 +2756,143 @@ MIGRATIONS: list[tuple[int, str]] = [
       PRIMARY KEY (room_id, user_id)
     ) STRICT;
     CREATE INDEX IF NOT EXISTS game_players_by_user ON game_players(user_id);"""),
+    # Admissions to an org's programs (logic/ako.py; the first: KBTU's Academy of Corporate Education). Applicants have no
+    # account: their link is the credential, kept here only as its SHA-256. Their documents live in a private folder.
+    (264, """CREATE TABLE IF NOT EXISTS ako_programs (  -- IF NOT EXISTS: tests rewind user_version
+      id        INTEGER PRIMARY KEY,
+      org_id    INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      key       TEXT NOT NULL,
+      kind      TEXT NOT NULL CHECK (kind IN ('degree', 'short')),
+      info      TEXT NOT NULL,                      -- {"ru": {"title", "sub", "price", "length", "format"}, "kk": ..., "en": ...}
+      url       TEXT NOT NULL DEFAULT '',          -- the program's page on the org's site, the source of the info
+      interview INTEGER NOT NULL DEFAULT 0 CHECK (interview IN (0, 1)),
+      first     TEXT NOT NULL DEFAULT '',          -- document keys asked before sending, comma-separated
+      later     TEXT NOT NULL DEFAULT '',          -- needed for enrolment, may come after sending
+      optional  TEXT NOT NULL DEFAULT '',          -- welcome, never asked for
+      sort      INTEGER NOT NULL DEFAULT 0,
+      open      INTEGER NOT NULL DEFAULT 1 CHECK (open IN (0, 1)),
+      UNIQUE (org_id, key)
+    ) STRICT;
+    CREATE TABLE IF NOT EXISTS ako_slots (
+      id         INTEGER PRIMARY KEY,
+      org_id     INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      starts_at  INTEGER NOT NULL,
+      minutes    INTEGER NOT NULL CHECK (minutes BETWEEN 5 AND 240),
+      cap        INTEGER NOT NULL DEFAULT 1 CHECK (cap BETWEEN 1 AND 50),
+      who        TEXT NOT NULL DEFAULT '',          -- the interviewer, for the managers
+      teams      TEXT,                              -- this slot's own meeting link, else its day's
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at INTEGER NOT NULL,
+      UNIQUE (org_id, starts_at, who)
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS ako_slots_by_time ON ako_slots(org_id, starts_at);
+    CREATE TABLE IF NOT EXISTS ako_days (
+      org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      day    TEXT NOT NULL,                         -- YYYY-MM-DD in Almaty
+      teams  TEXT NOT NULL,
+      PRIMARY KEY (org_id, day)
+    ) STRICT;
+    CREATE TABLE IF NOT EXISTS ako_apps (
+      id           INTEGER PRIMARY KEY,
+      org_id       INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      token        BLOB NOT NULL UNIQUE,            -- SHA-256 of the link's secret, never the secret
+      program_id   INTEGER REFERENCES ako_programs(id) ON DELETE SET NULL,
+      name         TEXT NOT NULL DEFAULT '',
+      phone        TEXT NOT NULL DEFAULT '',
+      email        TEXT NOT NULL DEFAULT '',
+      lang         TEXT NOT NULL DEFAULT 'ru' CHECK (lang IN ('ru', 'kk', 'en')),
+      status       TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'sent', 'review', 'accepted', 'declined')),
+      slot_id      INTEGER REFERENCES ako_slots(id) ON DELETE SET NULL,
+      rebook       TEXT,                            -- the managers took the booked time away: their reason, until a new pick
+      consent      TEXT,                            -- the notice's version agreed to (CONSENT), before any document
+      consent_at   INTEGER,
+      note         TEXT NOT NULL DEFAULT '',        -- the managers' own
+      created_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at   INTEGER NOT NULL,
+      updated_at   INTEGER NOT NULL,
+      sent_at      INTEGER
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS ako_apps_by_org ON ako_apps(org_id, status, updated_at);
+    CREATE INDEX IF NOT EXISTS ako_apps_by_slot ON ako_apps(slot_id) WHERE slot_id IS NOT NULL;
+    -- the public link's starts, for its daily caps (one address, one org): a keyed hash of the address (an IPv6 /64), a day
+    CREATE TABLE IF NOT EXISTS ako_starts (
+      org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      ip     TEXT NOT NULL,
+      at     INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS ako_starts_by_ip ON ako_starts(ip, at);
+    CREATE INDEX IF NOT EXISTS ako_starts_by_org ON ako_starts(org_id, at);
+    -- who reads packages without running them (the Academic Programs department): named by the admin, never by a role
+    -- (an org's members join in many ways; documents hold health data)
+    CREATE TABLE IF NOT EXISTS ako_reviewers (
+      org_id  INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (org_id, user_id)
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS ako_reviewers_by_user ON ako_reviewers(user_id);
+    CREATE TABLE IF NOT EXISTS ako_files (
+      id         INTEGER PRIMARY KEY,
+      app_id     INTEGER NOT NULL REFERENCES ako_apps(id) ON DELETE CASCADE,
+      doc        TEXT NOT NULL,
+      path       TEXT NOT NULL UNIQUE,              -- under the private ako/ folder
+      mime       TEXT NOT NULL CHECK (mime IN ('image/jpeg', 'application/pdf')),
+      bytes      INTEGER NOT NULL,
+      created_at INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS ako_files_by_app ON ako_files(app_id, doc, id);"""),
+    # admissions' daily upload caps (logic/ako.py _room): a row per try, kept a day. No foreign key on app_id: a page
+    # deleted, or a draft gone, still counts for its day
+    (265, """CREATE TABLE IF NOT EXISTS ako_uploads (
+      id     INTEGER PRIMARY KEY,
+      org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      app_id INTEGER NOT NULL,
+      ip     TEXT NOT NULL,                         -- a keyed hash of the uploader's address (an IPv6 /64), as ako_starts
+      bytes  INTEGER NOT NULL DEFAULT 0,            -- kept; 0 for a try refused or failed
+      at     INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS ako_uploads_by_app ON ako_uploads(app_id, at);
+    CREATE INDEX IF NOT EXISTS ako_uploads_by_ip ON ako_uploads(ip, at);
+    CREATE INDEX IF NOT EXISTS ako_uploads_by_org ON ako_uploads(org_id, at);"""),
+    # Forum reactions: the app's heart becomes one emoji per student per post (the hearts so far stay hearts; the set is
+    # fchannel.REACTIONS, no CHECK: the owner may change it). Polls: a post with 2-6 options, closing days after it
+    # went out (closes_at, written once). A vote is two rows that never meet: that I voted (one each), and the option's
+    # count with no account on it (research_participants' way): no row links a person to a choice (limits: fchannel polls).
+    # The forum's weekly digest gets its own switch (n_forum_digest), apart from the DMP memo's.
+    (266, """ALTER TABLE fchan_hearts ADD COLUMN emoji TEXT NOT NULL DEFAULT '❤️';
+    CREATE TABLE IF NOT EXISTS fchan_polls (  -- IF NOT EXISTS: tests rewind user_version
+      post_id   INTEGER PRIMARY KEY REFERENCES fchan_posts(id) ON DELETE CASCADE,
+      options   TEXT NOT NULL CHECK (json_valid(options)),
+      days      INTEGER NOT NULL CHECK (days IN (1, 3, 7)),
+      closes_at INTEGER
+    ) STRICT;
+    CREATE TABLE IF NOT EXISTS fchan_voted (
+      post_id INTEGER NOT NULL REFERENCES fchan_polls(post_id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (post_id, user_id)
+    ) STRICT, WITHOUT ROWID;
+    CREATE INDEX IF NOT EXISTS fchan_voted_by_user ON fchan_voted(user_id);
+    CREATE TABLE IF NOT EXISTS fchan_tally (
+      post_id INTEGER NOT NULL REFERENCES fchan_polls(post_id) ON DELETE CASCADE,
+      choice  INTEGER NOT NULL CHECK (choice BETWEEN 0 AND 5),
+      n       INTEGER NOT NULL,
+      PRIMARY KEY (post_id, choice)
+    ) STRICT, WITHOUT ROWID;
+    ALTER TABLE users ADD COLUMN n_forum_digest INTEGER NOT NULL DEFAULT 1;"""),
+    # Admissions reminders (logic/ako.py due, kbtu/akosend.py): the chat that tapped /start ako_... gets them (gone when
+    # decided, a day after the interview, or with a new link), and each send claimed once. No CHECK on kind or channel:
+    # a CHECK can't be altered, and WhatsApp is to come
+    (267, """CREATE TABLE IF NOT EXISTS ako_chats (  -- IF NOT EXISTS: tests rewind user_version
+      app_id INTEGER PRIMARY KEY REFERENCES ako_apps(id) ON DELETE CASCADE,
+      chat   INTEGER NOT NULL                         -- the applicant's private chat with the bot
+    ) STRICT;
+    CREATE TABLE IF NOT EXISTS ako_sends (
+      app_id  INTEGER NOT NULL REFERENCES ako_apps(id) ON DELETE CASCADE,
+      kind    TEXT NOT NULL,                          -- booked (the invite), d1 (a day before), h1 (an hour before)
+      channel TEXT NOT NULL,                          -- telegram, email
+      slot_at INTEGER NOT NULL,                       -- the interview's start it was for: a moved one is another send
+      at      INTEGER NOT NULL,                       -- claimed
+      sent_at INTEGER,
+      error   TEXT,                                   -- why it never went (an exception's class, never an address)
+      PRIMARY KEY (app_id, kind, channel, slot_at)
+    ) STRICT;"""),
 ]
