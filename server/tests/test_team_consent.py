@@ -102,10 +102,14 @@ def test_organizer_reminder(club, monkeypatch):
     now = int(time.time())
     set_clock(monkeypatch, lambda: now + 86400 + 60)
     assert c.post(url(a), headers=tma(20)).json()["queued"] is True and len(_asks(con, a)) == 2  # a day later
+    assert c.post(url(b), headers=tma(20)).json()["queued"] is True
+    mb = con.execute("SELECT *, 'en' AS lang FROM bot_outbox WHERE kind = 'team_consent' AND user_id = ?", (_uid(con, b),)).fetchone()
     c.post("/api/teams/consent", headers=tma(a), json={"consent": V})
     assert c.post(url(a), headers=tma(20)).json() == {"queued": False, "consent": True, "off": False}
+    assert outbox._render(con, m) is None  # agreed meanwhile: quiet
     c.delete(f"/api/events/{eid}/registration", headers=tma(b))
     assert c.post(url(b), headers=tma(20)).status_code == 404  # left
+    assert outbox._render(con, mb) is None  # left: quiet
     full = _event(c, start=now + 3 * 86400, seats=1, **TEAMS)
     _go(c, full, a)
     _go(c, full, b)  # the waitlist: no ticket, not on the board

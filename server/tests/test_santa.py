@@ -163,6 +163,19 @@ def test_one_button_starts_the_game(env):
     assert con.execute("SELECT 1 FROM bot_outbox WHERE kind = 'place_tba'").fetchone() is None
 
 
+def test_santa_news_queued_before_retiring(env):
+    """A santa_news row queued before the announcement was retired still renders to its President, quiet once they aren't."""
+    c, cfg = env
+    con = _club(c, cfg)
+    logic.set_role(con, None, _uid(con, 20), 1, "president", "test")
+    con.execute("INSERT INTO bot_outbox (user_id, kind, ref, send_after) VALUES (?, 'santa_news', 'sn:1', 0)", (_uid(con, 20),))
+    m = con.execute("SELECT *, 'en' AS lang FROM bot_outbox WHERE kind = 'santa_news'").fetchone()
+    text, button, start = outbox._render(con, m)
+    assert start == "sn_1" and "IT Club" in text and button
+    logic.set_role(con, None, _uid(con, 20), 1, "member", "test")
+    assert outbox._render(con, m) is None
+
+
 # ---------------------------------------------------------------- round 2: budget, deadline, the clock, reminders
 
 DAY = 86400
