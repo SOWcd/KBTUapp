@@ -781,13 +781,14 @@
   .acts.on :global(.ib:first-child svg) { fill: currentColor; color: var(--warning); }
 
   /* the words (the Afisha hero's slab): the title in the display face, the time in white, the place a step quieter */
-  .slab { position: relative; z-index: 2; isolation: isolate; display: flex; flex-direction: column; gap: 3px; padding: 76px 18px var(--s-4); pointer-events: none;
+  .slab { position: relative; z-index: 2; isolation: isolate; display: flex; flex-direction: column; gap: 3px; padding: 104px 18px var(--s-4); pointer-events: none;
     text-shadow: 0 1px 8px rgba(0, 0, 0, 0.28); }
   .pics .slab { padding-bottom: var(--s-6); } /* the photos' dots under the words */
   .clip .slab { padding-right: 60px; } /* the clip's sound button */
   .lens { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none;
-    -webkit-mask-image: linear-gradient(transparent, rgba(0, 0, 0, 0.7) 28px, black 56px); mask-image: linear-gradient(transparent, rgba(0, 0, 0, 0.7) 28px, black 56px); }
-  /* the picture runs 64px past the lens on every side but the top: a blurred layer fades out at its own edges */
+    -webkit-mask-image: linear-gradient(transparent, rgba(0, 0, 0, 0.35) 36px, rgba(0, 0, 0, 0.8) 68px, black 96px); mask-image: linear-gradient(transparent, rgba(0, 0, 0, 0.35) 36px, rgba(0, 0, 0, 0.8) 68px, black 96px); }
+  /* the picture runs 64px past the lens on every side but the top: a blurred layer fades out at its own edges.
+     It comes in over a long fade (the header is shorter than the Afisha's card: a short one drew a line across the picture) */
   .lens img { position: absolute; left: -64px; bottom: -64px; width: calc(100% + 128px); max-width: none; /* base.css caps every img at its box */ height: calc(var(--hh) + 64px); object-fit: cover;
     filter: blur(32px) saturate(1.7) brightness(0.6); }
   .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: var(--s-2); text-shadow: none; }
