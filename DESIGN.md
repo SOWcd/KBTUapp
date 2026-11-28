@@ -27,6 +27,9 @@ screen must look like it was always part of it. Apple-level minimalism. Speed co
   They never form full-width bars.
 - Content is never glass. Cards, lists and text sit on solid surfaces beneath the islands. Glass on content turns muddy.
 - One glass recipe for every island: the tab bar's.
+- Apple's own before/after (the owner's reference): a full-width toolbar with coloured icons becomes small glass CAPSULES
+  (related actions grouped) and round glass BUTTONS (a single action) floating over the content, with monochrome icons.
+  Our pinned bars and coloured icons are the "before". Every one of them becomes the "after".
 
 ## Never (he has rejected each of these, most of them more than once)
 - Coloured rounded-square icon tiles (iOS Settings style): "always childish". Use monochrome line icons, a 3D object, or type.
