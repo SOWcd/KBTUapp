@@ -343,7 +343,7 @@ async def _receipt(cfg: Config, http: httpx.AsyncClient, con, msg: dict, eid: in
 
 # Only announcements a student can browse or ignore get "Don't send these" (Codex review, owner Nov 23); a ticket, a
 # reply or a reminder keeps the whole keyboard for its own action. Settings still mutes every category.
-MUTE_ROW = {"new_event", "casting_open", "round_open", "broadcast"}
+MUTE_ROW = {"new_event", "casting_open", "round_open", "broadcast", "forum_week"}
 
 
 def _feedback_token(cfg: Config, chat: int, action: str, category: str, nonce: str, mid: int = 0) -> str:

@@ -224,7 +224,7 @@ def report_queue(con, v: Viewer) -> list[dict]:
             text, where = (" · ".join(x for x in (a["title"], a["body"][:400]) if x), ("ask", r["target_id"])) if a else (None, None)
         elif r["target"] == "fpost":  # a forum channel post: its words, and the way to it in the channel (an anonymous one names nobody)
             p = one(con, f"SELECT body, tg_msg FROM fchan_posts WHERE id = ? AND {FPOST_UP}", r["target_id"])
-            text, where = (p["body"], ("fpost", r["target_id"], p["tg_msg"])) if p else (None, None)
+            text, where = (fchannel.words(con, r["target_id"], p["body"]), ("fpost", r["target_id"], p["tg_msg"])) if p else (None, None)  # a poll's options too
             photos = fchannel._photos(con, [r["target_id"]]).get(r["target_id"], [])
             # edited since: the words as they were reported, oldest report's first
             was = one(con, """SELECT body FROM reports WHERE target = 'fpost' AND target_id = ? AND status = 'open' AND body IS NOT NULL

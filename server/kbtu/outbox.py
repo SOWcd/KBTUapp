@@ -68,6 +68,8 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
             int(ref[1]), m["user_id"], m["tg_id"])
         template = "fch_reply_answer" if json.loads(m["payload"]).get("answer") else kind
         return (*texts.bot_message(lang, template), f"fp_{post['id']}") if post else None
+    if kind == "forum_week":  # fw:<Friday> (or fw:p<time>, a preview): the Forum's week in counts, into the Forum
+        return logic.fchannel.digest_render(lang, m["ref"], m["payload"])
     if kind == "fch_reply_gone":  # fg:<reply>, to the post's author (through the post): its card
         r = one(con, "SELECT p.id FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id WHERE r.id = ? AND p.user_id = ? AND p.status = 'live'",
                 int(ref[1]), m["user_id"])
@@ -586,7 +588,7 @@ def _take(con, m, forum_channel: bool, pushable: bool = False):
         return _mark(con, m, False, "banned")
     if (category := notifications.CATEGORY_OF.get(m["kind"])) and not notifications.allowed(con, category, m["user_id"], m["tg_id"]):
         return _mark(con, m, False, "gone")
-    if m["kind"] == "fch_comments" and not forum_channel:
+    if m["kind"] in ("fch_comments", "forum_week") and not forum_channel:
         return _mark(con, m, False, "gone")
     try:
         msg = _render(con, m)

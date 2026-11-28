@@ -7,7 +7,8 @@ The rule (AGENTS.md): the bot sends templates with a button into the app, never 
 
 Two exceptions: a student's own post
 to the forum channel (`FORUM_CHANNEL`), published only after the AI's yes or a moderator's, as plain text without
-links or mentions, signed with the app's name or "Anonymous student"; the author can edit it (`fchannel.edit_*`: the
+links or mentions, signed with the app's name or "Anonymous student" (a poll's options go with it, a line each under
+the question, through the same checks, and every poll waits for a moderator's yes); the author can edit it (`fchannel.edit_*`: the
 same gates and AI look, or a moderator's yes, before the bot edits the channel message in place, the signature
 unchanged) or delete it, a moderator can
 take it down, and only the creator can reveal an anonymous author (audit log). The author of an anonymous post may

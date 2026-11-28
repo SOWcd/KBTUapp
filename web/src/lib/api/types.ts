@@ -83,6 +83,11 @@ export interface ChannelPost { id: Id; body: string; anon: boolean; nick: Nick; 
  *  (to mark), a sentence why, one on what to change. Mine alone; null: the app's own words */
 export interface ForumWhy { quote: string | null; reason: string; fix: string | null }
 export interface ChannelHeart { hearts: number; hearted: boolean }
+/** The app's reactions on a channel post (server fchannel.REACTIONS): per emoji, the set's order; pick: mine. Never who. */
+export interface ChannelReactions extends ChannelHeart { picks: { emoji: string; n: number }[]; pick: string | null }
+/** A poll post (server fchannel._polls): counts once I voted and 5 have, or once it closed; my own choice isn't kept
+ *  on the server (the device keeps it). closes: null until it went out. */
+export interface ChannelPoll { options: string[]; days: 1 | 3 | 7; closes: Ts | null; closed: boolean; voted: boolean; total: number; counts: number[] | null }
 export interface ChannelHelp { until: Ts; coming: number; me: boolean; who?: PersonRef[] }
 /** how long an ask for help stays up, in hours (the server's HELP_HOURS); 3 first */
 export const HELP_HOURS = [1, 3, 6, 12, 24] as const;
@@ -106,6 +111,8 @@ export interface ChannelFeedPost extends ChannelHeart { id: Id; body: string; st
   /** an ask for help: up until `until` (then out of the feed), how many said "I'm coming", whether I did; who: to
    *  its author alone */
   help?: ChannelHelp
+  /** the app's reactions (the server always sends them; optional until the chips replace hearts) and a poll's side */
+  picks?: ChannelReactions['picks']; pick?: ChannelReactions['pick']; poll?: ChannelPoll
   /** my held post (to me alone): why it waits: I sent it to a moderator, anonymous with photos, or the AI's own words (kept: a reload keeps them) */
   review?: { kind: 'appeal' | 'photo' | 'tg' | 'ai'; explain: ForumWhy | null } }
 /** The moderators' list: held posts (why: 'ai', 'person', 'check', 'busy') and this week's live ones. An anonymous
@@ -296,6 +303,7 @@ export interface Settings {
   nDoor: boolean;
   nNewEvents: boolean;
   nForumComments: boolean;
+  nForumDigest: boolean;        // the Forum's Friday message (counts only)
   nBroadcasts: boolean;
   nDigests: boolean;
   nFriends: boolean;
