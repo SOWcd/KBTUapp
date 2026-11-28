@@ -16,7 +16,7 @@ npm run e2e:snap                                       # the screen snapshots (n
 ## Screen snapshots
 
 `snap.spec.ts` takes the key screens at 375x812 in both themes (projects `snap-dark`, `snap-light`): the Afisha, an
-event, Clubs, the Forum, Profile with the badge, the anthem sheet, the assistant's welcome. The clock is fixed
+event, Clubs (its top, its list, and with clubs of my own), the Forum, Profile with the badge, the anthem sheet, the assistant's welcome, Spy's states (from a made-up room, its clock stopped). The clock is fixed
 (Wednesday 25 Nov 2026, 10:00 in Almaty: `qa.py --now` and Playwright's clock), motion is reduced, and a picture may
 differ from its baseline in `snapshots/` by 300 pixels at most. Each screen is also checked for anything running past
 the screen's sides.

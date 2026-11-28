@@ -159,7 +159,9 @@ test('Back closes the full-screen campus map back to the home screen', async ({ 
   dana.allow(/status of 404 \(Not Found\)$/);
   await atHome(dana);
 
-  await page.getByRole('button', { name: tr('map.open'), exact: true }).click();
+  // qa.py's server has the assistant on, so the bar's corner is its light and the map opens from the Afisha's "More"
+  await page.locator('[data-more]').click();
+  await page.getByRole('menuitem', { name: tr('map.open'), exact: true }).click();
   const floors = page.getByRole('group', { name: tr('map.floors') });
   await expect(floors).toBeVisible();
   await backShown(dana, true); // once the map's opening (its iris) is done

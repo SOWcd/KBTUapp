@@ -272,6 +272,7 @@ def stats_day(con) -> None:
                   chatmod.sweep,     # swear warnings in clubs' groups: 90 days
                   assistant.sweep,
                   santa.forget,      # its chat: 3 days after the gifts day
+                  rooms.sweep,       # game rooms: 3 hours after their last change
                   _prune_deletion_log,
                   checkin.sweep,     # check-ins left running (the organizers' list sweeps too, as it's read)
                   chatsync.night,    # linked clubs: their members against their chats again (updates missed while down)
@@ -369,7 +370,7 @@ from .account import _prune_deletion_log, me  # noqa: E402
 from .forum import asks, forum_sweep  # noqa: E402
 from .moderation import TAKEDOWN_KEEP  # noqa: E402
 from .newsfeed import wipe_post  # noqa: E402
-from . import ako, appeals, assistant, chatlist, chatmod, chatsync, donations, forms, helpus, library, mapflaws, research, santa, stats, web_auth  # noqa: E402
+from . import ako, appeals, assistant, chatlist, chatmod, chatsync, donations, forms, helpus, library, mapflaws, research, rooms, santa, stats, web_auth  # noqa: E402
 from .oversight import _admin, _owner  # noqa: E402
 from .queues import AI_TRIES, ai_state  # noqa: E402
 from .seats import notify  # noqa: E402

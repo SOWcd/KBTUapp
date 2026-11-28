@@ -67,10 +67,7 @@
                                 tools/roster_convert.py, the map sheet -> slug or {"new": {"name", "short", "emoji"}};
                                 a second run adds nothing; those already in the app whose rows they are join at once
   .venv/bin/python -m kbtu.admin grant session <sid> init26   the badge to everyone counted in a check-in session
-  .venv/bin/python -m kbtu.admin santa-news [--dry | <@who>]  (<@who>: to that one President or Vice alone, to read it first) Secret Santa's announcement: queued once to every President and Vice of an active
-                                organization the bot can write to; --dry: the count only. By hand, never on deploy
   .venv/bin/python -m kbtu.admin broadcast <name> <https://t.me/...> [--platform android|ios|desktop|web] [--dry | <@who>]
-  .venv/bin/python -m kbtu.admin broadcast-votes <name>   the broadcast's Interesting / Not interesting counts
                                 creator only: queue a bot template once per reachable user. --dry counts new recipients;
                                 @username or Telegram ID queues it for one person first; --platform: only people who
                                 opened the app on that kind of device in the last 90 days (a preview goes regardless)
@@ -102,9 +99,6 @@
                                 receipt in the app would be counted twice: check `donation list` first.
                                 donation list: id, user id (internal), amount, source, date, public (no names, no
                                 Telegram ids); donation remove <id> [--yes]: a manual row typed wrong goes, the medal follows
-  .venv/bin/python -m kbtu.admin team-consent-ask [--dry]   the bot's "agree to teams" (a button to the event's consent
-                                sheet) to everyone signed up to a coming team event without the teams consent, once per
-                                person and event; --dry: the count only. By hand, never on deploy
   .venv/bin/python -m kbtu.admin came <@username | telegram id> <event id>   a guest the organizers let in by hand whose list
                                 row the retention sweep already erased: a checked-in ticket (manual), audited as came_by_hand
   .venv/bin/python -m kbtu.admin seat <@username | telegram id> <event id>   a student seated on an event by hand, a paid
@@ -748,16 +742,6 @@ def main(args: list[str]) -> None:
         except ApiError as exc:
             sys.exit(f"refused: {exc.code} {exc.message or ''}".rstrip())
         print(f"granted {args[3]} to {n} people")
-    elif cmd == "santa-news" and len(args) == 2 and args[1] != "--dry":  # to one person first
-        from .logic import santa
-        print(f"queued {santa.news(con, only=_user(con, args[1])['id'])}")
-    elif cmd == "santa-news" and args[1:] in ([], ["--dry"]):  # Secret Santa's announcement to Presidents and Vices, queued once each
-        from .logic import santa
-        n = santa.news(con, dry=bool(args[1:]))
-        print(f"{'would queue' if args[1:] else 'queued'} {n}")
-    elif cmd == "broadcast-votes" and len(args) == 2:
-        yes, no = one(con, "SELECT COALESCE(SUM(vote), 0), COALESCE(SUM(1 - vote), 0) FROM broadcast_votes WHERE name = ?", args[1])
-        print(f"{args[1]}: {yes} interested, {no} not")
     elif cmd == "broadcast" and len(args) in (3, 4, 5, 6) and gz is None and len(args) - 2 * ("--platform" in args) in (3, 4):
         rest = args[1:]
         platform = None
@@ -866,10 +850,6 @@ def main(args: list[str]) -> None:
             day = time.strftime("%Y-%m-%d", time.gmtime(r["created_at"] + 5 * 3600))
             print(f"#{r['id']}  user {r['user_id']}  {r['amount'] or '-'}  {'manual' if r['flags'] == 'manual' else r['source']}  {r['status']}  {day}  "
                   f"public {'yes' if donations.public(con, r['user_id']) else 'no'}")
-    elif cmd == "team-consent-ask" and args[1:] in ([], ["--dry"]):  # signed up before the sign-up became the consent
-        from .logic import evteams
-        n = evteams.consent_ask(con, dry=bool(args[1:]))
-        print(f"{'would queue' if args[1:] else 'queued'} {n}")
     elif cmd == "came" and len(args) == 3 and CLI_ID.fullmatch(args[2]):  # the creator alone, on the organizers' word
         from .db import tx
         uid, eid = _user(con, args[1])["id"], int(args[2])

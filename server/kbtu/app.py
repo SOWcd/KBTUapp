@@ -3070,6 +3070,24 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     def set_reg_until(eid: int, con: Con, v: Me, body: dict = Body(...)):
         return logic.set_reg_until(con, v, eid, body.get("until"))
 
+    # game rooms (logic/rooms.py; the games: logic/spy.py): any signed-in person, students or not (a friend's link)
+    @app.post("/api/rooms")
+    def room_create(con: Con, v: Me, body: dict = Body(...)):
+        return logic.rooms.create(con, v, body)
+
+    @app.post("/api/rooms/join")  # by the 4-digit code: typed, or the QR / link startapp=g_<code>
+    def room_join(con: Con, v: Me, body: dict = Body(...)):
+        return logic.rooms.join(con, v, body.get("code"))
+
+    @app.get("/api/rooms/{rid}")  # ?v=<the version the phone has>: 204 while it is still that one
+    def room_get(rid: int, con: Con, v: Me, have: int | None = Query(None, alias="v")):
+        r = logic.rooms.get(con, v, rid, have)
+        return Response(status_code=204) if r is None else r
+
+    @app.post("/api/rooms/{rid}")  # one move: {id, v, type, ...}
+    def room_act(rid: int, con: Con, v: Me, body: dict = Body(...)):
+        return logic.rooms.act(con, v, rid, body)
+
     # Secret Santa (logic/santa.py): the one draw. No route reads pairs: each giver's own is on the event's page
     @app.post("/api/orgs/{oid}/santa")  # Studio's one button: the club's game, made and published (or the running one)
     def santa_start(oid: int, con: Con, v: Me, body: dict = Body(...)):

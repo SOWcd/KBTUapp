@@ -2734,9 +2734,31 @@ MIGRATIONS: list[tuple[int, str]] = [
     # mirror._MIRRORED). The main channels mirrored today without the bot keep going, as vouched.
     (262, """UPDATE chats SET mirror = 2 WHERE mirror = 1 AND main = 1 AND kind = 'channel' AND tg_chat_id IS NULL
         AND org_id IS NOT NULL;"""),
+    # rooms for games played together, each on their own phone (logic/rooms.py): one row per room, the whole state as
+    # JSON and a version every change moves; who is in it, and when their phone last asked (presence). Gone hours after
+    # the last change (rooms.purge). No CHECK on `game`: the next game is a new name, not a table rebuild
+    (263, """CREATE TABLE IF NOT EXISTS game_rooms (
+      id         INTEGER PRIMARY KEY,
+      game       TEXT NOT NULL,
+      code       TEXT NOT NULL UNIQUE,
+      host_id    INTEGER NOT NULL REFERENCES users(id),
+      state      TEXT NOT NULL,
+      version    INTEGER NOT NULL DEFAULT 1,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS game_rooms_by_host ON game_rooms(host_id);
+    CREATE INDEX IF NOT EXISTS game_rooms_by_age ON game_rooms(updated_at);
+    CREATE TABLE IF NOT EXISTS game_players (
+      room_id INTEGER NOT NULL REFERENCES game_rooms(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      seen_at INTEGER NOT NULL,
+      PRIMARY KEY (room_id, user_id)
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS game_players_by_user ON game_players(user_id);"""),
     # Admissions to an org's programs (logic/ako.py; the first: KBTU's Academy of Corporate Education). Applicants have no
     # account: their link is the credential, kept here only as its SHA-256. Their documents live in a private folder.
-    (263, """CREATE TABLE IF NOT EXISTS ako_programs (  -- IF NOT EXISTS: tests rewind user_version
+    (264, """CREATE TABLE IF NOT EXISTS ako_programs (  -- IF NOT EXISTS: tests rewind user_version
       id        INTEGER PRIMARY KEY,
       org_id    INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
       key       TEXT NOT NULL,

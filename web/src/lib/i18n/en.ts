@@ -1219,7 +1219,6 @@ const en: Dict = {
   'list.kind.lab': "Lab",
   'list.dayOff': "A day off by the academic calendar: classes are online and asynchronous.",
   'list.nowLeft': "{n} min left",
-  'list.week': { one: "{n} this week", other: "{n} this week" },
   'list.kind.lectureLong': "Lecture",
   'list.kind.practiceLong': "Practice",
   'list.kind.labLong': "Lab",
@@ -2908,6 +2907,8 @@ const en: Dict = {
   'album.added': { one: "{n} photo added", other: "{n} photos added" },
   'rate.count': { one: "{n} rating", other: "{n} ratings" },
   'anthem.title': "KBTU anthem",
+  // games (screens/games; their own words: i18n/games.ts)
+  'games.title': "Games",
   'anthem.play': "Play",
   'anthem.pause': "Pause",
   'anthem.repeat': "Repeat",

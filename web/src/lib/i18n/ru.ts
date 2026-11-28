@@ -1240,7 +1240,6 @@ const ru = {
   'list.kind.lab': "Лб",
   'list.dayOff': "Сегодня выходной по академическому календарю: пары онлайн, асинхронно.",
   'list.nowLeft': "ещё {n} мин",
-  'list.week': { one: "{n} на этой неделе", few: "{n} на этой неделе", many: "{n} на этой неделе", other: "{n} на этой неделе" },
   'list.kind.lectureLong': "Лекция",
   'list.kind.practiceLong': "Практика",
   'list.kind.labLong': "Лабораторная",
@@ -2931,6 +2930,8 @@ const ru = {
   'album.added': { one: "Добавлено {n} фото", few: "Добавлено {n} фото", many: "Добавлено {n} фото", other: "Добавлено {n} фото" },
   'rate.count': { one: "{n} оценка", few: "{n} оценки", many: "{n} оценок", other: "{n} оценки" },
   'anthem.title': "Гимн КБТУ",
+  // games (screens/games; their own words: i18n/games.ts)
+  'games.title': "Игры",
   'anthem.play': "Слушать",
   'anthem.pause': "Пауза",
   'anthem.repeat': "Повтор",
