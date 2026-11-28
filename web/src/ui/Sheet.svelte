@@ -267,7 +267,8 @@
   .scrim.clear { background: transparent; }
   .see { max-height: 56%; }
   .grip { position: relative; flex: none; width: 38px; height: 5px; border-radius: var(--r-full); background: var(--line-2); margin: 8px auto 4px; }
-  .body { position: relative; flex: 1; --pb: calc(var(--s-6) + var(--safe-bottom)); padding: 6px var(--gutter) var(--pb); scroll-padding-bottom: calc(var(--kb-room, 0px) + var(--foot-h, 0px)); }
+  /* isolate: the body now runs under the footer, and a z-index inside it (a card's layers) must never rise over the islands */
+  .body { position: relative; isolation: isolate; flex: 1; --pb: calc(var(--s-6) + var(--safe-bottom)); padding: 6px var(--gutter) var(--pb); scroll-padding-bottom: calc(var(--kb-room, 0px) + var(--foot-h, 0px)); }
   /* (scroll-padding: a scrollIntoView to the end, the newest message, stops above the raised footer) */
   /* the keyboard's room to scroll: no height in the flow (a short sheet keeps its size), its box reaching that much past
      the end, the padding included, so the scroll goes exactly --kb-room further */
