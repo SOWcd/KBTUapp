@@ -49,14 +49,15 @@
   import { haptic, inTelegram } from '../../lib/tg';
   import { SPOTS, campusPoint, roomOf, floorOf, nearRooms, spotOf } from '../../lib/map';
   import { campusPlace } from '../../lib/campusPlace';
-  import { FRAMES, HAS, lngLat, uvOf, zoomFor, widthAt, overview, scan, SCAN_AT, roomAt, labelsOf, labelData, type Ver } from '../../lib/mapgl';
-  import { Map as GLMap, LngLat, type MapMouseEvent, type StyleSpecification, type GeoJSONSource, type ImageSource } from 'maplibre-gl';
+  import { FRAMES, HAS, lngLat, widthAt, overview, scan, SCAN_AT, roomAt, labelsOf, labelData, type Ver } from '../../lib/mapgl';
+  import { Map as GLMap, type MapMouseEvent, type StyleSpecification, type GeoJSONSource, type ImageSource } from 'maplibre-gl';
   import { inkOf, planSource as planSourceOf, planLayer as planLayerOf, wordSize as wordSizeOf, fadeOf as fadeOfTier, TIERS, wordLayers, pinData as pinDataOf, pinLayer, type RasterPaint } from './mapLayers';
   import 'maplibre-gl/dist/maplibre-gl.css';
   import uniqRooms from '../../assets/map/uniq-rooms.json';
   import { UNITS, toPlan, fromPlan } from './planUnits';
   import { glass, jelly } from '../../ui/glass';
   import { floorSwipe, railGestures } from './floorSwipe';
+  import { camera, MAX, spring } from './mapCamera';
   import MapPad, { placeGroups, exitTiles, doorHint, adminNote, type PadCheck } from './MapPad.svelte';
   import DoorOpen from '@lucide/svelte/icons/door-open';
   import RouteUI, { type RouteView } from './RouteUI.svelte';
@@ -128,67 +129,14 @@
   let plan: HTMLDivElement;
   let gone = false;
 
-  // The camera is MapLibre's (our own pan and zoom "perceived gestures badly"): it draws the floor's tiles
-  // of the level the size on screen needs, a finer level fading in over the coarser one, and the labels, which fade in
-  // and out as they find room. Here the plan's scale is 1 when it is as wide as the stage, up to MAX; a place on it is
-  // (u, v), fractions of its width and height (lib/mapgl.ts turns those into MapLibre's own).
+  // the camera (mapCamera.ts): MapLibre's, the plan's scale 1 when it is as wide as the stage
   let map: GLMap;
   let ready = $state(false);
   const fr = $derived(FRAMES[ver]);
-  const MAX = 8;
-  const W = () => stage.clientWidth, H = () => stage.clientHeight;
-  const scale = () => widthAt(fr, map.getZoom()) / W();
-  /** the camera that shows the plan at scale k with its (u, v) at the stage's (sx, sy) */
-  function cam(k: number, u: number, v: number, sx = W() / 2, sy = H() / 2) {
-    const pw = W() * k;
-    return { center: lngLat(fr, u + (W() / 2 - sx) / pw, v + (H() / 2 - sy) / (pw * AR)), zoom: zoomFor(fr, pw) };
-  }
-  /** the plan's point under a point of the stage */
-  function uvAt(px: number, py: number): [number, number] { const at = map.unproject([px, py]); return uvOf(fr, at.lng, at.lat); }
-  /** the screen's middle stays on the plan, so half a screen of room past each edge: a corner, or a route under the
-   *  card, can be dragged to the middle; never smaller than the stage's width, never past MAX */
-  function within(at: LngLat, zoom: number) {
-    const [u, v] = uvOf(fr, at.lng, at.lat), on = (n: number) => Math.min(1, Math.max(0, n));
-    return { center: new LngLat(...lngLat(fr, on(u), on(v))), zoom: Math.min(zoomFor(fr, W() * MAX), Math.max(zoomFor(fr, W()), zoom)) };
-  }
-  /** what stands on the plan follows the camera: the overlay as wide as the plan is on screen (its pins keep their
-   *  size), the overview under the canvas by a transform alone */
-  function follow() {
-    const p = map.project(lngLat(fr, 0, 0)), pw = widthAt(fr, map.getZoom());
-    plan.style.width = `${pw}px`; plan.style.transform = `translate3d(${p.x}px,${p.y}px,0)`;
-    first.style.transform = `translate3d(${p.x}px,${p.y}px,0) scale(${pw / fr.fx / 512})`;
-  }
-  // the stage runs under Telegram's header (full-bleed); the plan rests below it, where .side starts
-  let side: HTMLDivElement;
-  const head = () => side.offsetTop - 10;
-  /** the view a floor opens in: on the main map the building (u .12-.85 of Uni-Q's sheet, white margins round it) fills
-   *  the width, not far away; the drawn plans have no margins, the whole of them */
-  const homeK = () => (ver === 'main' ? 1.3 : 1);
-  /** the building in the middle of what's under the header, at scale k: where the plan rests zoomed out */
-  const middle = (k = homeK()) => cam(k, ver === 'main' ? 0.485 : 0.5, 0.5, W() / 2, head() + (H() - head()) / 2);
-  /** zoomed out: the whole floor, where one finger turns floors and never pans (the swipe "doesn't
-   *  understand what I want"); a hair of zoom left by a pinch still counts, and the let-go takes it back (rest) */
-  const NEAR = 1.15;
-  const out = () => scale() < homeK() * NEAR;
-  function reset() { halt(); map.jumpTo(middle()); }
-  /** a running glide stops where it is on screen (a finger, a floor, the other version came) */
-  const halt = () => map.stop();
-  // off at once, settles without a crawl: a critically damped spring (an easy ease is too slow, an
-  // ease-out one crawls at the end)
-  const spring = (p: number) => (p >= 1 ? 1 : 1 - (1 + 10 * p) * Math.exp(-10 * p));
-  /** fingers let the plan go: zoomed out it may rest only in the middle and goes back there, at the size they left it
-   *  under the whole floor's, or at the whole floor's from a hair over it; zoomed in it stays where it was left */
-  function rest() {
-    if (fingers || !out()) return;
-    const to = middle(Math.min(scale(), homeK())), a = map.project(to.center), b = map.project(map.getCenter());
-    if (Math.hypot(a.x - b.x, a.y - b.y) > 0.5 || Math.abs(to.zoom - map.getZoom()) > 0.005) easeFit(to, 380);
-  }
-  /** a glide to the whole floor: a finger in the middle of it lands it at once (it was halfway, neither out nor in) */
-  let fitting = false;
-  function easeFit(to: { center: LngLat | [number, number]; zoom: number }, duration: number) {
-    fitting = true; map.once('moveend', () => (fitting = false));
-    map.easeTo({ ...to, duration, easing: spring });
-  }
+  let side: HTMLDivElement; // the top row: the plan rests below where it starts
+  const { W, H, scale, cam, uvAt, within, follow, head, homeK, middle, out, halt, reset, easeFit, grab, rest } = camera({
+    map: () => map, fr: () => fr, ver: () => ver, stage: () => stage, side: () => side, plan: () => plan, first: () => first, fingers: () => fingers,
+  });
 
   // ---- what MapLibre draws: the floor's tiles, the 2023 plan's original over its redraw when asked, the labels ----
   // (the builders are mapLayers.ts; these read the map's version, frame and look now)
@@ -287,7 +235,7 @@
   }
   function down(e: PointerEvent) {
     menu = false; clearTimeout(glideT); touched++; framed = null; // a finger first: the glide gives way
-    if (fitting && e.isPrimary) { fitting = false; map.jumpTo(middle(Math.min(scale(), homeK()))); } else halt();
+    grab(e.isPrimary);
     clearTimeout(holdT); held = false;
     // the first finger of a new touch: any finger still counted is stale (iOS sends no up for one held while the flaw's
     // sheet opened over it, so every later press read as a second finger and never held)
