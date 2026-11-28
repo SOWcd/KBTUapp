@@ -27,7 +27,7 @@ vi.mock('./session.svelte', () => ({
   asStudent: (action: () => void, ...again: unknown[]) => { h.log.push(['asStudent', ...again]); action(); },
 }));
 // open's tap time (its 5th argument, for the counters) is left out: only what opens matters here
-vi.mock('./ui.svelte', () => ({ ui: h.ui, say: h.rec('say'), open: (...a: unknown[]) => h.rec('open')(...a.slice(0, 4)) }));
+vi.mock('./ui.svelte', () => ({ ui: h.ui, coming: { n: 0 }, say: h.rec('say'), open: (...a: unknown[]) => h.rec('open')(...a.slice(0, 4)) }));
 vi.mock('./subjects.svelte', () => ({ loadSubjects: () => Promise.resolve() }));
 vi.mock('./channel.svelte', () => ({ channel: h.channel }));
 vi.mock('./data.svelte', () => ({

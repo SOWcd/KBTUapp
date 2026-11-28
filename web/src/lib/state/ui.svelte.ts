@@ -94,9 +94,12 @@ export function hideChrome(): () => void {
   };
 }
 
+/** sheets whose chunk is still on its way (openers.ts lazy). A moment waits for them as for an open sheet: its own
+ *  lazy() made the one still loading (a deep link's: the game room from a scanned QR) never open */
+export const coming = { n: 0 };
 /** A moment nobody tapped for (the computer sheet, a roster sheet, an award): it opens only once nothing is open and
  *  the policy's gate is down, 600 ms after the last one (lib/moments.ts). A tap or a deep link opens at once. */
-export const moment = queue(() => ui.gate || overlays.some((o) => !o.closing));
+export const moment = queue(() => ui.gate || coming.n > 0 || overlays.some((o) => !o.closing));
 
 /** The screen in front, as the counters name it: the top overlay that has a name, else the tab. */
 export const here = (): Screen => untrack(() => [...overlays].reverse().find((o) => !o.closing && o.stat)?.stat ?? (`tab.${ui.tab}` as const));
