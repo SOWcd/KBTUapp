@@ -5,7 +5,7 @@
 // no console errors, no failed requests, no sideways scroll, no text spilling out of buttons; small tap targets are
 // reported, not failed; a screenshot of each is attached to the test.
 import { test as base, expect, type Page, type TestInfo } from '@playwright/test';
-import { spawn, type ChildProcess } from 'node:child_process';
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -24,6 +24,8 @@ export type Qa = {
   /** with qa.py --ako (test.use({ qaArgs: ['--ako'] })): the applicant pages' paths: a manager's prefilled link, a sent
    *  package, the website's start */
   ako: { link?: string; sent?: string; start?: string };
+  /** run SQL on the server's database (more rows than qa.py seeds) */
+  sql: (script: string) => void;
 };
 
 const freePort = () => new Promise<number>((ok, fail) => {
@@ -62,6 +64,10 @@ async function startQa(now?: number, args: string[] = []): Promise<Qa & { stop: 
   }
   return {
     url, db, stop, ako,
+    sql: (script) => {
+      const r = spawnSync(PYTHON, ['-c', 'import sqlite3, sys; c = sqlite3.connect(sys.argv[1]); c.executescript(sys.stdin.read()); c.commit()', db], { input: script, encoding: 'utf8' });
+      if (r.status) throw new Error(r.stderr);
+    },
     link: (who, { path = '/', ...extra } = {}) => {
       const p = new URLSearchParams(links[who]!.split('#')[1]);
       for (const [k, v] of Object.entries(extra)) p.set(k, v);
@@ -94,6 +100,9 @@ const theme = (info: TestInfo) => (info.project.metadata?.theme as 'dark' | 'lig
 /** a project's fixed clock (Unix seconds; the snapshot projects): the server's and the browser's, so every screen says
  *  the same "in 2 days" on every run */
 const clock = (info: TestInfo) => info.project.metadata?.now as number | undefined;
+/** the `android` project: Telegram for Android's launch (its platform) on a CPU this many times slower (a mid phone) */
+const platform = (info: TestInfo) => info.project.metadata?.platform as string | undefined;
+const cpu = (info: TestInfo) => info.project.metadata?.cpu as number | undefined;
 
 async function openPhone(page: Page, qa: Qa, who: Who, info: TestInfo, faults: Faults, opts: OpenOpts = {}): Promise<Phone> {
   const dark = theme(info) === 'dark';
@@ -107,7 +116,8 @@ async function openPhone(page: Page, qa: Qa, who: Who, info: TestInfo, faults: F
       method: body ? 'POST' : 'GET', headers: { Authorization: `tma ${init}`, 'Content-Type': 'application/json' }, data: body ? JSON.stringify(body) : undefined });
     const me = await (await call('/me')).json() as { unlocked?: { code: string; level: number }[] };
     for (const u of me.unlocked ?? []) expect((await call('/me/unlocked', u)).ok(), `award ${u.code} marked seen`).toBe(true);
-    await page.addInitScript(() => { try { localStorage.setItem('kb-install', '1'); } catch { /* storage blocked */ } });
+    // (and on Android, the Google Play tester sheet: lib/androidTest.ts, already opened its page)
+    await page.addInitScript(() => { try { localStorage.setItem('kb-install', '1'); localStorage.setItem('andr.asked', '1'); localStorage.setItem('andr.went', '1'); } catch { /* storage blocked */ } });
   }
   await page.addInitScript(() => {
     const w = window as unknown as { __tg: { events: [string, unknown][]; back: boolean }; TelegramWebviewProxy: unknown };
@@ -123,6 +133,7 @@ async function openPhone(page: Page, qa: Qa, who: Who, info: TestInfo, faults: F
       },
     };
   });
+  if (cpu(info)) await (await page.context().newCDPSession(page)).send('Emulation.setCPUThrottlingRate', { rate: cpu(info)! });
   if (clock(info)) await page.clock.install({ time: clock(info)! * 1000 }); // runs on from there; a test may fast-forward it
   page.on('console', (m) => { if (m.type() === 'error') faults.errors.push(`console: ${m.text()}`); });
   page.on('pageerror', (e) => faults.errors.push(`page: ${e.message}`));
@@ -134,7 +145,7 @@ async function openPhone(page: Page, qa: Qa, who: Who, info: TestInfo, faults: F
   page.on('response', (r) => { if (r.status() >= 400) faults.failed.push(`${r.request().method()} ${r.url()} ${r.status()}`); });
 
   const themeParams = JSON.stringify(dark ? { bg_color: '#000000', text_color: '#ffffff' } : { bg_color: '#ffffff', text_color: '#000000' });
-  await page.goto(qa.link(who, { tgWebAppThemeParams: themeParams, ...(opts.path ? { path: opts.path } : {}) }));
+  await page.goto(qa.link(who, { tgWebAppThemeParams: themeParams, ...(platform(info) ? { tgWebAppPlatform: platform(info)! } : {}), ...(opts.path ? { path: opts.path } : {}) }));
   await expect(page.locator('html'), 'the theme Telegram passed').toHaveAttribute('data-theme', theme(info));
   const initData = await page.evaluate(() => (window as unknown as { Telegram: { WebApp: { initData: string } } }).Telegram.WebApp.initData);
 
