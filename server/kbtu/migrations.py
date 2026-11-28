@@ -2856,7 +2856,7 @@ MIGRATIONS: list[tuple[int, str]] = [
     # Forum reactions: the app's heart becomes one emoji per student per post (the hearts so far stay hearts; the set is
     # fchannel.REACTIONS, no CHECK: the owner may change it). Polls: a post with 2-6 options, closing days after it
     # went out (closes_at, written once). A vote is two rows that never meet: that I voted (one each), and the option's
-    # count with no account on it (research_participants' way): nobody, the database included, can tell who chose what.
+    # count with no account on it (research_participants' way): no row links a person to a choice (limits: fchannel polls).
     # The forum's weekly digest gets its own switch (n_forum_digest), apart from the DMP memo's.
     (266, """ALTER TABLE fchan_hearts ADD COLUMN emoji TEXT NOT NULL DEFAULT '❤️';
     CREATE TABLE IF NOT EXISTS fchan_polls (  -- IF NOT EXISTS: tests rewind user_version

@@ -136,6 +136,8 @@ def test_digest_counts_only_once_on_friday_after_the_owners_yes(env, monkeypatch
     row = {"kind": "forum_week", "ref": f"fw:{day}", "lang": "en", "payload": got[0][2], "user_id": a}
     text, button, start = outbox._render(con, row)
     assert text == texts.bot_message("en", "forum_week", posts=1, polls=0)[0] and start == "fp" and text.startswith("\U0001f5de")
+    polls_only = outbox._render(con, {**row, "payload": json.dumps({"posts": 0, "polls": 2})})[0]
+    assert polls_only == texts.bot_message("en", "forum_week_only_polls", polls=2)[0]                # no "new posts: 0"
     set_clock(monkeypatch, lambda: friday + 2 * 86400)
     assert outbox._render(con, row) is None                                               # missed its Saturday: never late
     con.close()

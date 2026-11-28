@@ -441,6 +441,7 @@ BOT = {
         # the Forum's week (fchannel.digest_week): counts only, never anyone's words
         "forum_week": ("🗞 Неделя на форуме: новых постов — {posts}.", "Открыть форум"),
         "forum_week_polls": ("🗞 Неделя на форуме: новых постов — {posts}.\n📊 Открытых опросов — {polls}.", "Открыть форум"),
+        "forum_week_only_polls": ("📊 На форуме открытых опросов — {polls}.", "Открыть форум"),
         "fch_reply_gone": ("🗑 Комментарий, на который ты отвечал(а) анонимно, удалён — ответ не отправлен.", "Открыть пост"),
         # my own post: out in the channel, or declined by a moderator (one fixed reason line; to the author alone)
         "fch_posted": ("🙌 Модератор одобрил твой пост: он вышел в канале форума.", "Открыть пост"),
@@ -674,6 +675,7 @@ BOT = {
         "fch_comments": ("💬 Постыңа жаңа пікірлер жазылды.", "Форумды ашу"),
         "forum_week": ("🗞 Форумдағы апта: жаңа посттар — {posts}.", "Форумды ашу"),
         "forum_week_polls": ("🗞 Форумдағы апта: жаңа посттар — {posts}.\n📊 Ашық сауалнамалар — {polls}.", "Форумды ашу"),
+        "forum_week_only_polls": ("📊 Форумдағы ашық сауалнамалар — {polls}.", "Форумды ашу"),
         "fch_reply_gone": ("🗑 Сен анонимді жауап берген пікір өшірілген — жауап жіберілмеді.", "Постты ашу"),
         "fch_posted": ("🙌 Модератор постыңды мақұлдады: ол форум арнасында жарияланды.", "Постты ашу"),
         "fch_declined": ("🚫 Модератор постыңды өткізбеді: ол форум ережелеріне сай емес.", "Форумды ашу"),
@@ -905,6 +907,7 @@ BOT = {
         "fch_comments": ("💬 There are new comments on your post.", "Open forum"),
         "forum_week": ("🗞 The week in the Forum: new posts: {posts}.", "Open forum"),
         "forum_week_polls": ("🗞 The week in the Forum: new posts: {posts}.\n📊 Open polls: {polls}.", "Open forum"),
+        "forum_week_only_polls": ("📊 Open polls in the Forum: {polls}.", "Open forum"),
         "fch_reply_gone": ("🗑 The comment you replied to anonymously was deleted, so the reply wasn't sent.", "Open the post"),
         "fch_posted": ("🙌 A moderator approved your post: it is out in the forum channel.", "Open the post"),
         "fch_declined": ("🚫 A moderator didn't let your post through: it doesn't fit the forum's rules.", "Open the forum"),

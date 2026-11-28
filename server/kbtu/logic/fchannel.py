@@ -404,8 +404,12 @@ def set_heart(con, v: Viewer, pid: int, picked: bool) -> dict:
 # options at once; its noise or ad refuses (no appeal: a moderator looks at every poll anyway); anything else waits for a
 # moderator (owner, Nov 12). Out in the channel as the question, the options as lines, the signature; open for its
 # days from then (closes_at, written once: a restore or a republish never reopens it). A vote is final and leaves two
-# rows that never meet (migration 263): I voted, and the option's count. The bars show to those who voted once
+# rows with no key between them (migration 266): I voted, and the option's count. The bars show to those who voted once
 # POLL_SHOWN have, and to everyone once it closes; the author like anyone else. Not editable (votes would change meaning).
+# ponytail: both rows land in one commit, so two reads of the database (two nightly backups, a watcher re-reading
+# prod) around a lone vote can pair them; and deleting an account drops its "I voted" while the count stays, so one
+# person who deletes and verifies again votes twice. Fine for forum polls; if a poll ever decides something, delay
+# the count's write (random, hourly) and keep a keyed hash of the Microsoft identity until the poll closes.
 POLL_DAYS = (1, 3, 7)
 POLL_OPTIONS = (2, 6)
 OPTION_MAX = 80
@@ -1454,12 +1458,14 @@ def digest_week(con) -> None:
     day = local // 86400
     if (day + 3) % 7 != DIGEST_DAY or local % 86400 < DIGEST_HOUR * 3600:
         return
-    if not one(con, "SELECT 1 FROM meta WHERE key = ? AND value = 'on'", DIGEST) or not core._once(con, "forum_week", str(day)):
+    if not one(con, "SELECT 1 FROM meta WHERE key = ? AND value = 'on'", DIGEST):
         return
-    counts = digest_counts(con)
-    if not counts["posts"] and not counts["polls"]:
-        return
-    with tx(con):
+    with tx(con):  # the week's mark and its cards commit together: a failed queue retries on the next round
+        if not core._once(con, "forum_week", str(day)):
+            return
+        counts = digest_counts(con)
+        if not counts["posts"] and not counts["polls"]:
+            return
         con.execute("""INSERT OR IGNORE INTO bot_outbox (user_id, kind, ref, payload, send_after)
             SELECT u.id, 'forum_week', ?, ?, ? FROM users u JOIN students s ON s.user_id = u.id
             WHERE s.manual = 0 AND u.n_forum_digest = 1 AND u.can_dm = 1 AND u.banned_at IS NULL AND u.tg_id > 0
@@ -1473,7 +1479,8 @@ def digest_render(lang: str, ref: str, payload: str) -> tuple[str, str | None, s
     if when.isdigit() and (core.now() + core.TZ) // 86400 > int(when) + 1:
         return None
     n = json.loads(payload or "{}")
-    return (*texts.bot_message(lang, "forum_week_polls" if n.get("polls") else "forum_week", posts=n.get("posts", 0), polls=n.get("polls", 0)), "fp")
+    key = ("forum_week_polls" if n.get("posts") else "forum_week_only_polls") if n.get("polls") else "forum_week"
+    return (*texts.bot_message(lang, key, posts=n.get("posts", 0), polls=n.get("polls", 0)), "fp")
 
 
 def digest_preview(con, uid: int) -> None:
