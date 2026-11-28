@@ -48,8 +48,8 @@
   import { campusPoint, roomOf, floorOf, nearRooms, spotOf } from '../../lib/map';
   import { campusPlace } from '../../lib/campusPlace';
   import { FRAMES, HAS, widthAt, overview, roomAt, labelsOf, labelData, type Ver } from '../../lib/mapgl';
-  import { Map as GLMap, type MapMouseEvent, type StyleSpecification, type GeoJSONSource } from 'maplibre-gl';
-  import { inkOf, planSource as planSourceOf, planLayer as planLayerOf, wordLayers, pinData as pinDataOf, pinLayer, styleSync } from './mapLayers';
+  import type { Map as GLMap, MapMouseEvent, GeoJSONSource } from 'maplibre-gl';
+  import { pinData as pinDataOf, styleSync, makeMap } from './mapLayers';
   import 'maplibre-gl/dist/maplibre-gl.css';
   import uniqRooms from '../../assets/map/uniq-rooms.json';
   import { UNITS, toPlan, fromPlan } from './planUnits';
@@ -140,9 +140,6 @@
 
   // ---- what MapLibre draws: the floor's tiles, the 2023 plan's original over its redraw when asked, the labels ----
   // (the builders are mapLayers.ts; these read the map's version, frame and look now)
-  const ink = () => inkOf(ver, look === 'dark');
-  const planSource = () => planSourceOf(fr, ver, look === 'dark', cur);
-  const planLayer = () => planLayerOf(ink());
   let orig = $state(false); // the 2023 plan as it was given, over our redraw
   // the room looked for is the first to get its place among the labels: its ring is never round nothing
   const words = () => labelData(fr, orig && ver === 'old' ? [] : labelsOf(ver, cur, look === 'dark', (k) => t(`kmap.${k}` as 'kmap.canteen'), room ?? ''));
@@ -365,19 +362,8 @@
   onMount(() => {
     const dark = look === 'dark';
     layers.seed({ ver, cur, dark, wk: wordsNow() });
-    map = new GLMap({
-      container: gl, ...middle(), attributionControl: false, renderWorldCopies: false, fadeDuration: 250,
-      dragRotate: false, pitchWithRotate: false, touchPitch: false, keyboard: false, boxZoom: false, doubleClickZoom: false,
-      pixelRatio: Math.min(3, devicePixelRatio || 1), transformConstrain: within,
-      style: { version: 8, sources: { plan: planSource(), words: { type: 'geojson', data: words() }, pins: { type: 'geojson', data: pinData() } }, layers: [planLayer(), ...wordLayers(fr, ver), pinLayer] } as StyleSpecification,
-    });
-    map.touchZoomRotate.disableRotation();
+    map = makeMap({ container: gl, view: middle(), constrain: within, fr, ver, dark, cur, words: words(), pins: pinData() });
     map.getCanvasContainer().append(plan); // over the canvas, inside what MapLibre listens on
-    // a label's plate (Uni-Q's numbers cover the tiny printed ones): one flat square, coloured and stretched by the layer
-    map.once('style.load', () => {
-      map.addImage('plate', { width: 4, height: 4, data: new Uint8Array(64).fill(255) }, { sdf: true });
-      map.addImage('pin', { width: 24, height: 24, data: new Uint8Array(24 * 24 * 4) }); // a pin's place, drawn by the overlay
-    });
     map.on('move', follow); map.on('resize', follow);
     map.on('moveend', (e) => { if ((e as { originalEvent?: Event }).originalEvent) rest(); });
     map.on('click', tap);

@@ -1,7 +1,7 @@
 // What MapLibre draws for the campus map (CampusMap.svelte): the floor's tiles, the labels, the pins' places. Plain
 // builders of MapLibre's sources, layers and paint, from the map's version, frame and look; CampusMap gives them to
 // the map and gives them again when one of those changes.
-import type { GeoJSONSource, ImageSource, LayerSpecification, Map as GLMap, SourceSpecification } from 'maplibre-gl';
+import { Map as GLMap, type GeoJSONSource, type ImageSource, type LayerSpecification, type LngLat, type SourceSpecification, type StyleSpecification } from 'maplibre-gl';
 import { FRAMES, Z0, LEVELS, SCAN_AT, lngLat, scan, zoomFor, widthAt, tilesOf, tileSize, type Frame, type Ver } from '../../lib/mapgl';
 
 export type RasterPaint = 'raster-brightness-min' | 'raster-brightness-max' | 'raster-hue-rotate';
@@ -102,4 +102,25 @@ export function styleSync(map: () => GLMap, gone: () => boolean) {
     if (m.getLayer('scan')) inked('scan');
   }
   return { seed, sync, stop: () => clearTimeout(scanT) };
+}
+
+/** the map itself, made from the state it opens in: MapLibre with only what the campus map uses (no rotation, pitch,
+ *  keyboard or box zoom; the double tap is ours), the plan, the labels and the pins' places as its style */
+export function makeMap(o: {
+  container: HTMLElement; view: { center: LngLat | [number, number]; zoom: number }; constrain: (at: LngLat, zoom: number) => { center: LngLat; zoom: number };
+  fr: Frame; ver: Ver; dark: boolean; cur: number; words: Parameters<GeoJSONSource['setData']>[0]; pins: ReturnType<typeof pinData>;
+}): GLMap {
+  const map = new GLMap({
+    container: o.container, ...o.view, attributionControl: false, renderWorldCopies: false, fadeDuration: 250,
+    dragRotate: false, pitchWithRotate: false, touchPitch: false, keyboard: false, boxZoom: false, doubleClickZoom: false,
+    pixelRatio: Math.min(3, devicePixelRatio || 1), transformConstrain: o.constrain,
+    style: { version: 8, sources: { plan: planSource(o.fr, o.ver, o.dark, o.cur), words: { type: 'geojson', data: o.words }, pins: { type: 'geojson', data: o.pins } }, layers: [planLayer(inkOf(o.ver, o.dark)), ...wordLayers(o.fr, o.ver), pinLayer] } as StyleSpecification,
+  });
+  map.touchZoomRotate.disableRotation();
+  // a label's plate (Uni-Q's numbers cover the tiny printed ones): one flat square, coloured and stretched by the layer
+  map.once('style.load', () => {
+    map.addImage('plate', { width: 4, height: 4, data: new Uint8Array(64).fill(255) }, { sdf: true });
+    map.addImage('pin', { width: 24, height: 24, data: new Uint8Array(24 * 24 * 4) }); // a pin's place, drawn by the overlay
+  });
+  return map;
 }
