@@ -96,11 +96,11 @@
   "legacy": 4
  },
  "screens/map/CampusMap.svelte": {
-  "font": 8,
-  "radius": 10,
-  "hex": 13,
+  "font": 4,
+  "radius": 6,
+  "hex": 8,
   "mix": 0,
-  "weight": 5,
+  "weight": 3,
   "legacy": 0
  },
  "screens/map/MapMarks.svelte": {
@@ -117,6 +117,14 @@
   "hex": 21,
   "mix": 4,
   "weight": 8,
+  "legacy": 0
+ },
+ "screens/map/RoomCard.svelte": {
+  "font": 4,
+  "radius": 4,
+  "hex": 5,
+  "mix": 0,
+  "weight": 2,
   "legacy": 0
  },
  "screens/map/RouteUI.svelte": {
