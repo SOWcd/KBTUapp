@@ -11,10 +11,11 @@ test('a round of Spy: a room, three players, the role, the vote, the reveal, one
   await page.getByRole('navigation', { name: ru['nav.label'] }).getByRole('button', { name: ru['tab.profile'], exact: true }).click();
   await page.getByRole('button', { name: ru['games.title'], exact: true }).click();
   const sheet = page.getByRole('dialog').filter({ has: page.locator('.home, .phase') });
-  await sheet.locator('.home .btn').click();
+  await sheet.locator('.home .btn.k-primary').click();
   const code = (await sheet.locator('.digits').innerText()).replace(/\D/g, '');
   expect(code).toMatch(/^\d{4}$/);
-  await expect(sheet.locator('.go .btn.full')).toBeDisabled(); // alone: no Start yet
+  const main = sheet.locator('.foot .island .btn'); // the island's one action: Start, Confirm, One more round
+  await expect(main).toHaveCount(0); // alone: no Start yet
   await dana.look('spy lobby');
 
   // the other two, as their phones would call
@@ -32,7 +33,7 @@ test('a round of Spy: a room, three players, the role, the vote, the reveal, one
   };
   for (const c of others) await act(c, () => null);
 
-  await sheet.locator('.go .btn.full').click(); // Start, once her phone has seen the three
+  await main.click(); // Start, once her phone has seen the three
   const secret = sheet.locator('.env');
   await expect(secret).toBeVisible();
   const box = (await secret.boundingBox())!;
@@ -43,21 +44,23 @@ test('a round of Spy: a room, three players, the role, the vote, the reveal, one
   await page.mouse.up();
   await expect(secret.locator('.big')).toHaveCount(0);
 
-  await sheet.locator('.skip').click(); // the host: to the vote, asked first (the app's Ask, either of its shapes)
-  await page.locator('.act.yes, .row.btns .btn:last-child').click();
+  await sheet.locator('.foot .dock.mid .btn').click(); // her call for the vote, and one more: two of three end the talk
+  await act(others[0], () => ({ type: 'vote_now' }));
   await expect(sheet.locator('.cand')).toHaveCount(2);
   await sheet.locator('.cand').first().click();
   await expect(sheet.locator('.cand').first()).toHaveAttribute('aria-pressed', 'true');
   await dana.look('spy vote');
+  await main.click(); // Confirm: her pick is final
+  await expect(main).toHaveCount(0);
   await expect(sheet.locator('.sum span')).toContainText('1'); // her vote is in before the others' end the vote
-  // each of the others votes for Dana; whoever the spy is, the round then ends in a guess or at once
-  for (const c of others) await act(c, (r) => ({ type: 'vote', target: r.players[0].id }));
+  // each of the others votes for Dana and confirms; whoever the spy is, the round then ends in a guess or at once
+  for (const c of others) { await act(c, (r) => ({ type: 'vote', target: r.players[0].id })); await act(c, () => ({ type: 'confirm' })); }
   for (const c of others) await act(c, (r) => (r.phase === 'guess' && r.role === 'spy' ? { type: 'guess', location: 'library' } : null));
   const mine = await dana.api<Room>('/api/rooms/join', { code });
   if (mine.phase === 'guess') await dana.api(`/api/rooms/${mine.id}`, { id: crypto.randomUUID(), v: mine.v, type: 'guess', location: 'library' });
   await expect(sheet.locator('header.end')).toBeVisible();
   await dana.look('spy reveal');
-  await sheet.locator('.foot .btn').first().click(); // the host (Leave beside it): one more round, in the same room
+  await main.click(); // the host (Leave beside it): one more round, in the same room
   await expect(sheet.locator('.digits')).toHaveText(code.split('').join(''));
   await expect(sheet.locator('.seats li')).toHaveCount(3);
 });

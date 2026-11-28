@@ -137,9 +137,6 @@
   "backdrop": 2,
   "rawColor": 1
  },
- "screens/games/Spy.svelte": {
-  "rawColor": 1
- },
  "screens/lab/Lab.svelte": {
   "font": 0,
   "radius": 0,

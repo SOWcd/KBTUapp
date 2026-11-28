@@ -996,13 +996,14 @@ export interface Room {
   phase: 'lobby' | 'play' | 'vote' | 'guess' | 'reveal'; minutes: number; deadline: Ts | null;
   role?: 'spy' | 'local'; first?: Id;   // from the start: mine, and who asks the first question
   location?: string;                    // a local's place (never the spy's before the reveal); everyone's at the reveal
-  voted?: Id[]; myVote?: Id | null;     // the vote: who has voted, and for whom I did
+  calls?: Id[];                         // the talk: who has called the vote (more than half of the players start it)
+  voted?: Id[]; myVote?: Id | null;     // the vote: who has confirmed theirs, and my pick (changeable until I confirm)
   accused?: Id;                         // the caught spy, naming the place
   result?: { spy: Id; accused: Id | null; guess: string | null; winner: 'spy' | 'locals'; why: 'guessed' | 'wrong_guess' | 'missed' | 'no_guess'; votes: { from: Id; to: Id }[] };
 }
-/** a move: start {minutes}, vote_now (the host), vote {target}, guess {location} (the spy), leave (the lobby only),
+/** a move: start {minutes}, vote_now (any player's call for the vote), vote {target} (a pick), confirm (it is final), guess {location} (the spy), leave (the lobby only),
  *  again (the host, at the reveal: one more round in the same room, back to its lobby) */
-export type RoomMove = { type: 'start'; minutes: number } | { type: 'vote_now' } | { type: 'vote'; target: Id } | { type: 'guess'; location: string } | { type: 'leave' } | { type: 'again' };
+export type RoomMove = { type: 'start'; minutes: number } | { type: 'vote_now' } | { type: 'vote'; target: Id } | { type: 'confirm' } | { type: 'guess'; location: string } | { type: 'leave' } | { type: 'again' };
 
 /** Native surveys; answer content and identities are never returned to the student list. */
 export interface ResearchQuestion {

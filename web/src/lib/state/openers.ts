@@ -16,7 +16,7 @@ import { data, eventDetails, keepRef, loadAfisha, loadMyCard, loadResearch, load
 import { asStudent, loadMe, runningCheckin, session } from './session.svelte';
 import { sheets, type InviteLanding, type SheetKey } from './sheets';
 import { loadSubjects } from './subjects.svelte';
-import { close, open, overlays, say, ui } from './ui.svelte';
+import { close, coming, open, overlays, say, ui } from './ui.svelte';
 
 // A sheet in its own chunk needs the network the first time: offline, taps used to queue and all open on top of each
 // other once it was back. Now only the latest tap opens, and after 2 s the app says there's no network.
@@ -29,7 +29,8 @@ export function lazy<P extends Record<string, unknown>>(load: () => Promise<{ de
   const mine = ++want, got = loaded.get(load), at = performance.now();
   if (got) { open(got.default, props, stat, key, at); return Promise.resolve(); }
   const slow = setTimeout(() => { if (mine === want) say(t('common.offline'), 'pleading_face_3d'); }, 2000);
-  return load().then((m) => { clearTimeout(slow); loaded.set(load, m); if (mine === want && !session.revoked && !session.banned) open(m.default, props, stat, key, at); }).catch(() => { clearTimeout(slow); if (mine === want) say(t('common.offline'), 'pleading_face_3d'); });
+  coming.n++;
+  return load().then((m) => { clearTimeout(slow); loaded.set(load, m); if (mine === want && !session.revoked && !session.banned) open(m.default, props, stat, key, at); }).catch(() => { clearTimeout(slow); if (mine === want) say(t('common.offline'), 'pleading_face_3d'); }).finally(() => { coming.n--; });
 }
 // One full-screen place at a time (owner): the map, the gallery, the feed, all posts. Opening one over another closes
 // that one and whatever was opened over it, so closing the new one lands where the first was opened from.

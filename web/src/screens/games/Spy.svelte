@@ -7,11 +7,13 @@
   // The look: the app's orb holds the game's mark; a room's code is four tiles, the same ones a guest types into; the
   // role is a sealed envelope that opens only while a finger holds it, and nothing on a phone tells the spy's from a
   // local's at a glance: the open letter looks the same for both, and every phone's places answer a tap the same way
-  // (the question "name it?"; only the spy's yes is a move).
+  // (the question "name it?"; only the spy's yes is a move). Actions float over the content as glass islands (Sheet's
+  // footer): Leave a small capsule, the main one in its island. Once a round runs all players are equal: any of them
+  // calls the vote (more than half start it), and a vote is a pick until its player confirms it.
   import { onDestroy, onMount } from 'svelte';
   import HatGlasses from '@lucide/svelte/icons/hat-glasses';
   import ArrowRight from '@lucide/svelte/icons/arrow-right';
-  import ChevronRight from '@lucide/svelte/icons/chevron-right';
+  import ScanLine from '@lucide/svelte/icons/scan-line';
   import Crown from '@lucide/svelte/icons/crown';
   import Send from '@lucide/svelte/icons/send';
   import Minus from '@lucide/svelte/icons/minus';
@@ -24,7 +26,8 @@
   import { t } from '../../lib/i18n/index.svelte';
   import { gw, type GameKey } from '../../lib/i18n/games';
   import { SPY_ART, SPY_LOCATIONS, roomLink, type SpyLocation } from '../../lib/games/spy';
-  import { haptic, tgShare } from '../../lib/tg';
+  import { haptic, inTelegram, onComputer, scanQr, tgShare } from '../../lib/tg';
+  import { inApp } from '../../lib/native';
   import { say, type Overlay } from '../../lib/state/ui.svelte';
   import { sheets } from '../../lib/state/sheets';
   import Sheet from '../../ui/Sheet.svelte';
@@ -38,6 +41,7 @@
   let room = $state<Room | null>(null);
   let typed = $state(''), minutes = $state(5), shown = $state(false), busy = $state<'create' | 'join' | null>(null), err = $state('');
   let pick = $state<Id | null>(null); // my vote from the tap, until the server's room says it
+  let sure = $state(false), called = $state(false); // my confirm and my call for the vote, from the tap likewise
   let skew = 0, clock = $state(Date.now() / 1000), timer: ReturnType<typeof setTimeout> | undefined, alive = true;
 
   const place = (id: string) => gw(`spy.loc.${id}` as GameKey);
@@ -56,7 +60,7 @@
 
   function take(r: Room) {
     if (room && r.id === room.id && r.v < room.v) return; // an answer overtaken by a newer one
-    if (r.phase !== room?.phase) { shown = false; pick = null; }
+    if (r.phase !== room?.phase) { shown = false; pick = null; sure = called = false; }
     room = r; skew = r.now - Date.now() / 1000;
     keep(r.id); // through the reveal too: the host may start one more round in it
   }
@@ -86,13 +90,14 @@
     const id = Math.random().toString(36).slice(2) + Date.now().toString(36);
     try {
       let a = await api.roomMove(room.id, room.v, m, id);
-      if (!a.applied && a.room) { take(a.room); a = await api.roomMove(a.room.id, a.room.v, m, id); }
+      // (a few times: in a vote every phone moves the room twice within the same minute)
+      for (let i = 0; i < 4 && !a.applied && a.room; i++) { take(a.room); a = await api.roomMove(a.room.id, a.room.v, m, id); }
       if (m.type === 'leave') { forget(); return; }
       if (a.room) take(a.room);
       schedule();
     } catch (e) {
       if (m.type === 'leave' && e instanceof ApiErr && e.code === 'not_found') { forget(); return; } // a double tap: already out
-      pick = null; haptic.error(); say(why(e), 'pleading_face_3d');
+      pick = null; sure = called = false; haptic.error(); say(why(e), 'pleading_face_3d');
     }
   }
   function type(e: Event & { currentTarget: HTMLInputElement }) {
@@ -106,11 +111,19 @@
     if (!(await sheets.ask({ title: gw('spy.guessAsk', { place: place(l) }), text: gw('spy.guessAskText'), ok: gw('spy.guess'), cancel: t('common.cancel') }))) return;
     if (room?.role === 'spy') void move({ type: 'guess', location: l }); else say(gw('spy.onlySpy'), 'thinking_face_3d');
   }
-  // the host's way to the vote ends everyone's discussion: asked first
-  async function voteNow() {
-    if (await sheets.ask({ title: gw('spy.voteAsk'), text: gw('spy.voteAskText'), ok: gw('spy.voteNow'), cancel: t('common.cancel') })) void move({ type: 'vote_now' });
-  }
-  function vote(id: Id) { pick = id; haptic.select(); void move({ type: 'vote', target: id }); }
+  // a phone's own scanner (Telegram's or the iPhone app's), for a friend already in the app: the room's QR, or its
+  // code alone; anything else is not ours and the scanner keeps looking
+  const canScan = (inTelegram && !onComputer) || inApp;
+  const scan = () => scanQr(gw('spy.scanQr'), (text) => {
+    const c = text.trim().match(/(?:[?&]startapp=g_|^)(\d{4})$/)?.[1];
+    if (c) { typed = c; void enter(api.roomJoin(c), 'join'); }
+    return !!c;
+  });
+  // anyone's call for the vote: more than half of the players end the talk (server spy.py), so one tap ends nothing alone
+  function callVote() { if (called || room?.calls?.includes(room.me)) return; called = true; haptic.select(); void move({ type: 'vote_now' }); }
+  const mySure = $derived(sure || !!room?.voted?.includes(room.me));
+  function vote(id: Id) { if (mySure) return; pick = id; haptic.select(); void move({ type: 'vote', target: id }); }
+  function confirm() { sure = true; haptic.ok(); void move({ type: 'confirm' }); }
   const hold = (on: boolean) => { if (on !== shown) { shown = on; if (on) haptic.soft(); } };
 
   onMount(() => {
@@ -211,6 +224,7 @@
         {#each [0, 1, 2, 3] as i (i)}<span class="tile num" class:at={i === typed.length} style:--i={i}>{typed[i] ?? ''}</span>{/each}
       </label>
       <p class="err" role="alert">{err}</p>
+      {#if canScan}<Button kind="secondary" full disabled={!!busy} onclick={scan}>{#snippet icon()}<ScanLine size={18} />{/snippet}{gw('spy.scanQr')}</Button>{/if}
     </div>
   {:else}
     {@const r = room}
@@ -238,11 +252,20 @@
               {#each { length: Math.max(0, 3 - r.players.length) } as _, i (i)}<li class="free"><i class="seat" title={gw('spy.seat')}></i><b>…</b></li>{/each}
             </ul>
           </section>
+          <!-- how long to talk: the host's, set here, above the island that starts the talk -->
+          {#if r.me === r.host}
+            <div class="mins card">
+              <b>{gw('spy.minutes')}</b>
+              <span class="step" role="group" aria-label={gw('spy.minutes')}>
+                <Button kind="gray" size="s" round label={gw('spy.less')} disabled={minutes <= 1} onclick={() => minutes--}>{#snippet icon()}<Minus size={18} />{/snippet}</Button>
+                <b class="num" aria-live="polite">{gw('spy.min', { n: minutes })}</b>
+                <Button kind="gray" size="s" round label={gw('spy.more')} disabled={minutes >= 15} onclick={() => minutes++}>{#snippet icon()}<Plus size={18} />{/snippet}</Button>
+              </span>
+            </div>
+          {/if}
         {:else if r.phase === 'play'}
           {@const first = who(r.first)}
           {@render time(gw('spy.minutes'))}
-          <!-- the host's way on: small, at the top, away from the thumb, and asked before it goes -->
-          {#if r.me === r.host}<button class="skip" onclick={voteNow}>{gw('spy.voteNow')}<ChevronRight size={15} /></button>{/if}
           {@render secret(r)}
           {#if first}<p class="first"><Avatar person={first} size={24} tappable={false} /><span>{gw('spy.first', { name: first.name })}</span></p>{/if}
           {@render places(true)}
@@ -252,13 +275,13 @@
           <section class="ballot">
             <p class="hint rule">{gw('spy.voteHint')}</p>
             {#each r.players.filter((p) => p.id !== r.me) as p (p.id)}
-              <button class="cand" class:on={mine === p.id} aria-pressed={mine === p.id} data-nohaptic onclick={() => vote(p.id)}>
+              <button class="cand" class:on={mine === p.id} aria-pressed={mine === p.id} disabled={mySure} data-nohaptic onclick={() => vote(p.id)}>
                 <Avatar person={p} size={44} tappable={false} />
                 <span class="cw"><b>{p.name}</b>{#if r.voted?.includes(p.id)}<span class="did"><Check size={14} strokeWidth={3} />{gw('spy.hasVoted')}</span>{/if}</span>
                 <i class="radio"><Check size={15} strokeWidth={3} /></i>
               </button>
             {/each}
-            <p class="sum"><b>{mine != null ? gw('spy.myVote', { name: nameOf(mine) }) : ''}</b><span>{gw('spy.voted', { n: r.voted?.length ?? 0, total: r.players.length })}</span></p>
+            <p class="sum"><b>{mine != null ? gw(mySure ? 'spy.confirmed' : 'spy.myVote', { name: nameOf(mine) }) : ''}</b><span>{gw('spy.voted', { n: r.voted?.length ?? 0, total: r.players.length })}</span></p>
           </section>
           {@render secret(r, true)}
         {:else if r.phase === 'guess'}
@@ -289,32 +312,43 @@
       </div>
     {/key}
   {/if}
+  <!-- the actions: islands over the content. Leaving is its own small capsule, beside the island with the one main
+       action (or the word on whom everyone waits) -->
   {#snippet footer()}
     {#if room?.phase === 'lobby'}
       {@const n = room.players.length}
-      <div class="ft">
-        {#if room.me !== room.host}
-          <p class="note">{gw('spy.waitHost')}<span class="dots" aria-hidden="true"><i></i><i></i><i></i></span></p>
-        {:else}
-          {#if n < 3 || n > 12}<p class="note">{gw('spy.needMore')}</p>{/if}
-          <!-- how long to talk, beside the button that starts the talk -->
-          <div class="go">
-            <span class="step" role="group" aria-label={gw('spy.minutes')}>
-              <Button kind="gray" size="s" round label={gw('spy.less')} disabled={minutes <= 1} onclick={() => minutes--}>{#snippet icon()}<Minus size={18} />{/snippet}</Button>
-              <b class="num" aria-live="polite">{gw('spy.min', { n: minutes })}</b>
-              <Button kind="gray" size="s" round label={gw('spy.more')} disabled={minutes >= 15} onclick={() => minutes++}>{#snippet icon()}<Plus size={18} />{/snippet}</Button>
-            </span>
-            <Button size="l" full lit disabled={n < 3 || n > 12} onclick={() => move({ type: 'start', minutes })}>{gw('spy.start')}</Button>
-          </div>
-        {/if}
-        <Button kind="plain" destructive full onclick={() => move({ type: 'leave' })}>{gw('spy.leave')}</Button>
+      <div class="dock">
+        <Button kind="glass" size="l" onclick={() => move({ type: 'leave' })}>{gw('spy.leave')}</Button>
+        <div class="island glass glass-pill">
+          {#if room.me !== room.host}
+            <p class="note">{gw('spy.waitHost')}<span class="dots" aria-hidden="true"><i></i><i></i><i></i></span></p>
+          {:else if n < 3 || n > 12}
+            <p class="note">{gw('spy.needMore')}</p>
+          {:else}
+            <Button size="l" full lit onclick={() => move({ type: 'start', minutes })}>{gw('spy.start')}</Button>
+          {/if}
+        </div>
       </div>
+    {:else if room?.phase === 'play'}
+      {@const mine = called || !!room.calls?.includes(room.me)}
+      {@const label = gw('spy.callN', { n: Math.max(room.calls?.length ?? 0, mine ? 1 : 0), need: Math.floor(room.players.length / 2) + 1 })}
+      <!-- (glass either way: Button's `on` look has no blur, and this one floats over the places) -->
+      <div class="dock mid">
+        {#if mine}<Button kind="glass" size="l" onclick={callVote}>{#snippet icon()}<Check size={18} strokeWidth={2.6} />{/snippet}{label}</Button>
+        {:else}<Button kind="glass" size="l" onclick={callVote}>{label}</Button>{/if}
+      </div>
+    {:else if room?.phase === 'vote'}
+      {#if !mySure}
+        <div class="dock"><div class="island glass glass-pill"><Button size="l" full lit disabled={(pick ?? room.myVote) == null} onclick={confirm}>{gw('spy.confirm')}</Button></div></div>
+      {/if}
     {:else if room?.phase === 'reveal'}
       <!-- one more round in the same room, everyone still in it: the host's -->
-      <div class="ft">
-        {#if room.me === room.host}<Button size="l" full lit onclick={() => move({ type: 'again' })}>{gw('spy.again')}</Button>
-        {:else}<p class="note">{gw('spy.waitAgain')}</p>{/if}
-        <Button kind="plain" destructive full onclick={forget}>{gw('spy.leave')}</Button>
+      <div class="dock">
+        <Button kind="glass" size="l" onclick={forget}>{gw('spy.leave')}</Button>
+        <div class="island glass glass-pill">
+          {#if room.me === room.host}<Button size="l" full lit onclick={() => move({ type: 'again' })}>{gw('spy.again')}</Button>
+          {:else}<p class="note">{gw('spy.waitAgain')}</p>{/if}
+        </div>
       </div>
     {/if}
   {/snippet}
@@ -359,7 +393,7 @@
     background: radial-gradient(90% 60% at 50% 0%, var(--accent-soft), transparent 70%), var(--surface); box-shadow: var(--card-rim); text-align: center; }
   .owner { display: flex; align-items: center; gap: var(--s-2); font: 600 var(--fs-body)/1.2 var(--font-text); }
   /* a white plate in both themes: a camera reads dark on white */
-  .plate { width: 168px; padding: var(--s-3); border-radius: var(--r-l); background: white; box-shadow: var(--shadow-thumb); }
+  .plate { width: 208px; padding: var(--s-3); border-radius: var(--r-l); background: white; box-shadow: var(--shadow-thumb); }
   .qm { display: grid; place-items: center; width: 100%; height: 100%; border-radius: var(--r-xs); background: var(--ink); color: white; }
 
   /* the players around the table: faces, the host's with a crown, mine ringed */
@@ -368,18 +402,23 @@
   .seats li { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; animation: pop var(--t-slow) var(--ease-bounce) both; }
   .seats b { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 var(--fs-sub)/1.2 var(--font-text); }
   .face { position: relative; display: inline-flex; border-radius: var(--r-full); }
-  .me .face { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent); }
+  .me .face { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--text); }
   .crown { position: absolute; right: -4px; top: -4px; display: grid; place-items: center; width: 22px; height: 22px; border-radius: var(--r-full);
     background: var(--gold); color: var(--ink); box-shadow: 0 0 0 2px var(--bg); }
   .seat { width: 52px; height: 52px; border-radius: var(--r-full); border: 1.5px dashed var(--text-3); animation: wait 1.2s var(--ease) infinite alternate; }
   .free b { color: var(--text-3); }
 
-  .ft { display: flex; flex-direction: column; gap: var(--s-2); }
-  .go { display: flex; align-items: center; gap: var(--s-3); }
-  .go :global(.btn.full) { flex: 1 1 0; width: auto; min-width: 0; }
+  .mins { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); min-height: var(--row-dense); padding: var(--s-2) var(--s-3) var(--s-2) var(--s-4); }
+  .mins > b { font: 600 var(--fs-body)/1.2 var(--font-text); }
   .step { flex: none; display: inline-flex; align-items: center; gap: var(--s-1); }
   .step b { min-width: 3.6em; text-align: center; font: 600 var(--fs-body)/1 var(--font-text); }
-  .note { display: flex; justify-content: center; align-items: baseline; gap: 3px; font: 450 var(--fs-sub)/1.4 var(--font-text); color: var(--text-3); text-align: center; }
+  /* the floating actions: a capsule and an island side by side, or one capsule in the middle */
+  .dock { display: flex; align-items: center; gap: var(--s-2); }
+  .dock.mid { width: fit-content; margin: 0 auto; } /* no wider than its capsule: the places beside it stay tappable */
+  .dock .island { flex: 1; min-width: 0; }
+  .dock > :global(.btn) { flex: none; }
+  .note { display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline; align-content: center; gap: 3px; min-height: var(--ctl-l); padding: var(--s-1) var(--s-3);
+    font: 450 var(--fs-sub)/1.3 var(--font-text); color: var(--text-2); text-align: center; text-wrap: balance; }
   .dots { display: inline-flex; gap: 3px; margin-left: 3px; }
   .dots i { width: 3px; height: 3px; border-radius: var(--r-full); background: currentColor; animation: wait 900ms var(--ease) infinite alternate; }
   .dots i:nth-child(2) { animation-delay: 200ms; } .dots i:nth-child(3) { animation-delay: 400ms; }
@@ -388,11 +427,9 @@
   .ct { font: 600 var(--fs-body)/1.2 var(--font-text); color: var(--text-2); }
   .cn { font: 800 calc(var(--fs-title) * 1.9)/1 var(--font-display); letter-spacing: -0.035em; transition: color var(--t-base) var(--ease); }
   .bar { width: 100%; height: 4px; margin-top: var(--s-2); border-radius: var(--r-full); background: var(--fill); overflow: hidden; }
-  .bar i { display: block; height: 100%; border-radius: inherit; background: var(--grad-accent); transform-origin: left; transition: transform 250ms linear; }
+  .bar i { display: block; height: 100%; border-radius: inherit; background: var(--text); transform-origin: left; transition: transform 250ms linear; }
   .low .cn { color: var(--danger-text); }
   .low .bar i { background: var(--danger); }
-  .skip { align-self: flex-end; display: inline-flex; align-items: center; gap: 2px; min-height: var(--tap); margin: calc(var(--s-5) * -1) 0 calc(var(--s-4) * -1); padding: 0 var(--s-1);
-    font: 600 var(--fs-sub)/1 var(--font-text); color: var(--text-3); }
 
   /* the envelope: a card with its back folds drawn, a flap sealed with the game's mark; held, the flap lifts and the
      letter comes up. One look for every role */
@@ -406,9 +443,9 @@
   .flap { position: absolute; left: 0; right: 0; top: 0; height: 54%; transform-origin: top; clip-path: polygon(0 0, 100% 0, 50% 100%);
     background: linear-gradient(var(--surface-2), var(--fill-2)); transition: transform var(--t-slow) var(--ease), opacity var(--t-base) var(--ease); }
   .seal { position: absolute; left: 50%; top: 54%; display: grid; place-items: center; width: 60px; height: 60px; margin: -30px 0 0 -30px; border-radius: var(--r-full);
-    background: var(--grad-accent); color: white; box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.18), var(--shadow-thumb);
+    background: var(--text); color: var(--bg); box-shadow: var(--shadow-thumb);
     transition: transform var(--t-slow) var(--ease-bounce), opacity var(--t-base) var(--ease); }
-  .seal::after { content: ''; position: absolute; inset: 0; border-radius: inherit; box-shadow: 0 0 0 1.5px var(--accent); opacity: 0; animation: ring 2.4s var(--ease) infinite; }
+  .seal::after { content: ''; position: absolute; inset: 0; border-radius: inherit; box-shadow: 0 0 0 1.5px var(--text); opacity: 0; animation: ring 2.4s var(--ease) infinite; }
   .how { position: absolute; left: var(--s-4); right: var(--s-4); bottom: var(--s-4); display: flex; flex-direction: column; gap: var(--s-1); transition: opacity var(--t-base) var(--ease); }
   .how b { font: 600 var(--fs-sub)/1.3 var(--font-text); color: var(--text-2); }
   .how .cap { display: none; }
@@ -445,10 +482,12 @@
   .cw { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
   .cw b { font: 600 var(--fs-row)/1.25 var(--font-text); overflow-wrap: anywhere; }
   .did { display: inline-flex; align-items: center; gap: var(--s-1); font: 600 var(--fs-sub)/1.2 var(--font-text); color: var(--success-text); animation: rise var(--t-base) var(--ease) both; }
-  .cand.on { background: var(--accent-soft); box-shadow: inset 0 0 0 1.5px var(--accent); }
+  .cand:disabled { cursor: default; }
+  .cand:disabled:not(.on) { opacity: 0.55; }
+  .cand.on { background: var(--fill); box-shadow: inset 0 0 0 1.5px var(--text); }
   .radio { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: var(--r-full); box-shadow: inset 0 0 0 1.5px var(--line-2); color: transparent;
     transition: background-color var(--t-base) var(--ease), transform var(--t-slow) var(--ease-bounce); }
-  .on .radio { background: var(--accent); box-shadow: none; color: var(--on-accent); transform: scale(1.08); }
+  .on .radio { background: var(--text); box-shadow: none; color: var(--bg); transform: scale(1.08); }
   .sum { display: flex; flex-direction: column; align-items: center; gap: var(--s-1); min-height: 2.9em; text-align: center; font: 450 var(--fs-sub)/1.3 var(--font-text); color: var(--text-3); }
   .sum b { font: 600 var(--fs-body)/1.3 var(--font-text); color: var(--text); }
 

@@ -198,6 +198,8 @@ html.lowfx * { -webkit-backdrop-filter: none !important; backdrop-filter: none !
 .scroll::-webkit-scrollbar { display: none; }
 .hscroll { display: flex; overflow-x: auto; scrollbar-width: none; scroll-snap-type: x proximity; }
 .hscroll::-webkit-scrollbar { display: none; }
+/* a sheet's floating action in its own glass island (with .glass.glass-pill): the main button, a note over it */
+.island.glass { display: flex; flex-direction: column; padding: 5px; border-radius: var(--r-xl); } /* (.glass: over .glass-pill's own radius) */
 /* buttons that share a row (a sheet's footer pair, a card's actions): equal parts of it, a label may shrink */
 .btns .btn.full { flex: 1 1 0; width: auto; min-width: 0; }
 /* the keyboard's focus (Telegram Desktop, the staff on computers): a ring, never for a tap */
