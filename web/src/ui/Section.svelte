@@ -21,12 +21,12 @@
 <style>
   .sec { display: flex; flex-direction: column; gap: var(--s-3); }
   .hd { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-3); padding: 0 var(--s-1); }
-  .tt { min-width: 0; font: 700 var(--fs-t3)/1.18 var(--font-display); letter-spacing: -0.02em; overflow-wrap: break-word; hyphens: auto; }
+  .tt { min-width: 0; font: var(--type-heading); letter-spacing: var(--track-heading); overflow-wrap: break-word; hyphens: auto; }
   .n { margin-left: 8px; font-weight: 450; color: var(--text-3); }
   .more { position: relative; flex: none; display: inline-flex; align-items: center; gap: 0; margin-right: -6px; color: var(--accent-text);
     font: 450 var(--fs-row)/1.2 var(--font-text); letter-spacing: -0.012em; }
   .more::after { content: ''; position: absolute; inset: -12px -4px; } /* 44 to the finger */
   .more:active { opacity: 0.5; transform: none; }
   .hd:has(.loud) { align-items: center; }
-  .loud { height: 32px; margin-right: 0; padding: 0 var(--s-2) 0 13px; border-radius: var(--r-full); background: var(--accent); color: var(--on-accent); font: 600 var(--fs-sub)/1 var(--font-text); box-shadow: var(--lg-bevel), var(--lg-lift); }
+  .loud { height: 32px; margin-right: 0; padding: 0 var(--s-2) 0 13px; border-radius: var(--r-full); background: var(--text); color: var(--bg); font: var(--type-label); } /* the primary's calm ink capsule (ui/Button) */
 </style>

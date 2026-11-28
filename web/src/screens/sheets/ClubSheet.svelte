@@ -94,7 +94,7 @@
 {#snippet bell()}{#if o?.subscribed}<BellCheck size={19} />{:else}<Bell size={19} />{/if}{/snippet}
 {#snippet send()}<TelegramMark size={18} />{/snippet}
 
-<Sheet {overlay} icon={TAB_ICON.club} title={t('cap.club')}>
+<Sheet {overlay} icon={TAB_ICON.club} title={t('cap.club')} tall>
   {#if o}
     <div class="hero">
       {#if o.myRights?.includes('profile')}

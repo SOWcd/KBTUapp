@@ -25,7 +25,7 @@
     border-radius: var(--r-full); background: var(--fill); }
   /* the one selected pill (the tab bar's lens): a convex body lighter at the top, a rim lit from the glass's light side */
   .thumb { position: absolute; top: 2px; bottom: 2px; left: 2px; width: calc((100% - 4px) / var(--n)); border-radius: var(--r-full);
-    background: linear-gradient(var(--lens-top), transparent 70%), var(--lens); box-shadow: var(--lens-shadow); transition: transform 380ms var(--ease-spring); }
+    background: linear-gradient(var(--lens-top), transparent 70%), var(--lens); box-shadow: var(--lens-shadow); transition: transform var(--t-slow) var(--ease-spring); }
   .thumb::after { content: ''; position: absolute; inset: 0; padding: 1px; border-radius: inherit; pointer-events: none;
     background:
       radial-gradient(ellipse 60% 150% at var(--hx, 24%) 0%, var(--lens-rim), transparent 72%),

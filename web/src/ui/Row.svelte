@@ -1,5 +1,5 @@
 <script lang="ts" module>
-  /** a row tile's flat colour (tokens.css --tile-*) */
+  /** was a coloured icon tile's colour; a row's icon is now always a plain monochrome glyph (DESIGN.md), the prop is accepted and ignored until the callers drop it */
   export type Tile = 'gray' | 'indigo' | 'red' | 'orange' | 'green' | 'teal' | 'blue' | 'accent' | 'purple' | 'pink';
   let seq = 0;
 </script>
@@ -13,7 +13,7 @@
   //   value      grey, before the end mark ("Russian", "2/3");  whole: it never gives way, the title and subtitle wrap
   //              instead (a number that means nothing cut: "3 h 45 min")
   //   icon       a plain grey line glyph, Settings' row exactly (base.css: 20 px icon in 24, 50 high, the line from
-  //              the label); the default for forms and lists;  with tile: a 30 px tile of one flat colour with a white glyph (Settings' top level only);
+  //              the label); the default for forms and lists (never a coloured tile behind it);
   //              lead: anything else at the start (an avatar, a content emoji, a club's logo)
   //   placeholder  shown grey while the title is empty (a field-like row: "Place" until one is picked)
   //   invalid    the value turns red ("Needed" when there is none): a required row left empty
@@ -45,7 +45,7 @@
     tone?: 'action' | 'add' | 'destructive'; disabled?: boolean;
     onclick?: (e: MouseEvent) => void; onchange?: (on: boolean) => void;
   };
-  let { title, subtitle, value, whole = false, dense = false, icon: Icon, tile, placeholder, invalid = false, lead, detail, count = 0, accessory = 'none', checked = false, open = false,
+  let { title, subtitle, value, whole = false, dense = false, icon: Icon, placeholder, invalid = false, lead, detail, count = 0, accessory = 'none', checked = false, open = false,
     menu, trailing, tone, disabled = false, onclick, onchange }: Props = $props();
 
   const id = `row${++seq}`;
@@ -60,7 +60,6 @@
 
 {#snippet inner()}
   {#if tone === 'add'}<span class="plus"><Plus size={22} strokeWidth={2.2} /></span>
-  {:else if Icon && tile}<span class="tile" style:background="var(--tile-{tile})"><Icon size={18} strokeWidth={2.2} /></span>
   {:else if Icon}<span class="li"><Icon size={20} strokeWidth={2} /></span>
   {:else if lead}<span class="lead">{@render lead()}</span>{/if}
   <span class="body" class:hv={(!!shown || !!menu) && !whole} class:whole>
@@ -83,9 +82,9 @@
 {/snippet}
 
 {#if still}
-  <div class="row kb-row {tone ?? ''}" class:lined={!!Icon && !tile} class:invalid class:dense class:two={!!subtitle} class:lone={!Icon && !lead && tone !== 'add'} class:off={disabled}>{@render inner()}</div>
+  <div class="row kb-row {tone ?? ''}" class:lined={!!Icon} class:invalid class:dense class:two={!!subtitle} class:lone={!Icon && !lead && tone !== 'add'} class:off={disabled}>{@render inner()}</div>
 {:else}
-  <button class="row kb-row tap {tone ?? ''}" class:lined={!!Icon && !tile} class:invalid class:dense class:two={!!subtitle} class:lone={!Icon && !lead && tone !== 'add'} {disabled}
+  <button class="row kb-row tap {tone ?? ''}" class:lined={!!Icon} class:invalid class:dense class:two={!!subtitle} class:lone={!Icon && !lead && tone !== 'add'} {disabled}
     aria-pressed={accessory === 'check' ? checked : undefined} aria-expanded={accessory === 'disclosure' ? open : undefined}
     aria-haspopup={menu ? 'menu' : undefined} onclick={tap}>{@render inner()}</button>
 {/if}
@@ -113,7 +112,6 @@
   .dense .st { font: 450 var(--fs-sub)/1.3 var(--font-text); letter-spacing: 0; }
   .val { flex: 0 1 auto; min-width: 0; margin-left: auto; color: var(--text-3); font-weight: 450; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .whole .val, .whole .menu { flex: none; }
-  .tile { flex: none; width: 30px; height: 30px; border-radius: var(--r-xs); display: grid; place-items: center; color: var(--on-accent); }
   .li { flex: none; width: 24px; display: grid; place-items: center; color: var(--text-2); }
   .ph { color: var(--text-3); }
   .invalid .val { color: var(--danger-text); }
