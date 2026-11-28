@@ -18,7 +18,6 @@
   import Zap from '@lucide/svelte/icons/zap';
   import ArrowUpDown from '@lucide/svelte/icons/arrow-up-down';
   import Shuffle from '@lucide/svelte/icons/shuffle';
-  import DoorOpen from '@lucide/svelte/icons/door-open';
   import Pencil from '@lucide/svelte/icons/pencil';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
