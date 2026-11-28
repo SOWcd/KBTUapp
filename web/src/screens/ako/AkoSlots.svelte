@@ -94,7 +94,7 @@
 
     {#if err}<p class="a-note bad gap" role="alert">{aw(err)}</p>{/if}
 
-    <!-- the picked time is confirmed in the wizard's sticky bar (Ako.svelte); on the status page, by the interview card -->
+    <!-- the picked time is confirmed in the wizard's island (Ako.svelte); on the status page, by the interview card -->
   {/if}
 </div>
 
@@ -105,8 +105,8 @@
   .none { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-3); }
   .ico { display: grid; place-items: center; width: 52px; height: 52px; border-radius: var(--r-full); background: var(--fill); color: var(--text-2); }
 
-  .days { display: flex; gap: var(--s-2); margin: var(--s-6) calc(-1 * var(--s-5)) 0; padding: var(--s-1) var(--s-5); overflow-x: auto;
-    scroll-snap-type: x proximity; scroll-padding: 0 var(--s-5); scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .days { display: flex; gap: var(--s-2); margin: var(--s-5) calc(-1 * var(--s-4)) 0; padding: var(--s-1) var(--s-4); overflow-x: auto;
+    scroll-snap-type: x proximity; scroll-padding: 0 var(--s-4); scrollbar-width: none; -webkit-overflow-scrolling: touch; }
   .days::-webkit-scrollbar { display: none; }
   .compact .days { margin-top: 0; }
   .day { flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-width: 68px; height: 84px;
@@ -118,7 +118,8 @@
   .day.on { background: var(--text); color: var(--bg); box-shadow: none; }
   .day.on .wd { color: inherit; opacity: 0.7; }
   .mk { width: 6px; height: 6px; border-radius: var(--r-full); background: transparent; }
-  .mk.has { background: var(--accent); }
+  .mk.has { background: var(--text); }
+  .on .mk.has { background: var(--bg); }
 
   .dh { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0 var(--s-3); margin: var(--s-6) 0 var(--s-3); }
   .dh b { font: 600 var(--fs-row)/1.3 var(--font-text); }

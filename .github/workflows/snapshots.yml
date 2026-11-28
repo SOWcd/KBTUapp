@@ -1,5 +1,5 @@
 name: snapshots
-# "Run workflow" on a branch (gh workflow run snapshots.yml --ref <branch>): every screen of e2e/snap.spec.ts retaken in
+# "Run workflow" on a branch (gh workflow run snapshots.yml --ref <branch>): every screen of e2e/snap.spec.ts and e2e/ako-snap.spec.ts retaken in
 # the same Linux browser, as the artifact `snapshots`. Its own workflow, not a job in ci.yml: a manual ci.yml run would
 # put skipped runs of the required checks on the PR's head and hide their failures. The token stays read-only: a person
 # looks at the pictures and commits them to web/e2e/snapshots/ (web/e2e/README.md)
@@ -29,7 +29,7 @@ jobs:
       - run: pip install -r ../server/requirements.txt
       - run: npm ci --no-audit --no-fund
       - run: npm run build
-      - run: e2e/linux.sh e2e/snap.spec.ts --project=snap-dark --project=snap-light --update-snapshots=all
+      - run: e2e/linux.sh e2e/snap.spec.ts e2e/ako-snap.spec.ts --project=snap-dark --project=snap-light --update-snapshots=all
         env:
           QA_PYTHON: python
       - if: always()
