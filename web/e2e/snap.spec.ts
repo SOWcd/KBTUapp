@@ -151,10 +151,10 @@ test('Spy, the host\'s lobby', async ({ open }) => {
   await shot(p, 'spy-lobby', undefined, true);
 });
 
-test('Spy, the role held open', async ({ open }) => {
+test('Spy, the sealed role and the role held open', async ({ open }) => {
   const p = await ali(open);
   const sheet = await spy(p, { phase: 'play', span: 272, role: 'local', location: 'library', first: 3 });
-  await p.look('spy-cover');
+  await shot(p, 'spy-envelope', undefined, true);
   const box = (await sheet.locator('.env').boundingBox())!;
   await p.page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await p.page.mouse.down();

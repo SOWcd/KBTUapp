@@ -361,7 +361,7 @@
   .me .face { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent); }
   .crown { position: absolute; right: -4px; top: -4px; display: grid; place-items: center; width: 22px; height: 22px; border-radius: var(--r-full);
     background: var(--gold); color: var(--ink); box-shadow: 0 0 0 2px var(--bg); }
-  .seat { width: 52px; height: 52px; border-radius: var(--r-full); border: 1.5px dashed var(--line-2); animation: wait 1.2s var(--ease) infinite alternate; }
+  .seat { width: 52px; height: 52px; border-radius: var(--r-full); border: 1.5px dashed var(--text-3); animation: wait 1.2s var(--ease) infinite alternate; }
   .free b { color: var(--text-3); }
 
   .ft { display: flex; flex-direction: column; gap: var(--s-2); }
