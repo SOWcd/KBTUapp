@@ -63,9 +63,9 @@
   import MapTopRow from './MapTopRow.svelte';
   import MapDock from './MapDock.svelte';
   import { floorName, doorNamed, checkFind as checkFindIn, roomTitle } from './mapFind';
+  import { flawsOn, sendFlaw, type Flaw } from './mapFlaws';
   import { api } from '../../lib/api';
   import { session } from '../../lib/state/session.svelte';
-  import { sheets } from '../../lib/state/sheets';
   import { takeMapIris, fadeIn, irisIn, fadeOut, irisOut } from './mapIris';
   import type { RoomWeek } from '../../lib/rooms';
   import { freeTints, roomLine as roomLineOf } from './freeRooms';
@@ -165,9 +165,8 @@
   // a line of text, the spot to the admin's list with its floor and the plan's units
   let holdT: ReturnType<typeof setTimeout> | undefined;
   // where it was marked (the spot was saved, but nothing showed where): a pin at the pressed point while the note
-  // is written, a check on it once saved, and my own open ones on the floor as small pins; a tap on one shows its words.
-  // Only mine, never anyone else's (the admin's list has all of them)
-  type Flaw = { id: number; ver: string; floor: number; u: number; v: number; px: number | null; py: number | null; body: string };
+  // is written, a check on it once saved, and my own open ones on the floor as small pins (mapFlaws.ts); a tap on one
+  // shows its words
   let mine = $state<Flaw[]>([]);
   let draft = $state<{ ver: Ver; f: number; u: number; v: number } | null>(null);
   let okId = $state(0), seen = $state(0), okT = 0;
@@ -180,12 +179,7 @@
   const freeHere = $derived(!week || !freeOn || ver !== 'main' ? [] : freeTints(ROOMS[cur], week, clock));
   const roomLine = $derived(roomLineOf(room, week, clock));
   function toggleFree() { haptic.select(); freeOn = !freeOn; clock = nowTs(); if (freeOn) say(t('map.freeHint'), 'sparkles_3d'); }
-  /** mine on this floor of this map: its own spot, or on another map through the 2023 plan's units */
-  const flawsHere = $derived(mine.flatMap((m) => {
-    if (m.floor !== cur) return [];
-    const [u, v] = m.ver === ver ? [m.u, m.v] : m.px != null && m.py != null ? fromPlan(ver, m.px, m.py) : [-1, -1];
-    return u >= 0 && u <= 1 && v >= 0 && v <= 1 ? [{ id: m.id, u, v, body: m.body }] : [];
-  }));
+  const flawsHere = $derived(flawsOn(mine, cur, ver));
   function flaw(at: { x: number; y: number }): boolean {
     const [u, v] = uvAt(at.x, at.y);
     if (gone || u < 0 || u > 1 || v < 0 || v > 1 || !canFlaw()) return false; // a hold that fired as the map closed
@@ -194,16 +188,11 @@
     draft = { ver: vr, f, u, v };
     // zoomed in, a spot low on the screen comes up above the sheet the note is written in
     if (!out() && at.y > H() * 0.4) map.panBy([0, at.y - H() * 0.3], { duration: 420 });
-    void sheets.askText({ title: t('map.flawTitle'), text: t('map.flawText', { floor: f }), ok: t('map.flawSend'), cancel: t('common.cancel'), placeholder: t('map.flawPh'), max: 300 })
-      .then((body) => body ? api.mapFlaw({ ver: vr, floor: f, u, v, px, py, body }).then(() => {
-        haptic.ok(); say(t('map.flawThanks'), 'sparkles_3d');
-        if (gone) return; // sent; the map is closed, nothing of it to mark
-        const id = -Date.now(); // the server answers 204: mine until the next visit lists it with its own id
-        mine = [...mine, { id, ver: vr, floor: f, u, v, px, py, body }];
-        okId = id; clearTimeout(okT); okT = window.setTimeout(() => (okId = 0), 1400);
-      }) : undefined)
-      .catch(() => say(t('common.error'), 'warning_3d'))
-      .finally(() => (draft = null));
+    void sendFlaw({ ver: vr, floor: f, u, v, px, py }).then((m) => {
+      if (!m || gone) return; // cancelled, failed, or sent as the map closed: nothing of it to mark
+      mine = [...mine, m];
+      okId = m.id; clearTimeout(okT); okT = window.setTimeout(() => (okId = 0), 1400);
+    }).finally(() => (draft = null));
     return true;
   }
   function down(e: PointerEvent) {
