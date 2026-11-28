@@ -2350,6 +2350,7 @@ const en: Dict = {
   'studio.delNo': "Can't delete: the club has members or events",
   'studio.recruitClosed': "closed",
   'studio.memoShort': "Memo",
+  'studio.ako': "Admissions",
   'vol.title': "Volunteers needed",
   'vol.left': "{n} of {of} places free",
   'vol.senior': "from year 2",

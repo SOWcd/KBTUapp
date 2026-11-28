@@ -13,8 +13,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
  *  mark on Afisha's cards and rows (PR 452: OfficeMark, its icon and string, shown from the first frame); +200 for the
  *  tab switch's crossfade and the lens's stretch on one spring (PR 456: the shell and Nav are the start); +100 for the
  *  receipt fixes' strings (PR 465: Match with Kaspi, a resent receipt, the unchecked cap; the ru dictionary again). Then down to 219,500 (PR 479: the staff and organizer screens' words,
- *  ~500 entries, left ru.ts for their own chunk, lib/i18n/staff: 226,871 -> 218,711, the rest is room). */
-const MAX_START_GZIP = 219_500;
+ *  ~500 entries, left ru.ts for their own chunk, lib/i18n/staff: 226,871 -> 218,711, the rest is room); +1,000 for
+ *  admissions (/ako: its page, words and desk calls are lazy chunks, but a new lazy entry makes Rollup split modules the
+ *  start shares with it into chunks of their own, each preloaded: 20 -> 23 files); +200 when main's Spy game and Afisha
+ *  rework met admissions on one branch (220,572: 72 B over, nothing of the start itself added). */
+const MAX_START_GZIP = 220_700;
 
 const gzipped = async (code: string) => (await new Response(new Blob([code]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer()).byteLength;
 

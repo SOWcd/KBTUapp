@@ -2756,4 +2756,101 @@ MIGRATIONS: list[tuple[int, str]] = [
       PRIMARY KEY (room_id, user_id)
     ) STRICT;
     CREATE INDEX IF NOT EXISTS game_players_by_user ON game_players(user_id);"""),
+    # Admissions to an org's programs (logic/ako.py; the first: KBTU's Academy of Corporate Education). Applicants have no
+    # account: their link is the credential, kept here only as its SHA-256. Their documents live in a private folder.
+    (264, """CREATE TABLE IF NOT EXISTS ako_programs (  -- IF NOT EXISTS: tests rewind user_version
+      id        INTEGER PRIMARY KEY,
+      org_id    INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      key       TEXT NOT NULL,
+      kind      TEXT NOT NULL CHECK (kind IN ('degree', 'short')),
+      info      TEXT NOT NULL,                      -- {"ru": {"title", "sub", "price", "length", "format"}, "kk": ..., "en": ...}
+      url       TEXT NOT NULL DEFAULT '',          -- the program's page on the org's site, the source of the info
+      interview INTEGER NOT NULL DEFAULT 0 CHECK (interview IN (0, 1)),
+      first     TEXT NOT NULL DEFAULT '',          -- document keys asked before sending, comma-separated
+      later     TEXT NOT NULL DEFAULT '',          -- needed for enrolment, may come after sending
+      optional  TEXT NOT NULL DEFAULT '',          -- welcome, never asked for
+      sort      INTEGER NOT NULL DEFAULT 0,
+      open      INTEGER NOT NULL DEFAULT 1 CHECK (open IN (0, 1)),
+      UNIQUE (org_id, key)
+    ) STRICT;
+    CREATE TABLE IF NOT EXISTS ako_slots (
+      id         INTEGER PRIMARY KEY,
+      org_id     INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      starts_at  INTEGER NOT NULL,
+      minutes    INTEGER NOT NULL CHECK (minutes BETWEEN 5 AND 240),
+      cap        INTEGER NOT NULL DEFAULT 1 CHECK (cap BETWEEN 1 AND 50),
+      who        TEXT NOT NULL DEFAULT '',          -- the interviewer, for the managers
+      teams      TEXT,                              -- this slot's own meeting link, else its day's
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at INTEGER NOT NULL,
+      UNIQUE (org_id, starts_at, who)
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS ako_slots_by_time ON ako_slots(org_id, starts_at);
+    CREATE TABLE IF NOT EXISTS ako_days (
+      org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      day    TEXT NOT NULL,                         -- YYYY-MM-DD in Almaty
+      teams  TEXT NOT NULL,
+      PRIMARY KEY (org_id, day)
+    ) STRICT;
+    CREATE TABLE IF NOT EXISTS ako_apps (
+      id           INTEGER PRIMARY KEY,
+      org_id       INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      token        BLOB NOT NULL UNIQUE,            -- SHA-256 of the link's secret, never the secret
+      program_id   INTEGER REFERENCES ako_programs(id) ON DELETE SET NULL,
+      name         TEXT NOT NULL DEFAULT '',
+      phone        TEXT NOT NULL DEFAULT '',
+      email        TEXT NOT NULL DEFAULT '',
+      lang         TEXT NOT NULL DEFAULT 'ru' CHECK (lang IN ('ru', 'kk', 'en')),
+      status       TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'sent', 'review', 'accepted', 'declined')),
+      slot_id      INTEGER REFERENCES ako_slots(id) ON DELETE SET NULL,
+      rebook       TEXT,                            -- the managers took the booked time away: their reason, until a new pick
+      consent      TEXT,                            -- the notice's version agreed to (CONSENT), before any document
+      consent_at   INTEGER,
+      note         TEXT NOT NULL DEFAULT '',        -- the managers' own
+      created_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at   INTEGER NOT NULL,
+      updated_at   INTEGER NOT NULL,
+      sent_at      INTEGER
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS ako_apps_by_org ON ako_apps(org_id, status, updated_at);
+    CREATE INDEX IF NOT EXISTS ako_apps_by_slot ON ako_apps(slot_id) WHERE slot_id IS NOT NULL;
+    -- the public link's starts, for its daily caps (one address, one org): a keyed hash of the address (an IPv6 /64), a day
+    CREATE TABLE IF NOT EXISTS ako_starts (
+      org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      ip     TEXT NOT NULL,
+      at     INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS ako_starts_by_ip ON ako_starts(ip, at);
+    CREATE INDEX IF NOT EXISTS ako_starts_by_org ON ako_starts(org_id, at);
+    -- who reads packages without running them (the Academic Programs department): named by the admin, never by a role
+    -- (an org's members join in many ways; documents hold health data)
+    CREATE TABLE IF NOT EXISTS ako_reviewers (
+      org_id  INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (org_id, user_id)
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS ako_reviewers_by_user ON ako_reviewers(user_id);
+    CREATE TABLE IF NOT EXISTS ako_files (
+      id         INTEGER PRIMARY KEY,
+      app_id     INTEGER NOT NULL REFERENCES ako_apps(id) ON DELETE CASCADE,
+      doc        TEXT NOT NULL,
+      path       TEXT NOT NULL UNIQUE,              -- under the private ako/ folder
+      mime       TEXT NOT NULL CHECK (mime IN ('image/jpeg', 'application/pdf')),
+      bytes      INTEGER NOT NULL,
+      created_at INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS ako_files_by_app ON ako_files(app_id, doc, id);"""),
+    # admissions' daily upload caps (logic/ako.py _room): a row per try, kept a day. No foreign key on app_id: a page
+    # deleted, or a draft gone, still counts for its day
+    (265, """CREATE TABLE IF NOT EXISTS ako_uploads (
+      id     INTEGER PRIMARY KEY,
+      org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      app_id INTEGER NOT NULL,
+      ip     TEXT NOT NULL,                         -- a keyed hash of the uploader's address (an IPv6 /64), as ako_starts
+      bytes  INTEGER NOT NULL DEFAULT 0,            -- kept; 0 for a try refused or failed
+      at     INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX IF NOT EXISTS ako_uploads_by_app ON ako_uploads(app_id, at);
+    CREATE INDEX IF NOT EXISTS ako_uploads_by_ip ON ako_uploads(ip, at);
+    CREATE INDEX IF NOT EXISTS ako_uploads_by_org ON ako_uploads(org_id, at);"""),
 ]
