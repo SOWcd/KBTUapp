@@ -33,7 +33,8 @@ screen must look like it was always part of it. Apple-level minimalism. Speed co
 - Tinting a whole screen in the event or club colour.
 - Web-style giant H1 page titles, and loose section headings floating on the ground.
 - Endless lists to scroll through. Show a short list (about 6) plus "All N", which opens the full list.
-- Letterboxed or cropped avatars and logos (black bars). Circles are filled (object-fit: cover).
+- Letterboxed or cropped avatars and logos (black bars): every avatar and logo fills its shape (object-fit: cover).
+- Coloured status rings around avatars (the green "event coming up" ring): old-fashioned. Use no ring, or a subtle modern cue.
 - Glow that leaks: only the active card glows, never the neighbours peeking in a carousel.
 - Flat emoji boxes as a poster stand-in. Copying another product's layout (the Luma-style editor).
 - Gambling or casino looks: chips, points, bets, card tables (a university rule).
