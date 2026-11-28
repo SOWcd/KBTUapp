@@ -1,6 +1,9 @@
 """Spy, a party game for friends sitting together, each on their own phone (rooms.py holds the room). Everyone but one
 gets the same place; the spy gets none and tries to work it out from the talk. One round: the host starts it with a
-discussion timer, then everyone votes whom they think is the spy. A majority on the spy: caught, and the spy names the
+discussion timer, then everyone votes whom they think is the spy. Once it runs all players are equal: the talk ends early
+when more than half of them call the vote (`vote_now`, one call each: nobody ends it alone). A vote is a pick, changed
+freely until its player confirms it (`confirm`); the count comes when everyone has confirmed or the vote's time is up
+(then every pick counts, confirmed or not). A majority on the spy: caught, and the spy names the
 place (right: the spy wins after all); anyone else or no majority: the spy wins. The spy may also name the place at any
 moment of the talk, which ends the round either way. After the reveal the host may play again in the same room (`again`).
 The place lives in the state alone: view() gives it to the locals, never to the spy before the reveal (a test reads the
@@ -15,7 +18,7 @@ MIN, MAX = 3, 12
 MINUTES = (1, 15)  # the discussion timer the host picks
 VOTE_S, GUESS_S = 60, 30  # the vote's and the caught spy's guess's time
 LIVE = ("play", "vote", "guess")
-ROUND = ("spy", "loc", "first", "votes", "accused", "guess", "winner", "why")  # a round's own keys, gone at a rematch
+ROUND = ("spy", "loc", "first", "calls", "votes", "sure", "accused", "guess", "winner", "why")  # a round's own keys, gone at a rematch
 # campus places first, then the city's and the classic ones
 LOCATIONS = ("library", "canteen", "lecture_hall", "dorm", "gym", "dean_office", "lab", "coworking", "exam", "graduation",
              "hackathon", "assembly_hall", "club_fair", "career_fair", "metro", "bus", "coffee_shop", "hospital", "airport",
@@ -82,7 +85,7 @@ def act(s: dict, players: list[int], host: int, uid: int, body: dict, t: int) ->
             raise ApiError("conflict", "players")
         places = [x for x in LOCATIONS if x != s.get("last")] or LOCATIONS  # never the last round's place again
         s.update(phase="play", minutes=minutes, deadline=t + minutes * 60, spy=secrets.choice(players),
-                 loc=secrets.choice(places), first=secrets.choice(players), votes={}, accused=None, guess=None)
+                 loc=secrets.choice(places), first=secrets.choice(players), calls=[], votes={}, sure=[], accused=None, guess=None)
     elif kind == "again":  # one more round in the same room: back to the lobby, or straight into play given minutes
         if uid != host:
             raise ApiError("forbidden", "host")
@@ -94,20 +97,32 @@ def act(s: dict, players: list[int], host: int, uid: int, body: dict, t: int) ->
         s.update(phase="lobby", deadline=None, last=last)
         if "minutes" in body:
             act(s, players, host, uid, {**body, "type": "start"}, t)
-    elif kind == "vote_now":  # the talk is over before the timer: the host takes everyone to the vote
-        if uid != host:
-            raise ApiError("forbidden", "host")
+    elif kind == "vote_now":  # the talk is over before the timer once more than half the players have called the vote
         if s["phase"] != "play":
             raise ApiError("conflict", "phase")
-        s.update(phase="vote", deadline=t + VOTE_S)
+        calls = s.setdefault("calls", [])  # (setdefault, and .get below: a round dealt before these keys came)
+        if uid not in calls:
+            calls.append(uid)
+        if len(calls) * 2 > len(players):
+            s.update(phase="vote", deadline=t + VOTE_S)
     elif kind == "vote":
         target = body.get("target")
         if s["phase"] != "vote":
             raise ApiError("conflict", "phase")
         if type(target) is not int or target not in players or target == uid:  # an int: 2.0 == 2 would be kept and shown as 2.0
             raise ApiError("bad_input", "target")
-        s["votes"][str(uid)] = target  # a change of mind is allowed until everyone has voted
-        if len(s["votes"]) == len(players):
+        if uid in s.get("sure", []):
+            raise ApiError("conflict", "confirmed")
+        s["votes"][str(uid)] = target  # a change of mind is allowed until this player confirms
+    elif kind == "confirm":  # my pick is final; the last player's confirm is the count
+        if s["phase"] != "vote":
+            raise ApiError("conflict", "phase")
+        if str(uid) not in s["votes"]:
+            raise ApiError("conflict", "vote")
+        sure = s.setdefault("sure", [])
+        if uid not in sure:
+            sure.append(uid)
+        if len(sure) == len(players):
             _count(s, players, t)
     elif kind == "guess":
         loc = body.get("location")
@@ -133,8 +148,10 @@ def view(s: dict, uid: int) -> dict:
     out.update(role="spy" if spy else "local", first=s["first"])
     if not spy:
         out["location"] = s["loc"]
-    if s["phase"] == "vote":
-        out.update(voted=sorted(int(x) for x in s["votes"]), myVote=s["votes"].get(str(uid)))
+    if s["phase"] == "play":
+        out["calls"] = s.get("calls", [])  # who has called the vote: said aloud at the table anyway
+    elif s["phase"] == "vote":  # voted: who has confirmed (a pick not yet confirmed is its player's own)
+        out.update(voted=sorted(s.get("sure", [])), myVote=s["votes"].get(str(uid)))
     elif s["phase"] == "guess":
         out["accused"] = s["accused"]  # caught: the spy is everyone's now, and has GUESS_S to name the place
     elif s["phase"] == "reveal":

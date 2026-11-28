@@ -43,6 +43,14 @@ def _start(c, room, minutes=5, tg=HOST):
     return r.json()["room"]
 
 
+def _to_vote(c, room, tgs=(HOST, P2)):
+    """More than half of a room of three call the vote: the talk is over."""
+    for i, tg in enumerate(tgs):
+        room = _act(c, tg, _get(c, tg, room["id"]).json(), f"call-vote-{i}", type="vote_now").json()["room"]
+    assert room["phase"] == "vote"
+    return _get(c, tgs[0], room["id"]).json()
+
+
 def test_lobby_join_and_start(env):
     c, cfg = env
     r = c.post("/api/rooms", headers=tma(HOST), json={"game": "spy"}).json()
@@ -83,17 +91,25 @@ def test_spy_never_gets_the_place(env, monkeypatch):
         return mine
 
     check("play")
-    room = _act(c, HOST, check("play"), "vote-now-01", type="vote_now").json()["room"]
+    room = _to_vote(c, room, others)  # any three of the four: the spy's call isn't needed, nor the host's
     check("vote")
-    # all three locals vote for the spy: caught, and the spy has a guess
+    # all three locals vote for the spy and confirm: caught, and the spy has a guess
     for i, tg in enumerate(others):
         room = _get(c, tg, room["id"]).json()
-        assert _act(c, tg, room, f"vote-000{i}", type="vote", target=s["spy"]).json()["applied"]
+        assert _act(c, tg, room, f"conf-000{i}", type="confirm").json()["message"] == "vote"  # nothing picked yet
+        room = _act(c, tg, room, f"vote-000{i}", type="vote", target=s["spy"]).json()["room"]
+        assert room["myVote"] == s["spy"] and room["me"] not in room["voted"]  # a pick: mine alone until confirmed
+        room = _act(c, tg, room, f"sure-000{i}", type="confirm").json()["room"]
+        assert room["me"] in room["voted"]
+        assert _act(c, tg, room, f"late-000{i}", type="vote", target=s["spy"]).json()["message"] == "confirmed"  # final
     room = _get(c, spy, room["id"]).json()
-    assert room["phase"] == "vote" and len(room["voted"]) == 3  # everyone votes before the count, the spy too
+    assert room["phase"] == "vote" and len(room["voted"]) == 3  # everyone confirms before the count, the spy too
     assert _act(c, spy, room, "vote-spy-01", type="vote", target=room["me"]).status_code == 400  # not for oneself
-    target = next(p["id"] for p in room["players"] if p["id"] != room["me"])
-    assert _act(c, spy, room, "vote-spy-02", type="vote", target=target).json()["applied"]
+    target, other = [p["id"] for p in room["players"] if p["id"] != room["me"]][:2]
+    room = _act(c, spy, room, "vote-spy-02", type="vote", target=other).json()["room"]
+    room = _act(c, spy, room, "vote-spy-03", type="vote", target=target).json()["room"]  # a change of mind
+    assert room["phase"] == "vote" and room["myVote"] == target
+    assert _act(c, spy, room, "sure-spy-01", type="confirm").json()["applied"]
     mine = check("guess")
     assert mine["accused"] == s["spy"] and 0 < mine["deadline"] - mine["now"] <= logic.spy.GUESS_S
     wrong = next(x for x in logic.spy.LOCATIONS if x != s["loc"])
@@ -114,9 +130,14 @@ def test_stale_and_duplicate_moves(env):
     stale = _act(c, HOST, {**room, "v": v - 1}, "vote-now-02", type="vote_now").json()
     assert not stale["applied"] and stale["room"]["phase"] == "play" and stale["room"]["v"] == v  # an old screen: nothing
     moved = _act(c, HOST, room, "vote-now-03", type="vote_now").json()
-    assert moved["applied"] and moved["room"]["phase"] == "vote" and moved["room"]["v"] == v + 1
+    assert moved["applied"] and moved["room"]["phase"] == "play" and moved["room"]["v"] == v + 1
+    assert moved["room"]["calls"] == [room["me"]]  # one of three: a call, not the vote yet
     dup = _act(c, HOST, room, "vote-now-03", type="vote_now").json()
     assert dup["applied"] and dup["room"]["v"] == v + 1  # sent twice: moved once
+    more = _act(c, HOST, moved["room"], "vote-now-04", type="vote_now").json()["room"]
+    assert more["phase"] == "play" and more["calls"] == [room["me"]]  # the same player again: still one call
+    p2 = _act(c, P2, _get(c, P2, room["id"]).json(), "vote-now-05", type="vote_now").json()["room"]
+    assert p2["phase"] == "vote" and "calls" not in p2  # the second of three, not the host: more than half
     assert _state(cfg, room["id"])["spy"] == s["spy"]
     assert c.post(f"/api/rooms/{room['id']}", headers=tma(HOST), json={"type": "vote_now"}).status_code == 400  # no id, no version
 
@@ -124,7 +145,7 @@ def test_stale_and_duplicate_moves(env):
 def test_action_ids_are_each_players_own(env):
     """One player's action id can't swallow another's move (applied: true for a move that never landed)."""
     c, cfg = env
-    room = _act(c, HOST, _start(c, _room(c)), "same-id-01", type="vote_now").json()["room"]
+    room = _to_vote(c, _act(c, HOST, _start(c, _room(c)), "same-id-01", type="vote_now").json()["room"], (P2,))
     p2 = _get(c, P2, room["id"]).json()
     target = next(p["id"] for p in p2["players"] if p["id"] != p2["me"])
     assert _act(c, P2, p2, "same-id-01", type="vote", target=target).json()["applied"]
@@ -133,7 +154,7 @@ def test_action_ids_are_each_players_own(env):
 
 def test_vote_target_is_a_person_id(env):
     c, cfg = env
-    room = _act(c, HOST, _start(c, _room(c)), "vote-now-01", type="vote_now").json()["room"]
+    room = _to_vote(c, _start(c, _room(c)))
     other = next(p["id"] for p in room["players"] if p["id"] != room["me"])
     for bad in (float(other), str(other)):
         assert _act(c, HOST, room, "vote-0001", type="vote", target=bad).status_code == 400
@@ -151,16 +172,28 @@ def test_deadlines_resolve_on_the_next_read(env, monkeypatch):
     set_clock(monkeypatch, lambda: t0 + 60 + logic.spy.VOTE_S + 1)
     end = _get(c, P3, room["id"]).json()  # nobody voted: no majority, the spy wins
     assert end["phase"] == "reveal" and end["result"]["winner"] == "spy" and end["result"]["why"] == "missed"
+    # picks nobody confirmed count when the vote's time is up
+    set_clock(monkeypatch, lambda: t0)
+    room = _start(c, _room(c, (70, 71, 72)), tg=70)
+    s = _state(cfg, room["id"])
+    room = _to_vote(c, room, (70, 71))
+    for i, tg in enumerate((70, 71, 72)):
+        mine = _get(c, tg, room["id"]).json()
+        if mine["me"] != s["spy"]:
+            assert _act(c, tg, mine, f"pick-000{i}", type="vote", target=s["spy"]).json()["room"]["phase"] == "vote"
+    set_clock(monkeypatch, lambda: t0 + logic.spy.VOTE_S)
+    assert _get(c, 70, room["id"]).json()["phase"] == "guess"  # two of three on the spy, unconfirmed: caught
     # a caught spy who says nothing in time: the locals win
     set_clock(monkeypatch, lambda: t0)
     room = _start(c, _room(c, (60, 61, 62)), tg=60)
     s = _state(cfg, room["id"])
-    room = _act(c, 60, room, "vote-now-01", type="vote_now").json()["room"]
+    room = _to_vote(c, room, (60, 61))
     tg_of = {room["me"]: 60, **{_get(c, tg, room["id"]).json()["me"]: tg for tg in (61, 62)}}
     for i, (uid, tg) in enumerate(tg_of.items()):
         room = _get(c, tg, room["id"]).json()
         target = s["spy"] if uid != s["spy"] else next(x for x in tg_of if x != uid)
-        _act(c, tg, room, f"vote-000{i}", type="vote", target=target)
+        room = _act(c, tg, room, f"vote-000{i}", type="vote", target=target).json()["room"]
+        _act(c, tg, room, f"sure-000{i}", type="confirm")
     assert _get(c, 60, room["id"]).json()["phase"] == "guess"
     set_clock(monkeypatch, lambda: t0 + logic.spy.GUESS_S)
     assert _get(c, 61, room["id"]).json()["result"]["why"] == "no_guess"
