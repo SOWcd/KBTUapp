@@ -101,6 +101,13 @@ def test_a_lists_mistakes_come_back_by_row(env, monkeypatch):
     # a header naming only some columns is refused, never issued as a certificate
     part = _run(c, oid, tid, _csv("", "Name,Program,Date", "A,P,D"), dry=True)
     assert part.status_code == 400 and part.json()["message"] == "cert_columns", part.text
+    # one known word is enough: an export's own header is never issued as a certificate
+    other = _run(c, oid, tid, _csv("Student,Course,Completion Date,Certificate ID", "A,P,D,N1"), dry=True)
+    assert other.status_code == 400 and other.json()["message"] == "cert_columns", other.text
+    # no header and a fifth column (an index first): every field would shift, so the row is refused (Excel's blank
+    # ";;;" line above is skipped)
+    shifted = _run(c, oid, tid, _csv(";;;", "1;A;P;D;N1"), dry=True)
+    assert shifted.json()["errors"] == [{"row": 2, "field": "columns", "why": "extra"}], shifted.text
     assert _run(c, oid, tid, b'A,"P,D,N1\n' + b"x" * 200_000).json()["message"] == "bad_file"  # an unclosed quote
     # Excel's "Unicode text": UTF-16 with tabs, a header after a blank line
     u16 = _run(c, oid, tid, ("\n" + RU_HEAD.replace(";", "\t") + f"\n{ALIYA}\tMini MBA\t28.11.2026\tAKO-9\n").encode("utf-16"), dry=True)

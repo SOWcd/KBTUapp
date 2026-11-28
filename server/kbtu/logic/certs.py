@@ -284,7 +284,7 @@ def parse(data: bytes) -> tuple[list[dict], list[dict]]:
     (never issued as a certificate); without one, the order is name, program, date, number. Blank lines are skipped;
     row numbers are the lines a spreadsheet shows."""
     text = _decode(data)
-    first = text.lstrip("\r\n").split("\n", 1)[0]
+    first = next((ln for ln in text.splitlines() if ln.strip(" ;,\t")), "")  # the header's line, as `head` below finds it
     try:
         lines = list(csv.reader(io.StringIO(text), delimiter=max(";,\t", key=first.count)))  # the first line's commonest (ties: ";")
     except csv.Error:  # an unclosed quote running past the field limit
@@ -296,7 +296,7 @@ def parse(data: bytes) -> tuple[list[dict], list[dict]]:
         named = [next((k for k, ws in _HEADERS.items() if " ".join(c.split()).casefold() in ws), None) for c in lines[head]]
         if set(COLUMNS) <= set(named):
             order, start = named, head + 1
-        elif len(set(named) - {None}) >= 2:
+        elif set(named) - {None}:  # one known word is enough: "Student,Course,..." must never become a certificate
             raise ApiError("bad_input", "cert_columns", {"row": head + 1, "missing": [k for k in COLUMNS if k not in named]})
     out, errors, seen = [], [], {}
     for n, cells in enumerate(lines[start:], start + 1):
@@ -305,6 +305,8 @@ def parse(data: bytes) -> tuple[list[dict], list[dict]]:
         if len(out) == MAX_ROWS:
             raise ApiError("bad_input", "cert_too_many", {"most": MAX_ROWS})
         r: dict = {"row": n}
+        if not start and any(c.strip() for c in cells[len(COLUMNS):]):  # no header: a fifth column (an index?) shifts them all
+            errors.append({"row": n, "field": "columns", "why": "extra"})
         for k, c in zip(order, cells):
             if k:
                 r[k] = " ".join(ako._CTRL.sub(" ", c).split())
@@ -347,6 +349,7 @@ def run(con, v: Viewer, oid: int, tid: object, data: bytes, dry: bool) -> dict:
         raise ApiError("bad_input", "cert_rows", {"errors": errors[:200]})
     t0 = core.now()
     with tx(con):
+        _of(con, oid, t["id"])  # not deleted meanwhile (its runs' foreign key would fail as a 500)
         if one(con, "SELECT COALESCE(SUM(count), 0) FROM cert_runs WHERE org_id = ? AND at > ?", oid, t0 - 86400)[0] + len(parsed) > CERTS_A_DAY:
             raise ApiError("rate_limited", "cert_runs")  # the runs' own rows: a certificate deleted still counts for its day
         rid = con.execute("INSERT INTO cert_runs (org_id, template_id, fields, count, by, at) VALUES (?, ?, ?, ?, ?, ?)",
