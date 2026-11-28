@@ -157,14 +157,16 @@ def test_downloads_are_signed_links_of_the_org(env, monkeypatch):
     con.commit()
     assert c.get(f"/api/orgs/{other}/certs/{cid}/link", headers=tma(HEAD)).status_code == 403
     first = con.execute("SELECT id FROM certs WHERE number = 'AKO/1'").fetchone()[0]
+    early = c.get(f"/api/orgs/{oid}/certs/{first}/link", headers=tma(HEAD)).json()["url"]
     c.patch(f"/api/orgs/{oid}/certs/{first}", headers=tma(HEAD), json={"revoked": True})
     no = c.get(f"/api/orgs/{oid}/certs/{first}/link", headers=tma(HEAD))  # never printed while its page says revoked
     assert no.status_code == 409 and no.json()["message"] == "cert_revoked"
+    assert c.get(early).status_code == 404  # a link made before the revoke prints nothing either
     z = c.get(c.get(f"/api/orgs/{oid}/certs/runs/{rid}/link", headers=tma(HEAD)).json()["url"])
     assert z.status_code == 200
     names = zipfile.ZipFile(io.BytesIO(z.content)).namelist()
     assert sorted(names) == ["AKO-2 Erlan S.pdf", "AKO-3 Dana.pdf"]  # the revoked one left out; no "/" ever in a name
-    assert con.execute("SELECT COUNT(*) FROM audit_log WHERE action = 'cert_download'").fetchone()[0] == 2
+    assert con.execute("SELECT COUNT(*) FROM audit_log WHERE action = 'cert_download'").fetchone()[0] == 3
     set_clock(monkeypatch, lambda: t0 + certs.LINK_TTL + 1)
     assert c.get(url).status_code == 404
 

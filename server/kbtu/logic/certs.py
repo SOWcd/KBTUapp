@@ -10,6 +10,7 @@ answering). Holders have no account; what /c/ shows is in the privacy policy (se
 from __future__ import annotations
 
 import base64
+import contextlib
 import csv
 import hashlib
 import hmac
@@ -54,6 +55,8 @@ _FONTS = {False: ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/usr/share
 # ponytail: one system font (the Dockerfile's fonts-dejavu-core: Latin, Cyrillic, Kazakh); the upgrade is an OFL font
 # the designer picks, kept in the repository, or the template's own font uploaded beside it
 _zip = threading.BoundedSemaphore(1)  # one ZIP drawn at a time; another is refused, never waits on a thread
+_draw = threading.BoundedSemaphore(2)  # one PDF or preview is ~50 MB in flight: two at a time, the rest refused
+_page = threading.BoundedSemaphore(1)  # a template PDF's first page: its own child, so applicants' uploads keep ako._pdf
 _HEADERS = {k: {w.casefold() for w in ws} for k, ws in json.loads(ako.DATA.read_text(encoding="utf-8"))["certColumns"].items()}
 
 
@@ -94,10 +97,10 @@ def _of(con, oid: int, tid: object, cols: str = _COLS):
 
 
 def _background(data: bytes) -> Image.Image:
-    """The template's look as a picture: a PDF's first page (drawn in pdfpages' child, the admissions' two at a time),
+    """The template's look as a picture: a PDF's first page (drawn in pdfpages' child, one at a time),
     or an image upright."""
     if data[:5] == b"%PDF-":
-        if not ako._pdf.acquire(blocking=False):
+        if not _page.acquire(blocking=False):
             raise ApiError("rate_limited", "ako_busy")
         try:
             with tempfile.TemporaryDirectory(prefix="cert-pdf-") as out:
@@ -108,7 +111,7 @@ def _background(data: bytes) -> Image.Image:
                 with Image.open(page) as im:
                     return im.convert("RGB")
         finally:
-            ako._pdf.release()
+            _page.release()
     try:
         im = media.decode(data)
     except media.BadImage:
@@ -166,6 +169,7 @@ def update_template(con, v: Viewer, oid: int, tid: int, body: dict) -> dict:
             con.execute("UPDATE cert_templates SET name = ? WHERE id = ?", (ako._line(body["name"], 80) or "Certificate", tid))
         if "fields" in body:
             con.execute("UPDATE cert_templates SET fields = ? WHERE id = ?", (json.dumps(_fields(body["fields"])), tid))
+        core.log_action(con, v.id, "cert_template_edit", f"org:{oid}", json.dumps({"template": tid}))
     return _template(_of(con, oid, tid), _count(con, tid))
 
 
@@ -240,16 +244,27 @@ SAMPLE = {"name": "Aigerim Nurlanovna Seitkali", "program": "Executive MBA: Busi
           "date": "28.11.2026", "number": "AKO-2026-0001"}
 
 
+@contextlib.contextmanager
+def _drawing():
+    if not _draw.acquire(blocking=False):
+        raise ApiError("rate_limited", "cert_busy")  # the app tries again in a moment
+    try:
+        yield
+    finally:
+        _draw.release()
+
+
 def preview(con, v: Viewer, oid: int, tid: int, domain: str) -> bytes:
     """The template with made-up values as a JPEG: what its certificates will look like (the server's font, not the
     browser's)."""
     team(con, v, oid)
     t = _of(con, oid, tid, "image, fields")
-    im = draw(_bg(t["image"]), json.loads(t["fields"]), {**SAMPLE, "link": url_of(domain, "ABCDEFGHJK")})
-    im.thumbnail((1600, 1600), Image.Resampling.LANCZOS)
-    out = io.BytesIO()
-    im.save(out, "JPEG", quality=82)
-    return out.getvalue()
+    with _drawing():
+        im = draw(_bg(t["image"]), json.loads(t["fields"]), {**SAMPLE, "link": url_of(domain, "ABCDEFGHJK")})
+        im.thumbnail((1600, 1600), Image.Resampling.LANCZOS)
+        out = io.BytesIO()
+        im.save(out, "JPEG", quality=82)
+        return out.getvalue()
 
 
 # ---------------------------------------------------------------- the bulk run
@@ -451,10 +466,11 @@ def _values(c, domain: str) -> dict:
 def pdf_of(con, cid: int, domain: str) -> tuple[bytes, str]:
     """One certificate as a PDF (its link checked by signed()) and its download name."""
     c = one(con, """SELECT c.*, r.fields, t.image FROM certs c JOIN cert_runs r ON r.id = c.run_id
-        JOIN cert_templates t ON t.id = c.template_id WHERE c.id = ?""", cid)
+        JOIN cert_templates t ON t.id = c.template_id WHERE c.id = ? AND c.revoked_at IS NULL""", cid)
     if not c:
-        raise ApiError("not_found")
-    return _pdf(draw(_bg(c["image"]), json.loads(c["fields"]), _values(c, domain))), _filename(c)
+        raise ApiError("not_found")  # revoked after its link was made: never printed again
+    with _drawing():
+        return _pdf(draw(_bg(c["image"]), json.loads(c["fields"]), _values(c, domain))), _filename(c)
 
 
 def zip_of(con, rid: int, domain: str) -> tuple[Path, str]:
