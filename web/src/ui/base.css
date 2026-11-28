@@ -147,6 +147,12 @@ html.lowfx * { -webkit-backdrop-filter: none !important; backdrop-filter: none !
   .glass { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
   :root, :root[data-theme], .theme-light, .theme-dark { --glass-bg: var(--glass-solid); --glass-pill-bg: var(--glass-solid); --glass-clear: var(--glass-solid); --dock: var(--glass-solid); }
 }
+/* "Increase contrast": the glass near opaque, its whole edge a visible border in the text's colour (Apple's own answer) */
+@media (prefers-contrast: more) {
+  :root, :root[data-theme], .theme-light, .theme-dark { --glass-bg: var(--glass-solid); --glass-pill-bg: var(--glass-solid); --glass-clear: var(--glass-solid); --dock: var(--glass-solid);
+    --glass-rim-base: var(--text-2); --glass-rim-w: 1.5px; }
+  .glass::after { opacity: 1; }
+}
 .surface { background: var(--surface); border-radius: var(--r-l); box-shadow: var(--elev-1); }
 
 /* form field: caption above the input on a soft tile; 16px text keeps iOS from zooming on focus */
