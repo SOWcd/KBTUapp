@@ -488,10 +488,12 @@ def _channel(c) -> dict | None:
     return {"title": c["title"], "mirror": chatlist.mirrored(c) and c["kind"] == "channel" and bool(mirror.username(c["url"]))} if c else None
 
 
-def _membership(con, m, mains: dict, logos: dict) -> dict:
-    """One of /api/me's memberships (and the creator's lent one, lent_studio)."""
+def _membership(con, m, mains: dict, logos: dict, desks: tuple[set[int], set[int]] | None = None) -> dict:
+    """One of /api/me's memberships (and the creator's lent one, lent_studio: no admissions there, ako._access refuses it)."""
     return {"org": org_ref(con, m, logos), "role": m["role"], **core.titled(m), "rights": _ordered(core.club_rights(m["role"], m["rights"], m)),
             "oversee": bool(m["can_oversee"] and m["role"] != "member"),
+            # admissions (logic/ako.py): the org takes applications; head and up run them, a named reviewer reads
+            **({"ako": a} if desks and (a := ako.manages(m["id"], m["role"], desks)) else {}),
             **({"channel": _channel(mains.get(m["id"]))} if "profile" in _rights_from(m["role"], m["rights"]) else {}),
             # the composer's locked state (clubs.stories_open): read only for a writer of a student initiative
             **({"storiesLocked": True} if "posts" in _rights_from(m["role"], m["rights"]) and not m["official"]
@@ -558,12 +560,13 @@ def me(con, v: Viewer) -> dict:
     relink = bool(s and s["manual"])  # typed in before Microsoft only: signed out until Microsoft confirms
     s = None if relink else s
     dmp = dmp_listed(con, v.id) if not s and not relink else None
-    members = rows(con, f"""SELECT m.role, {core.TITLES}, t.rights, o.* FROM org_members m JOIN orgs o ON o.id = m.org_id
+    members = rows(con, f"""SELECT m.role, m.user_id, {core.TITLES}, t.rights, o.* FROM org_members m JOIN orgs o ON o.id = m.org_id
         LEFT JOIN org_roles t ON t.id = m.role_id WHERE m.user_id = ? AND o.status = 'active'""", v.id) if s else []
     # Studio's "Channel → news" tile (Vice+, who link chats): each org's main chat, one read for all of them
     mains = {c["org_id"]: c for c in rows(con, f"SELECT org_id, title, kind, url, mirror, tg_chat_id FROM chats WHERE main = 1 AND org_id IN ({','.join('?' * len(members))})",
                                           *(m["id"] for m in members))} if members else {}
     logos = core._by_id(con, "files", (m["logo_file_id"] for m in members))  # every club's logo in one read, not one per membership
+    desks = ako.desks(con, (m["id"] for m in members), v.id)  # admissions, likewise
     tickets = one(con, """SELECT COUNT(*) FROM registrations r JOIN events e ON e.id = r.event_id
         WHERE r.user_id = ? AND r.status = 'going' AND COALESCE(e.ends_at, e.starts_at + ?) > ?""", v.id, NO_END, core.now())[0]
     name_row = one(con, PERSON + " WHERE u.id = ?", v.id)
@@ -612,7 +615,7 @@ def me(con, v: Viewer) -> dict:
         "bio": u["bio"], "showcase": [x for x in u["showcase"].split(",") if x],
         "settings": {**{k: (u[c] if k in ("lang", "theme") else bool(u[c])) for k, c in SETTINGS.items()}, "suggestMe": pymk.is_on(con, v.id)},
         # oversee: this org is DMP and I lead in it: Studio shows the registry with it picked
-        "memberships": [_membership(con, m, mains, logos) for m in members],
+        "memberships": [_membership(con, m, mains, logos, desks) for m in members],
         # an office's own person before the KBTU sign-in: the app greets them as the team once (web App teamHi); no rights in it
         # (DMP's own hello already left on another phone: not again as the office's)
         "office": org_ref(con, o) if not s and (o := one(con, """SELECT o.* FROM org_members m JOIN orgs o ON o.id = m.org_id
@@ -1385,6 +1388,7 @@ _DEL_GONE = {
     ("fchan_feed_pages", "user_id"), ("broadcast_votes", "user_id"), ("user_platforms", "user_id"), ("android_app", "user_id"),
     ("web_sessions", "user_id"),
     ("identities", "user_id"), ("push_devices", "user_id"),  # my Apple sign-in and my iPhones' push tokens (logic/apple.py)
+    ("game_rooms", "host_id"), ("game_players", "user_id"),  # rooms.gone takes them first
     ("students", "user_id"), ("staff_ok", "user_id"), ("santa_people", "user_id"), ("santa_msgs", "giver_id"), ("santa_msgs", "to_id"), ("santa_sends", "user_id"), ("schedule_classes", "user_id"), ("org_members", "user_id"), ("join_requests", "user_id"),
     ("club_applications", "user_id"), ("subscriptions", "user_id"), ("registrations", "user_id"), ("saved_events", "user_id"),
     ("post_reactions", "user_id"), ("post_reads", "user_id"), ("achievement_grants", "user_id"),
@@ -1409,6 +1413,7 @@ _DEL_GONE = {
     ("fchan_comments", "user_id"),  # my face under channel posts (the comments stay in Telegram, Telegram's own)
     ("fchan_reply_reports", "user_id"),  # my /report on an anonymous author's reply
     ("staff_mutes", "user_id"),  # the staff notifications I muted
+    ("ako_reviewers", "user_id"),  # my reading of an org's admissions (logic/ako.py)
     ("research_requests", "user_id"),  # signed research proposals
     ("research_answers", "user_id"),  # delete signed answer contents; anonymous answers have no account link
     ("research_participants", "user_id"),  # only the fact that I answered, never a link to an answer
@@ -1597,6 +1602,7 @@ def delete_me(con, v: Viewer) -> tuple[list[str], list[str]]:
         from . import vol
         vol.gone(con, v.id)  # my volunteers-ledger records, including ones unlinked since
         santa.gone(con, v.id)  # Secret Santa: my Santa gives to my person instead
+        rooms.gone(con, v.id)  # game rooms I host or play in, whole
         fks = _user_fks(con)
         # my appeals to SG, their words and answers with them (their author links go in the loop below)
         con.execute("DELETE FROM appeals WHERE id IN (SELECT appeal_id FROM appeal_authors WHERE user_id = ?)", (v.id,))
@@ -1795,7 +1801,7 @@ def drop_my_schedule(con, v: Viewer) -> None:
 
 # the other domains', imported last: they import this one too, and each needs the other's names only
 # when a function runs
-from . import chatlist, core, credits, guests, inbox, profiles, santa  # noqa: E402
+from . import ako, chatlist, core, credits, guests, inbox, profiles, rooms, santa  # noqa: E402
 from .clubs import TRANSLIT, stories_open  # noqa: E402
 from .newsfeed import unread_broadcasts  # noqa: E402
 from .organizing import kz_phone, link_door_guests  # noqa: E402

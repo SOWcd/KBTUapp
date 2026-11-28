@@ -120,6 +120,7 @@ const cases: [string, unknown[][], string?][] = [
   ['sn_6', [['open', 'StudioPane', { org: 6 }, 'sheet.studio', undefined]], 'club'], // a member who may not start it: the Studio alone
   ['sn_4', [['sheets.club', 4]]],
   ['mg_5', [['asStudent'], ['eventDetails', 5], ['sheets.manage', 5]]],
+  ['g_0427', [['sheets.spy', '0427']]], // a game room's QR: its code as typed, leading zero kept
 ];
 
 it.each(cases)('%s opens what it did before', async (p, calls, tab = 'afisha') => {

@@ -56,8 +56,9 @@ FUNNELS = {
 }
 STREAK = (*(f"streak.t{i}" for i in range(5)), "streak.tap")  # my flame drawn, by its tier (0..4), and tapped
 JS_KINDS = ("type", "ref", "range", "syntax", "chunk", "other")  # an uncaught error's class, never its message
+EXPECTED = ("consent", "expired")  # forbidden's two reasons that are no failure (the consent asked, initData expired)
 API_KINDS = ("network", "server", "unauthorized", "need_student", "forbidden", "not_found", "full", "closed", "conflict",
-             "guest_list", "rate_limited", "bad_input", "unavailable")  # a failed call: no answer, a 5xx, or the server's code
+             "guest_list", "rate_limited", "bad_input", "unavailable", *EXPECTED)  # a failed call: no answer, a 5xx, or the server's code
 PLATFORMS = ("ios", "android", "desktop", "web")
 BUCKETS = ("≤1", "≤2", "≤3", "≤5", "≤8", "8+")  # seconds from navigation start to the first useful paint
 TTI = ("≤100ms", "≤250ms", "≤500ms", "≤1s", "≤2s", "2s+")  # a tab's or a sheet's tap to its first frame
@@ -306,9 +307,13 @@ def week(con, upto: int | None = None) -> str:
     out.append("🐢 Slowest (p75, tap → first frame)")
     out += [f"  {s} {p} {p75} ({-n}{f', was {o}' if o and o != p75 else ''})" for _, n, s, p, p75, o in sorted(slow)[:6]] or ["  —"]
 
-    errs = sorted((k for k in now if k.startswith(("js.", "api.", "err."))), key=lambda k: -now[k])
+    fine = tuple(f".{k}" for k in EXPECTED)
+    errs = sorted((k for k in now if k.startswith(("js.", "api.", "err.")) and not k.endswith(fine)), key=lambda k: -now[k])
     out.append("💥 Errors (js: a crash, api: a failed call, err: the error toast)")
     out += [f"  {k} {now[k]} ({_vs(now[k], was.get(k, 0))})" for k in errs[:6]] or ["  —"]
+    held = {e: sum(n for k, n in now.items() if k.startswith("api.") and k.endswith(f".{e}")) for e in EXPECTED}
+    if any(held.values()):
+        out.append(f"  not errors: consent asked {held['consent']} · sign-in expired {held['expired']}")
 
     out.append("🆕 Since Nov 20: " + " · ".join(f"{k[3:]} {now.get(k, 0)}" for k in sorted(NEW_ACTIONS, key=lambda k: -now.get(k, 0))))
     return "\n".join(out)

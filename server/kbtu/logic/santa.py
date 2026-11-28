@@ -117,22 +117,6 @@ def start(con, v: Viewer, oid: int, body: dict) -> dict:
         return {**out, "santaTold": len(told)}
 
 
-def news(con, dry: bool = False, only: int | None = None) -> int:
-    """`python -m kbtu.admin santa-news`: the tool's announcement, a template with a button into their Studio, queued
-    once per person to every President and Vice of an active organization the bot can write to (their first one's
-    Studio). Run by hand, never by a deploy; a second run queues only who became one since."""
-    to = rows(con, """SELECT m.user_id, MIN(m.org_id) AS org FROM org_members m JOIN orgs o ON o.id = m.org_id AND o.status = 'active' AND o.kind != 'office'
-        JOIN users u ON u.id = m.user_id AND u.can_dm = 1 AND u.banned_at IS NULL AND u.tg_id > 0
-        WHERE m.role IN ('president', 'vice') AND (? IS NOT NULL OR NOT EXISTS (SELECT 1 FROM bot_outbox b WHERE b.user_id = m.user_id AND b.kind = 'santa_news'))
-          AND (? IS NULL OR m.user_id = ?)
-        GROUP BY m.user_id ORDER BY m.user_id""", only, only, only)  # only: one person first, to read it as they will, again after each rewording
-    if not dry:
-        with tx(con):
-            for r in to:
-                notify(con, r["user_id"], "santa_news", f"sn:{r['org']}" + (f":{now()}" if only else ""))
-    return len(to)
-
-
 def parts(con, ids: list[int]) -> dict[int, dict]:
     """The card's part, the same for everyone: the game is on, the draw is done, the gift's budget (the deadline is regUntil)."""
     return {r[0]: {"drawn": bool(r[1]), **({"budget": r[2]} if r[2] else {})} for r in rows(con, f"""SELECT s.event_id, s.drawn_at, g.budget

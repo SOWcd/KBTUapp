@@ -1,10 +1,10 @@
 """Signing up to a team event is the teams consent (evteams.signup's consent marker, the owner, Nov 18), and those
-signed up before it are asked by the bot: the admin's one-time team-consent-ask and the organizer's reminder."""
+signed up before it are asked by the bot: the organizer's reminder."""
 from __future__ import annotations
 
 import time
 
-from kbtu import admin, logic, outbox
+from kbtu import logic, outbox
 from test_core import env, set_clock, tma  # noqa: F401  (env is a fixture)
 from test_event_teams import TEAMS, _event, _go, _list, _people, _sheet, club  # noqa: F401  (club is a fixture)
 from test_team_guests import PAID, _uid
@@ -58,14 +58,13 @@ def test_signup_with_the_marker_is_the_consent(club):
 
 def test_withdraw_is_remembered(club):
     """Taking it back still takes me out of my teams; the no is kept (OFF): the board says so with no Remind, the
-    admin's run and the organizer skip me, a message queued before stays quiet; a new yes (a marked sign-up) overwrites."""
+    organizer skips me, a message queued before stays quiet; a new yes (a marked sign-up) overwrites."""
     c, con = club
     a, b = _people(c, 2, consent=False)
     eid, other = _event(c, **TEAMS), _event(c, **TEAMS)
     r = c.post(f"/api/events/{eid}/registration", headers=tma(a), json={"teamConsent": V, "team": {"create": "Owls"}})
     assert r.json()["teamsConsent"] is True and _consent(c, a)  # the server's word comes back with the card
     _go(c, eid, b)
-    logic.evteams.consent_ask(con)  # b asked before withdrawing anything: fine
     assert c.delete("/api/teams/consent", headers=tma(a)).json() == {"consent": False}
     assert _sheet(c, eid, a)["teams"]["team"] is None and _sheet(c, eid, a)["my"]["status"] == "going"
     assert con.execute("SELECT version FROM team_consents WHERE user_id = ?", (_uid(con, a),)).fetchone()[0] == "off"
@@ -74,7 +73,7 @@ def test_withdraw_is_remembered(club):
     assert (solo[_uid(con, b)]["consent"], solo[_uid(con, b)]["off"]) == (False, False)
     url = f"/api/events/{eid}/teams/people/{_uid(con, a)}/remind"
     assert c.post(url, headers=tma(20)).json() == {"queued": False, "consent": False, "off": True}
-    assert logic.evteams.consent_ask(con) == 0 and _asks(con, a) == []
+    assert _asks(con, a) == []
     con.execute("INSERT INTO bot_outbox (user_id, kind, ref, send_after) VALUES (?, 'team_consent', ?, 0)", (_uid(con, a), f"tc:{eid}"))
     m = con.execute("SELECT *, 'en' AS lang FROM bot_outbox WHERE kind = 'team_consent' AND user_id = ?", (_uid(con, a),)).fetchone()
     assert outbox._render(con, m) is None  # queued before the no: quiet
@@ -82,53 +81,9 @@ def test_withdraw_is_remembered(club):
     assert r.json()["teamsConsent"] is True and _consent(c, a)  # a new yes
 
 
-def test_admin_command_asks_once(club, monkeypatch):
-    """team-consent-ask: one message per person, for their soonest coming team event (the consent is one for all);
-    --dry queues nothing; a consented one, a plain event, a started one, someone who left, anyone asked before: never."""
-    c, con = club
-    a, b, x = _people(c, 3, consent=False)
-    (ok,) = _people(c, 1, first=300)
-    soon = int(time.time()) + 3600
-    e1, e2 = _event(c, start=soon + 5 * 3600, **TEAMS), _event(c, start=soon + 3 * 3600, **TEAMS)
-    started, plain = _event(c, start=soon, **TEAMS), _event(c)
-    for p in (a, b, ok):
-        _go(c, e1, p)
-    _go(c, e2, a)
-    _go(c, plain, x)
-    _go(c, started, x)
-    _go(c, e2, b)
-    c.delete(f"/api/events/{e2}/registration", headers=tma(b))  # left
-    set_clock(monkeypatch, lambda: soon + 60)  # `started` has started
-    assert logic.evteams.consent_ask(con, dry=True) == 2 and _asks(con) == []
-    assert logic.evteams.consent_ask(con) == 2
-    assert _asks(con) == sorted([(a, f"tc:{e2}"), (b, f"tc:{e1}")])  # a: the sooner one
-    assert logic.evteams.consent_ask(con) == 0  # idempotent
-    m = con.execute("SELECT *, 'en' AS lang FROM bot_outbox WHERE kind = 'team_consent' AND user_id = ?", (_uid(con, a),)).fetchone()
-    text, button, start = outbox._render(con, m)
-    assert start == f"tc_{e2}" and "Case Cup" in text and button
-    c.post("/api/teams/consent", headers=tma(a), json={"consent": V})
-    assert outbox._render(con, m) is None  # agreed meanwhile: quiet
-    m = con.execute("SELECT *, 'en' AS lang FROM bot_outbox WHERE kind = 'team_consent' AND user_id = ?", (_uid(con, b),)).fetchone()
-    c.delete(f"/api/events/{e1}/registration", headers=tma(b))
-    assert outbox._render(con, m) is None  # left: quiet
-
-
-def test_admin_cli(club, env, capsys, monkeypatch):
-    c, con = club
-    (a,) = _people(c, 1, consent=False)
-    _go(c, _event(c, **TEAMS), a)
-    monkeypatch.setattr(admin.config, "load", lambda: env[1])
-    admin.main(["team-consent-ask", "--dry"])
-    assert capsys.readouterr().out.strip() == "would queue 1" and _asks(con) == []
-    admin.main(["team-consent-ask"])
-    assert capsys.readouterr().out.strip() == "queued 1"
-    admin.main(["team-consent-ask"])
-    assert capsys.readouterr().out.strip() == "queued 0" and len(_asks(con)) == 1
-
-
 def test_organizer_reminder(club, monkeypatch):
     """The board's "Remind about consent": only who may manage the event's teams, a ticket only, once a day per person
-    (any event's, the admin's run too), nothing for someone who agreed or left; renders to the consent sheet."""
+    (any event's), nothing for someone who agreed or left; renders to the consent sheet."""
     c, con = club
     a, b = _people(c, 2, consent=False)
     later = int(time.time()) + 3 * 86400  # still ahead a day later
@@ -147,12 +102,14 @@ def test_organizer_reminder(club, monkeypatch):
     now = int(time.time())
     set_clock(monkeypatch, lambda: now + 86400 + 60)
     assert c.post(url(a), headers=tma(20)).json()["queued"] is True and len(_asks(con, a)) == 2  # a day later
-    logic.evteams.consent_ask(con)  # b: the admin's run asked today
-    assert c.post(url(b), headers=tma(20)).json()["queued"] is False
+    assert c.post(url(b), headers=tma(20)).json()["queued"] is True
+    mb = con.execute("SELECT *, 'en' AS lang FROM bot_outbox WHERE kind = 'team_consent' AND user_id = ?", (_uid(con, b),)).fetchone()
     c.post("/api/teams/consent", headers=tma(a), json={"consent": V})
     assert c.post(url(a), headers=tma(20)).json() == {"queued": False, "consent": True, "off": False}
+    assert outbox._render(con, m) is None  # agreed meanwhile: quiet
     c.delete(f"/api/events/{eid}/registration", headers=tma(b))
     assert c.post(url(b), headers=tma(20)).status_code == 404  # left
+    assert outbox._render(con, mb) is None  # left: quiet
     full = _event(c, start=now + 3 * 86400, seats=1, **TEAMS)
     _go(c, full, a)
     _go(c, full, b)  # the waitlist: no ticket, not on the board

@@ -275,7 +275,9 @@ def offsite_round(cfg: Config, con) -> None:
     elif not alert and local % 86400 >= 10 * 3600 and not done("offsite_db") and not one(con, "SELECT 1 FROM meta WHERE key = 'offsite_db' AND value = ?", yday):
         logic.notify_staff(con, [r[0] for r in admins()], "backup_failed", f"bf:{date}")
         con.execute("INSERT INTO meta (key, value) VALUES ('offsite_alert', ?)", (date,))
-    # deletions.log and its salt ride along: a copy restored from R2 alone must still re-run the deletions since (redelete)
+    # deletions.log and its salt ride along: a copy restored from R2 alone must still re-run the deletions since (redelete).
+    # Never the admissions' documents (home/ako, logic/ako.py): the policy (section 17) promises they are in no backup;
+    # test_offsite_backup pins these lists
     jobs = ([("offsite_db", [copy, home / "receipts", home / "deletions.log", home / "deletions.salt"], f"db/{stamp}.tar.age")]
             if copy.exists() and not done("offsite_db") else [])
     if time.gmtime(local).tm_wday == 6 and not done("offsite_media"):
@@ -312,6 +314,7 @@ def _chores(cfg: Config, con) -> None:
     logic.clubs.hidden_day(con)  # 11:00: a club too small for the registry, to its president, once
     logic.door_round(con)  # the door is open (early, or at T-30): each guest going hears it once
     logic.daily.guest_age_round(con)  # guest-list data and age marks expire a day after the event
+    logic.rooms.purge_round(con)  # game rooms 3 hours after their last change
     logic.santa.tick(con)  # Secret Santa's clock: the draw at the deadline, the reminders (one read of the games due)
     logic.stats_day(con)  # after midnight: yesterday's row for the admin's stats
     logic.course_day(con)  # September 1: every student's year of study a year on

@@ -322,6 +322,7 @@ def test_offsite_backup(env, monkeypatch):
     clock[0] += 3600
     chores.offsite_round(cfg, con)
     assert [n.split("/")[0] for n, _ in sent] == ["db", "media"] and sent[0][1] == ["kbtu-2024-10-06.db", "receipts", "deletions.log", "deletions.salt"]
+    assert sent[1][1] == ["media"]  # never "ako": the admissions' documents are in no backup (privacy policy, section 17)
     clock[0] += 3600
     chores.offsite_round(cfg, con)                                         # done for the day
     assert len(sent) == 2

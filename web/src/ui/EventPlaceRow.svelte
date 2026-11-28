@@ -1,6 +1,6 @@
 <script lang="ts">
-  // The event page's place row: a room opens our map, the rest leaves for 2GIS (its mark, an arrow out), a campus spot
-  // the map can't point at stays plain. Apart from EventPlace so the 2GIS mark stays out of the start chunk.
+  // The event page's place row: a room opens our map on it, a campus spot ("Atrium") our map as it is, the rest leaves
+  // for 2GIS (its mark, an arrow out); a place that says nothing stays plain. Apart from EventPlace so the 2GIS mark stays out of the start chunk.
   import MapPin from '@lucide/svelte/icons/map-pin';
   import MapIcon from '@lucide/svelte/icons/map';
   import type { EventCard } from '../lib/api';
@@ -20,7 +20,9 @@
 {#if found?.kind === 'room'}
   <Row icon={MapIcon} title={placeOf(e.place)} whole value={campusPlace(e.place) ? undefined : found.floor ? t('route.floor', { n: found.floor }) : t('route.basement')}
     accessory="chevron" onclick={() => sheets.map(e.place)} />
-{:else if found && found.kind !== 'campus'}
+{:else if found?.kind === 'campus'}
+  <Row icon={MapIcon} title={placeOf(e.place)} accessory="chevron" onclick={() => sheets.map(e.place)} />
+{:else if found}
   {@const url = found.url}
   <Row title={hasText ? placeOf(e.place) : t('event.route')} subtitle={hasText ? t('event.route') : undefined} accessory="external" onclick={() => openLink(url)}>
     {#snippet lead()}<span class="gis"><TwoGisMark size={22} /></span>{/snippet}

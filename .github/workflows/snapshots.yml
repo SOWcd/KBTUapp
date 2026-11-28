@@ -1,0 +1,40 @@
+name: snapshots
+# "Run workflow" on a branch (gh workflow run snapshots.yml --ref <branch>): every screen of e2e/snap.spec.ts retaken in
+# the same Linux browser, as the artifact `snapshots`. Its own workflow, not a job in ci.yml: a manual ci.yml run would
+# put skipped runs of the required checks on the PR's head and hide their failures. The token stays read-only: a person
+# looks at the pictures and commits them to web/e2e/snapshots/ (web/e2e/README.md)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  retake:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: server/requirements.txt
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: docker pull -q "mcr.microsoft.com/playwright:v$(jq -r '.packages["node_modules/@playwright/test"].version' package-lock.json)-noble" &
+      - run: pip install -r ../server/requirements.txt
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - run: e2e/linux.sh e2e/snap.spec.ts --project=snap-dark --project=snap-light --update-snapshots=all
+        env:
+          QA_PYTHON: python
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshots
+          path: web/e2e/snapshots
+          retention-days: 14
