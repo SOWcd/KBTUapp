@@ -40,7 +40,10 @@
   let scrim: HTMLDivElement;
   let body: HTMLDivElement;
   let foot = $state<HTMLDivElement>();
-  let footH = $state(0); // the floating footer's height: the body runs under it by that much
+  // the floating footer's height: the body runs under it by that much. Its exact box (a label's line is 20.4 px): a
+  // rounded one left the body's end on a fraction of a pixel, and the text at the scroll's end drawn a shade differently
+  let footBox = $state<ResizeObserverSize[]>();
+  const footH = $derived(footBox?.[0]?.blockSize ?? 0);
   let room: HTMLDivElement;
   let gone = false;
   const born = performance.now();
@@ -240,7 +243,7 @@
     {@render children()}
     <div class="kbroom" bind:this={room} aria-hidden="true"></div>
   </div>
-  {#if footer}<div class="foot" bind:this={foot} bind:offsetHeight={footH}>{@render footer()}</div>{/if}
+  {#if footer}<div class="foot" bind:this={foot} bind:borderBoxSize={footBox}>{@render footer()}</div>{/if}
 </div>
 
 <style>
