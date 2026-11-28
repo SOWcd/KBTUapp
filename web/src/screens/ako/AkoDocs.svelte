@@ -226,9 +226,9 @@
     font: 600 var(--fs-body)/1.3 var(--font-text); -webkit-tap-highlight-color: transparent; }
   .box { flex: none; width: 26px; height: 26px; border-radius: var(--r-full); box-shadow: inset 0 0 0 1.5px var(--line-2); }
   .nudge .box { box-shadow: inset 0 0 0 2px var(--accent); }
-  .links { display: flex; flex-wrap: wrap; gap: 0 var(--s-5); margin: calc(-1 * var(--s-2)) 0 0 calc(26px + var(--s-3)); }
+  .links { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0 var(--s-4); margin: calc(-1 * var(--s-1)) 0 0 var(--s-1); }
   .links .a-quiet { min-height: 44px; font-weight: 450; font-size: var(--fs-sub); color: var(--text-3); }
-  .full { margin: 0 0 var(--s-3) calc(26px + var(--s-3)); animation: rise var(--t-base) var(--ease) both; }
+  .full { margin: 0 0 var(--s-3) var(--s-1); animation: rise var(--t-base) var(--ease) both; }
   .top { margin-bottom: var(--s-4); }
 
   .head { display: flex; align-items: center; gap: var(--s-3); width: 100%; min-height: 68px; padding: var(--s-3) var(--s-5); text-align: left; color: inherit; -webkit-tap-highlight-color: transparent; }

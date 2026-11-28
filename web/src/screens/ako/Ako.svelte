@@ -220,6 +220,8 @@
   .top { position: sticky; top: 0; z-index: var(--z-nav); display: flex; align-items: center; gap: var(--s-2);
     padding: calc(var(--safe-top) + var(--s-2)) 0 var(--s-3); pointer-events: none; }
   @media (min-width: 700px) { .top { padding-top: var(--s-6); } }
+  /* what scrolls under the pills fades into the ground: words never run through them */
+  .top::before { content: ''; position: absolute; inset: 0 calc(-1 * var(--s-4)) calc(-1 * var(--s-3)); z-index: -1; background: linear-gradient(var(--bg) 55%, transparent); }
   .pill { flex: none; display: flex; align-items: center; height: 44px; border-radius: var(--r-full); color: var(--text); pointer-events: auto;
     font: 600 var(--fs-sub)/1 var(--font-text); letter-spacing: -0.005em; }
   .rnd { justify-content: center; width: 44px; -webkit-tap-highlight-color: transparent; transition: transform var(--t-base) var(--ease-bounce); }
