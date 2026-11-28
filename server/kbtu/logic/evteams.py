@@ -35,8 +35,8 @@ The feature's own consent (CONSENT, as evreports'): one per person, for every ev
 it: creating, joining, Form teams and the organizer's moves all ask for it; someone signed up before an event became a
 team event waits with no team until they agree. Signing up is the consent: the app asks one who hasn't agreed
 in an alert on the sign-up tap and sends the version with it (signup's consent); a sign-up without it (an old app)
-writes none and still signs up. Those signed up without it get the bot's template (consent_ask once, the organizer's remind
-once a day), never a consent. Withdrawing it takes me out of my teams on events not started yet.
+writes none and still signs up. Those signed up without it get the bot's template (the organizer's remind once a day), never a
+consent. Withdrawing it takes me out of my teams on events not started yet.
 
 Who sees what: a team's name and roster, the people signed up for the event (their own team) and its organizers (all);
 an invite link's holder sees the team it invites to. Other event viewers see the team settings and the names in a drawn
@@ -533,26 +533,6 @@ def move(con, v: Viewer, eid: int, uid: int, team: object) -> dict:
         elif now_in:
             notify(con, uid, "team_removed", f"tr:{eid}:{core.now()}")  # as the captain's remove
     return teams_list(con, v, eid)
-
-
-# ------------------------------------------------------------ consent requests for registrations without consent
-
-def consent_ask(con, dry: bool = False) -> int:
-    """`python -m kbtu.admin team-consent-ask [--dry]`: everyone signed up to a coming team event without the teams
-    consent (signed up before the sign-up became the consent) gets the bot's template once, for their soonest
-    such event (the consent is one for all events), a button to it with the consent sheet open (tc_<event>). Never a
-    consent written for them; nobody who withdrew it (OFF), nobody ever asked before. By hand, never on deploy."""
-    to = rows(con, """SELECT r.user_id, r.event_id, MIN(e.starts_at) FROM registrations r JOIN events e ON e.id = r.event_id
-        WHERE e.team_max IS NOT NULL AND e.status = 'published' AND e.hidden_at IS NULL AND e.starts_at > ?
-          AND r.status IN ('going', 'hold', 'waitlist')
-          AND NOT EXISTS (SELECT 1 FROM team_consents c WHERE c.user_id = r.user_id)
-          AND NOT EXISTS (SELECT 1 FROM bot_outbox b WHERE b.user_id = r.user_id AND b.kind = 'team_consent')
-        GROUP BY r.user_id ORDER BY r.user_id""", core.now())  # SQLite: the bare event_id is MIN's row
-    if not dry:
-        with tx(con):
-            for r in to:
-                notify(con, r["user_id"], "team_consent", f"tc:{r['event_id']}")
-    return len(to)
 
 
 def remind(con, v: Viewer, eid: int, uid: int) -> dict:
