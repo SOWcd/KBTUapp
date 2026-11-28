@@ -153,7 +153,8 @@ test('the campus map', async ({ open }) => {
   // the map's "free now" rooms are off on this server: it answers 404 by design (client.ts mapRooms)
   p.allow(/\/api\/map\/rooms 404$/);
   p.allow(/status of 404 \(Not Found\)$/);
-  await p.page.getByRole('button', { name: tr('map.open'), exact: true }).click();
+  await p.page.locator('[data-more]').click(); // the map opens from the Afisha's "More"
+  await p.page.getByRole('menuitem', { name: tr('map.open'), exact: true }).click();
   await expect(p.page.getByRole('group', { name: tr('map.floors') })).toBeVisible();
   await shot(p, 'map');
 });

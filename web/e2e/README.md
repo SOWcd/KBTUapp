@@ -32,7 +32,7 @@ Pixels depend on the machine (fonts, the GPU), so the browser always comes from 
 cd web && npm run build && npm run e2e:snap -- --update-snapshots
 ```
 
-Without Docker (a low-memory laptop): `gh workflow run ci.yml --ref <branch>` retakes them all in CI (job `snapshots`);
+Without Docker (a low-memory laptop): `gh workflow run snapshots.yml --ref <branch>` retakes them all in CI;
 `gh run download <run> -n snapshots -D web/e2e/snapshots` brings them back to commit.
 
 Look at the new pictures before committing them. A new screen: a `test` in `snap.spec.ts` that calls `shot()`.
