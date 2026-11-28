@@ -1,3 +1,4 @@
+import { motion } from './motion';
 // The tapped poster grows into the event sheet's header (App Store style). A copy of the header starts on the poster,
 // scaled down and clipped to the poster's shape around the cover's focus, and opens up into place on the sheet's own
 // curve and time, so the two land together; the real header shows when it lands. Only where motion is welcome (not
@@ -46,9 +47,7 @@ function launch(from: Element, to: HTMLElement, panel: HTMLElement, done: () => 
       { transform: 'translate(0px, 0px) scale(1)', clipPath: `inset(0px 0px 0px 0px round ${r1}px)` },
     ];
   };
-  const root = getComputedStyle(document.documentElement), t = root.getPropertyValue('--t-slow').trim();
-  const ease = root.getPropertyValue('--ease-spring').trim() || 'ease-out';
-  const ms = (parseFloat(t) || 0.38) * (t.endsWith('ms') ? 1 : 1000);   // the browser may hand it back in seconds
+  const { slow: ms, easeSpring: ease } = motion();
   Object.assign(copy.style, { position: 'fixed', margin: '0', zIndex: '55', pointerEvents: 'none', transformOrigin: '0 0' });
   copy.setAttribute('aria-hidden', 'true');
   const frames = aim();

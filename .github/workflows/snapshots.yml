@@ -29,7 +29,7 @@ jobs:
       - run: pip install -r ../server/requirements.txt
       - run: npm ci --no-audit --no-fund
       - run: npm run build
-      - run: e2e/linux.sh e2e/snap.spec.ts --project=snap-dark --project=snap-light --update-snapshots=all
+      - run: e2e/linux.sh e2e/snap.spec.ts e2e/ako-snap.spec.ts --project=snap-dark --project=snap-light --update-snapshots=all
         env:
           QA_PYTHON: python
       - if: always()

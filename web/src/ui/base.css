@@ -43,26 +43,27 @@ img { max-width: 100%; -webkit-user-drag: none; user-drag: none; -webkit-touch-c
 /* ...but DMP's registry opened wide (screens/dmp/RegistrySheet.svelte) takes the whole window while it is up */
 :root[data-wide] #app { left: 0; right: 0; width: auto; transform: none; }
 
-/* ---- type scale ---- */
-.t-h1 { font: 800 28px/1.08 var(--font-display); letter-spacing: -0.03em; }
-.t-h2 { font: 760 22px/1.14 var(--font-display); letter-spacing: -0.025em; }
-.t-h3 { font: 700 17px/1.2 var(--font-display); letter-spacing: -0.02em; }
-.t-title { font: 640 16px/1.28 var(--font-text); letter-spacing: -0.01em; }
-.t-body { font: 450 15px/1.45 var(--font-text); }
-.t-callout { font: 550 14px/1.35 var(--font-text); }
-.t-foot { font: 500 13px/1.35 var(--font-text); color: var(--text-2); }
-.t-cap { font: 650 11px/1.2 var(--font-text); letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-3); }
-/* the design system's type, one class per step of tokens.css --fs-* (the .t-* above stay as they are until their screens
-   move): Inter's own tracking per size; a long word breaks at its soft hyphen or at the edge, never "anywhere" */
-.fs-title { font: 700 var(--fs-title)/1.06 var(--font-display); letter-spacing: -0.04em; }
-.fs-t1 { font: 700 var(--fs-t1)/1.1 var(--font-display); letter-spacing: -0.022em; }
-.fs-sec { font: 700 var(--fs-sec)/1.18 var(--font-display); letter-spacing: -0.018em; }
-.fs-t3 { font: 700 var(--fs-t3)/1.2 var(--font-display); letter-spacing: -0.016em; }
-.fs-row { font: 450 var(--fs-row)/1.25 var(--font-text); letter-spacing: -0.012em; }
-.fs-body { font: 450 var(--fs-body)/1.35 var(--font-text); letter-spacing: -0.008em; }
-.fs-sub { font: 450 var(--fs-sub)/1.35 var(--font-text); }
-.fs-cap { font: 600 var(--fs-cap)/1.25 var(--font-text); }
-.fs-micro { font: 600 var(--fs-micro)/1.2 var(--font-text); letter-spacing: 0.005em; }
+/* ---- type: the composite tokens (tokens.css --type-*), one class per step; Inter's own tracking per size; a long word
+   breaks at its soft hyphen or at the edge, never "anywhere" ---- */
+.fs-title { font: 700 var(--fs-title)/1.06 var(--font-display); letter-spacing: -0.04em; } /* the web entrance and Lab only: no page H1s in the app */
+.fs-t1 { font: var(--type-title); letter-spacing: var(--track-title); }
+.fs-sec { font: var(--type-section); letter-spacing: var(--track-section); }
+.fs-t3 { font: var(--type-heading); letter-spacing: var(--track-heading); }
+.fs-row { font: var(--type-row); letter-spacing: var(--track-row); }
+.fs-body { font: var(--type-body); letter-spacing: var(--track-body); }
+.fs-sub { font: var(--type-sub); }
+.fs-cap { font: var(--type-cap); }
+.fs-micro { font: var(--type-micro); letter-spacing: 0.005em; }
+/* the names from before the scale, on the same tokens and the scale's three weights (their sizes kept where no step
+   matches: 65 files still say them) */
+.t-h1 { font: var(--type-title); letter-spacing: var(--track-title); }
+.t-h2 { font: var(--type-section); letter-spacing: var(--track-section); }
+.t-h3 { font: var(--type-row); font-weight: 700; font-family: var(--font-display); letter-spacing: -0.02em; }
+.t-title { font: 600 16px/1.28 var(--font-text); letter-spacing: -0.01em; }
+.t-body { font: var(--type-body); line-height: 1.45; }
+.t-callout { font: 500 14px/1.35 var(--font-text); }
+.t-foot { font: var(--type-sub); font-weight: 500; color: var(--text-2); }
+.t-cap { font: var(--type-micro); letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-3); }
 .fs-title, .fs-t1, .fs-sec, .fs-t3, .fs-row, .fs-body { overflow-wrap: break-word; }
 .num { font-variant-numeric: tabular-nums; }
 .dim { color: var(--text-2); }
@@ -70,111 +71,69 @@ img { max-width: 100%; -webkit-user-drag: none; user-drag: none; -webkit-touch-c
 .clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* ---- materials ----
-   Glass: ONLY for things that float above content (nav, capsule, sheets, toasts). Pages are solid.
-   Liquid glass, the recipe approved in the prototype: a clear body (blur + saturation of what's
-   behind); a sheen spot and a bright rim whose angle follow the phone's tilt (--gx/--gy from
-   glass.ts); a specular top edge; faint warm/cool fringes left and right; a soft inner bevel.
-   Static paint: nothing repaints unless the phone moves. A glass element must be positioned.
-   The rim (owner, Oct 24: an even hairline all round read as a drawn border, "not real"): bright only on the arc that
-   faces the light (--hx, along the top), a dim reflection on the opposite bottom arc (--ox), barely there elsewhere,
-   with a soft specular spot under the bright arc. Same cost: two gradients, repainted only on tilt.
-   Variants: .glass-pill (capsule, toasts: lighter blur, one clean rim), .glass-sheet (big surfaces:
-   no light spot, it read as a flashlight). */
+/* ---- materials: three tiers, their values in tokens.css ----
+   1. FLOATING GLASS, only for what floats above content (the islands: nav, capsule, toasts, toolbars over media, sheet
+      actions). `.glass.glass-pill` is the one recipe, the tab bar's: a clear body (one backdrop filter), a rim bright
+      only on the arc that faces the light (--hx) with a dim reflection opposite (--ox) and the pink/blue fringe at
+      its ends, a light spot under the arc, the glass's thickness inside the edge, a neutral lift. Static paint:
+      nothing repaints unless the phone moves (--gx/--gy from glass.ts). No selector here names a theme: a theme only
+      changes the tokens, so no component's own rule can lose to one (the light tab bar once got 8 px of blur that way).
+      `.glass` alone (or with .glass-sheet) is the same glass at its large size, for menus and alerts: near opaque, no
+      light spot (it read as a flashlight), a softer rim.
+   2. SOLID SURFACE for content: .surface, ui/Card, ui/Group, ui/Sheet.
+   3. QUIET FILL for flat controls inside content: --fill, no rim (ui/Button secondary, ui/Chip).
+   A glass element must be positioned. */
 .glass {
   --hx: calc(24% + var(--gx, 0) * 38%);
   --ox: calc(76% - var(--gx, 0) * 38%);
   isolation: isolate;
   background-color: var(--glass-bg);
-  -webkit-backdrop-filter: blur(24px) saturate(190%);
-  backdrop-filter: blur(24px) saturate(190%);
-  box-shadow: var(--glass-shadow);
+  -webkit-backdrop-filter: var(--glass-filter-thick);
+  backdrop-filter: var(--glass-filter-thick);
+  box-shadow: var(--elev-4);
 }
-/* the sheen and rim are drawn on the glass itself: an unpositioned .glass (a round button) hung them on the nearest positioned
+/* the light is drawn on the glass itself: an unpositioned .glass (a round button) hung it on the nearest positioned
    ancestor, a huge oval over the sheet's footer. :where keeps it weakest, so any component's own position wins */
 :where(.glass) { position: relative; }
 .glass::before, .glass::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; }
-.glass::before {
-  z-index: -1;
-  background:
-    radial-gradient(ellipse 34% 26% at var(--hx) 0%, rgba(255, 255, 255, 0.28), transparent 70%),
-    radial-gradient(120% 90% at calc(30% + var(--gx, 0) * 70%) calc(-25% + var(--gy, 0) * 45%), var(--glass-sheen), transparent 55%);
-  box-shadow:
-    inset 1.5px 0 1px -0.5px rgba(255, 120, 200, 0.22),
-    inset -1.5px 0 1px -0.5px rgba(90, 190, 255, 0.26),
-    inset 0 -10px 18px -10px rgba(0, 0, 0, 0.2),
-    inset 0 8px 16px -10px rgba(255, 255, 255, 0.22),
-    inset 0 0 14px rgba(255, 255, 255, 0.07);
-}
+.glass::before { z-index: -1; box-shadow: inset 0 1px 0.5px var(--glass-edge-hi); }
 .glass::after {
-  padding: 1.2px;
+  padding: var(--glass-rim-w); opacity: 0.55;
   background:
-    radial-gradient(ellipse 46% 140% at var(--hx) 0%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.35) 40%, transparent 72%),
-    radial-gradient(ellipse 36% 120% at var(--ox) 100%, rgba(255, 255, 255, 0.42), transparent 70%),
-    rgba(255, 255, 255, 0.07);
+    radial-gradient(ellipse 46% 140% at var(--hx) 0%, var(--glass-rim-hi), var(--glass-rim-mid) 40%, transparent 72%),
+    radial-gradient(ellipse 36% 120% at var(--ox) 100%, var(--glass-rim-lo), transparent 70%),
+    linear-gradient(90deg, var(--glass-fringe-a), transparent 18%, transparent 82%, var(--glass-fringe-b)),
+    var(--glass-rim-base);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
 }
-/* a pill's thickness: a bright band just inside the lit edge and its faint reflection on the far one, both sliding
-   round with the tilt (box-shadow offsets in px from --gx: WebKit can't bend the backdrop at the edge, the light can) */
 .glass-pill {
-  --pill-edge: inset calc(var(--gx, 0) * -1.5px) 1.5px 1.5px -0.5px rgba(255, 255, 255, 0.3),
-    inset calc(var(--gx, 0) * 1.5px) -1px 1.5px -0.5px rgba(255, 255, 255, 0.1);
   background-color: var(--glass-pill-bg);
-  -webkit-backdrop-filter: blur(10px) saturate(200%) brightness(1.06);
-  backdrop-filter: blur(10px) saturate(200%) brightness(1.06);
-  box-shadow: 0 12px 32px -10px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.08);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--refract, var(--glass-filter)); /* --refract: real edge refraction where the engine has it (glass.ts) */
+  box-shadow: var(--elev-3);
 }
-.glass-pill::before { box-shadow: var(--pill-edge), inset 0 8px 14px -10px rgba(255, 255, 255, 0.2), inset 0 0 12px rgba(255, 255, 255, 0.06); }
-.glass-sheet::before { background: none; box-shadow: inset 0 1px 0.5px rgba(255, 255, 255, 0.6); }
-/* Light theme (the glass must still show): white rims vanish on a
-   white page and a milky body over white cards reads as plastic, so here the glass is clearer (what scrolls under it
-   shows through, a lighter blur, no brightening) and shows by its edge: a hairline bright at the lit top that turns to
-   a faint ink at the bottom, a deeper lower bevel, a white inner ring, the colour fringes stronger, an ink outline.
-   .theme-light / .theme-dark: a part of the page in a theme of its own (the map's switch), the same glass there. */
-.theme-light, .theme-dark { color: var(--text); }
-:root[data-theme='light'], .theme-light { --glass-clear: rgba(255, 255, 255, 0.14); }
-:root[data-theme='light'] .glass-pill, .theme-light .glass-pill { -webkit-backdrop-filter: blur(8px) saturate(190%); backdrop-filter: var(--refract, blur(8px) saturate(190%)); }
-:root[data-theme='light'] .glass::after, .theme-light .glass::after {
+.glass-pill::before {
   background:
-    radial-gradient(ellipse 46% 140% at var(--hx) 0%, #fff, rgba(255, 255, 255, 0.5) 40%, transparent 72%),
-    radial-gradient(ellipse 50% 130% at var(--ox) 100%, rgba(11, 20, 51, 0.2), transparent 75%),
-    rgba(11, 20, 51, 0.07);
-}
-:root[data-theme='light'] .glass-pill::before, .theme-light .glass-pill::before {
+    radial-gradient(ellipse var(--glass-spot-size) at var(--hx) 0%, var(--glass-spot), transparent 70%),
+    radial-gradient(120% 90% at calc(30% + var(--gx, 0) * 70%) calc(-25% + var(--gy, 0) * 45%), var(--glass-wash), transparent 55%);
+  /* the thickness: a bright band just inside the lit edge and its reflection on the far one, both sliding round with
+     the tilt (WebKit can't bend the backdrop at the edge, the light can) */
   box-shadow:
-    inset calc(var(--gx, 0) * -2px) 1.5px 1px #fff,
-    inset calc(var(--gx, 0) * 1.5px) -1px 1.5px rgba(11, 20, 51, 0.16),
-    inset 3px 0 3px -1px rgba(255, 110, 190, 0.6),
-    inset -3px 0 3px -1px rgba(70, 170, 255, 0.65),
-    inset 0 -12px 18px -10px rgba(11, 20, 51, 0.22);
+    inset calc(var(--gx, 0) * -1.5px) 1.5px 1.5px -0.5px var(--glass-edge-hi),
+    inset calc(var(--gx, 0) * 1.5px) -1px 1.5px -0.5px var(--glass-edge-lo),
+    inset var(--glass-in-w) 0 var(--glass-in-w) -1px var(--glass-in-a),
+    inset calc(var(--glass-in-w) * -1) 0 var(--glass-in-w) -1px var(--glass-in-b),
+    inset 0 -12px 18px -10px var(--glass-shade),
+    inset 0 8px 14px -10px var(--glass-glow);
 }
-:root[data-theme='light'] .glass-pill, .theme-light .glass-pill { box-shadow: 0 14px 30px -12px rgba(24, 36, 90, 0.45), 0 2px 5px rgba(24, 36, 90, 0.14); }
-/* a pill shows by its edge here (a white arc is lost on white): an ink rim the
-   bright arc breaks like glare, an ink reflection at the bottom, a glare spot under the arc */
-:root[data-theme='light'] .glass-pill::after, .theme-light .glass-pill::after {
-  padding: 1.4px;
-  background:
-    radial-gradient(ellipse 40% 150% at var(--hx) 0%, #fff, rgba(255, 255, 255, 0.85) 35%, transparent 70%),
-    radial-gradient(ellipse 55% 140% at var(--ox) 100%, rgba(11, 20, 51, 0.42), transparent 75%),
-    rgba(11, 20, 51, 0.2);
-}
-:root[data-theme='light'] .glass-pill::before, .theme-light .glass-pill::before { background: radial-gradient(ellipse 30% 70% at var(--hx) 0%, rgba(255, 255, 255, 0.95), transparent 70%); }
-/* a dark part on a light page: the dark glass back */
-:root[data-theme='light'] .theme-dark .glass::after {
-  background:
-    radial-gradient(ellipse 46% 140% at var(--hx) 0%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.35) 40%, transparent 72%),
-    radial-gradient(ellipse 36% 120% at var(--ox) 100%, rgba(255, 255, 255, 0.42), transparent 70%),
-    rgba(255, 255, 255, 0.07);
-}
-:root[data-theme='light'] .theme-dark .glass-pill::before { box-shadow: var(--pill-edge), inset 0 8px 14px -10px rgba(255, 255, 255, 0.2), inset 0 0 12px rgba(255, 255, 255, 0.06);
-  background:
-    radial-gradient(ellipse 34% 26% at var(--hx) 0%, rgba(255, 255, 255, 0.28), transparent 70%),
-    radial-gradient(120% 90% at calc(30% + var(--gx, 0) * 70%) calc(-25% + var(--gy, 0) * 45%), var(--glass-sheen), transparent 55%); }
-:root[data-theme='light'] .theme-dark .glass-pill { box-shadow: 0 12px 32px -10px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.08);
-  -webkit-backdrop-filter: blur(10px) saturate(200%) brightness(1.06); backdrop-filter: blur(10px) saturate(200%) brightness(1.06); }
-:root[data-theme='light'] .theme-dark { --glass-clear: rgba(255, 255, 255, 0.1); }
+.glass-pill::after { opacity: 1; }
+/* the hair of edge on media (a cover the size of a card): it keeps a dark picture's shape on the black ground. On an
+   empty layer over the picture, the picture's radius */
+.media-rim { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; box-shadow: inset 0 0 0 0.5px var(--media-line); }
+/* .theme-light / .theme-dark: a part of the page in a theme of its own (the map's switch); the tokens come with it */
+.theme-light, .theme-dark { color: var(--text); }
 /* the touch bloom (glass.ts): sits over the sheen, under the content */
 .glass-bloom {
   position: absolute; z-index: -1; width: 180px; height: 180px; margin: -90px 0 0 -90px; border-radius: 50%;
@@ -191,7 +150,13 @@ html.lowfx * { -webkit-backdrop-filter: none !important; backdrop-filter: none !
   .glass { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
   :root, :root[data-theme], .theme-light, .theme-dark { --glass-bg: var(--glass-solid); --glass-pill-bg: var(--glass-solid); --glass-clear: var(--glass-solid); --dock: var(--glass-solid); }
 }
-.surface { background: var(--surface); border-radius: var(--r-l); box-shadow: var(--shadow-card); }
+/* "Increase contrast": the glass near opaque, its whole edge a visible border in the text's colour (Apple's own answer) */
+@media (prefers-contrast: more) {
+  :root, :root[data-theme], .theme-light, .theme-dark { --glass-bg: var(--glass-solid); --glass-pill-bg: var(--glass-solid); --glass-clear: var(--glass-solid); --dock: var(--glass-solid);
+    --glass-rim-base: var(--text-2); --glass-rim-w: 1.5px; }
+  .glass::after { opacity: 1; }
+}
+.surface { background: var(--surface); border-radius: var(--r-l); box-shadow: var(--elev-1); }
 
 /* form field: caption above the input on a soft tile; 16px text keeps iOS from zooming on focus */
 .field { display: flex; flex-direction: column; gap: 6px; padding: 10px 14px; border-radius: var(--r-m); background: var(--surface-2); }
@@ -207,7 +172,7 @@ html.lowfx * { -webkit-backdrop-filter: none !important; backdrop-filter: none !
 .switch input, .sw-on input[role="switch"] { appearance: none; -webkit-appearance: none; flex: none; position: relative; width: 50px; height: 30px; border-radius: 15px;
   background: var(--line-2); transition: background-color var(--t-base); }
 .switch input::after, .sw-on input[role="switch"]::after { content: ''; position: absolute; left: 2px; top: 2px; width: 26px; height: 26px; border-radius: 50%; background: #fff;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25); transition: transform var(--t-base) var(--ease); }
+  box-shadow: var(--elev-2); transition: transform var(--t-base) var(--ease); }
 /* (.sw-on: a Settings list row with a switch, without the .switch row's layout)
    on: the owner's pick from real screenshots (Oct 10): light, a solid blue track and a white knob; dark, a soft blue
    track and a blue knob (tokens.css --switch-on, --switch-knob) */
@@ -233,26 +198,21 @@ html.lowfx * { -webkit-backdrop-filter: none !important; backdrop-filter: none !
 .scroll::-webkit-scrollbar { display: none; }
 .hscroll { display: flex; overflow-x: auto; scrollbar-width: none; scroll-snap-type: x proximity; }
 .hscroll::-webkit-scrollbar { display: none; }
-/* a sheet's floating actions (Sheet's `float` footer): a glass island over the content, with .glass.glass-pill. Its main
-   button is calm: white with ink words on the dark, ink with white words on the light (the accent's blue shouted).
-   .calm alone: the same main button where it sits in the content */
-.island, .calm { --cta: var(--ink); }
-:root[data-theme='light'] .island, :root[data-theme='light'] .calm { --cta: var(--on-accent); }
+/* a sheet's floating action in its own glass island (with .glass.glass-pill): the main button, a note over it */
 .island.glass { display: flex; flex-direction: column; padding: 5px; border-radius: var(--r-xl); } /* (.glass: over .glass-pill's own radius) */
-.island .btn.k-primary:not(.red):not(.done):not(:disabled), .calm .btn.k-primary:not(.red):not(.done):not(:disabled) { --body: var(--text); color: var(--cta); --rim-lo: rgba(11, 20, 51, 0.2); }
 /* buttons that share a row (a sheet's footer pair, a card's actions): equal parts of it, a label may shrink */
 .btns .btn.full { flex: 1 1 0; width: auto; min-width: 0; }
 /* the keyboard's focus (Telegram Desktop, the staff on computers): a ring, never for a tap */
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* a text field matches :focus-visible on a tap too (a blue box round Team's search): its caret says it */
 :where(input, textarea, [contenteditable]):focus-visible { outline: none; }
-.press { transition: transform 450ms var(--ease-bounce); }
-.press:active { transform: scale(0.965); transition-duration: 80ms; }
+.press { transition: transform var(--t-spring) var(--ease-bounce); }
+.press:active { transform: scale(0.965); transition-duration: var(--t-press); }
 /* every button answers a press: a small give, zero specificity, so a
    component's own :active, transform or transition always wins */
-:where(button:not(:disabled), [role='button']) { transition: transform 450ms var(--ease-bounce), opacity var(--t-fast) var(--ease); }
+:where(button:not(:disabled), [role='button']) { transition: transform var(--t-spring) var(--ease-bounce), opacity var(--t-fast) var(--ease); }
 /* not a container while a button inside it is pressed: :active reaches every ancestor (the Feed's slide) */
-:where(button:not(:disabled), [role='button']):active:not(:has(:where(button, [role='button']):active)) { transform: scale(0.965); opacity: 0.9; transition-duration: 80ms; }
+:where(button:not(:disabled), [role='button']):active:not(:has(:where(button, [role='button']):active)) { transform: scale(0.965); opacity: 0.9; transition-duration: var(--t-press); }
 
 /* the theme switch (theme.svelte.ts): the circle is drawn by script on the new snapshot, so both snapshots sit still
    and the old one simply gets covered; without a circle (Telegram changed the scheme) the default fade runs.
@@ -268,7 +228,7 @@ html.lowfx * { -webkit-backdrop-filter: none !important; backdrop-filter: none !
 :root.vt-solid, .vt-solid .theme-light, .vt-solid .theme-dark,
 :root.glass-wake, .glass-wake .theme-light, .glass-wake .theme-dark { --glass-bg: var(--glass-solid); --glass-pill-bg: var(--glass-solid); --glass-clear: var(--glass-solid); --dock: var(--glass-solid); }
 :root:not(.vt-solid, .glass-wake), :root:not(.vt-solid, .glass-wake) .theme-light, :root:not(.vt-solid, .glass-wake) .theme-dark {
-  transition: --glass-bg 360ms ease, --glass-pill-bg 360ms ease, --glass-clear 360ms ease;
+  transition: --glass-bg var(--t-slow) ease, --glass-pill-bg var(--t-slow) ease, --glass-clear var(--t-slow) ease;
 }
 /* glass with a tint of its own (the route's step card) goes solid too: it showed the plan through, sharp */
 .vt-solid .glass, .glass-wake .glass { background-color: var(--glass-solid) !important; }
@@ -278,13 +238,13 @@ html.lowfx * { -webkit-backdrop-filter: none !important; backdrop-filter: none !
 /* a language switch: the old screen stays put, the new one comes into focus over it; the backgrounds match, so only the
    words visibly change */
 .vt-lang::view-transition-old(root) { animation: none; }
-.vt-lang::view-transition-new(root) { mix-blend-mode: normal; animation: vt-focus 420ms cubic-bezier(0.2, 0.7, 0.2, 1) both; }
-@keyframes vt-focus { from { opacity: 0; filter: blur(7px); } }
+.vt-lang::view-transition-new(root) { mix-blend-mode: normal; animation: vt-focus var(--t-slow) var(--ease) both; }
+@keyframes vt-focus { from { opacity: 0; } } /* a plain fade: a blur animated over the whole screen dropped frames */
 
 /* a page's blocks come in one after another the first time it opens (a page stays mounted after: once a session);
    lists inside keep their own rise. Power saving and reduced motion skip it. */
-@keyframes kb-stagger { from { opacity: 0; transform: translate3d(0, 12px, 0); } }
-.stagger > * { animation: kb-stagger 460ms cubic-bezier(.2, .9, .25, 1) backwards; }
+@keyframes kb-stagger { from { opacity: 0; transform: translate3d(0, 8px, 0); } }
+.stagger > * { animation: kb-stagger var(--t-slow) var(--ease) backwards; }
 .stagger > :nth-child(2) { animation-delay: 40ms; } .stagger > :nth-child(3) { animation-delay: 80ms; }
 .stagger > :nth-child(4) { animation-delay: 120ms; } .stagger > :nth-child(5) { animation-delay: 160ms; }
 .stagger > :nth-child(6) { animation-delay: 200ms; } .stagger > :nth-child(7) { animation-delay: 240ms; }
@@ -316,7 +276,7 @@ button.set-row:active { background: var(--surface-2); }
 
 /* the page under a pushed one (ui/Pane: a tab, a sheet, another pane) drifts left and dims, as the phone does; the host
    keeps its transition until it is back in place */
-.pane-host { transition: transform 440ms cubic-bezier(.32,.72,0,1), opacity 440ms ease; }
+.pane-host { transition: transform 440ms var(--ease-spring), opacity 440ms ease; } /* 440: ui/Pane's own clock */
 .pane-under { transform: translate3d(-28%, 0, 0); opacity: 0.5; }
 
 /* Lanyard depth, one grammar for every lanyard's art (.claude/reports/lanyard-standard-spec.md): a layer floats --z px at

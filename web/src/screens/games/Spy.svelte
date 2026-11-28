@@ -8,7 +8,7 @@
   // role is a sealed envelope that opens only while a finger holds it, and nothing on a phone tells the spy's from a
   // local's at a glance: the open letter looks the same for both, and every phone's places answer a tap the same way
   // (the question "name it?"; only the spy's yes is a move). Actions float over the content as glass islands (Sheet's
-  // float footer), the main one calm ink, never the accent's blue. Once a round runs all players are equal: any of them
+  // footer): Leave a small capsule, the main one in its island. Once a round runs all players are equal: any of them
   // calls the vote (more than half start it), and a vote is a pick until its player confirms it.
   import { onDestroy, onMount } from 'svelte';
   import HatGlasses from '@lucide/svelte/icons/hat-glasses';
@@ -206,9 +206,9 @@
   {/if}
 {/snippet}
 
-<Sheet {overlay} full float title={gw('spy.title')} icon={HatGlasses}>
+<Sheet {overlay} full title={gw('spy.title')} icon={HatGlasses}>
   {#if !room}
-    <div class="home calm stagger">
+    <div class="home stagger">
       <div class="orb"><Orb size={132}><span class="om">{@render mark(56)}</span></Orb></div>
       <p class="pitch">{gw('spy.about')}</p>
       <ul class="facts">

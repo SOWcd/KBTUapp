@@ -99,7 +99,7 @@
   <!-- live status -->
   <button class="layer live" class:off={mode !== 'live'} onclick={() => live?.onopen?.()} aria-label={live ? `${liveTop} ${live.title}` : undefined}>
     {#if live}
-      <span class="lv" style="background:{live.tint}"><Emoji name={live.emoji} size={20} /></span>
+      <span class="lv"><Emoji name={live.emoji} size={20} /></span>
       <span class="lt"><b class="num">{liveTop}</b> <i class="ellipsis">{live.title}</i></span>
     {/if}
   </button>
@@ -114,8 +114,8 @@
     right: max(calc(50% - 94px), 96px); width: min(184px, calc(100vw - 198px)); height: 38px;
     border-radius: var(--r-full); overflow: hidden;
     background: none;
-    transition: width 400ms cubic-bezier(.25, .8, .3, 1), opacity var(--t-base);
-    animation: capIn 400ms cubic-bezier(.2, .9, .25, 1.2) backwards;
+    transition: width var(--t-slow) var(--ease), opacity var(--t-base);
+    animation: capIn var(--t-spring) var(--ease-bounce) backwards;
   }
   /* Android: the pill's live blur over a sheet or the WebGL medal dropped its title for seconds */
   .cap.flat { -webkit-backdrop-filter: none; backdrop-filter: none; }
@@ -142,20 +142,20 @@
   :global(html[data-theme='light'][data-sheet]) .cap.tinted > .tone-base {
     background: linear-gradient(var(--fill), var(--fill)), linear-gradient(var(--tint-veil), var(--tint-veil)), var(--chrome-tint); }
   /* nothing to say (a tab whose large title is in view, no live status): the glass fades away */
-  .cap.none { opacity: 0; transform: translateY(-4px) scale(0.94); pointer-events: none; transition: width 400ms cubic-bezier(.25, .8, .3, 1), opacity var(--t-base), transform var(--t-base) var(--ease); }
-  .cap:not(.none) { transition: width 400ms cubic-bezier(.25, .8, .3, 1), opacity var(--t-base), transform 360ms var(--ease-spring); }
+  .cap.none { opacity: 0; transform: translateY(-4px) scale(0.94); pointer-events: none; transition: width var(--t-slow) var(--ease), opacity var(--t-base), transform var(--t-base) var(--ease); }
+  .cap:not(.none) { transition: width var(--t-slow) var(--ease), opacity var(--t-base), transform var(--t-slow) var(--ease-spring); }
   @keyframes capIn { from { opacity: 0; transform: translateY(-8px) scale(0.94); } }
 
   .layer {
     position: absolute; inset: 3px; display: flex; align-items: center;
-    transition: opacity 260ms var(--ease), transform 360ms var(--ease-spring), filter 260ms var(--ease);
+    transition: opacity var(--t-base) var(--ease), transform var(--t-slow) var(--ease-spring); /* no blur on the way: it was animated on every title change */
   }
-  .layer.off { opacity: 0; transform: translateY(10px) scale(0.92); filter: blur(4px); pointer-events: none; }
+  .layer.off { opacity: 0; transform: translateY(10px) scale(0.92); pointer-events: none; }
   .live.off { transform: translateY(-10px) scale(0.92); }
 
   .live { gap: 8px; padding: 0 12px 0 0; text-align: left; }
   @media (max-width: 340px) { .live { padding-right: 2px; } } /* the top word still whole on the narrowest phones */
-  .lv { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex: none; }
+  .lv { width: 32px; height: 32px; border-radius: 50%; background: var(--fill); display: flex; align-items: center; justify-content: center; flex: none; }
   .lt { display: flex; flex-direction: column; min-width: 0; line-height: 1.1; }
   .lt b { font: 700 13px/1.1 var(--font-text); letter-spacing: 0.01em; }
   .lt i { font: 500 11.5px/1.2 var(--font-text); font-style: normal; color: var(--text-2); }

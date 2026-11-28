@@ -383,7 +383,7 @@
       {:else}
         <HeroArt pic={art} emoji={e.emoji} color={e.color ?? e.tint} first />
       {/if}
-      <div class="shade"></div>
+      <div class="shade media-rim"></div>
       <!-- over the picture, the floating layer: whose it is, and the two quiet actions (save, share) in glass; the bar
            below keeps the one main action alone -->
       <div class="top">{#if e.coHost}<span class="org"><OrgTag org={e.org} co={e.coHost} onpick={(o) => sheets.club(o)} /></span>
@@ -773,8 +773,7 @@
   .dots i { width: 6px; height: 6px; border-radius: var(--r-full); background: rgba(255, 255, 255, 0.5); box-shadow: 0 0 4px rgba(0, 0, 0, 0.4); transition: transform var(--t-fast); }
   .dots i.on { background: var(--on-accent); transform: scale(1.25); }
   /* the hair rim; a cover has HeroArt's own scrim under the words, the mesh a lighter one, photos and a clip a deep one */
-  .shade { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.14); }
-  .nopic .shade { background: linear-gradient(rgba(0, 0, 0, 0) 36%, rgba(0, 0, 0, 0.5)); }
+  .nopic .shade { background: var(--media-shade); }
   .deep .shade { background: linear-gradient(rgba(0, 0, 0, 0) 30%, rgba(0, 0, 0, 0.82)); }
   .top { position: absolute; z-index: 3; left: 12px; right: 12px; top: 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px; pointer-events: none; } /* a long name yields to the buttons, never under them */
   .top > * { pointer-events: auto; }
@@ -785,7 +784,7 @@
 
   /* the words (the Afisha hero's slab): the title in the display face, the time in white, the place a step quieter */
   .slab { position: relative; z-index: 2; isolation: isolate; display: flex; flex-direction: column; gap: 3px; padding: var(--s-6) 18px var(--s-4); pointer-events: none;
-    text-shadow: 0 1px 8px rgba(0, 0, 0, 0.28); }
+    text-shadow: var(--media-text-shadow); }
   .pics .slab { padding-bottom: var(--s-6); } /* the photos' dots under the words */
   .clip .slab { padding-right: 60px; } /* the clip's sound button */
   .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: var(--s-2); text-shadow: none; }
@@ -828,7 +827,11 @@
   .stack :global(.av + .av) { margin-left: -8px; }
   .stack :global(.av) { box-shadow: 0 0 0 2px var(--surface-solid); }
 
-  /* the footer: the one primary action, alone, in a glass island over the content (base.css .island) */
+  /* the footer: the one primary action, alone, in a glass island over the content. The main button is calm: white with
+     ink words on the dark, ink with white words on the light (the accent's blue shouted over every poster) */
+  .island { --cta: var(--ink); display: flex; flex-direction: column; padding: 5px; border-radius: var(--r-xl); }
+  :global(:root[data-theme='light']) .island { --cta: var(--on-accent); }
+  .island :global(.btn.k-primary:not(.red):not(.done):not(:disabled)) { --body: var(--text); color: var(--cta); --rim-lo: rgba(11, 20, 51, 0.2); }
   .actions { display: flex; gap: 8px; align-items: center; }
   .tnote { margin: 6px var(--s-3) 8px; text-align: center; color: var(--text-2); font: 450 var(--fs-sub)/1.3 var(--font-text); }
   .gl { flex: 1; margin: 0; padding: var(--s-2) var(--s-4); text-wrap: pretty; }
