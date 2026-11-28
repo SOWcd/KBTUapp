@@ -41,7 +41,7 @@ screen per PR, never slower than before, checked on a phone in both themes.
 | Web entry, tabs, sheets | `web/src/App.svelte`, `web/src/lib/state/ui.svelte.ts`, `web/src/lib/state/sheets.ts` |
 | API contract | `web/src/lib/api/types.ts`, `index.ts` (the interface), `client.ts` |
 | UI strings | `web/src/lib/i18n/{ru,kk,en}.ts` (ru is the source; kk and en are typed against it). ~70k tokens each: never read them whole; add a string with `node tools/i18n.mjs add <key> --ru "…" --kk "…" --en "…" [--after <key>]` (from `web/`): the same spot in all three, which keep one key order (a test checks). Words only the Admin sheet's and Studio's screens show: `staff.{ru,kk,en}.ts` (add with `--staff`), read with `sw()` from `lib/i18n/staff`, out of the start bundle |
-| Shared UI | `web/src/ui/` (tokens.css, base.css, glass, Sheet, Button, ...) |
+| Shared UI | `web/src/ui/` (tokens.css, base.css, glass, Sheet, Button, ...); the owner's taste and how design work is done: [DESIGN.md](DESIGN.md), read it before any UI change |
 | Test helpers | `env`, `login`, `tma`, `set_clock`, `delete_now` in `server/tests/helpers.py` (`from helpers import ...`; `test_core.py` re-exports them for the older tests) |
 | Android app (Play) | `android/` (a TWA from `twa-manifest.json`; README: release, demo login, Data safety), built only by `.github/workflows/android.yml` |
 | Deep links | parsed in `web/src/App.svelte` (`deepLink`): `ev_<id>`, `cl_<id>`, ... |
