@@ -54,7 +54,7 @@
   import StoryRow from './StoryRow.svelte';
   import PullSearch from '../../ui/PullSearch.svelte';
   import HeroArt from './HeroArt.svelte';
-  import { coverFor, focusPos } from '../../lib/photo';
+  import { coverFor } from '../../lib/photo';
   import Everything from './Everything.svelte';
   import GalleryCard from './GalleryCard.svelte';
   import Chip from '../../ui/Chip.svelte';
@@ -342,12 +342,6 @@
   {/if}
 {/snippet}
 
-<!-- what lies under the words: the picture again from its small thumb, larger, blurred and dimmed, cut to
-     the words' block. A still layer drawn once: a live backdrop blur was redrawn on every frame the card moved (a swipe, the page) -->
-{#snippet lens(pic: { thumb: string; focus?: [number, number] | null } | null)}
-  {#if pic}<span class="lens" aria-hidden="true"><img src={pic.thumb} alt="" decoding="async" draggable="false" style:object-position={focusPos(pic)} /></span>{/if}
-{/snippet}
-
 <!-- one hero card, any kind: the lead's slot (i 0) and the swiped-to ones -->
 {#snippet heroCard(c: Card, i: number)}
   {#if 'e' in c}
@@ -362,7 +356,6 @@
       <span class="art"><HeroArt pic={art} emoji={e.emoji} color={e.color ?? e.tint} first={i === 0} /></span>
       <div class="shade"></div>
       <div class="slab">
-        {@render lens(art)}
         <span class="hero-tx">
           <b class="clamp-2">{e.title}</b>
           <span class="where"><span class="ellipsis"><b class="num">{multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : time(e.startsAt)}</b> · {soon(e.startsAt, now)}</span><span class="by ellipsis">&nbsp;· {shortOf(e.org)}{#if e.coHost} × {shortOf(e.coHost)}{/if}</span></span>
@@ -389,7 +382,6 @@
       <span class="art"><HeroArt pic={v.item.cover} emoji={v.item.emoji} color={v.color} first={i === 0} /></span>
       <div class="shade"></div>
       <div class="slab">
-        {@render lens(v.item.cover)}
         <span class="hero-tx">
           <b class="clamp-2">{v.title}</b>
           <span class="where"><span class="ellipsis">{#if v.lead}<b class="num">{v.lead}</b> · {/if}{v.line}</span>{#if v.by}<span class="by ellipsis">&nbsp;· {v.by}</span>{/if}</span>
@@ -637,20 +629,13 @@
   @keyframes bloom { from { opacity: 0; } 40% { opacity: calc(var(--halo) * 1.5); } }
   .art, .shade { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; }
   .art { overflow: hidden; }
-  /* the cover clear at the top (it is the screen's one picture), deeper toward the words */
-  .shade { background: linear-gradient(rgba(0, 0, 0, 0) 36%, rgba(0, 0, 0, 0.5)); box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.14); }
+  /* the card's hair rim; with no cover, the mesh deeper toward the words */
+  .shade { box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.14); }
+  .nopic .shade { background: linear-gradient(rgba(0, 0, 0, 0) 36%, rgba(0, 0, 0, 0.5)); } /* a cover has HeroArt's own scrim */
   @media (prefers-reduced-motion: reduce) { .hero::before { animation: none; } }
-  /* (r4) the words lie on the cover itself, no box inside the card: under them the picture goes soft and dark by
-     degrees (the lens: the cover's thumb again, blurred and dimmed, let in through a short gradient mask that ends above the words: no edge where it starts, and the
-     sharp cover never shows through behind a line of text). A still layer, drawn once: nothing blurs live */
+  /* the words lie on the cover itself, no box inside the card: HeroArt darkens the picture under them */
   .slab { position: relative; z-index: 2; /* over the card's own tap */ isolation: isolate; display: flex; flex-direction: column; padding: 76px 18px var(--s-4);
     border-radius: 0 0 var(--r-xl) var(--r-xl); color: var(--text); pointer-events: none; }
-  .lens { position: absolute; inset: 0; z-index: -2; overflow: hidden; border-radius: inherit; pointer-events: none;
-    -webkit-mask-image: linear-gradient(transparent, rgba(0, 0, 0, 0.7) 28px, black 56px); mask-image: linear-gradient(transparent, rgba(0, 0, 0, 0.7) 28px, black 56px); }
-  /* the picture runs 64px past the lens on every side but the top: a blurred layer fades out at its own edges, and
-     at the card's foot the sharp cover showed through that fade */
-  .lens img { position: absolute; left: -64px; bottom: -64px; width: calc(100% + 128px); max-width: none; /* base.css caps every img at its box */ height: calc(var(--hh) + 64px); object-fit: cover;
-    filter: blur(32px) saturate(1.7) brightness(0.6); }
   /* over media the tags are white on a clear chip (the accent's blue on a blue cover was 2:1), the place has no underline
      (the whole card opens the event; the pin says it is a place) */
   .hsub :global(.chip) { background: rgba(255, 255, 255, 0.18); color: var(--on-accent); }

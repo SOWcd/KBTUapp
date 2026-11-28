@@ -51,8 +51,9 @@ def seed(path: str) -> None:
         con.execute("INSERT INTO org_roles (org_id, name, color, level, fixed, created_at) VALUES (1, ?, ?, ?, 1, ?)", (rn, color, lv, now))
     con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at, role_id) VALUES (1, 1, 'vice', ?, (SELECT id FROM org_roles WHERE org_id = 1 AND level = 'vice'))", (now - 50 * day,))
     start = (now // day + 2) * day + 13 * 3600 + 1800  # the day after tomorrow, 18:30 in Almaty
-    con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, ends_at, emoji, color, tint, seats, price, pay_to_name, pay_phone,
-            created_by, created_at, updated_at, published_at) VALUES (1, 1, 'published', 'Open Mic: stand-up and music', 'Atrium', ?, ?, 'microphone_3d',
+    con.execute("""INSERT INTO events (id, org_id, status, title, description, place, starts_at, ends_at, emoji, color, tint, seats, price, pay_to_name, pay_phone,
+            created_by, created_at, updated_at, published_at) VALUES (1, 1, 'published', 'Open Mic: stand-up and music',
+            'Stand-up, songs and poetry by students. Come to listen, or take five minutes on stage: sign up at the door.', 'Atrium', ?, ?, 'microphone_3d',
             '#7A4A22', '#5C3719', 80, 2000, 'Arman A.', '+77071234567', 1, ?, ?, ?)""", (start, start + 3 * 3600, now - day, now - day, now - day))
     # Dana's friends go to a free event: her Friends page has its "where friends are going" cards
     con.execute("INSERT INTO friendships (a, b, created_at) VALUES (1, 2, ?), (1, 3, ?)", (now - 20 * day, now - 10 * day))
