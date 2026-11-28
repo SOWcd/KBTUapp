@@ -325,5 +325,5 @@ html.lowfx .z, .rest .z { transform: scale(var(--zs, 1)); transition: none; }
 /* the home-screen app (no Telegram): iOS 26 without a translucent status bar reported a short innerHeight at launch, so
    --app-h left a black band at the bottom and the nav rode up (owner, Nov 22); here the box simply fills the window */
 :root[data-web] #app { bottom: 0; height: auto; } /* ui/Pane.svelte does the same for its pane */
-/* Measured on an iPhone 16 home-screen app (Nov 22, public/vp.html): with the default status bar the window starts under
+/* Measured on an iPhone 16 home-screen app (Nov 22, a since-deleted probe page): with the default status bar the window starts under
    it and the window height (793 of 852) is true; 100lvh and screen.height overshoot by the status bar (the nav was cut off) */
