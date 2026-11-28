@@ -82,3 +82,17 @@ export function railGestures(s: FloorSwipe, off: () => boolean) {
   }
   return { swipeable, swiped: () => swiped };
 }
+
+/** the floor changing (a bare swap of the picture doesn't feel like a floor changing): a lift's depth. Going up
+ *  (up > 0), the floor you leave (`ghost`, its overview) sinks away under you and the new one comes down from above,
+ *  settling to size; going down, the other way. Both pictures, and the canvas with the new floor's tiles and labels,
+ *  scale about the screen's middle (x, y on the stage); opacity and transform only. `done`: the ghost has gone */
+export function liftFloor(first: HTMLElement, ghost: HTMLImageElement, canvas: HTMLElement, up: number, x: number, y: number, done: () => void): void {
+  const m = new DOMMatrix(getComputedStyle(first).transform), o = `${(x - m.e) / m.a}px ${(y - m.f) / m.a}px`;
+  const fresh = first.querySelector<HTMLImageElement>('img:not(.ghost)');
+  const ease = { duration: 480, easing: 'cubic-bezier(.3, .75, .25, 1)' }, come = { transform: [`scale(${up > 0 ? 1.08 : 0.93})`, 'scale(1)'], opacity: [0, 1] };
+  ghost.style.transformOrigin = o;
+  ghost.animate({ transform: ['scale(1)', `scale(${up > 0 ? 0.9 : 1.1})`], opacity: [1, 0.5, 0] }, { ...ease, fill: 'forwards' }).finished.catch(() => {}).finally(done);
+  if (fresh) { fresh.style.transformOrigin = o; fresh.animate(come, ease); }
+  canvas.animate(come, ease);
+}

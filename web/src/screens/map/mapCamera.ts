@@ -16,7 +16,7 @@ const NEAR = 1.15;
 
 export type CameraHost = {
   map: () => GLMap; fr: () => Frame; ver: () => Ver;
-  stage: () => HTMLElement; side: () => HTMLElement; plan: () => HTMLElement; first: () => HTMLElement;
+  panel: () => HTMLElement; stage: () => HTMLElement; side: () => HTMLElement; plan: () => HTMLElement; first: () => HTMLElement;
   /** fingers on the stage now */
   fingers: () => number;
 };
@@ -73,5 +73,20 @@ export function camera(h: CameraHost) {
     const map = h.map(), to = middle(Math.min(scale(), homeK())), a = map.project(to.center), b = map.project(map.getCenter());
     if (Math.hypot(a.x - b.x, a.y - b.y) > 0.5 || Math.abs(to.zoom - map.getZoom()) > 0.005) easeFit(to, 380);
   }
-  return { W, H, scale, cam, uvAt, within, follow, head, homeK, middle, out, halt, reset, easeFit, grab, rest };
+  /** the stage's part nothing covers: above the bottom card or sheet (data-cover); measured, so the card's height and
+   *  the safe areas count. One place for every framing */
+  function free() {
+    // offsets, not rects: a card still rising (a transform) would measure short
+    const panel = h.panel(), H = panel.clientHeight; let bottom = 0;
+    panel.querySelectorAll<HTMLElement>('[data-cover]').forEach((el) => { bottom = Math.max(bottom, H - el.offsetTop); });
+    return { top: head() + 64, bottom: bottom ? bottom + 12 : 0 }; // under the floors row
+  }
+  /** where to glide to show all of `pts`, between the buttons at the top and the card at the bottom: the whole
+   *  step, never closer than it fits (the way didn't fit and he had to find himself) */
+  function fitOf(pts: number[][]) {
+    const { top, bottom } = free(), us = pts.map((p) => p[0]), vs = pts.map((p) => p[1]), W = h.stage().clientWidth, H = h.stage().clientHeight - top - bottom;
+    const bw = Math.max(...us) - Math.min(...us) + 0.08, bh = (Math.max(...vs) - Math.min(...vs)) * h.fr().ar + 0.08;
+    return { u: (Math.min(...us) + Math.max(...us)) / 2, v: (Math.min(...vs) + Math.max(...vs)) / 2, zoom: Math.min(3.2, Math.max(1, Math.min(1 / bw, H / (bh * W)))) };
+  }
+  return { W, H, scale, cam, uvAt, within, follow, head, homeK, middle, out, halt, reset, easeFit, grab, rest, free, fitOf };
 }

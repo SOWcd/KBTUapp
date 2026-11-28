@@ -54,7 +54,7 @@
   import uniqRooms from '../../assets/map/uniq-rooms.json';
   import { UNITS, toPlan, fromPlan } from './planUnits';
   import { glass, jelly } from '../../ui/glass';
-  import { floorSwipe, railGestures } from './floorSwipe';
+  import { floorSwipe, railGestures, liftFloor } from './floorSwipe';
   import { camera, MAX, spring } from './mapCamera';
   import MapPad, { placeGroups, exitTiles } from './MapPad.svelte';
   import RouteUI, { type RouteView } from './RouteUI.svelte';
@@ -133,8 +133,8 @@
   let ready = $state(false);
   const fr = $derived(FRAMES[ver]);
   let side: HTMLDivElement; // the top row: the plan rests below where it starts
-  const { W, H, scale, cam, uvAt, within, follow, head, homeK, middle, out, halt, reset, easeFit, grab, rest } = camera({
-    map: () => map, fr: () => fr, ver: () => ver, stage: () => stage, side: () => side, plan: () => plan, first: () => first, fingers: () => fingers,
+  const { W, H, scale, cam, uvAt, within, follow, head, homeK, middle, out, halt, reset, easeFit, grab, rest, free, fitOf } = camera({
+    map: () => map, fr: () => fr, ver: () => ver, panel: () => panel, stage: () => stage, side: () => side, plan: () => plan, first: () => first, fingers: () => fingers,
   });
 
   // ---- what MapLibre draws: the floor's tiles, the 2023 plan's original over its redraw when asked, the labels ----
@@ -269,9 +269,7 @@
   const idxOf = (n: number) => railFloors.indexOf(n);
   // the knob goes wherever the floor comes from (a tap, a search, a route step, the old plan's narrower rail)
   $effect(() => { const i = idxOf(cur); if (!untrack(() => dragging)) { kp = i; jelly(untrack(() => knob)); } });
-  // the change itself (a bare swap of the picture doesn't feel like a floor changing): a lift's
-  // depth. Going up, the floor you leave sinks away under you and the new one comes down from above, settling to size;
-  // going down, the other way. Both pictures scale about the middle of the screen; opacity and transform only.
+  // the change itself: a lift's depth, the floor left sinking away or rising (floorSwipe.ts liftFloor)
   let ghost = $state<string | null>(null), ghostEl = $state<HTMLImageElement>();
   async function goTo(n: number) {
     if (n === cur) return;
@@ -281,14 +279,8 @@
     cur = n; touched++;
     await tick();
     if (!ghostEl) return;
-    const m = new DOMMatrix(getComputedStyle(first).transform), o = `${(W() / 2 - m.e) / m.a}px ${(H() / 2 - m.f) / m.a}px`;
-    const fresh = first.querySelector<HTMLImageElement>('img:not(.ghost)');
-    const ease = { duration: 480, easing: 'cubic-bezier(.3, .75, .25, 1)' }, come = { transform: [`scale(${up > 0 ? 1.08 : 0.93})`, 'scale(1)'], opacity: [0, 1] };
-    const el = ghostEl, src = ghost;
-    el.style.transformOrigin = o;
-    el.animate({ transform: ['scale(1)', `scale(${up > 0 ? 0.9 : 1.1})`], opacity: [1, 0.5, 0] }, { ...ease, fill: 'forwards' }).finished.catch(() => {}).finally(() => { if (ghost === src) ghost = null; });
-    if (fresh) { fresh.style.transformOrigin = o; fresh.animate(come, ease); }
-    map.getCanvas().animate(come, ease); // the new floor's tiles and labels come with its overview, about the screen's middle
+    const src = ghost;
+    liftFloor(first, ghostEl, map.getCanvas(), up, W() / 2, H() / 2, () => { if (ghost === src) ghost = null; });
   }
   // the floors next to this one decoded ahead (each one's overview: its coarsest tile), so the new one is there the
   // moment the floor changes (a swipe goes one floor; a far one on the rail decodes from the cache under the
@@ -380,21 +372,8 @@
   const spots = $derived(onRoomFloor ? roomAt(ver, cur, room!) : ver === 'main' && at && at.f === cur ? [[at.u, at.v]] : []);
   // not numbered on the plan: its nearest numbers show roughly where it is (nearRooms)
   const near = $derived(ver !== 'main' || !onRoomFloor || spots.length ? [] : nearRooms(ROOMS[cur], room!, AR).map(([, at]) => at));
-  /** the stage's part nothing covers: above the bottom card or sheet (data-cover); measured, so the card's height and
-   *  the safe areas count. One place for every framing */
-  function free() {
-    // offsets, not rects: a card still rising (a transform) would measure short
-    const H = panel.clientHeight; let bottom = 0;
-    panel.querySelectorAll<HTMLElement>('[data-cover]').forEach((el) => { bottom = Math.max(bottom, H - el.offsetTop); });
-    return { top: head() + 64, bottom: bottom ? bottom + 12 : 0 }; // under the floors row
-  }
-  /** glide to show all of `pts`, between the buttons at the top and `inset` px at the bottom (a route's card): the whole
-   *  step, never closer than it fits (the way didn't fit and he had to find himself) */
-  function frame(pts: number[][]) {
-    const { top, bottom } = free(), us = pts.map((p) => p[0]), vs = pts.map((p) => p[1]), W = stage.clientWidth, H = stage.clientHeight - top - bottom;
-    const bw = Math.max(...us) - Math.min(...us) + 0.08, bh = (Math.max(...vs) - Math.min(...vs)) * AR + 0.08;
-    glideTo((Math.min(...us) + Math.max(...us)) / 2, (Math.min(...vs) + Math.max(...vs)) / 2, Math.min(3.2, Math.max(1, Math.min(1 / bw, H / (bh * W)))), true);
-  }
+  /** glide to show all of `pts` above the card (mapCamera.ts fitOf) */
+  function frame(pts: number[][]) { const f = fitOf(pts); glideTo(f.u, f.v, f.zoom, true); }
   $effect(() => {
     if (!onRoomFloor) return;
     if (spots.length) glideTo(spots[0][0], spots[0][1], 3.2, true); // framed above the room's card
