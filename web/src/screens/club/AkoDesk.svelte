@@ -64,7 +64,7 @@
   const addDay = () => void import('./AkoDaySheet.svelte').then((x) => desk && open(x.default, { org, desk, onchange: load }));
 
   async function copyPublic() {
-    try { await navigator.clipboard.writeText(`${location.origin}/ako/o/${slug}`); haptic.ok(); say(aw('akd.copied')); }
+    try { await navigator.clipboard.writeText(`${location.origin}/ako${slug === 'ako' ? '' : `/o/${slug}`}`); haptic.ok(); say(aw('akd.copied')); }
     catch { haptic.error(); say(t('common.error'), 'warning_3d'); }
   }
   const more = (e: MouseEvent) => menu(e.currentTarget as Element, [
