@@ -66,7 +66,8 @@ const staffOf = (method: string, path: string, event?: Id): Record<string, strin
 /** told of each failed call by its class only (App counts it against the screen in front, lib/stats.ts) */
 export const onFail: { fn: ((kind: ApiKind) => void) | null } = { fn: null };
 
-async function call<T>(method: string, path: string, body?: unknown, staffEvent?: Id): Promise<T> {
+// exported for lib/api/akoTeam.ts, the admissions desk's calls: kept out of the start bundle
+export async function call<T>(method: string, path: string, body?: unknown, staffEvent?: Id): Promise<T> {
   if (accountClosed()) throw new ApiErr('forbidden', 'init_data');
   const account = accountRequest();
   let r: Response, data: unknown;

@@ -2350,6 +2350,7 @@ const kk: Dict = {
   'studio.delNo': "Болмады: клубта мүшелер не іс-шаралар бар",
   'studio.recruitClosed': "жабық",
   'studio.memoShort': "Қызметтік хат",
+  'studio.ako': "Өтінімдерді қабылдау",
   'vol.title': "Волонтерлер керек",
   'vol.left': "Бос орын: {n}/{of}",
   'vol.senior': "2-курстан бастап",

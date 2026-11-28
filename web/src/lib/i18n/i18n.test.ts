@@ -7,9 +7,12 @@ import en from './en';
 import sru from './staff.ru';
 import skk from './staff.kk';
 import sen from './staff.en';
+import aru from './ako.ru';
+import akk from './ako.kk';
+import aen from './ako.en';
 
-// the start bundle's three and the staff screens' three (staff.ts) under the same rules
-const SETS = [['', ru, kk, en], ['staff.', sru, skk, sen]] as const;
+// the start bundle's three, the staff screens' three (staff.ts) and the admissions' three (ako.ts) under the same rules
+const SETS = [['', ru, kk, en], ['staff.', sru, skk, sen], ['ako.', aru, akk, aen]] as const;
 
 const holes = (v: unknown): string => [...new Set(JSON.stringify(v).match(/\{[a-zA-Z]+\}/g) ?? [])].sort().join(',');
 
@@ -44,5 +47,16 @@ it('puts a soft hyphen in every long ru and kk word', () => {
     .flatMap((v) => (typeof v === 'string' ? [v] : Object.values(v as Record<string, string>)))
     .flatMap((s) => s.match(/[\p{L}­]{15,}/gu) ?? [])
     .filter((w) => w.replace(/­/g, '').length >= 15 && !w.includes('­'));
-  expect([...words(ru), ...words(kk), ...words(sru), ...words(skk)]).toEqual([]);
+  expect([...words(ru), ...words(kk), ...words(sru), ...words(skk), ...words(aru), ...words(akk)]).toEqual([]);
+});
+
+// Admissions' own consent (server ako.CONSENT 'ako-2') says what the policy's section 17 says: health data (075/u and the
+// fluorography) and the Academic Programs reviewers besides AKO's heads, in every language
+it('names health data and the reviewers in the admissions consent', () => {
+  for (const d of [aru, akk, aen]) {
+    const t = d['ako.consentText'];
+    expect(t).toMatch(/075/);
+    expect(t).toMatch(/флюорограф|fluorograph/i);
+    expect(t).toMatch(/академических программ|академиялық бағдарламалар|Academic Programs/);
+  }
 });

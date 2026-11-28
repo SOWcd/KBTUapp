@@ -197,7 +197,7 @@ h2 { font-size: 24px; font-weight: 700; line-height: 1.15; letter-spacing: -.022
   var GROUP = 'https://groups.google.com/g/kbtu-app-testers';
   var OPTIN = 'https://play.google.com/apps/testing/kz.sow.kbtu';
   var PLAY = 'https://play.google.com/store/apps/details?id=kz.sow.kbtu';
-  var WAIT = 10 * 60 * 1000;   // Google Play lets a new tester in within about this long after the opt-in
+  var WAIT = 0;   // owner, Nov 28: Google Play let a new tester in at once; no timer, the install step says to retry if Play has not caught up
   var RETRY = 5 * 60 * 1000;   // "still not found": this much more
   var RING = 339.292;          // the ring's circumference (r = 54)
 

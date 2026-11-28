@@ -2373,6 +2373,7 @@ const ru = {
   'studio.delNo': "Не получилось: в клубе есть участники или события",
   'studio.recruitClosed': "закрыт",
   'studio.memoShort': "Служебка",
+  'studio.ako': "Приём заявок",
   'vol.title': "Нужны волонтёры",
   'vol.left': "Свободно {n} из {of}",
   'vol.senior': "со 2 курса",

@@ -334,7 +334,7 @@ export interface StudentProfile {
 /** A club role's rights: door (check people in), events, posts (news, replies as the club), people (tags, probation),
  *  team (applications, invites, roles, removing), money (price, Kaspi), profile (the club's page). */
 export type Right = 'door' | 'events' | 'posts' | 'people' | 'casting' | 'team' | 'money' | 'memo' | 'profile' | 'reports';
-export interface Membership { org: OrgRef; role: OrgRole; title?: string | null; titleKk?: string | null; titleEn?: string | null; rights?: Right[]; oversee?: boolean; channel?: { title: string; mirror: boolean } | null; storiesLocked?: true }  // storiesLocked: a writer of a student initiative below the Ascent's collab (server clubs.stories_open); rights, oversee (DMP staff there): in my own memberships; channel (the main chat, mirror: its posts reach the news): to Vice+ only
+export interface Membership { org: OrgRef; role: OrgRole; title?: string | null; titleKk?: string | null; titleEn?: string | null; rights?: Right[]; oversee?: boolean; channel?: { title: string; mirror: boolean } | null; storiesLocked?: true; ako?: 'manage' | 'review' }  // ako: the org takes applications (server logic/ako.py): head+ run them, a member reviews; storiesLocked: a writer of a student initiative below the Ascent's collab (server clubs.stories_open); rights, oversee (DMP staff there): in my own memberships; channel (the main chat, mirror: its posts reach the news): to Vice+ only
 
 /** The creator's Studio of a club he isn't in (GET /orgs/{id}/lent): its President's membership, and every role of the
  *  club's model (the levels, then the club's own) with the rights the server lends him as it (X-Staff-Role: key) */
@@ -1046,3 +1046,38 @@ export interface LibRoom {
 }
 /** the room's big screen (/show?lib=<key>): free or taken, nothing else */
 export interface LibWall { name: string; free: number; total: number; tables: { label: string; seats: ('free' | 'taken')[] }[] }
+
+// ---- admissions (server logic/ako.py): an org's programs, an applicant's package by its link, the team's desk
+/** a document's key; its name, hint and how-to are UI strings (lib/i18n/ako.*.ts: ako.doc.<key>) */
+export type AkoDoc = 'cv' | 'diploma' | 'application' | 'id' | 'photo' | 'med' | 'fluoro' | 'work' | 'extra';
+export interface AkoProgramInfo { title: string; sub: string; price: string; length: string; format: string }
+/** first: asked before sending; later: needed for enrolment, may come after; optional: welcome */
+export interface AkoProgram {
+  id: Id; key: string; kind: 'degree' | 'short'; info: Record<'ru' | 'kk' | 'en', AkoProgramInfo>; url: string;
+  interview: boolean; first: AkoDoc[]; later: AkoDoc[]; optional: AkoDoc[];
+}
+export interface AkoFile { id: Id; doc: AkoDoc; mime: 'image/jpeg' | 'application/pdf'; bytes: number; at: Ts }
+export type AkoStatus = 'draft' | 'sent' | 'review' | 'accepted' | 'declined';
+export interface AkoOrg { slug: string; name: Partial<Record<'ru' | 'kk' | 'en', string>> & { ru: string } }
+/** the public start link (/ako/o/<slug>): nothing made until a program is picked */
+export interface AkoStart { org: AkoOrg; programs: AkoProgram[] }
+/** the applicant's page (/ako#<secret>): files by name only, never their contents; slots: the times free to book */
+export interface AkoView extends AkoStart {
+  program: string | null; name: string; phone: string; email: string; lang: 'ru' | 'kk' | 'en'; status: AkoStatus;
+  consent: boolean; sentAt: Ts | null; rebook: string | null; files: AkoFile[];
+  slot: { id: Id; at: Ts; minutes: number; teams: string | null } | null;
+  slots: { id: Id; at: Ts; minutes: number }[];
+  maxFiles: number; maxBytes: number;
+}
+/** an applicant in the team's list: what is still missing of first + later; mine: a manager made the link */
+export interface AkoRow {
+  id: Id; name: string; phone: string; program: string | null; status: AkoStatus; sentAt: Ts | null; updatedAt: Ts; mine: boolean;
+  slot: { id: Id; at: Ts; minutes: number; who: string } | null; rebook: string | null; missing: AkoDoc[]; docs: number;
+}
+export interface AkoPackage extends AkoRow {
+  email: string; lang: 'ru' | 'kk' | 'en'; note: string; consentAt: Ts | null; createdAt: Ts; by: PersonRef | null;
+  teams: string | null; files: AkoFile[];
+}
+export interface AkoSlot { id: Id; at: Ts; minutes: number; cap: number; who: string; teams: string | null; apps: Id[] }
+/** the team's desk in Studio: manage (head+) or read only (a reviewer); days: each day's Teams link by YYYY-MM-DD */
+export interface AkoDesk { manage: boolean; programs: AkoProgram[]; apps: AkoRow[]; slots: AkoSlot[]; days: Record<string, string>; cutoff: number }
