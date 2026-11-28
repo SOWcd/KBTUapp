@@ -20,7 +20,8 @@ function sticksOut(page: Page): Promise<string[]> {
 
     for (const el of document.body.querySelectorAll<HTMLElement>('*')) {
       const r = el.getBoundingClientRect(), cs = getComputedStyle(el);
-      if (!r.width || !r.height || cs.visibility === 'hidden' || el.closest('[aria-hidden="true"], [inert]')) continue;
+      // (.pane-under: the page a pushed one covers, drifted left on purpose, base.css)
+      if (!r.width || !r.height || cs.visibility === 'hidden' || el.closest('[aria-hidden="true"], [inert], .pane-under')) continue;
       if (r.left >= -1 && r.right <= vw + 1) continue;
       let clipped = false;
       for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
@@ -166,6 +167,30 @@ test('the assistant\'s welcome', async ({ open }) => {
   await p.page.getByRole('button', { name: tr('as.askAi'), exact: true }).click();
   await expect(p.page.getByRole('dialog', { name: tr('as.title') })).toBeVisible();
   await shot(p, 'assistant');
+});
+
+test('the campus map', async ({ open }) => {
+  const p = await ali(open);
+  // the map's "free now" rooms are off on this server: it answers 404 by design (client.ts mapRooms)
+  p.allow(/\/api\/map\/rooms 404$/);
+  p.allow(/status of 404 \(Not Found\)$/);
+  await p.page.locator('[data-more]').click(); // the map opens from the Afisha's "More"
+  await p.page.getByRole('menuitem', { name: tr('map.open'), exact: true }).click();
+  await expect(p.page.getByRole('group', { name: tr('map.floors') })).toBeVisible();
+  await shot(p, 'map');
+});
+
+test('a club\'s Studio', async ({ open }) => {
+  const p = await settled(await open('Dana')); // Dana runs the Open Mic Club
+  await nav(p.page).getByRole('button', { name: tr('page.clubs'), exact: true }).click();
+  await p.page.getByRole('button', { name: /^Open Mic Club\b/ }).first().click();
+  await expect(p.page.getByRole('region', { name: 'Open Mic Club' })).toBeVisible();
+  await shot(p, 'studio');
+});
+
+test('Afisha on the smallest phone', async ({ open, page }) => {
+  await page.setViewportSize({ width: 320, height: 568 }); // the one 320 px picture: what fits at 375 may not here
+  await shot(await ali(open), 'afisha-320');
 });
 
 // Spy (screens/games/Spy.svelte): each state from a made-up room the test answers the API with. A real room's code,
