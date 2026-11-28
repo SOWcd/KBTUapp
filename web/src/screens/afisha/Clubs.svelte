@@ -1,7 +1,9 @@
 <script lang="ts">
   // The Clubs tab, one page and nothing pushed from it, in the Profile's language: no page title, a stack of cards on
-  // one 16 px rhythm. First who is recruiting now, each a club's badge (its lanyard's colours, its mark and name, a strip
-  // with the deadline and the one button), as the Profile opens with mine; then my clubs, a shelf of marks in a card (a
+  // one 16 px rhythm. First who is recruiting now, each on the club's own badge: the very lanyard the Profile and the
+  // ticket draw (ui/LanyardBand's art, its colours, its medallion top right, its strip at the foot, here with the
+  // deadline and the one button); a club with no lanyard yet stands on its logo's colours in the same frame. Then my
+  // clubs, a shelf of marks in a card (a
   // tap: Studio); then every club on one grouped card, rows with hairlines, that the chips filter in place (all by the
   // server's rank, recruiting with Apply on each row, followed, an interest, schools), the quiet clubs dimmed at its
   // end; last two tiles, the chats and a new club. Search (pulled down) swaps the page for what it found.
@@ -14,8 +16,8 @@
   import Trophy from '@lucide/svelte/icons/trophy';
   import type { Membership, Org, OrgCategory, OrgRef, Post } from '../../lib/api';
   import { clubLook, lookVars, skinOf } from '../../lib/awards';
-  import { byWeight, clubSub, daysLeft, hit, nextByOrg, roundDue, service, waitsDmp } from '../../lib/clubs';
-  import { artOf, coverOf } from '../../lib/covers';
+  import { byWeight, clubSub, hit, nextByOrg, roundDue, service, waitsDmp } from '../../lib/clubs';
+  import { coverOf } from '../../lib/covers';
   import { t, tn } from '../../lib/i18n/index.svelte';
   import { byRank, canLeave, roleLabel } from '../../lib/perms';
   import { castingState, castingStatus } from '../../lib/posts';
@@ -28,11 +30,13 @@
   import Button from '../../ui/Button.svelte';
   import ChatAvatar from '../../ui/ChatAvatar.svelte';
   import GovMark from '../../ui/GovMark.svelte';
+  import LanyardBand from '../../ui/LanyardBand.svelte';
   import OfficeMark from '../../ui/OfficeMark.svelte';
   import { longPress } from '../../ui/longpress';
   import { menu } from '../../ui/menu';
   import OfficialMark from '../../ui/OfficialMark.svelte';
   import OrgLogo from '../../ui/OrgLogo.svelte';
+  import OrgMedal from '../../ui/OrgMedal.svelte';
   import PullSearch from '../../ui/PullSearch.svelte';
   import TelegramMark from '../../ui/TelegramMark.svelte';
 
@@ -59,12 +63,12 @@
   const rounds = $derived(data.orgs.filter((o) => o.round && outside(o)).sort((a, b) => +!a.official - +!b.official || b.members - a.members || a.round!.closesAt - b.round!.closesAt));
   const always = $derived(clubs.filter((o) => o.recruiting && !o.round && outside(o)).sort(byWeight));
   // a badge: the club, what it is in caps (its interest; a casting says to come), its people with my friends' faces, when
-  type Call = { key: string; org: OrgRef; tag?: string; when: string; soon?: boolean; live?: boolean; sub: string; faces?: Org['friends']; open: () => void; cta?: { label: string; done: boolean; off?: boolean; run: () => void } };
+  type Call = { key: string; org: OrgRef; tag?: string; when: string; live?: boolean; sub: string; faces?: Org['friends']; open: () => void; cta?: { label: string; done: boolean; off?: boolean; run: () => void } };
   const kind = (o: Org) => (o.category ? t(`clubs.cat.${o.category}`) : undefined);
   const story = (p: Post) => sheets.stories([{ org: p.org, items: [{ post: p }], unread: false, cast: false }], 0);
   const calls = $derived<Call[]>([
     ...castings.map((p) => ({ key: `c${p.id}`, org: p.org, tag: t('casting.come'), when: castingStatus(p.casting!), live: castingState(p.casting!) === 'open', sub: p.casting!.place, open: () => story(p) })),
-    ...rounds.map((o) => ({ key: `r${o.id}`, org: o, tag: kind(o), when: roundDue(o.round!.closesAt), soon: daysLeft(o.round!.closesAt) <= 3, sub: tn('club.members', o.members), faces: o.friends, open: () => sheets.club(o.id),
+    ...rounds.map((o) => ({ key: `r${o.id}`, org: o, tag: kind(o), when: roundDue(o.round!.closesAt), sub: tn('club.members', o.members), faces: o.friends, open: () => sheets.club(o.id),
       cta: { label: t(o.round!.applied ? 'clubs.applied' : 'join.apply'), done: o.round!.applied, run: () => sheets.roundApply(o.id, 'join') } })),
     ...always.map((o) => ({ key: `a${o.id}`, org: o, tag: kind(o), when: t('clubs.openNow'), sub: tn('club.members', o.members), faces: o.friends, open: () => sheets.club(o.id),
       cta: { label: t(o.myRequest === 'rejected' ? 'join.notNow' : o.myRequest === 'pending' ? 'join.sent' : 'join.apply'), done: !!o.myRequest, off: o.myRequest === 'rejected', run: () => toggleJoin(o.id) } })),
@@ -142,24 +146,20 @@
     {#if calls.length}
       <section class={['calls', 'hscroll', { one: calls.length === 1 }]} aria-label={t('clubs.recruitingNow')} bind:this={shelf}>
         {#each calls.slice(0, SHOWN) as c (c.key)}
-          {@const art = artOf(c.org)}
           {@const look = skinOf(c.org)}
           {@const tpl = look ? clubLook(look) : undefined}
-          <!-- a template lanyard's picture is see-through: its ground and ink are the look's colours, as on its ticket -->
-          <div class={['call', { look: tpl, paper: tpl?.ink }]} style={look && tpl ? lookVars(look) : undefined} style:background={tpl ? undefined : coverOf(c.org)}>
-            {#if art}<img class="art" src={art} alt="" loading="lazy" decoding="async" draggable="false" />{/if}
-            <i class="lit"></i>
+          <!-- the club's lanyard as the Profile's badge and its ticket draw it; lookVars: the template's colours and ink -->
+          <div class={['call', { club: tpl }]} style={look && tpl ? lookVars(look) : undefined} style:background={look ? undefined : coverOf(c.org)}>
+            {#if look}<LanyardBand {look} wide qr />{:else}<i class="lit"></i>{/if}
             <button class="open" onclick={c.open} aria-label={c.org.name}></button>
-            <span class="who">
-              <span class="ph"><OrgLogo org={c.org} size={64} /></span>
-              <span class="id">
-                <b class="clamp-2">{nameOf(c.org)}</b>
-                {#if c.tag}<i>{c.tag}</i>{/if}
-                <small>{#if c.faces?.length}<span class="faces">{#each c.faces as p (p.id)}<Avatar person={p} size={18} tappable={false} />{/each}</span>{/if}<span class="ellipsis">{c.sub}</span></small>
-              </span>
+            <span class="medal">{#if look}<OrgMedal {look} logo={c.org.logo ?? null} />{:else}<span class="rim"><OrgLogo org={c.org} size={46} /></span>{/if}</span>
+            <span class="id">
+              <b class="clamp-2">{nameOf(c.org)}</b>
+              {#if c.tag}<i>{c.tag}</i>{/if}
+              <small>{#if c.faces?.length}<span class="faces">{#each c.faces as p (p.id)}<Avatar person={p} size={18} tappable={false} />{/each}</span>{/if}<span class="ellipsis">{c.sub}</span></small>
             </span>
             <span class="strip">
-              <span class={['when', 'ellipsis', { soon: c.soon, live: c.live }]}>{c.when}</span>
+              <span class={['when', 'ellipsis', { live: c.live }]}>{c.when}</span>
               {#if c.cta}<button class={['go', { done: c.cta.done }]} disabled={c.cta.off} onclick={c.cta.run}>{c.cta.label}</button>{/if}
             </span>
           </div>
@@ -233,52 +233,42 @@
   /* a shelf runs to the card's (or the screen's) edges and starts on its padding */
   .hscroll { gap: 10px; padding-inline: var(--s-4); scroll-padding-inline: var(--s-4); }
 
-  /* recruiting: a club's badge, as mine on the Profile. Its lanyard's colours lit from a corner in its own accent, its
-     picture whole, its mark framed where my photo is, its name; the foot is one flat band across the card, the deadline
-     and the one button on it */
+  /* recruiting: the club's badge, the Profile's own (Hero's .badge): its lanyard's art and colours, the medallion top
+     right, the name with its caps line and a grey line under it, and at the foot the lanyard's strip in its own metal,
+     here saying until when, the one button on it */
   .calls { margin-inline: calc(-1 * var(--gutter)); padding-inline: var(--gutter); scroll-padding-inline: var(--gutter); gap: var(--s-3); }
-  .call { position: relative; flex: none; width: 88%; height: 168px; overflow: hidden; border-radius: var(--r-xl); color: var(--on-accent); scroll-snap-align: start;
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12); transition: transform 450ms var(--ease-bounce); }
+  .call { position: relative; flex: none; width: 90%; height: 172px; overflow: hidden; border-radius: var(--r-l); color: var(--on-accent); scroll-snap-align: start;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28); transition: transform 450ms var(--ease-bounce); }
   .one .call { width: 100%; }
   .call:has(.open:active) { transform: scale(0.98); transition-duration: 80ms; }
-  .art, .lit { position: absolute; inset: 0; width: 100%; height: 100%; }
-  .art { object-fit: cover; object-position: right center; }
-  /* light on the card: a cover's own colours under a white gleam and a soft shade behind the words */
-  .lit { background: radial-gradient(80% 110% at 100% 0%, rgba(255, 255, 255, 0.34), transparent 62%), linear-gradient(90deg, rgba(0, 0, 0, 0.22), transparent 60%); }
+  /* a shelf of badges holds still: one moving scene is the Profile's, ten in a row would cost the scroll */
+  .call :global(.band *) { animation-play-state: paused !important; }
   .open { position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
   .open:active { transform: none; opacity: 1; } /* the press is the whole card's */
-  .who { position: absolute; inset: var(--s-4) var(--s-4) auto; display: flex; align-items: center; gap: 14px; }
-  .ph { flex: none; display: flex; padding: 3px; border-radius: var(--r-l); background: rgba(255, 255, 255, 0.28); box-shadow: 0 8px 18px -8px rgba(0, 0, 0, 0.5); }
-  .id { min-width: 0; display: flex; flex-direction: column; gap: var(--s-1); }
-  .id b { font: 700 var(--fs-t3)/1.1 var(--font-display); letter-spacing: -0.02em; text-shadow: 0 1px 10px rgba(0, 0, 0, 0.28); }
-  .id i { font: 700 var(--fs-micro)/1.2 var(--font-text); font-style: normal; letter-spacing: 0.1em; text-transform: uppercase; opacity: 0.86; }
-  .id small { display: flex; align-items: center; gap: 6px; font: 500 var(--fs-sub)/1.3 var(--font-text); }
-  .strip { position: absolute; inset: auto 0 0; display: flex; align-items: center; justify-content: space-between; gap: var(--s-3);
-    height: calc(var(--ctl-s) + var(--s-4)); padding: 0 var(--s-3) 0 var(--s-4); background: rgba(0, 0, 0, 0.24); box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.16); color: var(--on-accent); }
-  .when { display: flex; align-items: center; gap: 6px; min-width: 0; font: 600 var(--fs-sub)/1 var(--font-text); letter-spacing: 0.01em; }
-  .when.soon { color: var(--warning); }
+  .medal { position: absolute; top: 14px; right: 14px; width: 52px; height: 52px; }
+  .rim { display: block; padding: 3px; border-radius: var(--r-m); background: rgba(255, 255, 255, 0.85); box-shadow: 0 6px 14px -6px rgba(0, 0, 0, 0.4); }
+  .rim :global(.logo) { border-radius: var(--r-s) !important; }
+  .id { position: absolute; inset: 18px 80px auto 18px; display: flex; flex-direction: column; }
+  .id b { font: 700 var(--fs-t3)/1.12 var(--font-display); letter-spacing: -0.025em; text-shadow: var(--tsh, 0 1px 10px rgba(0, 0, 0, 0.28)); }
+  .id i { margin-top: 6px; font: 700 var(--fs-micro)/1.3 var(--font-text); font-style: normal; letter-spacing: 0.12em; text-transform: uppercase; color: var(--role, inherit); }
+  .id small { display: flex; align-items: center; gap: 6px; margin-top: 3px; font: 500 var(--fs-sub)/1.3 var(--font-text); color: var(--ink2, rgba(255, 255, 255, 0.84)); }
+  /* the strip: LanyardHolo's metal for a lanyard (its --h colours), pearl for a club without one */
+  .strip { position: absolute; inset: auto 14px 14px; display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); height: var(--ctl-s); padding-left: var(--s-3);
+    border-radius: var(--r-s); background: linear-gradient(100deg, var(--h1, white), var(--h2, rgb(232, 236, 246)) 50%, var(--h1, white)); color: var(--h3, var(--ink));
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5), inset 0 -1px 2px rgba(0, 0, 0, 0.18), 0 4px 12px -6px rgba(0, 0, 0, 0.45); }
+  .when { display: flex; align-items: center; gap: 6px; min-width: 0; font: 800 var(--fs-micro)/1 var(--font-text); letter-spacing: 0.12em; text-transform: uppercase; }
   .when.live::before { content: ''; flex: none; width: 7px; height: 7px; border-radius: var(--r-full); background: var(--success); }
-  .go { position: relative; z-index: 2; flex: none; height: var(--ctl-s); padding: 0 var(--s-4); border-radius: var(--r-full); background: var(--on-accent); color: var(--ink); font: 600 var(--fs-sub)/1 var(--font-text); }
+  /* the one button: words on the strip itself, no pill in a tray */
+  .go { position: relative; z-index: 2; flex: none; height: 100%; padding: 0 var(--s-3); color: inherit; font: 700 var(--fs-sub)/1 var(--font-text); }
   .go::after { content: ''; position: absolute; inset: -4px 0; } /* 44 to the finger */
-  .go.done { background: rgba(255, 255, 255, 0.22); color: var(--on-accent); }
-  .go:disabled { opacity: 0.6; }
-  /* a club's lanyard as the ground (lookVars, the ticket's .club): its colours and ink, lit in its strap's and its
-     hologram's colours instead of white */
-  .call.look { background: linear-gradient(155deg, var(--c1), var(--c2) 55%, var(--c3)); color: var(--ink); }
-  .look .lit { background: radial-gradient(85% 120% at 100% 0%, var(--h1), transparent 64%), radial-gradient(70% 90% at 0% 100%, var(--s2), transparent 70%); opacity: 0.42; }
-  .look .id b { text-shadow: var(--tsh); }
-  /* lookVars' --ink shadows the app's: a dark look's white button takes the look's colour */
-  .look:not(.paper) .go:not(.done) { color: var(--c2); }
-  /* a light paper: dark ink all the way, the band a shade of the paper, the button in ink */
-  .paper .lit { opacity: 0.2; }
-  .paper .id small { color: var(--ink2); }
-  .paper .ph { background: rgba(0, 0, 0, 0.1); }
-  .paper .strip { background: rgba(0, 0, 0, 0.06); box-shadow: inset 0 0.5px 0 rgba(0, 0, 0, 0.12); color: var(--ink); }
-  .paper .when.soon { color: var(--ink); }
-  .paper .go { background: var(--ink); color: var(--c1); }
-  .paper .go.done { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ink2); color: var(--ink); }
+  .go:not(.done)::before { content: ''; position: absolute; left: 0; top: 25%; bottom: 25%; width: 1px; background: currentColor; opacity: 0.25; }
+  .go.done, .go:disabled { opacity: 0.6; }
+  /* a club's template lanyard (lookVars, the ticket's .club): the card under its art, its ink */
+  .call.club { background: linear-gradient(155deg, var(--c1), var(--c2) 55%, var(--c3)); color: var(--ink); }
+  /* no lanyard yet: its logo's colours (coverOf) under a white gleam and a soft shade behind the words */
+  .lit { position: absolute; inset: 0; background: radial-gradient(80% 110% at 100% 0%, rgba(255, 255, 255, 0.34), transparent 62%), linear-gradient(90deg, rgba(0, 0, 0, 0.22), transparent 60%); }
   /* past the first ten: the rest, in the list below */
-  .call.rest { width: calc(var(--ctl-l) * 2); display: grid; place-items: center; background: var(--surface); box-shadow: var(--card-rim, var(--shadow-card)); color: var(--accent-text); font: 600 var(--fs-body)/1.2 var(--font-text); }
+  .call.rest { width: calc(var(--ctl-l) * 2); border-radius: var(--r-l); display: grid; place-items: center; background: var(--surface); box-shadow: var(--card-rim, var(--shadow-card)); color: var(--accent-text); font: 600 var(--fs-body)/1.2 var(--font-text); }
 
   /* my clubs: a shelf of marks in its card, as the medals in Awards, each name whole on two lines; a green ring only
      where something is coming up (a grey one on the rest was noise in light and nothing in dark) */
