@@ -16,7 +16,7 @@ if (!inTelegram && !/^\/(show|screen)\/?$/.test(location.pathname)) document.doc
 // the iPhone app draws the tab bar itself (UITabBar): Nav keeps only its corner button (lib/native.ts 'tabs')
 if (native.has('tabs')) document.documentElement.dataset.ntabs = '';
 // Telegram on Android reports its bottom inset (the system bar, 48 px) though the web view already ends above that bar
-// or the bar is hidden in fullscreen: tokens.css drops it there (measured Nov 27, startapp=vp: dock 58 px off the bottom)
+// or the bar is hidden in fullscreen: tokens.css drops it there (measured Nov 27: dock 58 px off the bottom)
 if (inTelegram && onAndroid) document.documentElement.dataset.android = '';
 // theme before the first paint: no white flash in dark mode
 applyTheme(initialTheme(tg.colorScheme()));
