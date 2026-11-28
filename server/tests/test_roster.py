@@ -46,6 +46,8 @@ def test_prefill_retention_migration_dates_legacy_rows(env, known_load):
         con.execute(f"INSERT INTO {table} (email, student_id) VALUES ('example@kbtu.kz', '25B010001')")
     if known_load:
         con.execute("INSERT INTO meta (key, value) VALUES ('prefill_list:old', '100'), ('prefill_list:new', '200')")
+    con.execute("ALTER TABLE fchan_hearts DROP COLUMN emoji")  # 263's columns, added again on the way up
+    con.execute("ALTER TABLE users DROP COLUMN n_forum_digest")
     con.execute("PRAGMA user_version = 260")
     db.init(cfg.db_path)
     for table in ("prefill", "prefill_rest"):

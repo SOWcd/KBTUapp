@@ -7,7 +7,8 @@ The rule (AGENTS.md): the bot sends templates with a button into the app, never 
 
 Two exceptions: a student's own post
 to the forum channel (`FORUM_CHANNEL`), published only after the AI's yes or a moderator's, as plain text without
-links or mentions, signed with the app's name or "Anonymous student"; the author can edit it (`fchannel.edit_*`: the
+links or mentions, signed with the app's name or "Anonymous student" (a poll's options go with it, a line each under
+the question, through the same checks, and every poll waits for a moderator's yes); the author can edit it (`fchannel.edit_*`: the
 same gates and AI look, or a moderator's yes, before the bot edits the channel message in place, the signature
 unchanged) or delete it, a moderator can
 take it down, and only the creator can reveal an anonymous author (audit log). The author of an anonymous post may
@@ -25,6 +26,11 @@ only to the Telegram account that made it, in its private chat (`/start sh_<secr
 offers it in inline mode to that account alone; no new words.
 
 Also: in a group, a TikTok, YouTube Shorts or Instagram link is answered with the video file itself, or the post's photos and videos as one album (`TIKTOK=1`, `kbtu/tiktok.py`; an Instagram story's video only with `INSTAGRAM_COOKIES`), no caption, no words of the bot's own.
+
+An admissions applicant's interview reminder (`ako_d1`, `ako_h1`, `kbtu/akosend.py`, only to the chat that tapped their
+own `/start ako_…` link) names the program from the org's catalogue (`i18n/ako.json`, never typed by anyone) and has
+one URL button: the interview's Microsoft Teams link the org's managers set, accepted only on Microsoft's hosts
+(`ako._meet`). No applicant's or manager's words.
 
 The iPhone app's notifications (`kbtu/apns.py`) are the same rendered bot message to the same person, sent there
 instead of Telegram (never both): they add no words and no exception.

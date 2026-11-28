@@ -17,7 +17,7 @@ from collections.abc import Awaitable, Callable
 import anyio.to_thread
 import httpx
 
-from . import casting, checkin, db, instagram, logic, mirror, push, texts, tgc, youtube
+from . import akosend, casting, checkin, db, instagram, logic, mirror, push, texts, tgc, youtube
 from .bot import _send, _stopping, _tg
 from .bot_dm import MUTE_ROW, _feedback_buttons
 from .chores import _chores, _userpics, offsite_round, post_channel, refresh_chats
@@ -59,6 +59,8 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         return text, button, f"ev_{evs[0]['id']}"
     if kind.startswith("tgc_"):  # the forum channel's comments (tgc.py)
         return tgc.render(con, m, lang)
+    if kind.startswith("ako_"):  # an applicant's reminder with sample data, to the owner first (admin ako-preview)
+        return logic.ako.preview(kind, lang)
     if kind.startswith("lib_"):  # library seats (logic/library.py): a seat's number and its table's label, never a name
         return logic.library.render(con, m, lang)
     if kind == "fch_comments":
@@ -68,6 +70,8 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
             int(ref[1]), m["user_id"], m["tg_id"])
         template = "fch_reply_answer" if json.loads(m["payload"]).get("answer") else kind
         return (*texts.bot_message(lang, template), f"fp_{post['id']}") if post else None
+    if kind == "forum_week":  # fw:<Friday> (or fw:p<time>, a preview): the Forum's week in counts, into the Forum
+        return logic.fchannel.digest_render(lang, m["ref"], m["payload"])
     if kind == "fch_reply_gone":  # fg:<reply>, to the post's author (through the post): its card
         r = one(con, "SELECT p.id FROM fchan_replies r JOIN fchan_posts p ON p.id = r.post_id WHERE r.id = ? AND p.user_id = ? AND p.status = 'live'",
                 int(ref[1]), m["user_id"])
@@ -586,7 +590,7 @@ def _take(con, m, forum_channel: bool, pushable: bool = False):
         return _mark(con, m, False, "banned")
     if (category := notifications.CATEGORY_OF.get(m["kind"])) and not notifications.allowed(con, category, m["user_id"], m["tg_id"]):
         return _mark(con, m, False, "gone")
-    if m["kind"] == "fch_comments" and not forum_channel:
+    if m["kind"] in ("fch_comments", "forum_week") and not forum_channel:
         return _mark(con, m, False, "gone")
     try:
         msg = _render(con, m)
@@ -655,6 +659,7 @@ async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
         await tgc.tick(cfg, http, con)  # the forum channel's comments: strangers' texts after the hour, deletions, unbans
         await tgc.post_tick(cfg, http, con)  # the forum channel's posts: taken down, then the new ones published
         await _withdrawn_offers(cfg, http, con)
+        await akosend.tick(cfg, http, con)  # applicants' interview reminders (AKO_REMIND), once a minute
         await _userpics(cfg, http, con)  # Telegram photos copied to /media: t.me takes ~1 s on every open
         if await anyio.to_thread.run_sync(logic._once, con, "yt_hour", str(now() // 3600)):
             await youtube.sweep(cfg, http, con)  # hourly: the clubs' YouTube channels' new videos as their posts

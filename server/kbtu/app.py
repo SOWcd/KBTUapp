@@ -639,6 +639,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     # the "To calendar" link is signed by one worker and may be opened on another: one key for all, from the env
     logic.seats.ICS_KEY = hmac.new(cfg.token_key, b"kbtu-ics", hashlib.sha256).digest()
     logic.seats.REF_KEY = hmac.new(cfg.token_key, b"kbtu-event-ref", hashlib.sha256).digest()  # "My link"'s code
+    logic.ako.KEY = hmac.new(cfg.token_key, b"kbtu-ako", hashlib.sha256).digest()  # an applicant's one-tap invite and bot link
+    logic.ako.BOT = cfg.bot_username if cfg.ako_remind else ""  # AKO_REMIND off: no reminders anywhere
     logic.appeals.ASK = cfg.ask  # the bot's help-desk answer message goes only where the desk opens (ASK)
     logic.library.MODE = cfg.library  # LIBRARY: the bot's seat messages go only while it is on
     logic.gallery.MODE = cfg.gallery  # GALLERY: who posts to the Gallery ("all", "staff"); empty: the albums alone
@@ -3354,7 +3356,15 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.put("/api/forum-posts/{pid}/heart")
     def fchan_heart(pid: int, con: Con, v: FChanWrite, body: dict = Body(...)):
-        return F.set_heart(con, v, pid, body.get("hearted"))
+        return F.set_heart(con, v, pid, body.get("hearted"))  # builds before reactions
+
+    @app.put("/api/forum-posts/{pid}/react")
+    def fchan_react(pid: int, con: Con, v: FChanWrite, body: dict = Body(...)):
+        return F.set_reaction(con, v, pid, body.get("emoji"))  # one of fchannel.REACTIONS, or null: mine taken back
+
+    @app.put("/api/forum-posts/{pid}/vote")
+    def fchan_vote(pid: int, con: Con, v: FChanWrite, body: dict = Body(...)):
+        return F.vote(con, v, pid, body.get("choice"))  # final; the poll as my card shows it now
 
     @app.put("/api/forum-posts/{pid}/coming")
     def fchan_coming(pid: int, con: Con, v: FChanWrite, body: dict = Body(...)):
@@ -3366,7 +3376,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         verdict = await ai.screen_post(cfg, ai_http(), text, **_ai_eu())
         p = await run_in_threadpool(F.settle, con, v, pid, verdict)  # live: the bot's round publishes it within seconds
         if p["status"] == "gone":  # the AI saw no message in it, or an ad: said, never silently (the app gives the words back)
-            raise ApiError("bad_input", "ad" if verdict == "ad" else "noise", {"post": pid, "appeal": await run_in_threadpool(F.appeals_left, con, v.id) > 0})
+            raise ApiError("bad_input", "ad" if verdict == "ad" else "noise", {"post": pid, "appeal": body.get("poll") is None  # a poll: written anew
+                                                                                   and await run_in_threadpool(F.appeals_left, con, v.id) > 0})
         return p | {"ai": verdict in ("person", "flag")}  # held by the AI's word: the app asks why (/why)
 
     @app.post("/api/forum-posts/{pid}/edit")
@@ -3715,6 +3726,12 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
     def ako_ics(request: Request, con: Con):
         return Response(logic.ako.ics(con, ako_token(request)), media_type="text/calendar; charset=utf-8", headers={
             "Cache-Control": "no-store", "Content-Disposition": 'attachment; filename="interview.ics"'})
+
+    @app.get("/api/ako/ics/{aid}")
+    def ako_ics_tap(aid: int, con: Con, s: str = ""):
+        # the invite in one tap: a plain link the phone hands to its calendar (no header); the signature opens it alone
+        return Response(logic.ako.signed_ics(con, aid, s), media_type="text/calendar; charset=utf-8", headers={
+            "Cache-Control": "no-store", "Referrer-Policy": "no-referrer", "Content-Disposition": 'inline; filename="interview.ics"'})
 
     # the org's own people (Studio): head and up run it, a member reads (logic/ako.py _team)
     @app.get("/api/orgs/{oid}/ako")
