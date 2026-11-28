@@ -217,6 +217,9 @@ def test_one_more_round_in_the_same_room(env, monkeypatch):
     assert again["phase"] == "play" and again["deadline"] - again["now"] == 180 and len(again["players"]) == 4
     assert _state(cfg, room["id"])["loc"] != played and "last" not in again
     assert c.post("/api/rooms", headers=tma(HOST), json={"game": "spy"}).status_code == 429  # the one room of the day
+
+
+def test_limits_leaving_and_account_deletion(env, monkeypatch):
     c, cfg = env
     monkeypatch.setattr(logic.rooms, "A_DAY", 2)
     _room(c)
