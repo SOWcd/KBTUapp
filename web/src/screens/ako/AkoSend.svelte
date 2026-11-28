@@ -4,7 +4,8 @@
 </script>
 
 <script lang="ts">
-  // The last step: contacts (saved when a field is left), what goes, and the send button in its own sticky bar.
+  // The last step: contacts (saved when a field is left), what goes, and the send button at the page's end (in the
+  // flow: nothing pinned over the form).
   import { untrack } from 'svelte';
   import Button from '../../ui/Button.svelte';
   import Field from '../../ui/Field.svelte';
@@ -91,8 +92,9 @@
       error={bad.email ? aw(bad.email) : undefined} />
   </form>
 
-  <h2 class="a-sec">{aw('ako.summary')}</h2>
-  <dl class="a-card sum">
+  <section class="a-grp sumbox">
+  <header class="a-head"><h2>{aw('ako.summary')}</h2></header>
+  <dl class="sum">
     <div class="r"><dt class="a-sub">{aw('ako.step.program')}</dt><dd>{title}</dd></div>
     <div class="r"><dt class="a-sub">{aw('ako.step.docs')}</dt><dd>{awn('ako.docsN', docs)}</dd></div>
     {#if program?.interview}
@@ -105,22 +107,24 @@
       </div>
     {/if}
   </dl>
+  </section>
 
-  <div class="a-bar bar">
+  <div class="bar">
     {#if note}<p class="a-note bad" role="alert">{note}</p>{/if}
     <Button size="l" full loading={busy} label={busy ? aw('ako.sending') : undefined} onclick={send}>{aw('ako.send')}</Button>
   </div>
 </div>
 
 <style>
-  .form { display: flex; flex-direction: column; gap: var(--s-4); margin-top: var(--s-6); }
+  .form { display: flex; flex-direction: column; gap: var(--s-4); margin-top: var(--s-5); }
   /* the app's Field, a step larger for this audience */
   .form :global(.lb) { font-size: var(--fs-body); color: var(--text-2); }
   .form :global(.box) { min-height: 56px; }
   .form :global(.err) { font-size: var(--fs-body); }
 
-  .sum { margin: 0; padding: var(--s-2) var(--s-5); }
-  .r { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-4); padding: var(--s-4) 0; }
+  .sumbox { margin-top: var(--s-6); }
+  .sum { margin: 0; padding: 0 var(--s-5) var(--s-1); }
+  .r { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-4); padding: var(--s-3) 0; }
   .r + .r { box-shadow: inset 0 0.5px 0 var(--separator); }
   dt { flex: none; }
   dd { margin: 0; min-width: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right;
@@ -129,6 +133,5 @@
   .big { font: 700 var(--fs-t3)/1.15 var(--font-display); font-variant-numeric: tabular-nums; }
   .no { color: var(--text-3); font-weight: 500; }
 
-  /* the bar sits inside the step, which has its own bottom padding: take it back so it rests where Ako's does */
-  .bar { margin-top: var(--s-4); margin-bottom: calc(-1 * var(--s-6)); }
+  .bar { display: flex; flex-direction: column; gap: var(--s-3); margin-top: var(--s-5); }
 </style>

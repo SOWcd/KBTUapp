@@ -37,7 +37,7 @@ test('admissions: the applicant from a manager\'s link to the status page', asyn
   const p = await openAko(page, qa, qa.ako.link!, info, faults);
   await expect(page.getByRole('heading', { name: tr('ako.docsTitle'), exact: true })).toBeVisible();
   await shot(p, 'ako-docs');
-  await page.getByRole('button', { name: tr('ako.consentOk') }).click();
+  await page.getByRole('checkbox', { name: tr('ako.consentOk') }).click();
   await attach(page, 'cv', 1);
   await attach(page, 'diploma', 1);
   // the file chooser's click scrolls by whatever the browser likes: one fixed place for the picture

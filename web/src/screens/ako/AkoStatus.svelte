@@ -171,7 +171,7 @@
   .status > :global(.a-card + .a-card) { margin-top: 0; }
 
   .st { display: flex; flex-direction: column; align-items: flex-start; padding: var(--s-6) var(--s-5); }
-  .badge { display: grid; place-items: center; width: 52px; height: 52px; margin-bottom: var(--s-4); border-radius: var(--r-full);
+  .badge { display: grid; place-items: center; width: 44px; height: 44px; margin-bottom: var(--s-4); border-radius: var(--r-full);
     background: var(--accent-soft); color: var(--accent-text); }
   .st.accepted .badge { background: var(--success-soft); color: var(--success-text); }
   .st.declined .badge { background: var(--fill); color: var(--text-2); }
@@ -180,7 +180,7 @@
   .iv { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-1); padding-bottom: var(--s-3); }
   .day { margin-top: var(--s-1); font: 700 var(--fs-sec)/1.2 var(--font-display); letter-spacing: -0.01em; }
   .clock { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 var(--s-3); }
-  .clock b { font: 800 var(--fs-title)/1.15 var(--font-display); letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+  .clock b { font: 800 var(--fs-t1)/1.15 var(--font-display); letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
   .acts { display: flex; flex-direction: column; gap: var(--s-3); width: 100%; margin: var(--s-4) 0 var(--s-1); }
   .iv .a-note { width: 100%; margin-top: var(--s-2); }
   .iv:not(:has(.a-quiet)) { padding-bottom: var(--s-5); }

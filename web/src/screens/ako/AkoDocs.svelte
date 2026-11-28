@@ -16,8 +16,9 @@
 </script>
 
 <script lang="ts">
-  // The documents: the consent card, then "now / later / optional". A page is a tile (kind, size, a check): never a
-  // preview, the applicant can't read a page back. only='later': the status page's list of what's still without a page.
+  // The documents: the consent line (one tap; the whole notice a tap away), then "now / later / optional", each a card
+  // with its head and the documents as its rows. A page is a tile (kind, size, a check): never a preview, the applicant
+  // can't read a page back. only='later': the status page's list of what's still without a page.
   import { fly } from 'svelte/transition';
   import Check from '@lucide/svelte/icons/check';
   import Camera from '@lucide/svelte/icons/camera';
@@ -27,7 +28,6 @@
   import X from '@lucide/svelte/icons/x';
   import ChevronDown from '@lucide/svelte/icons/chevron-down';
   import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
-  import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import Button from '../../ui/Button.svelte';
   import { ako } from '../../lib/api/ako';
   import type { AkoDoc, AkoFile, AkoView } from '../../lib/api/types';
@@ -43,6 +43,7 @@
   let touched = $state<AkoDoc[]>([]);
   let ask = $state<AkoFile['id'] | null>(null);
   let nudge = $state(false);
+  let more = $state(false);
   let note = $state<AkoKey | ''>('');
   let cam: HTMLInputElement | undefined = $state();
   let any: HTMLInputElement | undefined = $state();
@@ -130,7 +131,7 @@
   {@const shown = !fold || open.includes(d) || mine.length > 0}
   {@const how = opt('ako.docHow.' + d)}
   {@const url = opt('ako.docUrl.' + d)}
-  <article class="a-card doc">
+  <article class="a-row doc">
     {#if fold}
       <button type="button" class="head" aria-expanded={shown} onclick={() => toggle(d)}>
         {@render head(d, files.length)}<span class="chev" class:up={shown}><ChevronDown size={22} /></span>
@@ -188,22 +189,27 @@
   {#if !only}
     <h1 class="a-h1">{aw('ako.docsTitle')}</h1>
     <p class="a-lead">{aw(program?.first.length ? 'ako.docsLead' : 'ako.docsLeadNone')}</p>
+    <div class="lead-gap"></div>
   {/if}
 
   {#if !view.consent && (!only || nudge)}
+    <!-- an explicit tap (the documents include health data), as light as it gets: one line, the notice folded under it -->
     <section class="a-card consent" class:nudge bind:this={consentEl} out:fly={{ y: -12, duration: dur }}>
-      <span class="shield"><ShieldCheck size={26} /></span>
-      <h2 class="a-h2">{aw('ako.consentTitle')}</h2>
-      <p class="a-sub">{aw('ako.consentText')}</p>
-      <a class="a-quiet" href="/privacy?lang={i18n.lang}" target="_blank" rel="noopener">{aw('ako.policy')}<ArrowUpRight size={18} /></a>
-      <Button size="l" full onclick={agree}>{aw('ako.consentOk')}</Button>
+      <button type="button" class="ck" role="checkbox" aria-checked="false" onclick={agree}><span class="box"></span><span>{aw('ako.consentOk')}</span></button>
+      <p class="links">
+        <button type="button" class="a-quiet" aria-expanded={more} onclick={() => (more = !more)}>{aw('ako.consentMore')}<span class="chev" class:up={more}><ChevronDown size={16} /></span></button>
+        <a class="a-quiet" href="/privacy?lang={i18n.lang}" target="_blank" rel="noopener" aria-label={aw('ako.policy')}>{aw('ako.consentPolicy')}<ArrowUpRight size={16} /></a>
+      </p>
+      {#if more}<p class="a-sub full">{aw('ako.consentText')}</p>{/if}
     </section>
   {/if}
   {#if note}<p class="a-note bad top" role="alert">{aw(note)}</p>{/if}
 
   {#each groups as [g, list] (g)}
-    <h2 class="a-sec">{aw(k(`ako.${g}Group`))}</h2>
-    {#each list as d (d)}{@render card(d, g !== 'first')}{/each}
+    <section class="a-grp">
+      <header class="a-head"><h2>{aw(k(`ako.${g}Group`))}</h2><span>{list.filter(has).length} / {list.length}</span></header>
+      {#each list as d (d)}{@render card(d, g !== 'first')}{/each}
+    </section>
   {/each}
 
   <input bind:this={cam} class="in" type="file" accept="image/*" capture="environment" tabindex="-1" aria-hidden="true" onchange={picked} />
@@ -212,24 +218,29 @@
 
 <style>
   .in { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
-  .consent { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-3); margin-top: var(--s-6); transition: box-shadow var(--t-base) var(--ease); }
-  .consent.nudge { box-shadow: inset 0 0 0 2px var(--accent); animation: nudge var(--t-slow) var(--ease-bounce); }
+  .lead-gap { height: var(--s-5); }
+  .consent { margin-bottom: var(--s-4); padding: var(--s-2) var(--s-5) var(--s-2) var(--s-4); transition: box-shadow var(--t-base) var(--ease); }
+  .consent.nudge { box-shadow: inset 0 0 0 1.5px var(--accent); animation: nudge var(--t-slow) var(--ease-bounce); }
   @keyframes nudge { 50% { transform: scale(1.015); } }
-  .shield { display: grid; place-items: center; width: 52px; height: 52px; border-radius: var(--r-full); background: var(--success-soft); color: var(--success-text); }
-  .top { margin-top: var(--s-4); }
+  .ck { display: flex; align-items: center; gap: var(--s-3); width: 100%; min-height: 52px; text-align: left; color: inherit;
+    font: 600 var(--fs-body)/1.3 var(--font-text); -webkit-tap-highlight-color: transparent; }
+  .box { flex: none; width: 26px; height: 26px; border-radius: var(--r-full); box-shadow: inset 0 0 0 1.5px var(--line-2); }
+  .nudge .box { box-shadow: inset 0 0 0 2px var(--accent); }
+  .links { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0 var(--s-4); margin: calc(-1 * var(--s-1)) 0 0 var(--s-1); }
+  .links .a-quiet { min-height: 44px; font-weight: 450; font-size: var(--fs-sub); color: var(--text-3); }
+  .full { margin: 0 0 var(--s-3) var(--s-1); animation: rise var(--t-base) var(--ease) both; }
+  .top { margin-bottom: var(--s-4); }
 
-  .doc { padding: 0; }
-  .head { display: flex; align-items: center; gap: var(--s-3); width: 100%; min-height: 76px; padding: var(--s-4) var(--s-5); text-align: left; color: inherit;
-    border-radius: var(--r-l); -webkit-tap-highlight-color: transparent; }
+  .head { display: flex; align-items: center; gap: var(--s-3); width: 100%; min-height: 68px; padding: var(--s-3) var(--s-5); text-align: left; color: inherit; -webkit-tap-highlight-color: transparent; }
   .ttl { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
   .ttl b { font: 600 var(--fs-row)/1.25 var(--font-text); letter-spacing: -0.012em; }
-  .dot { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: var(--r-full); box-shadow: inset 0 0 0 2px var(--line-2); color: var(--on-accent); }
+  .dot { flex: none; display: grid; place-items: center; width: 26px; height: 26px; border-radius: var(--r-full); box-shadow: inset 0 0 0 1.5px var(--line-2); color: var(--on-accent); }
   .dot.ok { background: var(--success); box-shadow: none; animation: pop var(--t-slow) var(--ease-bounce); }
   @keyframes pop { from { transform: scale(0.5); opacity: 0; } }
   .chev { flex: none; display: inline-flex; color: var(--text-3); transition: transform var(--t-base) var(--ease); }
   .chev.up { transform: rotate(180deg); }
 
-  .body { display: flex; flex-direction: column; gap: var(--s-2); padding: 0 var(--s-5) var(--s-5); animation: rise var(--t-base) var(--ease) both; }
+  .body { display: flex; flex-direction: column; gap: var(--s-2); padding: 0 var(--s-5) var(--s-4); animation: rise var(--t-base) var(--ease) both; }
   @keyframes rise { from { opacity: 0; transform: translateY(-6px); } }
   .page { position: relative; display: flex; align-items: center; gap: var(--s-3); min-height: 60px; padding: var(--s-2) var(--s-1) var(--s-2) var(--s-4);
     border-radius: var(--r-m); background: var(--fill); overflow: hidden; animation: rise var(--t-base) var(--ease) both; }

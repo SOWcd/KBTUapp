@@ -508,43 +508,58 @@ def page(con, code: str, lang: str) -> tuple[int, str]:
     """(status, html) of /c/<code>: valid with whose and for what; revoked with its number only; or none (404)."""
     c = one(con, "SELECT * FROM certs WHERE code = ?", code.upper()) if _CODE.fullmatch(code.upper()) else None
     t, e = texts.CERT_PAGE[lang], html.escape
+
+    def facts(*kv):
+        return "<dl>" + "".join(f"<div><dt>{e(t[k])}</dt><dd>{e(v)}</dd></div>" for k, v in kv) + "</dl>"
     if not c:
-        body = f'<div class="head">{_ICON % _MARK["none"]}<h1>{e(t["none"])}</h1><p class="line">{e(t["noneLine"])}</p></div>'
+        body = f'<div class="none">{_SEAL % _MARK["none"]}<h1>{e(t["none"])}</h1><p>{e(t["noneLine"])}</p></div>'
     elif c["revoked_at"] is not None:
-        body = (f'<div class="head bad">{_ICON % _MARK["bad"]}<h1>{e(t["revoked"])}</h1></div>'
-                f'<dl><div><dt>{e(t["number"])}</dt><dd>{e(c["number"])}</dd></div></dl>')
+        body = (f'<div class="obj">{_COLONNADE}<h1 class="st bad">{_SEAL % _MARK["bad"]}{e(t["revoked"])}</h1></div>'
+                + facts(("number", c["number"])))
     else:
         org = ako._org(con, c["org_id"])["name"]
-        facts = "".join(f"<div><dt>{e(t[k])}</dt><dd>{e(v)}</dd></div>" for k, v in (
-            *((k, c[k]) for k in ("program", "date", "number")), ("by", org.get(lang) or org["ru"])))
-        body = (f'<div class="head ok">{_ICON % _MARK["ok"]}<p class="st">{e(t["valid"])}</p>'
-                f'<p class="cap">{e(t["name"])}</p><h1>{e(c["name"])}</h1></div><dl>{facts}</dl>')
+        body = (f'<div class="obj">{_COLONNADE}<p class="cap">{e(t["name"])}</p><h1 class="nm">{e(c["name"])}</h1>'
+                f'<p class="st ok">{_SEAL % _MARK["ok"]}{e(t["valid"])}</p></div>'
+                + facts(*((k, c[k]) for k in ("program", "date", "number")), ("by", org.get(lang) or org["ru"])))
     return (200 if c else 404), _HTML.replace("__LANG__", lang).replace("__TITLE__", e(t["title"])).replace("__BODY__", body)
 
 
-# The app's look without its bundle: the grouped ground, one solid 24 px card, hairline rows, a monochrome line seal
-# (tokens.css's colours by hand: this page loads nothing). No style attributes: the CSP allows this one sheet by hash.
-_ICON = ('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" '
+# The app's look without its bundle (this page loads nothing; tokens.css's colours by hand), as Profile opens: one
+# physical object first (the certificate, an ink card with the colonnade, its sheen kept inside it, the same in both
+# themes as the lanyard badge is), its status a glass capsule on it with a tinted mark, then the facts as grouped rows on
+# a solid 24 px card. No style attributes: the CSP allows this one sheet by hash.
+_COLONNADE = ('<svg class="mark" viewBox="0 0 28 24" aria-hidden="true"><g fill="currentColor"><rect x="1" y="1.5" width="26" height="4" rx="1.5"/>'
+              + "".join(f'<rect x="{x}" y="7" width="3" height="11" rx="1.5"/>' for x in (2, 7.25, 12.5, 17.75, 23))
+              + '<rect y="19.5" width="28" height="3" rx="1.5"/></g></svg>')
+_SEAL = ('<svg class="seal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" '
          'aria-hidden="true"><path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 '
          '4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/><path d="%s"/></svg>')
 _MARK = {"ok": "m9 12 2 2 4-4", "bad": "m15 9-6 6m0-6 6 6", "none": "M9.1 9a3 3 0 0 1 5.8 1c0 2-2.9 2.6-2.9 3.6M12 17h.01"}
-_CSS = """:root{color-scheme:light dark;--bg:#F2F2F7;--card:#FFF;--rim:transparent;--sep:rgba(60,60,67,.14);--text:#0A0A0C;--t2:rgba(60,60,67,.86);--ok:#1F8A4C;--bad:#BA342E}
-@media(prefers-color-scheme:dark){:root{--bg:#000;--card:#131314;--rim:rgba(255,255,255,.08);--sep:rgba(255,255,255,.1);--text:#FFF;--t2:rgba(235,235,245,.74);--ok:#5FD08A;--bad:#FF8A80}}
+_CSS = """:root{color-scheme:light dark;--bg:#F2F2F7;--card:#FFF;--rim:inset 0 0 0 .5px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.03),0 10px 24px -14px rgba(0,0,0,.12);--sep:rgba(60,60,67,.16);--text:#0A0A0C;--t2:rgba(60,60,67,.86);--t3:rgba(60,60,67,.72);--lift:0 24px 44px -20px rgba(11,20,51,.55)}
+@media(prefers-color-scheme:dark){:root{--bg:#000;--card:#131314;--rim:inset 0 0 0 1px rgba(255,255,255,.075);--sep:rgba(255,255,255,.1);--text:#FFF;--t2:rgba(235,235,245,.74);--t3:rgba(235,235,245,.54);--lift:none}}
 *{box-sizing:border-box}html{-webkit-text-size-adjust:100%}
-body{margin:0;background:var(--bg);color:var(--text);font:15px/1.4 -apple-system,system-ui,'Segoe UI',Roboto,sans-serif}
-main{max-width:480px;margin:0 auto;padding:max(24px,9vh) 16px 32px}
-.top{margin:0 0 16px;text-align:center;color:var(--t2);font-size:13px;font-weight:600}
-section{padding:28px 20px;border:1px solid var(--rim);border-radius:24px;background:var(--card)}
-.head{text-align:center}svg{display:block;width:44px;height:44px;margin:0 auto 12px;color:var(--t2)}
-h1{margin:0;font-size:22px;line-height:1.2;font-weight:700;letter-spacing:-.01em;overflow-wrap:anywhere}p{margin:0}
-.ok svg,.ok .st{color:var(--ok)}.bad svg,.bad h1{color:var(--bad)}.st{font-weight:600}
-.cap{margin-top:20px;color:var(--t2);font-size:13px}.ok h1{margin-top:2px;font-size:clamp(22px,7vw,28px);text-wrap:balance;line-height:1.15;letter-spacing:-.02em}
-.line{margin-top:8px;color:var(--t2)}dl{margin:24px 0 -13px}dl div{display:flex;justify-content:space-between;gap:16px;padding:13px 0;border-top:1px solid var(--sep)}
-dt{flex:none;color:var(--t2)}dd{margin:0;text-align:right;font-weight:500;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}"""
+body{margin:0;background:var(--bg);color:var(--text);font:450 15px/1.4 'Inter Variable',Inter,-apple-system,system-ui,'Segoe UI',Roboto,sans-serif;letter-spacing:-.011em}
+main{max-width:440px;margin:0 auto;padding:max(20px,7vh) 16px 32px}h1,p{margin:0}
+.obj{position:relative;overflow:hidden;min-height:212px;display:flex;flex-direction:column;align-items:flex-start;padding:22px 22px 20px;border-radius:28px;color:#FFF;
+background:radial-gradient(120% 90% at 0% 0%,rgba(255,120,200,.16),transparent 46%),radial-gradient(110% 90% at 100% 100%,rgba(90,190,255,.2),transparent 50%),linear-gradient(150deg,#1C2748,#0B1433 58%,#111A3C);
+box-shadow:inset 0 1px 0 rgba(255,255,255,.28),inset 0 0 0 1px rgba(255,255,255,.1),var(--lift)}
+.mark{display:block;width:34px;height:29px;margin-bottom:auto}
+.obj::after{content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;background:linear-gradient(115deg,transparent 38%,rgba(255,255,255,.07) 47%,transparent 58%)}
+.cap{margin-top:28px;color:rgba(235,235,245,.7);font-size:13px;font-weight:600}
+h1{font-size:22px;line-height:1.2;font-weight:700;letter-spacing:-.02em;overflow-wrap:anywhere}
+.nm{margin-top:2px;font-size:clamp(24px,7.4vw,30px);line-height:1.12;letter-spacing:-.025em;text-wrap:balance}
+.st{display:inline-flex;align-items:center;gap:6px;min-height:34px;margin-top:16px;padding:0 13px 0 9px;border-radius:999px;font-size:13px;line-height:1.2;font-weight:600;letter-spacing:0;
+background:rgba(255,255,255,.1);box-shadow:inset 0 1px 0 rgba(255,255,255,.3),inset 0 0 0 1px rgba(255,255,255,.1)}
+.seal{flex:none;width:20px;height:20px}.ok .seal{color:#5FD99A}.bad .seal{color:#FF8A80}
+dl{margin:12px 0 0;padding:4px 20px;border-radius:24px;background:var(--card);box-shadow:var(--rim)}
+dl div{display:flex;justify-content:space-between;align-items:baseline;gap:16px;padding:14px 0}dl div+div{border-top:.5px solid var(--sep)}
+dt{flex:none;color:var(--t2)}dd{margin:0;text-align:right;font-weight:600;letter-spacing:-.012em;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.none{padding:36px 24px;border-radius:24px;background:var(--card);box-shadow:var(--rim);text-align:center}.none .seal{width:40px;height:40px;margin:0 auto 14px;color:var(--t3);stroke-width:1.5}
+.none p{margin-top:8px;color:var(--t2)}.foot{margin-top:20px;text-align:center;color:var(--t3);font-size:13px}"""
 CSP = (f"default-src 'none'; style-src 'sha256-{base64.b64encode(hashlib.sha256(_CSS.encode()).digest()).decode()}'; "
        "base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
 _HTML = ('<!doctype html><html lang="__LANG__"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
          '<meta name="theme-color" media="(prefers-color-scheme: light)" content="#F2F2F7">'
          '<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#000000">'
          f'<meta name="robots" content="noindex"><title>__TITLE__</title><style>{_CSS}</style></head>'
-         '<body><main><p class="top">__TITLE__</p><section>__BODY__</section></main></body></html>')
+         '<body><main>__BODY__<p class="foot">__TITLE__ · KBTU App</p></main></body></html>')
