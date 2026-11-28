@@ -40,7 +40,7 @@ export default defineConfig({
   // every flow in every browser, phone size and theme: 8 projects
   ...browsers.flatMap((b) => phones.flatMap((p) => themes.map((theme) => ({
     name: `${b.name}-${p.name}-${theme}`,
-    testIgnore: /(snap|a11y)\.spec\.ts$/,
+    testIgnore: /(snap|a11y|android)\.spec\.ts$/,
     use: {
       ...b.device,
       browserName: b.device.defaultBrowserType,
@@ -66,5 +66,19 @@ export default defineConfig({
     },
     metadata: { theme, now: SNAP_AT },
   })),
+  // Telegram on Android (e2e/android.spec.ts, issue #71): its launch and user agent (performance class AVERAGE), the
+  // most common Android width, the CPU 4x slower (a mid phone); the numbers go to the job summary
+  {
+    name: 'android',
+    testMatch: /android\.spec\.ts$/,
+    use: {
+      ...devices['Pixel 7'],
+      userAgent: 'Mozilla/5.0 (Linux; Android 14; SM-A356E Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/131.0.6778.135 Mobile Safari/537.36 Telegram-Android/11.5.3 (Samsung SM-A356E; Android 14; SDK 34; AVERAGE)',
+      viewport: { width: 360, height: 800 },
+      colorScheme: 'dark' as const,
+      hasTouch: true,
+    },
+    metadata: { theme: 'dark', platform: 'android', cpu: 4 },
+  },
   ],
 });
