@@ -20,10 +20,10 @@
   import { openMapFrom, irisFrom } from '../../lib/state/sheets';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
+  import { nameOf } from '../../lib/short'; // a school by its abbreviation, a club in full ("EC" looked like a bug)
 
   // feed: there are events to show in a row
   let { feed = false }: { feed?: boolean } = $props();
-  import { nameOf } from '../../lib/short'; // a school by its abbreviation, a club in full ("EC" looked like a bug)
 
   // fresh each time List comes into view, quietly (the last copy shows meanwhile)
   $effect(() => { if (ui.tab === 'afisha') void untrack(() => loadNews(true)); });

@@ -73,6 +73,12 @@ def _visible(c: str) -> bool:
     return c == ZWJ or (unicodedata.category(c) not in ("Cf", "Co", "Cn") and c not in FILLERS and not "\U000e0100" <= c <= "\U000e01ef")
 
 
+def _linky(s: str) -> bool:
+    """A link, a mention or a phone in it, as Telegram or a reader would see one."""
+    seen = BRACKET_DOT.sub(".", unicodedata.normalize("NFKC", s.replace(ZWJ, "")).translate(DOTS))
+    return bool(LINKY.search(seen) or SPACED.search(seen) or _long_number(seen))
+
+
 def _clean(raw: object) -> str:
     """The words as published and as the AI reads them: invisible characters out, lines trimmed; refused with a link,
     a mention, a phone or a signature-like last line (an anonymous post posing as a named one)."""
@@ -81,8 +87,7 @@ def _clean(raw: object) -> str:
     s = re.sub(r"\n{3,}", "\n\n", s)
     if not 2 <= len(s) <= BODY_MAX:
         raise ApiError("bad_input")
-    seen = BRACKET_DOT.sub(".", unicodedata.normalize("NFKC", s.replace(ZWJ, "")).translate(DOTS))
-    if LINKY.search(seen) or SPACED.search(seen) or _long_number(seen):
+    if _linky(s):
         raise ApiError("bad_input", "links")
     last = unicodedata.normalize("NFKC", s.rsplit("\n", 1)[1].replace(ZWJ, "")).lstrip() if "\n" in s else ""
     if last and (unicodedata.category(last[0]) == "Pd" or last[0] in SIGNED):
@@ -132,7 +137,14 @@ def mine(con, v: Viewer) -> list[dict]:
     need_student(v)
     ps = rows(con, "SELECT * FROM fchan_posts WHERE user_id = ? AND status != 'gone' ORDER BY id DESC LIMIT 30", v.id)
     pics = _photos(con, [p["id"] for p in ps])
-    return [_shape(p) | {"photos": pics.get(p["id"], [])} for p in ps]
+    polls = _poll_texts(con, [p["id"] for p in ps])
+    return [_shape(p) | polls.get(p["id"], {}) | {"photos": pics.get(p["id"], [])} for p in ps]
+
+
+def _poll_texts(con, ids) -> dict[int, dict]:
+    """The polls among these posts as their author and the moderators read them: {"poll": {options, days}}, no votes."""
+    return {r["post_id"]: {"poll": {"options": json.loads(r["options"]), "days": r["days"]}} for r in rows(con,
+            "SELECT post_id, options, days FROM fchan_polls WHERE post_id IN (SELECT value FROM json_each(?))", json.dumps(list(ids)))}
 
 
 FEED_MAX = 50
@@ -143,9 +155,26 @@ FEED_SNAPSHOTS = 12  # per viewer and order
 _FEED_VISIBLE = "COALESCE(help_until, 1 << 62) > ? AND (status = 'live' AND tg_msg > 0 OR user_id = ? AND status != 'gone')"
 
 
+# The app's own reactions (fchan_hearts, the heart first): one emoji per student per post, picking another replaces it.
+# Counts and my own pick only, never who. ponytail: the set is the spec's pick until the owner names his five; one
+# taken out later stays counted on old posts (picks sort it last)
+REACTIONS = ("❤️", "\U0001f602", "\U0001f62e", "\U0001f622", "\U0001f525")
+
+
 def _feed_hearts(con, ids, uid: int) -> dict:
-    return {r["post_id"]: r for r in rows(con, """SELECT post_id, COUNT(*) n, MAX(user_id = ?) picked
-        FROM fchan_hearts WHERE post_id IN (SELECT value FROM json_each(?)) GROUP BY post_id""", uid, json.dumps(ids))} if ids else {}
+    """Each post's reactions in one query: n (all of them, what For you reads), picks (per emoji, the set's order) and
+    pick (mine, or None)."""
+    out: dict[int, dict] = {}
+    for r in rows(con, """SELECT post_id, emoji, COUNT(*) n, MAX(user_id = ?) mine FROM fchan_hearts
+            WHERE post_id IN (SELECT value FROM json_each(?)) GROUP BY post_id, emoji""", uid, json.dumps(ids)) if ids else []:
+        h = out.setdefault(r["post_id"], {"n": 0, "picks": [], "pick": None})
+        h["n"] += r["n"]
+        h["picks"].append({"emoji": r["emoji"], "n": r["n"]})
+        if r["mine"]:
+            h["pick"] = r["emoji"]
+    for h in out.values():
+        h["picks"].sort(key=lambda x: REACTIONS.index(x["emoji"]) if x["emoji"] in REACTIONS else len(REACTIONS))
+    return out
 
 
 def _feed_comments(con, ids) -> dict:
@@ -299,6 +328,7 @@ def _feed_cards(con, v: Viewer, ps, hearts=None, comments=None) -> list[dict]:
     pics = _photos(con, [p["id"] for p in ps], own)
     live = {p["id"] for p in ps if p["status"] == "live" and (p["tg_msg"] or 0) > 0}
     helps = _coming(con, v, [p for p in ps if p["help_until"]])
+    polls = _polls(con, v, [p["id"] for p in ps])
     edits = _edit_marks(con, own & live)
     hearts, comments = hearts or {}, comments or {}
     hearts.update(_feed_hearts(con, sorted(live - hearts.keys()), v.id))
@@ -317,10 +347,12 @@ def _feed_cards(con, v: Viewer, ps, hearts=None, comments=None) -> list[dict]:
              "edited": bool(p["edited_at"]), **({"edit": edits[p["id"]]} if p["id"] in edits else {}),
              # the comments: the students' count, and where the link opens the thread: the newest, or the bot's first with none yet
              "comments": p["comments"], "thread": ((discussion["newest"] if p["comments"] and discussion else None) or p["rules_msg"]) if p["tg_msg"] else None,
-             "hearts": heart["n"] if heart else 0, "hearted": bool(heart and heart["picked"]),
+             # the app's reactions: picks and pick; hearts (all of them) and hearted (any of mine) for builds before them
+             **_reactions(heart),
              # Telegram's side of the post: the latest commenters' faces (app students only), its top reactions
              "faces": faces.get(p["id"], []), "reactions": _top(p["reactions"]),
              **({"help": helps[p["id"]]} if p["id"] in helps else {}),
+             **({"poll": polls[p["id"]]} if p["id"] in polls else {}),
              "hot": bool(discussion and (p["comments"] >= HOT and discussion["busy"] >= HOT
                      or p["id"] in live and discussion["talked"] >= TALK_MIN)),  # being discussed (one label, in place): a busy hour, or several people over the day
              # my own held post: the AI passed it to a person (why != 'check': not still being checked), or its look is
@@ -332,20 +364,149 @@ def _feed_cards(con, v: Viewer, ps, hearts=None, comments=None) -> list[dict]:
     return out
 
 
-def set_heart(con, v: Viewer, pid: int, picked: bool) -> dict:
+def _reactions(h: dict | None) -> dict:
+    """A card's reactions (types.ts ChannelPost): picks, pick, and the older builds' hearts and hearted."""
+    return {"picks": h["picks"], "pick": h["pick"], "hearts": h["n"], "hearted": h["pick"] is not None} if h else \
+        {"picks": [], "pick": None, "hearts": 0, "hearted": False}
+
+
+def set_reaction(con, v: Viewer, pid: int, emoji: object) -> dict:
+    """My reaction on a post live in the channel: one of REACTIONS (replacing mine), or None to take it back. Any
+    student's, my own and an anonymous one's too (refusing the author's would tell who wrote it)."""
     need_student(v)
-    if not isinstance(picked, bool) or not 0 < pid < 1 << 63:
+    if emoji == "❤":  # the heart without its emoji selector (some keyboards): the same heart
+        emoji = REACTIONS[0]
+    if emoji is not None and emoji not in REACTIONS or not 0 < pid < 1 << 63:
         raise ApiError("bad_input")
     with tx(con):
         if not one(con, "SELECT 1 FROM students WHERE user_id = ? AND manual = 0", v.id):
             raise ApiError("need_student")
         if not one(con, "SELECT 1 FROM fchan_posts WHERE id = ? AND status = 'live' AND tg_msg > 0", pid):
             raise ApiError("not_found")
-        if picked:
-            con.execute("INSERT INTO fchan_hearts (post_id, user_id) VALUES (?, ?) ON CONFLICT DO NOTHING", (pid, v.id))
-        else:
+        if emoji is None:
             con.execute("DELETE FROM fchan_hearts WHERE post_id = ? AND user_id = ?", (pid, v.id))
-        return {"hearts": one(con, "SELECT COUNT(*) FROM fchan_hearts WHERE post_id = ?", pid)[0], "hearted": picked}
+        else:
+            con.execute("""INSERT INTO fchan_hearts (post_id, user_id, emoji) VALUES (?, ?, ?)
+                ON CONFLICT (post_id, user_id) DO UPDATE SET emoji = excluded.emoji""", (pid, v.id, emoji))
+        return _reactions(_feed_hearts(con, [pid], v.id).get(pid))
+
+
+def set_heart(con, v: Viewer, pid: int, picked: bool) -> dict:
+    """Builds before reactions: a heart, unless I reacted already (kept); off takes back whatever I picked."""
+    if not isinstance(picked, bool):
+        raise ApiError("bad_input")
+    mine = picked and 0 < pid < 1 << 63 and one(con, "SELECT emoji FROM fchan_hearts WHERE post_id = ? AND user_id = ?", pid, v.id)
+    got = set_reaction(con, v, pid, (mine[0] if mine else REACTIONS[0]) if picked else None)
+    return {"hearts": got["hearts"], "hearted": got["hearted"]}
+
+
+# ---- polls: a post (its body the question) with 2-6 options, signed or anonymous. The AI reads the question and the
+# options at once; its noise or ad refuses (no appeal: a moderator looks at every poll anyway); anything else waits for a
+# moderator (owner, Nov 12). Out in the channel as the question, the options as lines, the signature; open for its
+# days from then (closes_at, written once: a restore or a republish never reopens it). A vote is final and leaves two
+# rows with no key between them (migration 266): I voted, and the option's count. The bars show to those who voted once
+# POLL_SHOWN have, and to everyone once it closes; the author like anyone else. Not editable (votes would change meaning).
+# ponytail: both rows land in one commit, so two reads of the database (two nightly backups, a watcher re-reading
+# prod) around a lone vote can pair them; and deleting an account drops its "I voted" while the count stays, so one
+# person who deletes and verifies again votes twice. Fine for forum polls; if a poll ever decides something, delay
+# the count's write (random, hourly) and keep a keyed hash of the Microsoft identity until the poll closes.
+POLL_DAYS = (1, 3, 7)
+POLL_OPTIONS = (2, 6)
+OPTION_MAX = 80
+QUESTION_MAX = 300
+POLLS_A_DAY = 1   # a student's polls in any 24 h, refused ones counted (rows kept their day: sweep)
+POLL_SHOWN = 5    # fewer votes than this: only the total (one known voter's choice can't be read off the bars)
+OPTION_MARK = "▫️ "  # each option's line in the channel
+
+
+def _option(raw: object) -> str:
+    """One option: one line, invisible characters out, spaces squeezed, no link."""
+    s = " ".join("".join(c for c in raw if _visible(c)).split()) if isinstance(raw, str) else ""
+    if not 1 <= len(s) <= OPTION_MAX:
+        raise ApiError("bad_input", "poll")
+    if _linky(s):
+        raise ApiError("bad_input", "links")
+    return s
+
+
+def _poll_in(raw: object) -> tuple[list[str], int]:
+    """A new poll's options and days, as the composer sends them: {"options": [...], "days": 1 | 3 | 7}."""
+    opts, days = (raw.get("options"), raw.get("days")) if isinstance(raw, dict) else (None, None)
+    if not isinstance(opts, list) or not POLL_OPTIONS[0] <= len(opts) <= POLL_OPTIONS[1] or type(days) is not int or days not in POLL_DAYS:
+        raise ApiError("bad_input", "poll")
+    out = [_option(o) for o in opts]
+    if len({o.casefold() for o in out}) < len(out):
+        raise ApiError("bad_input", "poll")
+    return out, days
+
+
+def _is_poll(con, pid: int) -> bool:
+    return one(con, "SELECT 1 FROM fchan_polls WHERE post_id = ?", pid) is not None
+
+
+def words(con, pid: int, body: str) -> str:
+    """A post's words as the channel shows them (before the signature): a poll's options under its question. The one
+    place they're put together: the send, the signature's rewrite, a lost send's match, a report's text."""
+    q = one(con, "SELECT options FROM fchan_polls WHERE post_id = ?", pid)
+    opts = json.loads(q[0]) if q else []
+    return body + "".join(("\n\n" if i == 0 else "\n") + OPTION_MARK + o for i, o in enumerate(opts))
+
+
+def _polls(con, v: Viewer, ids) -> dict[int, dict]:
+    """The polls among these posts as cards show them (types.ts ChannelPoll), three queries for all of them. voted:
+    whether I did (my choice stays on my device: nothing here knows it)."""
+    ids = json.dumps(list(ids))
+    polls = rows(con, "SELECT * FROM fchan_polls WHERE post_id IN (SELECT value FROM json_each(?))", ids)
+    if not polls:
+        return {}
+    mine = {r[0] for r in rows(con, "SELECT post_id FROM fchan_voted WHERE user_id = ? AND post_id IN (SELECT value FROM json_each(?))", v.id, ids)}
+    tally: dict[int, dict[int, int]] = {}
+    for r in rows(con, "SELECT post_id, choice, n FROM fchan_tally WHERE post_id IN (SELECT value FROM json_each(?))", ids):
+        tally.setdefault(r["post_id"], {})[r["choice"]] = r["n"]
+    out = {}
+    for q in polls:
+        opts, got = json.loads(q["options"]), tally.get(q["post_id"], {})
+        total = sum(got.values())
+        closed = q["closes_at"] is not None and q["closes_at"] <= core.now()
+        shown = closed or q["post_id"] in mine and total >= POLL_SHOWN
+        out[q["post_id"]] = {"options": opts, "days": q["days"], "closes": q["closes_at"], "closed": closed,
+                             "voted": q["post_id"] in mine, "total": total, "counts": [got.get(i, 0) for i in range(len(opts))] if shown else None}
+    return out
+
+
+def vote(con, v: Viewer, pid: int, choice: object) -> dict:
+    """My vote on a poll live in the channel and still open: final (a second one: conflict), counted with no account
+    on it. The poll as my card shows it now."""
+    need_student(v)
+    if type(choice) is not int or not 0 <= choice < POLL_OPTIONS[1] or not 0 < pid < 1 << 63:
+        raise ApiError("bad_input")
+    with tx(con):
+        core.need_current_student(con, v)
+        q = one(con, """SELECT q.options, q.closes_at FROM fchan_polls q JOIN fchan_posts p ON p.id = q.post_id
+            WHERE q.post_id = ? AND p.status = 'live' AND p.tg_msg > 0""", pid)
+        if not q:
+            raise ApiError("not_found")
+        if q["closes_at"] is None or q["closes_at"] <= core.now():
+            raise ApiError("conflict", "closed")
+        if choice >= len(json.loads(q["options"])):
+            raise ApiError("bad_input")
+        if not con.execute("INSERT OR IGNORE INTO fchan_voted (post_id, user_id) VALUES (?, ?)", (pid, v.id)).rowcount:
+            raise ApiError("conflict", "voted")
+        con.execute("""INSERT INTO fchan_tally (post_id, choice, n) VALUES (?, ?, 1)
+            ON CONFLICT (post_id, choice) DO UPDATE SET n = n + 1""", (pid, choice))
+        return _polls(con, v, [pid])[pid]
+
+
+def _poll_closes(con, pid: int) -> None:
+    """Out in the channel: its days start now, once."""
+    con.execute("UPDATE fchan_polls SET closes_at = COALESCE(closes_at, ? + days * 86400) WHERE post_id = ?", (core.now(), pid))
+
+
+def _poll_off(con, pid: int) -> None:
+    """A poll's words and votes, with its post's words (a refusal, the author's delete); the row stays for the day's cap."""
+    con.execute("UPDATE fchan_polls SET options = '[]' WHERE post_id = ?", (pid,))
+    con.execute("DELETE FROM fchan_voted WHERE post_id = ?", (pid,))
+    con.execute("DELETE FROM fchan_tally WHERE post_id = ?", (pid,))
 
 
 HELP_HOURS = (1, 3, 6, 12, 24)  # how long an ask for help stays up, the author's pick (the app offers 3 h first)
@@ -435,7 +596,7 @@ def mark_seen(con, v: Viewer, msg: int) -> None:
 
 
 def _review(p) -> dict:
-    kind = "appeal" if p["appealed_at"] else "photo" if p["why"] == "photo" else "tg" if p["why"] == "tgno" else "ai"
+    kind = "appeal" if p["appealed_at"] else "photo" if p["why"] == "photo" else "tg" if p["why"] == "tgno" else "poll" if p["why"] == "poll" else "ai"
     ex = {"quote": p["ai_quote"], "reason": p["ai_reason"], "fix": p["ai_fix"]} if p["ai_reason"] else None
     return {"kind": kind, "explain": ex}
 
@@ -494,12 +655,18 @@ def reserve(con, v: Viewer, body: dict) -> tuple[int, str]:
         raise ApiError("bad_input", "help_anon")
     pics = _pics(body)
     text = _clean(body.get("body"))
+    poll = _poll_in(body["poll"]) if body.get("poll") is not None else None
+    if poll and (pics or hours or len(text) > QUESTION_MAX):  # a poll is the question and its options alone
+        raise ApiError("bad_input", "poll")
     if pics and len(text) > CAPTION_MAX:  # a caption: Telegram's 1024 with the signature under it
         raise ApiError("bad_input", "long")
     if not _meaningful(text):
         raise ApiError("bad_input", "short")
     with tx(con):
         core.need_current_student(con, v)
+        if poll and one(con, """SELECT COUNT(*) FROM fchan_polls q JOIN fchan_posts p ON p.id = q.post_id
+                WHERE p.user_id = ? AND p.created_at > ?""", v.id, core.now() - 86400)[0] >= POLLS_A_DAY:
+            raise ApiError("rate_limited", "polls")
         # the pace: two in any ten minutes; a post the AI called noise doesn't count (its author rewrites it now: told
         # why, ChannelCompose gives the words back); an ad does, and so does one I deleted myself (a
         # delete refunds nothing, else post-delete-post floods the channel)
@@ -513,6 +680,11 @@ def reserve(con, v: Viewer, body: dict) -> tuple[int, str]:
         con.execute("INSERT INTO fchan_posts (id, user_id, body, anon, status, why, created_at, sign, nick_a, nick_n, help_until) VALUES (?, ?, ?, ?, 'held', 'check', ?, ?, ?, ?, ?)",
                     (pid, v.id, text, int(anon), core.now(), sign, a, n, core.now() + hours * 3600 if hours else None))
         _attach(con, v.id, pid, pics)
+        if poll:
+            con.execute("INSERT INTO fchan_polls (post_id, options, days) VALUES (?, ?, ?)", (pid, json.dumps(poll[0], ensure_ascii=False), poll[1]))
+            if _linky(words(con, pid, text)):  # the lines together (each passed alone)
+                raise ApiError("bad_input", "links")
+            return pid, words(con, pid, text)  # the AI reads the options too
         return pid, text
 
 
@@ -658,8 +830,11 @@ def settle(con, v: Viewer, pid: int, verdict: str | None) -> dict:
                             (verdict, _refused(pid, p["body"]), pid))
                 # its photos back to me, on no post (Edit or the appeal names them again; unused, swept in the hour)
                 con.execute("UPDATE fchan_photos SET user_id = ?, post_id = NULL, created_at = ? WHERE post_id = ?", (p["user_id"], core.now(), pid))
+                _poll_off(con, pid)
                 return _shape(one(con, "SELECT * FROM fchan_posts WHERE id = ?", pid))
-            if verdict == "ok" and p["anon"] and _has_photos(con, pid):  # the AI can't judge pictures: a person looks first
+            if verdict == "ok" and _is_poll(con, pid):  # every poll waits for a moderator's yes
+                status, why = "held", "poll"
+            elif verdict == "ok" and p["anon"] and _has_photos(con, pid):  # the AI can't judge pictures: a person looks first
                 status, why = "held", "photo"
             elif verdict == "ok":
                 busy = one(con, "SELECT COUNT(*) FROM fchan_posts WHERE status = 'live' AND created_at > ?", core.now() - 3600)[0] >= CHANNEL_AN_HOUR
@@ -699,7 +874,7 @@ def appeal(con, v: Viewer, pid: int, body: dict) -> dict:
     with tx(con):
         p = one(con, """SELECT * FROM fchan_posts WHERE id = ? AND user_id = ? AND status = 'gone' AND why IN ('noise', 'ad')
                         AND appealed_at IS NULL AND created_at > ?""", pid, v.id, core.now() - APPEAL_WINDOW)
-        if not p:
+        if not p or _is_poll(con, pid):  # a refused poll's options are wiped: written anew, not appealed
             raise ApiError("not_found")
         if p["refused"] != _refused(pid, text):
             raise ApiError("bad_input", "changed")
@@ -787,6 +962,7 @@ def _wipe(con, p) -> None:
     pid = p["id"]
     con.execute("DELETE FROM fchan_hearts WHERE post_id = ?", (pid,))
     con.execute("DELETE FROM fchan_coming WHERE post_id = ?", (pid,))
+    _poll_off(con, pid)
     _unpost(con, p, "author")
     con.execute("""UPDATE fchan_replies SET status = 'gone', why = 'author', body = '', ai_reason = NULL,
         drop_at = CASE WHEN tg_msg >= 0 THEN ? END WHERE post_id = ?""", (core.now(), pid))
@@ -812,7 +988,7 @@ def resigns(con) -> list:
     for (k,) in rows(con, "SELECT key FROM meta WHERE key >= 'fch_resign:' AND key < 'fch_resign;' LIMIT 5"):
         p = one(con, "SELECT id, body, sign FROM fchan_posts WHERE tg_msg = ? AND status = 'live'", int(k[11:]))
         if p:
-            out.append((int(k[11:]), p["body"], p["sign"], _has_photos(con, p["id"])))
+            out.append((int(k[11:]), words(con, p["id"], p["body"]), p["sign"], _has_photos(con, p["id"])))
         else:
             resigned(con, int(k[11:]))
     return out
@@ -846,6 +1022,8 @@ def edit_reserve(con, v: Viewer, pid: int, body: dict) -> tuple[int, str]:
         p = one(con, "SELECT * FROM fchan_posts WHERE id = ? AND user_id = ? AND status = 'live' AND tg_msg > 0", pid, v.id)
         if not p or _expired(p):
             raise ApiError("not_found")
+        if _is_poll(con, pid):  # the votes were given to these words
+            raise ApiError("bad_input", "poll")
         if one(con, "SELECT 1 FROM fchan_edits WHERE post_id = ? AND status = 'check' AND created_at > ?", pid, core.now() - CHECK_OVER):
             raise ApiError("conflict", "editing")
         if nxt := next_post(con, v.id):
@@ -1011,7 +1189,7 @@ def to_send(con) -> list:
     """Live posts not in the channel yet, oldest first, with their signature: the one fixed when written (signature(),
     never a @username) or the anonymous line; and their photos' files (media paths), in order."""
     ps = rows(con, "SELECT * FROM fchan_posts WHERE status = 'live' AND tg_msg IS NULL AND COALESCE(help_until, 1 << 62) > ? ORDER BY id LIMIT 5", core.now())
-    return [(p["id"], p["body"], _sign(con, p), [r[0] for r in rows(con, "SELECT path FROM fchan_photos WHERE post_id = ? ORDER BY n", p["id"])]) for p in ps]
+    return [(p["id"], words(con, p["id"], p["body"]), _sign(con, p), [r[0] for r in rows(con, "SELECT path FROM fchan_photos WHERE post_id = ? ORDER BY n", p["id"])]) for p in ps]
 
 
 def anon_sign(body: str) -> str:
@@ -1066,6 +1244,7 @@ def sent(con, pid: int, msg_id: int, pics: list[int] | None = None) -> None:
     if con.execute("""UPDATE fchan_posts SET tg_msg = ?, posted_at = CASE WHEN tg_msg = 0 THEN ? ELSE COALESCE(posted_at, ?) END,
             edit_sync = NULL WHERE id = ? AND status = 'live' AND tg_msg IN (0, ?)""", (msg_id, now, now, pid, msg_id)).rowcount:
         con.execute("UPDATE fchan_photos SET sync = 0 WHERE post_id = ?", (pid,))  # sent as it is now: nothing left to edit in
+        _poll_closes(con, pid)
         for n, m in enumerate(pics or []):
             con.execute("UPDATE fchan_photos SET msg = ? WHERE post_id = ? AND n = ?", (m, pid, n))
         # its author hears it went out (a template, to their own chat alone: an anonymous post stays so); once a post, and
@@ -1129,9 +1308,10 @@ def found(con, msg_id: int, text: str) -> None:
     if one(con, "SELECT 1 FROM fchan_posts WHERE tg_msg = ?", msg_id):
         return
     hits = [p["id"] for p in rows(con, """SELECT * FROM fchan_posts WHERE (status = 'live' AND tg_msg = 0 OR status = 'held' AND why = 'lost')
-            AND ? LIKE '%' || body || '%'""", text) if text in (f"{_sign(con, p)}\n\n{p['body']}", f"{p['body']}\n\n— {_sign(con, p)}")]
+            AND ? LIKE '%' || body || '%'""", text) if text in (f"{_sign(con, p)}\n\n{words(con, p['id'], p['body'])}", f"{words(con, p['id'], p['body'])}\n\n— {_sign(con, p)}")]
     if len(hits) == 1:
         con.execute("UPDATE fchan_posts SET status = 'live', why = NULL, tg_msg = ?, posted_at = ? WHERE id = ?", (msg_id, core.now(), hits[0]))
+        _poll_closes(con, hits[0])
         # an album: the caption is on its first photo, and Telegram numbers one album's messages in a row, so photo n
         # is this one plus n; each then leaves with the post (else only the first does). ponytail: consecutive
         # ids are how Telegram sends a media group; match the copies' media_group_id if that ever changes
@@ -1256,6 +1436,58 @@ def sweep(con) -> None:
     con.execute("DELETE FROM fchan_replies WHERE status IN ('gone', 'hidden', 'held') AND tg_msg IS NULL AND created_at < ?", (core.now() - 30 * 86400,))
 
 
+# ---- the Forum's week: one template on Friday 18:00-24:00 (Almaty), counts only, never words: the posts out this week
+# and the polls open now, with a button into the Forum and "Don't send" (its own switch, nForumDigest). Only to verified
+# students with something unread (the channel moved past what they saw); none when it's all zero; a round that missed
+# Friday evening sends nothing (once a week by its meta key, and the postman drops a card past its Saturday). Off until
+# the owner's yes: `admin forum-digest <@who>` previews it, `forum-digest on` turns it on (owner preview, AGENTS).
+DIGEST = "forum_digest"  # meta: 'on' once the owner said yes
+DIGEST_DAY, DIGEST_HOUR = 4, 18  # Friday (Monday 0), 18:00
+
+
+def digest_counts(con) -> dict:
+    t = core.now()
+    return {"posts": one(con, "SELECT COUNT(*) FROM fchan_posts WHERE status = 'live' AND tg_msg > 0 AND posted_at > ?", t - 7 * 86400)[0],
+            "polls": one(con, """SELECT COUNT(*) FROM fchan_polls q JOIN fchan_posts p ON p.id = q.post_id
+                WHERE p.status = 'live' AND p.tg_msg > 0 AND q.closes_at > ?""", t)[0]}
+
+
+def digest_week(con) -> None:
+    """The bot's round (chores): Friday evening, once a week, the week's card queued to each reader it is for."""
+    local = core.now() + core.TZ
+    day = local // 86400
+    if (day + 3) % 7 != DIGEST_DAY or local % 86400 < DIGEST_HOUR * 3600:
+        return
+    if not one(con, "SELECT 1 FROM meta WHERE key = ? AND value = 'on'", DIGEST):
+        return
+    with tx(con):  # the week's mark and its cards commit together: a failed queue retries on the next round
+        if not core._once(con, "forum_week", str(day)):
+            return
+        counts = digest_counts(con)
+        if not counts["posts"] and not counts["polls"]:
+            return
+        con.execute("""INSERT OR IGNORE INTO bot_outbox (user_id, kind, ref, payload, send_after)
+            SELECT u.id, 'forum_week', ?, ?, ? FROM users u JOIN students s ON s.user_id = u.id
+            WHERE s.manual = 0 AND u.n_forum_digest = 1 AND u.can_dm = 1 AND u.banned_at IS NULL AND u.tg_id > 0
+              AND u.forum_seen_msg < (SELECT COALESCE(MAX(tg_msg), 0) FROM fchan_posts WHERE status = 'live' AND tg_msg > 0)""",
+                    (f"fw:{day}", json.dumps(counts), core.now()))
+
+
+def digest_render(lang: str, ref: str, payload: str) -> tuple[str, str | None, str] | None:
+    """outbox._render: the card from the counts taken when it was queued; a week's card past its Saturday: nothing."""
+    when = ref.split(":")[1]
+    if when.isdigit() and (core.now() + core.TZ) // 86400 > int(when) + 1:
+        return None
+    n = json.loads(payload or "{}")
+    key = ("forum_week_polls" if n.get("posts") else "forum_week_only_polls") if n.get("polls") else "forum_week"
+    return (*texts.bot_message(lang, key, posts=n.get("posts", 0), polls=n.get("polls", 0)), "fp")
+
+
+def digest_preview(con, uid: int) -> None:
+    """The owner's look first: this week's card to one person now, on or off (its own ref each time)."""
+    notify(con, uid, "forum_week", f"fw:p{core.now()}", json.dumps(digest_counts(con)))
+
+
 def unposts(con) -> list:
     """Channel messages due to leave now, oldest first."""
     return rows(con, "SELECT msg_id, why, photo FROM tg_unpost WHERE at <= ? ORDER BY at LIMIT 20", core.now())
@@ -1319,7 +1551,8 @@ def mod_queue(con, v: Viewer) -> dict:
     people = {p["id"]: person_ref(p) for p in rows(con, f"{PERSON} WHERE u.id IN ({','.join('?' * len(ids))})", *ids)} if ids else {}
     me_owner = _owner(con, v)
     pics = _photos(con, {p["id"] for p in held + live + removed})
-    shape = lambda p: _shape(p) | {"at": _mod_at(p["anon"], p["created_at"], p["posted_at"]), "photos": pics.get(p["id"], []), "own": p["user_id"] == v.id and not me_owner, "why": p["why"], "aiWhy": p["ai_reason"], "author": None if p["anon"] else people.get(p["user_id"])}  # noqa: E731
+    polls = _poll_texts(con, [p["id"] for p in held + live + removed])
+    shape = lambda p: _shape(p) | polls.get(p["id"], {}) | {"at": _mod_at(p["anon"], p["created_at"], p["posted_at"]), "photos": pics.get(p["id"], []), "own": p["user_id"] == v.id and not me_owner, "why": p["why"], "aiWhy": p["ai_reason"], "author": None if p["anon"] else people.get(p["user_id"])}  # noqa: E731
     return {"held": [shape(p) for p in held], "live": [shape(p) for p in live],
             "removed": [shape(p) | {"undo": _pending(con, p["tg_msg"])} for p in removed], "replies": reply_mod_queue(con),
             "edits": edit_mod_queue(con, v)}

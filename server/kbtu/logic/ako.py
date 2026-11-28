@@ -11,6 +11,7 @@ A public start link (/ako/o/<org slug>, for the org's website) makes a draft on 
 (WhatsApp's link previews fetch every link). Drafts never sent go after DRAFT_KEEP; sent packages after KEEP."""
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 import io
@@ -63,6 +64,12 @@ _CTRL = re.compile(r"[\x00-\x1f\x7f-\x9f‪-‮⁦-⁩]")
 _EMAIL = re.compile(r"[^@\s]{1,64}@[^@\s]{1,190}\.[^@\s.]{2,24}")
 _MEET = re.compile(r"https://(?:teams\.microsoft\.com|teams\.live\.com)/\S{1,600}")
 DATA = Path(__file__).resolve().parents[1] / "i18n" / "ako.json"
+# The interview's reminders (due, kbtu/akosend.py). app.create sets both: KEY from TOKEN_KEY (like seats.ICS_KEY), BOT
+# the bot's username while AKO_REMIND=1. BOT empty: no Telegram link offered, nothing sent anywhere
+KEY = secrets.token_bytes(32)
+BOT = ""
+D1, H1 = (24 * 3600, 20 * 3600), (3600, 300)  # a reminder's window, seconds before the start: from, until (a missed one is skipped)
+INVITES_A_DAY = 3           # "booked" e-mails to one package in a day: an applicant moving their time can't spam an address
 
 
 # ---------------------------------------------------------------- shared
@@ -203,7 +210,7 @@ def view(con, token: str) -> dict:
             "files": [{"id": f["id"], "doc": f["doc"], "mime": f["mime"], "bytes": f["bytes"], "at": f["created_at"]} for f in files],
             "slot": {"id": slot["id"], "at": slot["starts_at"], "minutes": slot["minutes"], "teams": _teams(con, a["org_id"], slot)} if slot else None,
             "slots": _free(con, a) if interview and a["status"] in ("draft", "sent", "review") else [],
-            "maxFiles": MAX_FILES, "maxBytes": FILE_BYTES}
+            "maxFiles": MAX_FILES, "maxBytes": FILE_BYTES, "remind": _reach(con, a, slot)}
 
 
 def _free(con, a) -> list[dict]:
@@ -420,25 +427,143 @@ def submit(con, token: str) -> dict:
 
 
 def ics(con, token: str) -> str:
+    return _invite(con, _app(con, token))
+
+
+def _title(con, a) -> str:
+    """The program's name in the applicant's language, from the org's catalogue (never anyone's typed words)."""
+    program, _ = _needs(con, a)
+    info = (program or {}).get("info", {}).get(a["lang"]) or (program or {}).get("info", {}).get("ru") or {}
+    return " ".join(filter(None, (info.get("title"), info.get("sub"))))
+
+
+def _invite(con, a) -> str:
     """My interview as a calendar invite, its meeting link inside and two alarms (a day and an hour before): the phone
-    reminds even when our server is down."""
-    a = _app(con, token)
+    reminds even when our server is down. One UID per package and a SEQUENCE that only grows: a moved interview,
+    opened again, moves the same event."""
     s = one(con, "SELECT * FROM ako_slots WHERE id = ?", a["slot_id"]) if a["slot_id"] else None
     if not s:
         raise ApiError("not_found")
-    program, _ = _needs(con, a)
     org, lang = _org(con, a["org_id"]), a["lang"]
-    info = (program or {}).get("info", {}).get(lang) or (program or {}).get("info", {}).get("ru") or {}
     words = texts.AKO_ICS[lang]
     teams = _teams(con, a["org_id"], s)
     utc = lambda ts: time.strftime("%Y%m%dT%H%M%SZ", time.gmtime(ts))  # noqa: E731
-    title = words["title"].format(program=" ".join(filter(None, (info.get("title"), info.get("sub")))), org=org["name"].get(lang) or org["name"]["ru"])
-    lines = ["BEGIN:VEVENT", f"UID:ako{a['id']}-{s['id']}@kbtu-app", f"DTSTAMP:{utc(core.now())}", f"DTSTART:{utc(s['starts_at'])}",
-             f"DTEND:{utc(s['starts_at'] + s['minutes'] * 60)}", "SUMMARY:" + _ics_text(title), "LOCATION:" + _ics_text(teams or "Microsoft Teams"),
-             "DESCRIPTION:" + _ics_text(words["body"] + (f"\n{teams}" if teams else "")), *([f"URL:{teams}"] if teams else [])]
+    title = words["title"].format(program=_title(con, a), org=org["name"].get(lang) or org["name"]["ru"])
+    lines = ["BEGIN:VEVENT", f"UID:ako{a['id']}@kbtu-app", f"SEQUENCE:{max(0, a['updated_at'] - a['created_at'])}", f"DTSTAMP:{utc(core.now())}",
+             f"DTSTART:{utc(s['starts_at'])}", f"DTEND:{utc(s['starts_at'] + s['minutes'] * 60)}", "SUMMARY:" + _ics_text(title),
+             "LOCATION:" + _ics_text(teams or "Microsoft Teams"), "DESCRIPTION:" + _ics_text(words["body"] + (f"\n{teams}" if teams else "")),
+             *([f"URL:{teams}"] if teams else [])]
     for before in ("-P1D", "-PT1H"):
         lines += ["BEGIN:VALARM", "ACTION:DISPLAY", "DESCRIPTION:" + _ics_text(title), f"TRIGGER:{before}", "END:VALARM"]
     return _calendar([*lines, "END:VEVENT"])
+
+
+# ---------------------------------------------------------------- the interview's invite and reminders
+
+def _mac(what: str, a) -> str:
+    """A link's signature, bound to the package's current secret: a new link (update_app newLink) stops the old
+    one-tap invite and the old Telegram link with it."""
+    d = hmac.new(KEY, f"ako-{what}:{a['id']}:".encode() + bytes(a["token"]), hashlib.sha256).digest()[:16]
+    return base64.urlsafe_b64encode(d).rstrip(b"=").decode()
+
+
+def _reach(con, a, slot) -> dict:
+    """view()'s ways to be reminded: the invite in one tap (a plain GET a phone hands to its calendar, no header to
+    send), the bot's link (only while AKO_REMIND is on), and whether a chat already gets them."""
+    return {"ics": f"/api/ako/ics/{a['id']}?s={_mac('ics', a)}" if slot else None,
+            "telegram": f"https://t.me/{BOT}?start=ako_{a['id']}_{_mac('tg', a)}" if BOT else None,
+            "linked": bool(one(con, "SELECT 1 FROM ako_chats WHERE app_id = ?", a["id"]))}
+
+
+def signed_ics(con, aid: int, s: object) -> str:
+    """The one-tap invite: its signature is the key, and opens nothing but the invite."""
+    a = one(con, "SELECT * FROM ako_apps WHERE id = ?", aid) if _id(aid) else None
+    if not (a and isinstance(s, str) and s.isascii() and hmac.compare_digest(s, _mac("ics", a))):
+        raise ApiError("not_found")
+    return _invite(con, a)
+
+
+def bind(con, payload: str, chat: int) -> str | None:
+    """/start ako_<id>_<signature>: this private chat gets the package's reminders. The first chat keeps them, so a
+    forwarded link takes nothing over (a new link frees them). Returns the package's language, None: not bound."""
+    _, aid, mac = (payload.split("_", 2) + ["", ""])[:3]
+    if not BOT or not aid.isdigit() or len(aid) > 15:
+        return None
+    with tx(con):
+        a = one(con, "SELECT * FROM ako_apps WHERE id = ?", int(aid))
+        if not a or not mac.isascii() or not hmac.compare_digest(mac, _mac("tg", a)) or a["status"] in ("accepted", "declined"):
+            return None
+        cur = one(con, "SELECT chat FROM ako_chats WHERE app_id = ?", a["id"])
+        if cur and cur[0] != chat:
+            return None
+        con.execute("INSERT OR IGNORE INTO ako_chats (app_id, chat) VALUES (?, ?)", (a["id"], chat))
+    return a["lang"]
+
+
+def message(kind: str, lang: str, program: str, at: int, teams: str | None) -> tuple[str, list | None]:
+    """A reminder in the bot (texts.BOT ako_*): the catalogue's program name and the time, the org's Teams link (Microsoft's
+    hosts only, _meet) as the one button. BOT_WORDS.md lists the link."""
+    text, button = texts.bot_message(lang, kind, program=program, when=texts.when(at, lang))
+    return text, [[{"text": button, "url": teams}]] if button and teams else None
+
+
+def due(con, mail: bool) -> list[dict]:
+    """What goes now (AKO_REMIND on): a day's and an hour's reminders in their windows to the linked chat and the
+    e-mail, and the invite by e-mail once per interview time. Each is claimed in ako_sends before it goes: a crash or a
+    second worker never sends one twice. Only packages sent and undecided, and only their current time."""
+    t = core.now()
+    out: list[dict] = []
+    with tx(con):
+        for a in rows(con, """SELECT a.*, s.starts_at, s.teams, c.chat AS tg_chat FROM ako_apps a JOIN ako_slots s ON s.id = a.slot_id
+                LEFT JOIN ako_chats c ON c.app_id = a.id WHERE a.status IN ('sent', 'review') AND s.starts_at > ?
+                  AND ((? AND a.email != '') OR (c.chat IS NOT NULL AND s.starts_at <= ?))
+                ORDER BY s.starts_at""", t, mail, t + D1[0]):
+            left = a["starts_at"] - t
+            kinds = [k for k, (hi, lo) in (("d1", D1), ("h1", H1)) if lo < left <= hi]
+            sends = [(k, "telegram") for k in kinds if a["tg_chat"] is not None]
+            if mail and a["email"]:
+                sends += [(k, "email") for k in kinds]
+                if one(con, "SELECT COUNT(*) FROM ako_sends WHERE app_id = ? AND kind = 'booked' AND at > ?", a["id"], t - 86400)[0] < INVITES_A_DAY:
+                    sends.append(("booked", "email"))
+                    last = one(con, "SELECT slot_at FROM ako_sends WHERE app_id = ? AND kind = 'booked' ORDER BY at DESC LIMIT 1", a["id"])
+                    if last and last[0] != a["starts_at"]:  # moved back to a time invited before: the calendar holds the later one
+                        con.execute("DELETE FROM ako_sends WHERE app_id = ? AND kind = 'booked' AND slot_at = ?", (a["id"], a["starts_at"]))
+            teams, program = _teams(con, a["org_id"], a), None  # the row carries its slot's starts_at and teams
+            for kind, channel in sends:
+                if not con.execute("INSERT OR IGNORE INTO ako_sends (app_id, kind, channel, slot_at, at) VALUES (?, ?, ?, ?, ?)",
+                                   (a["id"], kind, channel, a["starts_at"], t)).rowcount:
+                    continue
+                program = program if program is not None else _title(con, a)
+                org = _org(con, a["org_id"])["name"]
+                out.append({"app": a["id"], "kind": kind, "channel": channel, "at": a["starts_at"], "lang": a["lang"],
+                            "org": org.get(a["lang"]) or org["ru"],
+                            "to": a["tg_chat"] if channel == "telegram" else a["email"], "program": program, "teams": teams,
+                            "ics": _invite(con, a) if kind == "booked" else None})
+    return out
+
+
+def sent(con, m: dict, error: str | None) -> None:
+    """A send's end. error None: sent; "retry" (the network, a 429, a 5xx): the claim goes, the next round tries again
+    inside the window; "blocked" (Telegram 403): the chat is forgotten; anything else: kept as why it never went."""
+    with tx(con):
+        key = (m["app"], m["kind"], m["channel"], m["at"])
+        if error == "retry":
+            con.execute("DELETE FROM ako_sends WHERE app_id = ? AND kind = ? AND channel = ? AND slot_at = ?", key)
+            return
+        con.execute("UPDATE ako_sends SET sent_at = ?, error = ? WHERE app_id = ? AND kind = ? AND channel = ? AND slot_at = ?",
+                    (None if error else core.now(), error, *key))
+        if error == "blocked":
+            con.execute("DELETE FROM ako_chats WHERE app_id = ? AND chat = ?", (m["app"], m["to"]))
+
+
+def preview(kind: str, lang: str) -> tuple[str, str | None, str | list]:
+    """A reminder as its applicant gets it, with sample data (admin ako-preview: the owner's yes before any real send)."""
+    if kind == "ako_linked":
+        return (*texts.bot_message(lang, kind), "")
+    p = json.loads(DATA.read_text(encoding="utf-8"))["programs"][0][lang if lang in LANGS else "ru"]
+    text, keys = message(kind, lang, " ".join(filter(None, (p.get("title"), p.get("sub")))), core.now() + 86400,
+                         "https://teams.microsoft.com/l/meetup-join/sample")
+    return text, None, keys or ""
 
 
 # ---------------------------------------------------------------- the org's people (Studio)
@@ -658,6 +783,7 @@ def update_app(con, v: Viewer, oid: int, aid: int, body: dict) -> dict:
         if body.get("newLink") is True:
             token, digest = new_token()
             con.execute("UPDATE ako_apps SET token = ? WHERE id = ?", (digest, aid))
+            con.execute("DELETE FROM ako_chats WHERE app_id = ?", (aid,))  # the reminders' chat too
             out["token"] = token
         core.log_action(con, v.id, "ako_update", f"ako:{aid}", json.dumps({k: body[k] for k in ("status", "slot", "program") if k in body}))
     return out
@@ -785,7 +911,8 @@ def seed(con, oid: int) -> int:
 
 def sweep(con) -> None:
     """Nightly (daily.stats_day): drafts never sent go DRAFT_KEEP after their last change, sent packages KEEP after
-    sending, with their files; a starter's address hash after a day; past slots nobody holds."""
+    sending, with their files; a starter's address hash after a day; past slots nobody holds; the reminders' chat and
+    send marks a day after the interview (the chat also once decided)."""
     t = core.now()
     with tx(con):
         gone = rows(con, """SELECT id FROM ako_apps WHERE (status = 'draft' AND updated_at < ?) OR (sent_at IS NOT NULL AND sent_at < ?)""",
@@ -800,6 +927,10 @@ def sweep(con) -> None:
         con.execute("UPDATE ako_apps SET slot_id = NULL WHERE status = 'draft' AND slot_id IS NOT NULL AND updated_at < ?", (t - 86400,))
         con.execute("""DELETE FROM ako_slots WHERE starts_at < ? AND id NOT IN (SELECT slot_id FROM ako_apps WHERE slot_id IS NOT NULL)""",
                     (t - 30 * 86400,))
+        # the reminders' chat once there is nothing to remind of: decided, or a day after the interview
+        con.execute("""DELETE FROM ako_chats WHERE app_id IN (SELECT id FROM ako_apps WHERE status IN ('accepted', 'declined')
+            OR slot_id IN (SELECT id FROM ako_slots WHERE starts_at < ?))""", (t - 86400,))
+        con.execute("DELETE FROM ako_sends WHERE slot_at < ?", (t - 86400,))  # by the interview's time: a mark gone early sends again
     _unlink(root_of(con), paths)
     _orphans(con)
 

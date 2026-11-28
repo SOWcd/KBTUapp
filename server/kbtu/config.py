@@ -113,6 +113,15 @@ class Config:
     wallet_key: str = field(default="", repr=False)
     wallet_type_id: str = ""
     apple_team_id: str = ""
+    # AKO_REMIND=1: an applicant's interview reminders (logic/ako.py, akosend.py): the bot's link on their page and the
+    # sends; off: neither, by any channel. AKO_MAIL_FROM + SMTP_HOST (SMTP_PORT, 587 by default; SMTP_USER,
+    # SMTP_PASSWORD): the same by e-mail, with the invite attached; either empty: no e-mail
+    ako_remind: bool = False
+    ako_mail_from: str = ""
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = field(default="", repr=False)
 
 
 def _dotenv() -> dict[str, str]:
@@ -230,4 +239,10 @@ def load() -> Config:
         wallet_key=env.get("WALLET_PASS_KEY", "").strip(),
         wallet_type_id=env.get("WALLET_PASS_TYPE_ID", "").strip(),
         apple_team_id=env.get("APPLE_TEAM_ID", "").strip(),
+        ako_remind=env.get("AKO_REMIND", "").strip() == "1",
+        ako_mail_from=env.get("AKO_MAIL_FROM", "").strip(),
+        smtp_host=env.get("SMTP_HOST", "").strip(),
+        smtp_port=int(p) if (p := env.get("SMTP_PORT", "").strip()).isdigit() else 587,
+        smtp_user=env.get("SMTP_USER", "").strip(),
+        smtp_password=env.get("SMTP_PASSWORD", ""),
     )

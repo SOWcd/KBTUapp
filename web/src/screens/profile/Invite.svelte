@@ -71,6 +71,10 @@
   .cnt b { font: 800 var(--fs-title)/1 var(--font-display, var(--font-text)); letter-spacing: -0.03em; }
   .cnt i { font: 500 var(--fs-sub)/1.3 var(--font-text); font-style: normal; color: var(--text-2); }
   .tx { display: flex; flex-direction: column; min-width: 0; padding: 0; }
+  /* the tile gives as one, as when it was the button: base.css's press on every button would shrink and dim the words
+     again inside it, so the tile dims instead (not while the medal, a button of its own, is pressed) */
+  .tx:active { transform: none; opacity: 1; }
+  .sq:active:not(:has(.art:active)) { opacity: 0.9; }
   .tx b { font: 700 var(--fs-body)/1.2 var(--font-text); }
   .left { margin-top: 5px; font: 500 var(--fs-cap)/1.2 var(--font-text); font-style: normal; color: var(--text-2); }
   /* the nine levels: a mark each, in its metal; the next one fills as friends come */

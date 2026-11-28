@@ -2234,6 +2234,8 @@ const kk: Dict = {
   'set.newEventsHint': "Жазылған клубтарыңнан",
   'set.forumComments': "Форумдағы посттарыма жазылған пікірлер",
   'set.forumCommentsHint': "Әр пост үшін 3 сағатта бір реттен жиі емес",
+  'set.forumDigest': "Форумдағы апта",
+  'set.forumDigestHint': "Жұма сайын бір хабарлама: форумда не жаңа",
   'set.broadcasts': "Хабарлан­дырулар",
   'set.broadcastsHint': "Клуб жаңалықтары және Құпия Санта хабарлан­дырулары",
   'set.digests': "Шолулар",

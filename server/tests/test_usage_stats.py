@@ -142,7 +142,9 @@ def test_web_flows_errors_and_timings_match_the_allowlist():
     union = lambda name: re.findall(r"'([a-z_]+)'", re.search(rf"type {name} = (.*?);", src, re.S).group(1))  # noqa: E731
     assert tuple(union("JsKind")) == stats.JS_KINDS and tuple(union("ApiKind")) == stats.API_KINDS
     codes = re.search(r"interface ApiError \{ error: (.*?);", (web / "lib/api/types.ts").read_text(encoding="utf-8")).group(1)
-    assert set(re.findall(r"'([a-z_]+)'", codes)) == set(stats.API_KINDS) - {"network", "server"}  # the server's codes, all of them
+    assert set(re.findall(r"'([a-z_]+)'", codes)) == set(stats.API_KINDS) - {"network", "server", *stats.EXPECTED}  # the server's codes, all of them
+    client = (web / "lib/api/client.ts").read_text(encoding="utf-8")  # a 403's reason only (a 400 may say 'consent' too)
+    assert "r.status === 403 ? (data as ApiError | null)?.message" in client and "why === 'consent' ? 'consent' : why === 'init_data' ? 'expired'" in client
     assert len(re.search(r"TTI_EDGES = \[(.*?)\]", src).group(1).split(",")) + 1 == len(stats.TTI)
     for steps, ends in stats.FUNNELS.values():                              # every step is a key someone can count
         assert all(k in stats.KEYS or k.startswith("andr.") for k in (*steps, *ends))
@@ -171,6 +173,7 @@ def test_week_digest(env):
         (last, "tti.sheet.studio.android.4", 8), (last, "tti.sheet.studio.android.0", 1), (last - 7, "tti.sheet.studio.android.2", 6),
         (last, "tti.sheet.event.ios.0", 30), (last, "tti.sheet.news.ios.5", 2),   # under 5 samples: not ranked
         (last, "api.tab.forum.network", 7), (last - 7, "api.tab.forum.network", 2), (last, "do.share", 4),
+        (last, "api.tab.afisha.consent", 30), (last, "api.sheet.event.consent", 4), (last, "api.tab.afisha.expired", 9),
         (MONDAY, "sheet.event", 999)])                                      # today isn't a whole day yet
     w = stats.week(con, MONDAY).split("\n")
     assert w[0].startswith("📊 ") and all(line[:1] in "📊📈🪜🐢💥🆕 " for line in w)
@@ -180,6 +183,7 @@ def test_week_digest(env):
     slow = w.index("🐢 Slowest (p75, tap → first frame)")
     assert w[slow + 1:slow + 3] == ["  sheet.studio android ≤2s (9, was ≤500ms)", "  sheet.event ios ≤100ms (30)"]
     assert "  api.tab.forum.network 7 (+250%)" in w and w[-1].startswith("🆕 Since Nov 20: share 4 · ")
+    assert "  not errors: consent asked 34 · sign-in expired 9" in w and not any(".consent " in x or ".expired " in x for x in w)
 
 
 def test_usage_numbers(env):

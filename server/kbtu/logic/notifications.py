@@ -13,6 +13,7 @@ CATEGORIES = {
                             "santa_soon", "santa_nudge", "santa_eve", "santa_msg", "santa_reply")),
     "nNewEvents": ("n_new_events", ("new_event", "casting_open", "round_open")),
     "nForumComments": ("n_forum_comments", ("fch_comments",)),
+    "nForumDigest": ("n_forum_digest", ("forum_week",)),
     "nBroadcasts": ("n_broadcasts", ("broadcast", "santa_news", "santa_open")),
     "nDigests": ("n_digests", ("memo_ready", "place_tba")),
     "nFriends": ("n_friends", ("friend_request", "friend_new")),
