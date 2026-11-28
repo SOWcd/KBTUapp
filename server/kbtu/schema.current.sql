@@ -87,10 +87,11 @@ CREATE TABLE ako_starts (
       at     INTEGER NOT NULL
     ) STRICT;
 CREATE TABLE ako_uploads (
+      id     INTEGER PRIMARY KEY,
       org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
       app_id INTEGER NOT NULL,
-      draft  INTEGER NOT NULL CHECK (draft IN (0, 1)),
-      bytes  INTEGER NOT NULL,
+      ip     TEXT NOT NULL,                         -- a keyed hash of the uploader's address (an IPv6 /64), as ako_starts
+      bytes  INTEGER NOT NULL DEFAULT 0,            -- kept; 0 for a try refused or failed
       at     INTEGER NOT NULL
     ) STRICT;
 CREATE TABLE android_app (
@@ -1759,7 +1760,8 @@ CREATE INDEX ako_slots_by_time ON ako_slots(org_id, starts_at);
 CREATE INDEX ako_starts_by_ip ON ako_starts(ip, at);
 CREATE INDEX ako_starts_by_org ON ako_starts(org_id, at);
 CREATE INDEX ako_uploads_by_app ON ako_uploads(app_id, at);
-CREATE INDEX ako_uploads_by_org ON ako_uploads(org_id, draft, at);
+CREATE INDEX ako_uploads_by_ip ON ako_uploads(ip, at);
+CREATE INDEX ako_uploads_by_org ON ako_uploads(org_id, at);
 CREATE INDEX anon_feedback_by_day ON anon_feedback(day);
 CREATE INDEX appeal_authors_user ON appeal_authors(user_id);
 CREATE INDEX appeal_sends_user ON appeal_sends(user_id, at);

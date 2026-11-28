@@ -2840,15 +2840,17 @@ MIGRATIONS: list[tuple[int, str]] = [
       created_at INTEGER NOT NULL
     ) STRICT;
     CREATE INDEX IF NOT EXISTS ako_files_by_app ON ako_files(app_id, doc, id);"""),
-    # admissions' daily upload caps (logic/ako.py _room): a row per page stored, kept a day. No foreign key on app_id:
-    # a page deleted, or a draft gone, still counts for its day
+    # admissions' daily upload caps (logic/ako.py _room): a row per try, kept a day. No foreign key on app_id: a page
+    # deleted, or a draft gone, still counts for its day
     (265, """CREATE TABLE IF NOT EXISTS ako_uploads (
+      id     INTEGER PRIMARY KEY,
       org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
       app_id INTEGER NOT NULL,
-      draft  INTEGER NOT NULL CHECK (draft IN (0, 1)),
-      bytes  INTEGER NOT NULL,
+      ip     TEXT NOT NULL,                         -- a keyed hash of the uploader's address (an IPv6 /64), as ako_starts
+      bytes  INTEGER NOT NULL DEFAULT 0,            -- kept; 0 for a try refused or failed
       at     INTEGER NOT NULL
     ) STRICT;
     CREATE INDEX IF NOT EXISTS ako_uploads_by_app ON ako_uploads(app_id, at);
-    CREATE INDEX IF NOT EXISTS ako_uploads_by_org ON ako_uploads(org_id, draft, at);"""),
+    CREATE INDEX IF NOT EXISTS ako_uploads_by_ip ON ako_uploads(ip, at);
+    CREATE INDEX IF NOT EXISTS ako_uploads_by_org ON ako_uploads(org_id, at);"""),
 ]

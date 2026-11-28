@@ -146,31 +146,49 @@ def test_the_link_is_the_credential(env, monkeypatch):
 
 
 def test_uploads_are_capped_a_day(env, monkeypatch):
-    """Replacing a page counts (upload, delete, upload), and one org's drafts store at most so many bytes a day."""
+    """Tries count before the body is read: a failed rebuild and a replaced page too. Caps per link, per address, the
+    bytes kept per address, and the org's disk guard; a link id used again starts afresh."""
     c, cfg, con, oid, t0 = _setup(env, monkeypatch)
+    up = lambda tok, ip="198.51.100.1", body=None, doc="cv": c.post(  # noqa: E731
+        f"/api/ako/a/files?doc={doc}", headers={"X-Ako": tok, "CF-Connecting-IP": ip}, content=body or _jpeg(300, 400))
+    refused = lambda r: r.status_code == 429 and r.json()["message"] == "ako_uploads"  # noqa: E731
     tok = _new(c, oid)
-    h = {"X-Ako": tok}
-    c.patch("/api/ako/a", headers=h, json={"consent": True})
+    c.patch("/api/ako/a", headers={"X-Ako": tok}, json={"consent": True})
     monkeypatch.setattr(ako, "UPLOADS_A_DAY", 3)
-    for _ in range(3):
-        f = c.post("/api/ako/a/files?doc=cv", headers=h, content=_jpeg(300, 400))
-        assert f.status_code == 200
-        assert c.delete(f"/api/ako/a/files/{f.json()['id']}", headers=h).status_code == 204
-    r = c.post("/api/ako/a/files?doc=cv", headers=h, content=_jpeg(300, 400))
-    assert r.status_code == 429 and r.json()["message"] == "ako_uploads"
-    set_clock(monkeypatch, lambda: t0 + 86401)  # a day on: room again, and the night sweeps the old rows
-    assert c.post("/api/ako/a/files?doc=cv", headers=h, content=_jpeg(300, 400)).status_code == 200
-    ako.sweep(con)
-    assert con.execute("SELECT COUNT(*) FROM ako_uploads").fetchone()[0] == 1
-    # the org's drafts, together: another draft is refused once today's bytes are spent; a sent package is not
+    assert up(tok, body=b"%PDF-1.4 broken").status_code == 400  # a failed rebuild is a try
+    f = up(tok)
+    assert f.status_code == 200 and c.delete(f"/api/ako/a/files/{f.json()['id']}", headers={"X-Ako": tok}).status_code == 204
+    assert up(tok).status_code == 200
+    assert refused(up(tok)) and refused(up(tok, ip="198.51.100.2"))  # the link's own cap, from any address
+    # one address, many links
     monkeypatch.setattr(ako, "UPLOADS_A_DAY", 99)
-    monkeypatch.setattr(ako, "DRAFT_BYTES_A_DAY", con.execute("SELECT SUM(bytes) FROM ako_uploads").fetchone()[0])
+    monkeypatch.setattr(ako, "ADDR_UPLOADS_A_DAY", 3)
     other = _new(c, oid, name="Gulnara A")
     c.patch("/api/ako/a", headers={"X-Ako": other}, json={"consent": True})
-    r = c.post("/api/ako/a/files?doc=cv", headers={"X-Ako": other}, content=_jpeg(300, 400))
-    assert r.status_code == 429 and r.json()["message"] == "ako_uploads"
-    con.execute("UPDATE ako_apps SET status = 'sent', sent_at = ? WHERE token = ?", (t0, hashlib.sha256(other.encode()).digest()))
-    assert c.post("/api/ako/a/files?doc=med", headers={"X-Ako": other}, content=_jpeg(300, 400)).status_code == 200
+    assert refused(up(other)) and up(other, ip="198.51.100.3").status_code == 200
+    # bytes kept: per address, then the org's disk guard for everyone
+    monkeypatch.setattr(ako, "ADDR_UPLOADS_A_DAY", 999)
+    kept = lambda where, *a: con.execute(f"SELECT SUM(bytes) FROM ako_uploads WHERE {where}", a).fetchone()[0]  # noqa: E731
+    monkeypatch.setattr(ako, "ADDR_BYTES_A_DAY", kept("ip = ?", ako.who_of("198.51.100.3", cfg.token_key)))
+    assert refused(up(other, ip="198.51.100.3")) and up(other, ip="198.51.100.4").status_code == 200
+    monkeypatch.setattr(ako, "ADDR_BYTES_A_DAY", 1 << 40)
+    monkeypatch.setattr(ako, "ORG_BYTES_A_DAY", kept("org_id = ?", oid))
+    assert refused(up(other, ip="198.51.100.5"))
+    monkeypatch.setattr(ako, "ORG_BYTES_A_DAY", 1 << 40)
+    # an id used again by a newer link doesn't inherit the old one's tries
+    monkeypatch.setattr(ako, "UPLOADS_A_DAY", 3)
+    aid = con.execute("SELECT id FROM ako_apps WHERE token = ?", (hashlib.sha256(tok.encode()).digest(),)).fetchone()[0]
+    set_clock(monkeypatch, lambda: t0 + 60)
+    con.execute("DELETE FROM ako_apps WHERE id = ?", (aid,))
+    fresh, digest = ako.new_token()
+    con.execute("""INSERT INTO ako_apps (id, org_id, token, program_id, consent, created_at, updated_at)
+        SELECT ?, ?, ?, id, ?, ?, ? FROM ako_programs WHERE org_id = ? AND key = 'emba'""", (aid, oid, digest, ako.CONSENT, t0 + 60, t0 + 60, oid))
+    assert up(fresh, ip="198.51.100.6").status_code == 200
+    # a day on: room again, and the night sweeps the old rows
+    set_clock(monkeypatch, lambda: t0 + 86461)
+    assert up(other, ip="198.51.100.3").status_code == 200
+    ako.sweep(con)
+    assert con.execute("SELECT COUNT(*) FROM ako_uploads").fetchone()[0] == 1
 
 
 def test_a_third_pdf_at_once_is_refused_not_parked(env, monkeypatch):

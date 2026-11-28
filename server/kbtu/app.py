@@ -3693,10 +3693,11 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
 
     @app.post("/api/ako/a/files")
     async def ako_file(request: Request, con: Con, doc: str = ""):
-        token = ako_token(request)
-        await run_in_threadpool(logic.ako.may_add, con, token, doc)  # a stranger's body, or one with no room, is never read
+        token, who = ako_token(request), logic.ako.who_of(_visitor_ip(request), cfg.token_key)
+        # a stranger's body, or one with no room, is never read; a try counts before it is
+        tried = await run_in_threadpool(logic.ako.may_add, con, token, doc, who)
         data = await read_upload(request, logic.ako.FILE_BYTES)
-        return await run_in_threadpool(logic.ako.add_file, con, token, doc, data)
+        return await run_in_threadpool(logic.ako.add_file, con, token, doc, data, who, tried)
 
     @app.delete("/api/ako/a/files/{fid}", status_code=204)
     def ako_file_drop(fid: int, request: Request, con: Con):

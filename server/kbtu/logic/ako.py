@@ -36,9 +36,13 @@ from .seats import _calendar, _ics_text
 CONSENT = "ako-2"        # the applicant's own notice (web i18n ako.consent*): a new wording, a new version
 DOCS = ("cv", "diploma", "application", "id", "photo", "med", "fluoro", "work", "extra")
 MAX_FILES = 24              # an application's files: ~9 documents, a few with several pages
-UPLOADS_A_DAY = 60          # pages one link may upload in a day, replaced ones too (ako_uploads)
-DRAFT_BYTES_A_DAY = 3 << 30  # what one org's drafts may store in a day: junk drafts can't fill the disk (ponytail: a
-                            # flood stops uploads to drafts till tomorrow, sent packages go on; the upgrade is per address)
+# uploads a day (ako_uploads): tries, counted before the body is read (a refused or failed rebuild counts too, so a
+# slow PDF can't be posted in a loop), and bytes kept. Per address (an IPv6 /64) first: one address can't spend the org's
+UPLOADS_A_DAY = 60          # tries by one link, replaced pages too
+ADDR_UPLOADS_A_DAY = 150    # tries from one address (a shared office: several applicants)
+ADDR_BYTES_A_DAY = 1 << 30  # bytes kept from one address
+ORG_BYTES_A_DAY = 20 << 30  # bytes kept for one org, everyone together: the disk's guard, far above a real day (ponytail:
+                            # many addresses at once could still reach it; the upgrade is counting IPv6 by its /48)
 FILE_BYTES = 10 * 1024 * 1024
 SIDE = 2400                 # a photographed page is kept at most this long: a diploma's small print stays readable
 STARTS_A_DAY = 20           # drafts one address (an IPv6 /64) may start from the public link in a day
@@ -154,6 +158,17 @@ def public(con, slug: str) -> dict:
     return {"org": _org(con, o["id"]), "programs": programs}
 
 
+def who_of(ip: str, key: bytes) -> str:
+    """An address for the daily caps, as a keyed hash (kept a day): an IPv6 address by its /64, as one ordinary
+    allocation holds 2^64 of them."""
+    try:
+        a = ipaddress.ip_address(ip)
+        ip = str(ipaddress.ip_network(f"{a}/64", strict=False).network_address) if a.version == 6 else str(a)
+    except ValueError:
+        pass
+    return hmac.new(key, f"ako-ip:{ip}".encode(), hashlib.sha256).hexdigest()[:24]
+
+
 def start(con, slug: str, body: dict, ip: str, key: bytes) -> dict:
     """The public link's first real step: a draft with the program picked. The secret goes back once, here."""
     o = one(con, "SELECT id FROM orgs WHERE slug = ? AND status = 'active'", slug) if isinstance(slug, str) and len(slug) <= 40 else None
@@ -161,16 +176,11 @@ def start(con, slug: str, body: dict, ip: str, key: bytes) -> dict:
     if not p:
         raise ApiError("not_found")
     lang = body.get("lang") if body.get("lang") in LANGS else "ru"
-    try:  # an IPv6 address counts by its /64: one ordinary allocation holds 2^64 of them
-        a = ipaddress.ip_address(ip)
-        ip = str(ipaddress.ip_network(f"{a}/64", strict=False).network_address) if a.version == 6 else str(a)
-    except ValueError:
-        pass
-    who = hmac.new(key, f"ako-ip:{ip}".encode(), hashlib.sha256).hexdigest()[:24]
+    who = who_of(ip, key)
     token, digest = new_token()
     t = core.now()
     # no cap for the org as a whole: a few addresses could shut the link for everyone; a flood's real cost is disk,
-    # and DRAFT_BYTES_A_DAY caps that
+    # and the uploads' caps hold that (_room)
     with tx(con):  # the starts' own rows: a draft that is sent or deleted still counts for its day
         if one(con, "SELECT COUNT(*) FROM ako_starts WHERE ip = ? AND at > ?", who, t - 86400)[0] >= STARTS_A_DAY:
             raise ApiError("rate_limited", "ako_starts")
@@ -278,34 +288,44 @@ def _picture(data: bytes) -> tuple[bytes, str]:
     return out.getvalue(), "image/jpeg"
 
 
-def _room(con, a) -> None:
-    """Room for one more page: the package's files, the link's uploads today (replacing counts: ako_uploads keeps a
-    row for each, a deleted file's too), and for a draft its org's bytes from drafts today."""
+def _room(con, a, who: str, trying: bool) -> None:
+    """Room for one more page: the package's files; with trying, the tries today of this link (since it was made: an id
+    used again starts afresh) and of this address; and the bytes kept today from this address and for the org."""
     t = core.now() - 86400
     if one(con, "SELECT COUNT(*) FROM ako_files WHERE app_id = ?", a["id"])[0] >= MAX_FILES:
         raise ApiError("rate_limited", "ako_files")
-    if one(con, "SELECT COUNT(*) FROM ako_uploads WHERE app_id = ? AND at > ?", a["id"], t)[0] >= UPLOADS_A_DAY:
+    if trying and (one(con, "SELECT COUNT(*) FROM ako_uploads WHERE app_id = ? AND at > ? AND at >= ?", a["id"], t, a["created_at"])[0] >= UPLOADS_A_DAY
+                   or one(con, "SELECT COUNT(*) FROM ako_uploads WHERE ip = ? AND at > ?", who, t)[0] >= ADDR_UPLOADS_A_DAY):
         raise ApiError("rate_limited", "ako_uploads")
-    if a["status"] == "draft" and one(con, "SELECT COALESCE(SUM(bytes), 0) FROM ako_uploads WHERE org_id = ? AND draft = 1 AND at > ?",
-                                      a["org_id"], t)[0] >= DRAFT_BYTES_A_DAY:
+    if one(con, "SELECT COALESCE(SUM(bytes), 0) FROM ako_uploads WHERE ip = ? AND at > ?", who, t)[0] >= ADDR_BYTES_A_DAY \
+            or one(con, "SELECT COALESCE(SUM(bytes), 0) FROM ako_uploads WHERE org_id = ? AND at > ?", a["org_id"], t)[0] >= ORG_BYTES_A_DAY:
         raise ApiError("rate_limited", "ako_uploads")
 
 
-def may_add(con, token: str, doc: str):
-    """Before an upload's body is read: the link, its document, the notice agreed to, room for one more page."""
+def _may(con, token: str, doc: str):
     if doc not in DOCS:
         raise ApiError("bad_input", "doc")
     a = _app(con, token)
     if a["consent"] != CONSENT:
         raise ApiError("forbidden", "ako_consent")
     _editable(a)
-    _room(con, a)
     return a
 
 
-def add_file(con, token: str, doc: str, data: bytes) -> dict:
-    """One page or file of a document. The page is converted before the write lock; a refused write leaves no file."""
-    may_add(con, token, doc)
+def may_add(con, token: str, doc: str, who: str) -> int:
+    """Before an upload's body is read: the link, its document, the notice agreed to, room for one more page; then the
+    try is counted (its row, bytes 0 until a page is kept). Returns the try's id for add_file."""
+    with tx(con):
+        a = _may(con, token, doc)
+        _room(con, a, who, trying=True)
+        return con.execute("INSERT INTO ako_uploads (org_id, app_id, ip, at) VALUES (?, ?, ?, ?)",
+                           (a["org_id"], a["id"], who, core.now())).lastrowid
+
+
+def add_file(con, token: str, doc: str, data: bytes, who: str, tried: int) -> dict:
+    """One page or file of a document, its try counted by may_add. The page is converted before the write lock; a
+    refused write leaves no file."""
+    _may(con, token, doc)
     body, mime = _picture(data)
     root = root_of(con)
     name = secrets.token_hex(16)
@@ -316,11 +336,10 @@ def add_file(con, token: str, doc: str, data: bytes) -> dict:
         with tx(con):
             a = _app(con, token)
             _editable(a)
-            _room(con, a)
+            _room(con, a, who, trying=False)
             fid = con.execute("INSERT INTO ako_files (app_id, doc, path, mime, bytes, created_at) VALUES (?, ?, ?, ?, ?, ?)",
                               (a["id"], doc, rel, mime, len(body), core.now())).lastrowid
-            con.execute("INSERT INTO ako_uploads (org_id, app_id, draft, bytes, at) VALUES (?, ?, ?, ?, ?)",
-                        (a["org_id"], a["id"], int(a["status"] == "draft"), len(body), core.now()))
+            con.execute("UPDATE ako_uploads SET bytes = ? WHERE id = ? AND app_id = ?", (len(body), tried, a["id"]))
             con.execute("UPDATE ako_apps SET updated_at = ? WHERE id = ?", (core.now(), a["id"]))
     except BaseException:
         _unlink(root, [rel])
