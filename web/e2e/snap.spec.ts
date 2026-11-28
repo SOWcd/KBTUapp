@@ -213,7 +213,7 @@ async function spy(p: Phone, room?: SpyRoom) {
   const sheet = page.getByRole('dialog').filter({ has: page.locator('.home, .phase') });
   await expect(sheet.locator('.home')).toBeVisible();
   if (room) {
-    await sheet.locator('.home .btn').click();
+    await sheet.locator('.home .btn.k-primary').click();
     await expect(sheet.locator('.phase')).toBeVisible();
     await page.clock.pauseAt(SPY_PAUSE * 1000);
   }

@@ -11,7 +11,7 @@ test('a round of Spy: a room, three players, the role, the vote, the reveal, one
   await page.getByRole('navigation', { name: ru['nav.label'] }).getByRole('button', { name: ru['tab.profile'], exact: true }).click();
   await page.getByRole('button', { name: ru['games.title'], exact: true }).click();
   const sheet = page.getByRole('dialog').filter({ has: page.locator('.home, .phase') });
-  await sheet.locator('.home .btn').click();
+  await sheet.locator('.home .btn.k-primary').click();
   const code = (await sheet.locator('.digits').innerText()).replace(/\D/g, '');
   expect(code).toMatch(/^\d{4}$/);
   const main = sheet.locator('.foot .island .btn'); // the island's one action: Start, Confirm, One more round
