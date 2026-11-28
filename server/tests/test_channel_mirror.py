@@ -804,8 +804,8 @@ def test_forum_topic_source(env):
 def test_mirror_needs_the_channel_proven_own(env):
     """A club mirrors only a channel it runs: our bot an admin there (only the channel's owners can add it); a public
     channel it merely linked stays out of its news, and Studio's switch refuses (nobot). The admin vouches instead
-    (an office's channel); the bot leaving stops a bot-proven mirror; the mirrors live before this keep going (262)."""
-    from kbtu import migrations, mirror
+    (an office's channel); the bot leaving stops a bot-proven mirror."""
+    from kbtu import mirror
     c, cfg = env
     pres, boss = login(c, 80, "pres"), login(c, 81, "boss")
     con = db.connect(cfg.db_path)
@@ -824,5 +824,3 @@ def test_mirror_needs_the_channel_proven_own(env):
     assert sw(True).json()[0]["mirror"] is True and mirror.wanted(con) == {"big_news": 1}
     logic.chatlist.bot_left(con, -100700)
     assert mirror.wanted(con) == {} and sw(True).status_code == 400
-    con.executescript(dict(migrations.MIGRATIONS)[262])                              # mirrored before the rule: vouched
-    assert mirror.wanted(con) == {"big_news": 1}

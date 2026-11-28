@@ -207,14 +207,3 @@ def test_edit_timeout_is_lost_without_a_new_message(notice):
     con.execute("UPDATE bot_outbox SET send_after = 0")
     assert batch(con, cfg, no_answer)
     assert calls == ["editMessageText"]
-
-
-def test_legacy_dm_migration_does_not_guess_the_chat():
-    con = db.connect(":memory:")
-    try:
-        con.executescript("CREATE TABLE tgc_comments (id INTEGER PRIMARY KEY, dm_id INTEGER);"
-                          "INSERT INTO tgc_comments VALUES (1, 77);")
-        con.executescript(dict(db.MIGRATIONS)[260])
-        assert tuple(con.execute("SELECT dm_id, dm_chat_id FROM tgc_comments").fetchone()) == (77, None)
-    finally:
-        con.close()

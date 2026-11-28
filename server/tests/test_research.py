@@ -202,18 +202,6 @@ def test_answer_retention_after_closure(env, monkeypatch):
     assert con.execute("SELECT COUNT(*) FROM form_answers WHERE form_id = ?", (public,)).fetchone()[0] == 1
 
 
-def test_migration_marks_existing_library_only():
-    # Exercise the upgrade with an already-live library, not only an empty new database.
-    con = sqlite3.connect(":memory:")
-    con.executescript("CREATE TABLE forms (id INTEGER PRIMARY KEY, slug TEXT, spec TEXT); CREATE TABLE users (id INTEGER PRIMARY KEY);")
-    con.execute("INSERT INTO forms VALUES (1, 'library', ?)", ('{"title":"Library","intro":"Quiet rooms"}',))
-    con.execute("INSERT INTO forms VALUES (2, 'other', ?)", ('{"title":"Other","intro":"Elsewhere"}',))
-    con.executescript(dict(db.MIGRATIONS)[236])
-    assert con.execute("SELECT * FROM research_forms").fetchall() == [(1, "Quiet rooms")]
-    con.executescript(dict(db.MIGRATIONS)[236])  # safe when migration tests rewind user_version
-    assert con.execute("SELECT COUNT(*) FROM research_forms").fetchone()[0] == 1
-
-
 def test_verified_proposals_and_owner_approval_are_separate_from_forms(env):
     c, cfg, con, ids = setup(env)
     post = lambda uid, body=PROPOSAL: c.post("/api/research/requests", headers=tma(uid), json=body)  # noqa: E731

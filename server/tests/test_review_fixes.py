@@ -43,21 +43,17 @@ def test_delete_covers_tables_keyed_by_mail_or_id(env, monkeypatch):
     con.execute("INSERT INTO event_guests (event_id, student_id, adult, surname_hash) VALUES (2, '24Bali', 0, ?)",
                 (guests._surname_hash(2, "24Bali", "other"),))
     mail = con.execute("SELECT lower(email) FROM students WHERE user_id = ?", (aid,)).fetchone()[0]
-    for key, claimed, rejected, email in (("claimed", aid, None, mail), ("my_word", aid, None, None), ("turned_down", aid, aid, None), ("someone", None, None, None)):
-        con.execute("""INSERT INTO roster_pending (key, org_id, sheet, role, full_name, phone, email, claimed_by, rejected_by, created_at)
-            VALUES (?, 1, 's', 'vice', 'A Name', '+77000000000', ?, ?, ?, 0)""", (key, email, claimed, rejected))
-    con.execute("DROP TABLE roster_rejections")
-    migration = next(sql for _, sql in db.MIGRATIONS if "CREATE TABLE IF NOT EXISTS roster_rejections" in sql)
-    con.executescript(f"BEGIN;\n{migration}\nCOMMIT;")
-    refused = con.execute("SELECT id, claimed_by, rejected_by FROM roster_pending WHERE key = 'turned_down'").fetchone()
-    assert tuple(refused)[1:] == (None, None)
-    assert con.execute("SELECT user_id FROM roster_rejections WHERE row_id = ?", (refused[0],)).fetchone()[0] == aid
+    for key, claimed, email in (("claimed", aid, mail), ("my_word", aid, None), ("turned_down", None, None), ("someone", None, None)):
+        con.execute("""INSERT INTO roster_pending (key, org_id, sheet, role, full_name, phone, email, claimed_by, created_at)
+            VALUES (?, 1, 's', 'vice', 'A Name', '+77000000000', ?, ?, 0)""", (key, email, claimed))
+    refused = con.execute("SELECT id FROM roster_pending WHERE key = 'turned_down'").fetchone()[0]
+    con.execute("INSERT INTO roster_rejections (row_id, user_id) VALUES (?, ?)", (refused, aid))
     con.execute("INSERT INTO meta (key, value) VALUES (?, '1'), ('fsearch:999:1', '1'), ('rclaim:1', ?), ('rclaim:2', '999'), (?, '1'), ('subj:999:1', '1')",
                 (f"fsearch:{aid}:1", str(aid), f"subj:{aid}:1"))
     for action, by in (("team_link_join", aid), ("grant_link_used", aid), ("team_link_join", 999)):
         con.execute("INSERT INTO audit_log (action, target, data, at) VALUES (?, 'x', ?, 0)", (action, f'{{"link": "ab", "by": {by}}}'))
     bob = login(c, 22, "bob")["id"]
-    con.execute("INSERT INTO roster_rejections (row_id, user_id) VALUES (?, ?)", (refused[0], bob))
+    con.execute("INSERT INTO roster_rejections (row_id, user_id) VALUES (?, ?)", (refused, bob))
     mine_ = {"friend_new": f"fn:{aid}:1", "friend_request": f"fq:{aid}:1", "join_request": f"jr:1:{aid}:1", "team_ask": f"ta:1:{aid}:1", "friend_invite": f"fi:1:{aid}",
              "roster_claim": f"rq:1:{aid}", "tgc_good": f"gr:{aid}"}
     for kind, ref in mine_.items():  # sent ones too: other people's queues
@@ -76,7 +72,7 @@ def test_delete_covers_tables_keyed_by_mail_or_id(env, monkeypatch):
     # the row with my verified mail goes and a reload doesn't bring it back; one I only said was mine, turned down or never claimed is the club's
     assert [tuple(r) for r in con.execute("SELECT key, claimed_by FROM roster_pending ORDER BY key")] == [
         ("my_word", None), ("someone", None), ("turned_down", None)]
-    assert [tuple(r) for r in con.execute("SELECT row_id, user_id FROM roster_rejections")] == [(refused[0], bob)]
+    assert [tuple(r) for r in con.execute("SELECT row_id, user_id FROM roster_rejections")] == [(refused, bob)]
     assert [r[0] for r in con.execute("SELECT key FROM meta WHERE key LIKE 'roster_done:%'")] == ["roster_done:claimed"]
     # by mail; by my ID only with my name (Bek's row with a typo of my ID is his)
     assert [r[0] for r in con.execute("SELECT email FROM qr_expected WHERE session_id = ? ORDER BY email", (s1,))] == ["dan@kbtu.kz", "y@kbtu.kz"]

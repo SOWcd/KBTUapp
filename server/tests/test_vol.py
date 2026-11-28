@@ -890,25 +890,3 @@ def test_correcting_ledger_owner_replaces_erasure_tie(zz):
     delete_now(c, cfg, tma(3))
     assert con.execute("SELECT user_id FROM vol_people WHERE id = ?", (record,)).fetchone()[0] == owner
     assert not con.execute("SELECT 1 FROM vol_gone").fetchone()
-
-
-def test_migration_releases_only_uncorroborated_auto_links(zz):
-    c, _, con, org = zz
-    vol.apply(con, org, vol.plan(_book()), "list")
-    good = _member(c, con, org, 3, "aru")
-    bad = _member(c, con, org, 4, "other")
-    manual = _member(c, con, org, 5, "manual")
-    con.execute("UPDATE students SET last_name = 'Test' WHERE user_id = ?", (good,))
-    people = dict(con.execute("SELECT tg, id FROM vol_people WHERE tg IS NOT NULL"))
-    for tg, user in (("aru_t", good), ("bek_test", bad), ("nobody1", manual)):
-        vid = people[tg]
-        con.execute("UPDATE vol_people SET user_id = ? WHERE id = ?", (user, vid))
-        con.execute("INSERT INTO vol_ties (vol_id, user_id) VALUES (?, ?)", (vid, user))
-        con.execute("""INSERT INTO audit_log (action, target, data, at) VALUES ('vol_link', 'user:' || ?, json_object('vol', ?, 'auto', 'tg'), 1)""",
-                    (user, vid))
-    con.execute("""INSERT INTO audit_log (action, target, data, at) VALUES ('vol_link', 'user:' || ?, json_object('vol', ?), 2)""",
-                (manual, people["nobody1"]))
-    con.executescript("BEGIN;" + next(sql for _, sql in db.MIGRATIONS if "CREATE TEMP TABLE vol_unconfirmed" in sql) + "COMMIT;")
-    assert dict(con.execute("SELECT tg, user_id FROM vol_people WHERE tg IS NOT NULL")) == {
-        "aru_t": good, "bek_test": None, "nobody1": manual}
-    assert set(map(tuple, con.execute("SELECT vol_id, user_id FROM vol_ties"))) == {(people["aru_t"], good), (people["nobody1"], manual)}

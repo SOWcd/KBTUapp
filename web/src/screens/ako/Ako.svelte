@@ -1,8 +1,8 @@
 <script lang="ts">
-  // The applicant's page (/ako#<secret>, /ako/o/<slug>): its own root outside the app's shell, in the app's look: glass
-  // pills floating on top (Back, the step, the language), content on grouped surface cards, the one action a glass
-  // island with a calm ink capsule (the event sheet's). The program step is here; the other steps and the status page
-  // are components. Shared looks live here under :global(.ako .a-*).
+  // The applicant's page (/ako#<secret>, /ako/o/<slug>, /ako for slug ako): its own root outside the app's shell, in
+  // the app's look: glass pills floating on top (Back, the step, the language), content on grouped surface cards, the
+  // one action a glass island with a calm ink capsule (the event sheet's). The program step is here; the other steps
+  // and the status page are components. Shared looks live here under :global(.ako .a-*).
   import ChevronLeft from '@lucide/svelte/icons/chevron-left';
   import Check from '@lucide/svelte/icons/check';
   import Video from '@lucide/svelte/icons/video';
@@ -29,7 +29,8 @@
   // the secret rides in the fragment (/ako#<secret>): a browser never sends it, so no server or proxy log holds it
   const path = location.pathname;
   const pub = /^\/ako\/o\/([^/]+)\/?$/.exec(path);
-  const slug = pub ? decodeURIComponent(pub[1]) : '';
+  // plain /ako (no fragment): the Academy's own start page, the short link for its website
+  const slug = pub ? decodeURIComponent(pub[1]) : /^\/ako\/?$/.test(path) && !location.hash ? 'ako' : '';
   let token = $state(pub ? '' : (/^#([A-Za-z0-9_-]{43})$/.exec(location.hash)?.[1] ?? ''));
   // another link pasted into this tab changes only the fragment: the page starts over with it
   addEventListener('hashchange', () => location.reload());

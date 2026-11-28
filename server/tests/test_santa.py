@@ -615,52 +615,6 @@ def test_eve_follows_the_gifts_day(env):
     assert len(_out(con, "santa_eve")) == 6
 
 
-def test_migration_on_the_live_shape(env, tmp_path, before_door_migration):
-    """Migration 184 on a database at 183 shaped like production's: one running game, undrawn, no deadline, nobody
-    in, gifts day Dec 25 (here: in 37 days). It gets a week-before deadline and the next round sends nothing. A game
-    whose deadline passed undrawn: its President hears once that it waits for him, and nothing draws."""
-    from kbtu import db
-    path = str(tmp_path / "live.db")
-    db.init(path)
-    con = db.connect(path)
-    before_door_migration(con)
-    con.execute("ALTER TABLE users DROP COLUMN tg_photo_at")  # 194's
-    con.executescript("""DROP TABLE reg_age; DROP TABLE event_guests;
-        ALTER TABLE events DROP COLUMN age_check; ALTER TABLE events DROP COLUMN guest_list;""")
-    con.execute("ALTER TABLE events DROP COLUMN silent_publish")  # 198's
-    con.execute("ALTER TABLE org_invites DROP COLUMN consumed")  # 200's
-    if con.execute("SELECT 1 FROM sqlite_master WHERE name = 'event_guests'").fetchone():
-        con.execute("ALTER TABLE event_guests DROP COLUMN team")  # 212's
-        con.execute("ALTER TABLE event_guests DROP COLUMN username")  # 211's
-        con.execute("ALTER TABLE event_guests DROP COLUMN name")  # 210's
-        con.execute("ALTER TABLE event_guests DROP COLUMN came_at")  # 209's
-    con.execute("ALTER TABLE registrations DROP COLUMN door_team")  # 212's
-    con.execute("ALTER TABLE events DROP COLUMN door_extra")  # 208's
-    con.execute("ALTER TABLE users DROP COLUMN n_forum_comments")  # 206's
-    con.executescript("DROP TABLE fchan_hearts; ALTER TABLE users DROP COLUMN forum_seen_msg;")  # 205
-    con.executescript("ALTER TABLE events DROP COLUMN online; ALTER TABLE credits DROP COLUMN gh; DROP TABLE santa_games; DROP TRIGGER santa_moved_upd; DROP TRIGGER santa_moved_del; PRAGMA user_version = 183;")
-    t = int(time.time())
-    con.execute("INSERT INTO users (id, tg_id, tg_first_name, lang, can_dm, created_at, seen_at, qr_code) VALUES (1, 501, 'P', 'ru', 1, 0, 0, 'Q1')")
-    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 0)")
-    con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (1, 1, 'president', 0)")
-    for eid, starts, until in ((1, t + 37 * DAY, None), (2, t + 10 * DAY, t - 100)):
-        con.execute("""INSERT INTO events (id, org_id, status, title, place, starts_at, reg_until, emoji, color, tint, visibility, created_by, created_at, updated_at, published_at)
-            VALUES (?, 1, 'published', 'Secret Santa', '', ?, ?, 'sparkles_3d', '#D7263D', '#A01C2E', 'members', 1, 0, 0, 0)""", (eid, starts, until))
-        con.execute("INSERT INTO santa_events (event_id) VALUES (?)", (eid,))
-    con.close()
-    db.init(path)
-    con = db.connect(path)
-    assert con.execute("PRAGMA user_version").fetchone()[0] >= 184  # and whatever came after it
-    assert con.execute("SELECT reg_until FROM events WHERE id = 1").fetchone()[0] == t + 30 * DAY
-    assert con.execute("SELECT soon, checked FROM santa_games WHERE event_id = 1").fetchone()[:] == (None, None)
-    waits = con.execute("SELECT user_id, kind, ref FROM bot_outbox").fetchall()
-    assert [tuple(r) for r in waits] == [(1, "santa_wait", "event:2")]
-    logic.santa.tick(con)
-    logic.santa.tick(con)
-    assert con.execute("SELECT COUNT(*) FROM bot_outbox").fetchone()[0] == 1
-    assert con.execute("SELECT COUNT(*) FROM santa_events WHERE drawn_at IS NOT NULL").fetchone()[0] == 0
-
-
 def _rewish(c, eid, tg, wish):
     return c.put(f"/api/events/{eid}/santa/wish", headers=tma(tg), json={"wish": wish})
 

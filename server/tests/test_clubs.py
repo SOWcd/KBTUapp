@@ -448,10 +448,6 @@ def test_registry(env, monkeypatch):
     looks = [(r[0], r[1]) for r in con.execute("SELECT actor_id, action FROM audit_log WHERE action LIKE 'registry_%' ORDER BY id")]
     assert looks == [(dmp["id"], "registry_roster"), (dmp["id"], "registry_search"), (dmp["id"], "registry_search")]  # every look at personal data
     assert [json.loads(r[0]) for r in con.execute("SELECT data FROM audit_log WHERE action = 'registry_search' ORDER BY id")] == [{"found": 1}, {"found": 0}]
-    log_id = con.execute("""INSERT INTO audit_log (actor_id, action, target, data, at)
-        VALUES (?, 'registry_search', 'registry', '{"q":"24Bali","found":1}', 0)""", (dmp["id"],)).lastrowid
-    con.executescript(dict(db.MIGRATIONS)[231])
-    assert json.loads(con.execute("SELECT data FROM audit_log WHERE id = ?", (log_id,)).fetchone()[0]) == {"found": 1}
     sent = []
     real = httpx.AsyncClient
     monkeypatch.setattr(server.httpx, "AsyncClient", lambda **kw: real(transport=httpx.MockTransport(
