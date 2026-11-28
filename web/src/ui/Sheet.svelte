@@ -49,6 +49,7 @@
   let scrim: HTMLDivElement;
   let body: HTMLDivElement;
   let foot = $state<HTMLDivElement>();
+  let footH = $state(0); // a floating footer's height: the body ends that much lower, whatever the island holds (0: nothing in it)
   let room: HTMLDivElement;
   let gone = false;
   const born = performance.now();
@@ -241,7 +242,7 @@
 
 <!-- (the second tap of a double tap on what opened it lands on the new scrim: not a close) -->
 <div class="scrim" class:clear={see} bind:this={scrim} onclick={(e) => { if (e.timeStamp - born > 350) close(overlay.id, true); }} role="presentation"></div>
-<div class="sheet glass glass-sheet" use:glass class:tall class:full class:see class:float class:hasfoot={!!footer} class:flat={onAndroid} class:under class:ground bind:this={panel} role="dialog" aria-modal="true" aria-label={title || undefined} tabindex="-1" style={tint ? `--tint:${tint}` : ground ? `--ground:${ground}` : ''}>
+<div class="sheet glass glass-sheet" use:glass class:tall class:full class:see class:float class:hasfoot={!!footer} class:flat={onAndroid} class:under class:ground bind:this={panel} role="dialog" aria-modal="true" aria-label={title || undefined} tabindex="-1" style={tint ? `--tint:${tint}` : ground ? `--ground:${ground}` : ''} style:--foot-h={float && footH ? `${footH}px` : null}>
   {#if tint}<div class="tint" aria-hidden="true"></div>{/if}
   {#if !full}<div class="grip" aria-hidden="true"></div>{/if}
   <!-- the scroll edge: what scrolls up fades out under the top (the grip, the capsule) instead of running into it -->
@@ -251,7 +252,7 @@
     {@render children()}
     <div class="kbroom" bind:this={room} aria-hidden="true"></div>
   </div>
-  {#if footer}<div class="foot" bind:this={foot}>{@render footer()}</div>{/if}
+  {#if footer}<div class="foot" bind:this={foot} bind:clientHeight={footH}>{@render footer()}</div>{/if}
 </div>
 
 <style>
@@ -299,7 +300,7 @@
   .hasfoot .body { --pb: var(--s-4); }
   .float .foot { position: absolute; left: 0; right: 0; bottom: 0; border-top: 0; pointer-events: none; }
   .float .foot > :global(*) { pointer-events: auto; }
-  .float.hasfoot .body { --pb: calc(var(--ctl-l) + var(--s-8) + var(--s-3) + var(--safe-bottom)); } /* the last line clear of the island */
+  .float.hasfoot .body { --pb: max(calc(var(--s-6) + var(--safe-bottom)), calc(var(--foot-h, 0px) + var(--s-3))); } /* the last line clear of the island, as tall as it is; an empty footer: a sheet's usual end */
   /* Keep the moving scroll body free of an extra masked layer on Android. */
   .sheet:not(.flat) .scrolled { -webkit-mask-image: linear-gradient(transparent, black 18px); mask-image: linear-gradient(transparent, black 18px); }
   .full:not(.flat) .scrolled { -webkit-mask-image: linear-gradient(transparent var(--edge-from), black var(--edge-to));

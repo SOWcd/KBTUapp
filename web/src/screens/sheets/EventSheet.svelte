@@ -47,7 +47,7 @@
   import Button from '../../ui/Button.svelte';
   import Poster from '../../ui/Poster.svelte';
   import HeroArt from '../afisha/HeroArt.svelte';
-  import EventPlace from '../../ui/EventPlace.svelte';
+  import MapPin from '@lucide/svelte/icons/map-pin';
   import { eventPlace } from '../../lib/map';
   import Santa from './Santa.svelte';
   import Tag from '../../ui/Tag.svelte';
@@ -139,8 +139,8 @@
   const art = $derived(e ? coverFor(e.cover, 'card') ?? e.video?.poster ?? null : null);
   const strip = $derived(!!e && !e.video?.url && !!e.cover && !!e.slides?.length);
   const still = $derived(!wide && !strip && !e?.video?.url);
-  // a place that leads somewhere has a row (our map, 2GIS, the meeting's link); one that doesn't is said on the picture only
-  const leads = $derived(!e ? false : e.online ? !!(meetUrl && meetAt) : (eventPlace(e.place, e.placeUrl)?.kind ?? 'campus') !== 'campus');
+  // a place that leads somewhere has a row (our map for a room or a campus spot, 2GIS, the meeting's link); the picture says it in words
+  const leads = $derived(!e ? false : e.online ? !!(meetUrl && meetAt) : !!eventPlace(e.place, e.placeUrl));
   const started = $derived(!!e && e.startsAt <= nowTs());
   // the registration deadline closes "Going" for those not in yet; a 1st-year takes a paid event's free seat
   const regShut = $derived(!!e?.regUntil && e.regUntil <= nowTs() && st !== 'going' && st !== 'hold' && st !== 'waitlist');
@@ -400,7 +400,8 @@
         <h2 class="ttl" class:strike={cancelled}>{e.title.replace(/(\p{L})-(\p{L})/gu, '$1\u2011$2')}</h2><!-- "stand-up" stays on one line -->
         {#if cancelled}<p class="cancel">{t('event.cancelledLong')}</p>{/if}
         <p class="when">{multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : relDay(e.startsAt)}, {time(e.startsAt)}{endTime(e.startsAt, e.endsAt) ? ' – ' + endTime(e.startsAt, e.endsAt) : ''}</p>
-        {#if !e.santa || e.place || e.placeUrl || e.online}<p class="where"><EventPlace {e} pin /></p>{/if}
+        <!-- words only (the slab takes no taps): the row below is the way there -->
+        {#if e.place.trim() || e.online || (!e.santa && !e.placeUrl)}<p class="where">{#if e.online}<VideoCall size={14} strokeWidth={1.75} />{:else}<MapPin size={14} strokeWidth={1.75} />{/if}<span>{placeOf(e.place, e.online)}</span></p>{/if}
         {#if e.guestHost}<p class="where">{t('event.with', { host: e.guestHost })} · {t('event.notKbtu')}</p>{/if}
       </div>
     </div>
@@ -760,7 +761,7 @@
   .hero { --hh: clamp(300px, 44vh, 380px); position: relative; isolation: isolate; display: flex; flex-direction: column; justify-content: flex-end;
     min-height: var(--hh); margin: 4px 0 var(--s-4); padding-top: 60px; /* the words stay clear of the top row */ border-radius: var(--r-xl); overflow: hidden; background: var(--media); color: var(--text); }
   .hero > :global(.poster.poster) { position: absolute; inset: 0; } /* ui/Poster is a box in the flow */
-  .hero.cancelled > :global(.poster:not(.dim)) { filter: grayscale(1); opacity: 0.6; }
+  .hero.cancelled > :global(.poster.poster:not(.dim)) { filter: grayscale(1); opacity: 0.6; } /* HeroArt's cover and mesh, as ui/Poster's own dim */
   /* the 3D mark sits under the top row's buttons at the hero's size: smaller and lower here */
   .hero :global(.mark) { top: 52px; transform-origin: 100% 0; transform: rotate(8deg) scale(0.82); }
   .wide { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
@@ -795,7 +796,8 @@
   .when { font: 600 var(--fs-row)/1.25 var(--font-text); letter-spacing: -0.012em; }
   .when::first-letter { text-transform: uppercase; }
   .where { min-width: 0; font: 500 var(--fs-body)/1.3 var(--font-text); color: var(--text-2); }
-  .where :global(.place) { text-decoration: none; }
+  .where { display: flex; align-items: center; gap: 5px; }
+  .where :global(svg) { flex: none; }
 
   /* the guests' album: the first photo big, two beside it, three under (whole blocks only) */
   .album { display: flex; flex-direction: column; gap: 10px; }
