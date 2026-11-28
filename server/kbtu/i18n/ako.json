@@ -1,12 +1,18 @@
 {
-  "_": "KBTU's Academy of Corporate Education: its programs as the admissions show them (logic/ako.py seed). Russian is copied from each program's page (url, read Nov 27, 2026); Kazakh and English are machine translations until the Academy checks them. first: asked before sending; later: needed for enrolment, may come after; optional: welcome. Document names and how-tos are UI strings (web i18n ako.doc.*).",
+  "_": "KBTU's Academy of Corporate Education: its programs as the admissions show them (logic/ako.py seed), in the site's order (academic, continuing education, international, UN SDG courses, summer). kind: degree = academic and international degree programs, short = the rest (the page's two groups). Russian is copied from each program's page (url, read Nov 28, 2026); Kazakh from the site's Kazakh pages where they say it, else translated; English is translated (the site has no English pages); both until the Academy checks them. A page with several programs at different prices (MBA, Executive MBA, the National Bank's, TVET) is one entry each. first: asked before sending; later: needed for enrolment, may come after; optional: welcome; where a page lists no documents, the defaults of a similar program. Document names and how-tos are UI strings (web i18n ako.doc.*). certColumns: the header words a certificates list's first row may use, per column (logic/certs.py parse; compared case-blind).",
+  "certColumns": {
+    "name": ["name", "full name", "holder", "фио", "ф.и.о.", "имя", "ф.и.о", "аты-жөні", "аты жөні"],
+    "program": ["program", "programme", "course", "программа", "курс", "бағдарлама"],
+    "date": ["date", "issued", "дата", "дата выдачи", "күні", "берілген күні"],
+    "number": ["number", "no", "no.", "#", "№", "номер", "номер сертификата", "нөмірі", "сертификат нөмірі"]
+  },
   "programs": [
     {
       "key": "mba", "kind": "degree", "interview": true,
       "url": "https://kbtu.edu.kz/ru/akademiya-korporativnogo-obrazovaniya/akademicheskie-programmy/4895-master-delovogo-administrirovaniya-mba",
       "first": ["cv", "diploma"], "later": ["application", "id", "photo", "med", "fluoro"], "optional": ["work", "extra"],
       "ru": {"title": "MBA", "sub": "Менеджмент и экономика бизнеса", "price": "3 000 000 ₸", "length": "1,5 года", "format": "Очно, вечером 3 раза в неделю и в субботу"},
-      "kk": {"title": "MBA", "sub": "Бизнес менеджменті және экономикасы", "price": "3 000 000 ₸", "length": "1,5 жыл", "format": "Күндізгі, аптасына 3 рет кешке және сенбіде"},
+      "kk": {"title": "MBA", "sub": "Менеджмент және бизнес экономикасы", "price": "3 000 000 ₸", "length": "1,5 жыл", "format": "Кешкі формат, аптасына 3 рет кешке және сенбі"},
       "en": {"title": "MBA", "sub": "Business Management and Economics", "price": "3,000,000 ₸", "length": "1.5 years", "format": "In person, 3 evenings a week and Saturdays"}
     },
     {
@@ -14,7 +20,7 @@
       "url": "https://kbtu.edu.kz/ru/akademiya-korporativnogo-obrazovaniya/akademicheskie-programmy/4895-master-delovogo-administrirovaniya-mba",
       "first": ["cv", "diploma"], "later": ["application", "id", "photo", "med", "fluoro"], "optional": ["work", "extra"],
       "ru": {"title": "MBA", "sub": "Бизнес-право", "price": "4 200 000 ₸", "length": "1,5 года", "format": "Офлайн или гибридно, 3 вечера и суббота"},
-      "kk": {"title": "MBA", "sub": "Бизнес құқығы", "price": "4 200 000 ₸", "length": "1,5 жыл", "format": "Офлайн немесе гибридті, 3 кеш және сенбі"},
+      "kk": {"title": "MBA", "sub": "Бизнес құқығы", "price": "4 200 000 ₸", "length": "1,5 жыл", "format": "Офлайн немесе гибридті, аптасына 3 рет кешке және сенбі"},
       "en": {"title": "MBA", "sub": "Business Law", "price": "4,200,000 ₸", "length": "1.5 years", "format": "In person or hybrid, 3 evenings and Saturdays"}
     },
     {
@@ -22,7 +28,7 @@
       "url": "https://kbtu.edu.kz/ru/akademiya-korporativnogo-obrazovaniya/akademicheskie-programmy/4896-master-delovogo-administrirovaniya-dlya-rukovoditelej-executive-mba",
       "first": ["cv", "diploma"], "later": ["application", "id", "photo", "med", "fluoro", "work"], "optional": ["extra"],
       "ru": {"title": "Executive MBA", "sub": "Деловое администрирование для руководителей", "price": "3 150 000 ₸", "length": "12–15 месяцев", "format": "Модульный"},
-      "kk": {"title": "Executive MBA", "sub": "Басшыларға арналған іскерлік әкімшілік", "price": "3 150 000 ₸", "length": "12–15 ай", "format": "Модульдік"},
+      "kk": {"title": "Executive MBA", "sub": "Басшыларға арналған іскери әкімшілендіру", "price": "3 150 000 ₸", "length": "12–15 ай", "format": "Модульдік"},
       "en": {"title": "Executive MBA", "sub": "Business Administration for Executives", "price": "3,150,000 ₸", "length": "12–15 months", "format": "Modular"}
     },
     {
@@ -30,7 +36,7 @@
       "url": "https://kbtu.edu.kz/ru/akademiya-korporativnogo-obrazovaniya/akademicheskie-programmy/4896-master-delovogo-administrirovaniya-dlya-rukovoditelej-executive-mba",
       "first": ["cv", "diploma"], "later": ["application", "id", "photo", "med", "fluoro", "work"], "optional": ["extra"],
       "ru": {"title": "Executive MBA", "sub": "Стратегический риск-менеджмент", "price": "3 150 000 ₸", "length": "12–15 месяцев", "format": "Модульный"},
-      "kk": {"title": "Executive MBA", "sub": "Стратегиялық тәуекел-менеджмент", "price": "3 150 000 ₸", "length": "12–15 ай", "format": "Модульдік"},
+      "kk": {"title": "Executive MBA", "sub": "Стратегиялық тәуекелді басқару", "price": "3 150 000 ₸", "length": "12–15 ай", "format": "Модульдік"},
       "en": {"title": "Executive MBA", "sub": "Strategic Risk Management", "price": "3,150,000 ₸", "length": "12–15 months", "format": "Modular"}
     },
     {
@@ -38,16 +44,192 @@
       "url": "https://kbtu.edu.kz/ru/akademiya-korporativnogo-obrazovaniya/akademicheskie-programmy/4897-doktor-delovogo-administrirovaniya-dba",
       "first": ["cv", "diploma"], "later": ["application", "id", "photo", "med", "fluoro", "work"], "optional": ["extra"],
       "ru": {"title": "DBA", "sub": "Доктор делового администрирования", "price": "5 400 000 ₸", "length": "3 года", "format": "Вечером и по выходным"},
-      "kk": {"title": "DBA", "sub": "Іскерлік әкімшілік докторы", "price": "5 400 000 ₸", "length": "3 жыл", "format": "Кешке және демалыс күндері"},
+      "kk": {"title": "DBA", "sub": "Іскери әкімшілендіру докторы", "price": "5 400 000 ₸", "length": "3 жыл", "format": "Кешкі және демалыс күндері"},
       "en": {"title": "DBA", "sub": "Doctor of Business Administration", "price": "5,400,000 ₸", "length": "3 years", "format": "Evenings and weekends"}
+    },
+    {
+      "key": "nb-risk", "kind": "degree", "interview": false,
+      "url": "https://kbtu.edu.kz/ru/akademiya-korporativnogo-obrazovaniya/akademicheskie-programmy/4898-sovmestnye-programmy-magistratury-s-natsionalnym-bankom-rk",
+      "first": ["cv", "diploma"], "later": ["application", "id", "photo", "med", "fluoro"], "optional": ["work", "extra"],
+      "ru": {"title": "MBA с НБРК и АРРФР РК", "sub": "Финансовый риск-менеджмент и Data Science", "price": "5 920 000 ₸", "length": "2 года", "format": "Очно, днём, на русском и английском"},
+      "kk": {"title": "ҚРҰБ және ҚНРДА-мен MBA", "sub": "Қаржылық тәуекелдерді басқару және Data Science", "price": "5 920 000 ₸", "length": "2 жыл", "format": "Күндізгі (офлайн), орыс және ағылшын тілдерінде"},
+      "en": {"title": "MBA with the National Bank and ARDFM", "sub": "Financial Risk Management and Data Science", "price": "5,920,000 ₸", "length": "2 years", "format": "Full-time in person, in Russian and English"}
+    },
+    {
+      "key": "nb-fintech", "kind": "degree", "interview": false,
+      "url": "https://kbtu.edu.kz/ru/akademiya-korporativnogo-obrazovaniya/akademicheskie-programmy/4898-sovmestnye-programmy-magistratury-s-natsionalnym-bankom-rk",
+      "first": ["cv", "diploma"], "later": ["application", "id", "photo", "med", "fluoro"], "optional": ["work", "extra"],
+      "ru": {"title": "MBA с НБРК и АРРФР РК", "sub": "Финансовые технологии", "price": "5 840 000 ₸", "length": "2 года", "format": "Очно, днём, на русском и английском"},
+      "kk": {"title": "ҚРҰБ және ҚНРДА-мен MBA", "sub": "Қаржылық технологиялар", "price": "5 840 000 ₸", "length": "2 жыл", "format": "Күндізгі (офлайн), орыс және ағылшын тілдерінде"},
+      "en": {"title": "MBA with the National Bank and ARDFM", "sub": "Financial Technology", "price": "5,840,000 ₸", "length": "2 years", "format": "Full-time in person, in Russian and English"}
+    },
+    {
+      "key": "it-law", "kind": "degree", "interview": false,
+      "url": "https://kbtu.edu.kz/ru/akademiya-korporativnogo-obrazovaniya/akademicheskie-programmy/5218-bakalavriat-informatsionnye-tekhnologii-i-tsifrovoe-pravo",
+      "first": [], "later": ["application", "id", "photo", "med", "fluoro"], "optional": ["extra"],
+      "ru": {"title": "Бакалавриат", "sub": "Информационные технологии и цифровое право", "price": "3 000 000 ₸ в год", "length": "4 года", "format": "Очно, на русском языке"},
+      "kk": {"title": "Бакалавриат", "sub": "Ақпараттық технологиялар және цифрлық құқық", "price": "жылына 3 000 000 ₸", "length": "4 жыл", "format": "Күндізгі, орыс тілінде"},
+      "en": {"title": "Bachelor's", "sub": "Information Technology and Digital Law", "price": "3,000,000 ₸ a year", "length": "4 years", "format": "In person, in Russian"}
+    },
+    {
+      "key": "staffordshire-topup", "kind": "degree", "interview": false,
+      "url": "https://kbtu.edu.kz/ru/akademiya-korporativnogo-obrazovaniya/mezhdunarodnye-programmy/4984-top-up-programma-s-staffordshire-university-velikobritaniya",
+      "first": [], "later": ["diploma", "id"], "optional": ["extra"],
+      "ru": {"title": "Top-Up", "sub": "Staffordshire University (Великобритания): Business Management, Computer Science", "price": "По запросу", "length": "1 академический год", "format": "Очно, в кампусе в Англии, на английском"},
+      "kk": {"title": "Top-Up", "sub": "Staffordshire University (Ұлыбритания): Business Management, Computer Science", "price": "Сұрау бойынша", "length": "1 академиялық жыл", "format": "Англиядағы кампуста, ағылшын тілінде"},
+      "en": {"title": "Top-Up", "sub": "Staffordshire University (UK): Business Management, Computer Science", "price": "On request", "length": "1 academic year", "format": "On campus in England, in English"}
+    },
+    {
+      "key": "arden-topup", "kind": "degree", "interview": false,
+      "url": "https://kbtu.edu.kz/ru/akademiya-korporativnogo-obrazovaniya/mezhdunarodnye-programmy/4985-top-up-programmy-arden-university-berlin",
+      "first": ["cv", "diploma"], "later": ["id"], "optional": ["extra"],
+      "ru": {"title": "Top-Up", "sub": "Arden University (Берлин): Business Management, Computing", "price": "По запросу", "length": "1 академический год", "format": "Очно, в кампусе в Берлине, на английском"},
+      "kk": {"title": "Top-Up", "sub": "Arden University (Берлин): Business Management, Computing", "price": "Сұрау бойынша", "length": "1 академиялық жыл", "format": "Берлиндегі кампуста, ағылшын тілінде"},
+      "en": {"title": "Top-Up", "sub": "Arden University (Berlin): Business Management, Computing", "price": "On request", "length": "1 academic year", "format": "On campus in Berlin, in English"}
+    },
+    {
+      "key": "arden-bachelor", "kind": "degree", "interview": false,
+      "url": "https://kbtu.edu.kz/ru/akademiya-korporativnogo-obrazovaniya/mezhdunarodnye-programmy/4986-programmy-bakalavriata-arden-university-berlin",
+      "first": [], "later": ["id"], "optional": ["extra"],
+      "ru": {"title": "Бакалавриат", "sub": "Arden University (Берлин): Business Management, Computing", "price": "По запросу", "length": "3 года", "format": "Очно или гибко, в Берлине, на английском"},
+      "kk": {"title": "Бакалавриат", "sub": "Arden University (Берлин): Business Management, Computing", "price": "Сұрау бойынша", "length": "3 жыл", "format": "Кампуста немесе гибридті, Берлинде, ағылшын тілінде"},
+      "en": {"title": "Bachelor's", "sub": "Arden University (Berlin): Business Management, Computing", "price": "On request", "length": "3 years", "format": "On campus or flexible, in Berlin, in English"}
+    },
+    {
+      "key": "bsbi-global-mba", "kind": "degree", "interview": false,
+      "url": "https://kbtu.edu.kz/ru/akademiya-korporativnogo-obrazovaniya/mezhdunarodnye-programmy/4987-programma-global-mba-bsbi-germaniya",
+      "first": [], "later": ["diploma", "id"], "optional": ["cv", "extra"],
+      "ru": {"title": "Global MBA", "sub": "BSBI (Германия)", "price": "По запросу", "length": "18 месяцев", "format": "Очно, full-time, в Берлине, на английском"},
+      "kk": {"title": "Global MBA", "sub": "BSBI (Германия)", "price": "Сұрау бойынша", "length": "18 ай", "format": "Толық күндізгі, Берлиндегі кампуста, ағылшын тілінде"},
+      "en": {"title": "Global MBA", "sub": "BSBI (Germany)", "price": "On request", "length": "18 months", "format": "Full-time on campus in Berlin, in English"}
+    },
+    {
+      "key": "arden-emba", "kind": "degree", "interview": false,
+      "url": "https://kbtu.edu.kz/ru/akademiya-korporativnogo-obrazovaniya/mezhdunarodnye-programmy/4988-programmy-executive-mba-arden-university-berlin",
+      "first": ["cv", "diploma"], "later": ["id", "work"], "optional": ["extra"],
+      "ru": {"title": "Executive MBA", "sub": "Arden University (Берлин): Executive MBA, Executive MBA (Finance)", "price": "По запросу", "length": "1 академический год", "format": "В Берлине или онлайн, на английском"},
+      "kk": {"title": "Executive MBA", "sub": "Arden University (Берлин): Executive MBA, Executive MBA (Finance)", "price": "Сұрау бойынша", "length": "1 академиялық жыл", "format": "Берлин кампусында немесе онлайн, ағылшын тілінде"},
+      "en": {"title": "Executive MBA", "sub": "Arden University (Berlin): Executive MBA, Executive MBA (Finance)", "price": "On request", "length": "1 academic year", "format": "In Berlin or online, in English"}
+    },
+    {
+      "key": "arden-master", "kind": "degree", "interview": false,
+      "url": "https://kbtu.edu.kz/ru/akademiya-korporativnogo-obrazovaniya/mezhdunarodnye-programmy/4989-programmy-magistratury-arden-university-berlin",
+      "first": ["cv", "diploma"], "later": ["id"], "optional": ["extra"],
+      "ru": {"title": "Магистратура", "sub": "Arden University (Берлин): MBA, Project Management, Strategic Digital Marketing, Data Science", "price": "По запросу", "length": "1 академический год", "format": "Очно, в кампусе в Берлине, на английском"},
+      "kk": {"title": "Магистратура", "sub": "Arden University (Берлин): MBA, Project Management, Strategic Digital Marketing, Data Science", "price": "Сұрау бойынша", "length": "1 академиялық жыл", "format": "Берлиндегі кампуста, ағылшын тілінде"},
+      "en": {"title": "Master's", "sub": "Arden University (Berlin): MBA, Project Management, Strategic Digital Marketing, Data Science", "price": "On request", "length": "1 academic year", "format": "On campus in Berlin, in English"}
+    },
+    {
+      "key": "kpk", "kind": "short", "interview": false,
+      "url": "https://kbtu.edu.kz/ru/akademiya-korporativnogo-obrazovaniya/nepreryvnoe-obrazovanie/4907-kursy-povysheniya-kvalifikatsii-kpk",
+      "first": [], "later": ["id"], "optional": ["cv"],
+      "ru": {"title": "Курсы повышения квалификации", "sub": "Управленческие навыки, технические направления и ИТ", "price": "", "length": "2–5 дней", "format": "Онлайн или очно"},
+      "kk": {"title": "Біліктілікті арттыру курстары", "sub": "Басқарушылық дағдылар, техникалық бағыттар және АТ", "price": "", "length": "2–5 күн", "format": "Онлайн немесе офлайн"},
+      "en": {"title": "Professional Development Courses", "sub": "Management skills, technical fields and IT", "price": "", "length": "2–5 days", "format": "Online or in person"}
     },
     {
       "key": "mini-mba", "kind": "short", "interview": false,
       "url": "https://kbtu.edu.kz/ru/akademiya-korporativnogo-obrazovaniya/nepreryvnoe-obrazovanie/4909-mini-mba",
       "first": [], "later": ["id"], "optional": ["cv"],
       "ru": {"title": "Mini MBA", "sub": "6 модулей из программы Executive MBA", "price": "990 000 ₸", "length": "6 месяцев", "format": "Онлайн, по вечерам"},
-      "kk": {"title": "Mini MBA", "sub": "Executive MBA бағдарламасының 6 модулі", "price": "990 000 ₸", "length": "6 ай", "format": "Онлайн, кешке"},
+      "kk": {"title": "Mini MBA", "sub": "Executive MBA бағдарламасының 6 модулі", "price": "990 000 ₸", "length": "6 ай", "format": "Онлайн, модульдік, кешкі формат"},
       "en": {"title": "Mini MBA", "sub": "6 modules of the Executive MBA", "price": "990,000 ₸", "length": "6 months", "format": "Online, evenings"}
+    },
+    {
+      "key": "iwcf", "kind": "short", "interview": false,
+      "url": "https://kbtu.edu.kz/ru/akademiya-korporativnogo-obrazovaniya/nepreryvnoe-obrazovanie/4911-mezhdunarodnaya-sertifikatsiya-iwcf",
+      "first": [], "later": ["id"], "optional": ["cv"],
+      "ru": {"title": "IWCF", "sub": "Международная сертификация по управлению скважиной", "price": "", "length": "5 или 7 дней", "format": "Очно, с практикой на симуляторах DrillSim"},
+      "kk": {"title": "IWCF", "sub": "Ұңғыманы басқару бойынша халықаралық сертификат", "price": "", "length": "5 немесе 7 күн", "format": "Күндізгі, DrillSim тренажерларында тәжірибе"},
+      "en": {"title": "IWCF", "sub": "International well control certification", "price": "", "length": "5 or 7 days", "format": "In person, with DrillSim simulator practice"}
+    },
+    {
+      "key": "step", "kind": "short", "interview": false,
+      "url": "https://kbtu.edu.kz/ru/akademiya-korporativnogo-obrazovaniya/nepreryvnoe-obrazovanie/5219-step-kbtu-kursy-anglijskogo-yazyka",
+      "first": [], "later": ["id"], "optional": [],
+      "ru": {"title": "STEP KBTU", "sub": "Курсы английского языка для поступающих на бакалавриат", "price": "35 000 ₸ в месяц", "length": "Около 2 месяцев на уровень", "format": "Онлайн"},
+      "kk": {"title": "STEP KBTU", "sub": "Бакалавриатқа түсушілерге арналған ағылшын тілі курстары", "price": "айына 35 000 ₸", "length": "Бір деңгейге шамамен 2 ай", "format": "Онлайн"},
+      "en": {"title": "STEP KBTU", "sub": "English courses for bachelor's applicants", "price": "35,000 ₸ a month", "length": "About 2 months a level", "format": "Online"}
+    },
+    {
+      "key": "sdg-finance", "kind": "short", "interview": false,
+      "url": "https://kbtu.edu.kz/ru/akademiya-korporativnogo-obrazovaniya/kursy-po-tselyam-ustojchivogo-razvitiya-oon-tsur-oon-i-mezhdunarodnye-stazhirovki/5061-finansovaya-i-ekologicheskaya-ustojchivost",
+      "first": [], "later": ["id"], "optional": ["cv"],
+      "ru": {"title": "Финансовая и экологическая устойчивость", "sub": "Курсы по Целям устойчивого развития ООН", "price": "от 70 000 ₸", "length": "От 5 дней до 2 месяцев", "format": "Онлайн и офлайн, гибкий график"},
+      "kk": {"title": "Қаржылық және экологиялық тұрақтылық", "sub": "БҰҰ Тұрақты даму мақсаттары бойынша курстар", "price": "70 000 ₸-ден бастап", "length": "5 күннен 2 айға дейін", "format": "Онлайн және офлайн, икемді кесте"},
+      "en": {"title": "Financial and Environmental Sustainability", "sub": "UN Sustainable Development Goals courses", "price": "from 70,000 ₸", "length": "5 days to 2 months", "format": "Online and in person, flexible schedule"}
+    },
+    {
+      "key": "sdg-law", "kind": "short", "interview": false,
+      "url": "https://kbtu.edu.kz/ru/akademiya-korporativnogo-obrazovaniya/kursy-po-tselyam-ustojchivogo-razvitiya-oon-tsur-oon-i-mezhdunarodnye-stazhirovki/5062-pravovaya-otvetstvennost-i-ustojchivost-kompanii",
+      "first": [], "later": ["id"], "optional": ["cv"],
+      "ru": {"title": "Правовая ответственность и устойчивость компании", "sub": "Курсы по Целям устойчивого развития ООН", "price": "от 70 000 ₸", "length": "От 5 дней до 2 месяцев", "format": "Онлайн и офлайн, гибкий график"},
+      "kk": {"title": "Компанияның құқықтық жауапкершілігі және тұрақтылығы", "sub": "БҰҰ Тұрақты даму мақсаттары бойынша курстар", "price": "70 000 ₸-ден бастап", "length": "5 күннен 2 айға дейін", "format": "Онлайн және офлайн, икемді кесте"},
+      "en": {"title": "Legal Responsibility and Corporate Sustainability", "sub": "UN Sustainable Development Goals courses", "price": "from 70,000 ₸", "length": "5 days to 2 months", "format": "Online and in person, flexible schedule"}
+    },
+    {
+      "key": "sdg-digital", "kind": "short", "interview": false,
+      "url": "https://kbtu.edu.kz/ru/akademiya-korporativnogo-obrazovaniya/kursy-po-tselyam-ustojchivogo-razvitiya-oon-tsur-oon-i-mezhdunarodnye-stazhirovki/5063-tsifrovaya-ustojchivost",
+      "first": [], "later": ["id"], "optional": ["cv"],
+      "ru": {"title": "Цифровая устойчивость", "sub": "Курсы по Целям устойчивого развития ООН", "price": "от 70 000 ₸", "length": "От 5 дней до 2 месяцев", "format": "Онлайн и офлайн, гибкий график"},
+      "kk": {"title": "Цифрлық тұрақтылық", "sub": "БҰҰ Тұрақты даму мақсаттары бойынша курстар", "price": "70 000 ₸-ден бастап", "length": "5 күннен 2 айға дейін", "format": "Онлайн және офлайн, икемді кесте"},
+      "en": {"title": "Digital Sustainability", "sub": "UN Sustainable Development Goals courses", "price": "from 70,000 ₸", "length": "5 days to 2 months", "format": "Online and in person, flexible schedule"}
+    },
+    {
+      "key": "sdg-iso", "kind": "short", "interview": false,
+      "url": "https://kbtu.edu.kz/ru/akademiya-korporativnogo-obrazovaniya/kursy-po-tselyam-ustojchivogo-razvitiya-oon-tsur-oon-i-mezhdunarodnye-stazhirovki/5064-kursy-v-oblasti-iso",
+      "first": [], "later": ["id"], "optional": ["cv"],
+      "ru": {"title": "Курсы в области ISO", "sub": "Курсы по Целям устойчивого развития ООН", "price": "от 70 000 ₸", "length": "От 5 дней до 2 месяцев", "format": "Онлайн и офлайн, гибкий график"},
+      "kk": {"title": "ISO бөлімі", "sub": "БҰҰ Тұрақты даму мақсаттары бойынша курстар", "price": "70 000 ₸-ден бастап", "length": "5 күннен 2 айға дейін", "format": "Онлайн және офлайн, икемді кесте"},
+      "en": {"title": "ISO Courses", "sub": "UN Sustainable Development Goals courses", "price": "from 70,000 ₸", "length": "5 days to 2 months", "format": "Online and in person, flexible schedule"}
+    },
+    {
+      "key": "abroad", "kind": "short", "interview": false,
+      "url": "https://kbtu.edu.kz/ru/akademiya-korporativnogo-obrazovaniya/kursy-po-tselyam-ustojchivogo-razvitiya-oon-tsur-oon-i-mezhdunarodnye-stazhirovki/5065-kratkosrochnye-kursy-za-rubezhom",
+      "first": [], "later": ["id"], "optional": ["cv"],
+      "ru": {"title": "Краткосрочные курсы за рубежом", "sub": "London School of Economics (Великобритания), LSBF (Малайзия)", "price": "1 200 $ (LSBF), от 7 450 £ (LSE)", "length": "5 дней", "format": "Офлайн, за рубежом, на английском"},
+      "kk": {"title": "Шетелдегі қысқа мерзімді курстар", "sub": "London School of Economics (Ұлыбритания), LSBF (Малайзия)", "price": "1 200 $ (LSBF), 7 450 £-ден (LSE)", "length": "5 күн", "format": "Офлайн, шетелде, ағылшын тілінде"},
+      "en": {"title": "Short Courses Abroad", "sub": "London School of Economics (UK), LSBF (Malaysia)", "price": "$1,200 (LSBF), from £7,450 (LSE)", "length": "5 days", "format": "In person abroad, in English"}
+    },
+    {
+      "key": "tvet-sustainability", "kind": "short", "interview": false,
+      "url": "https://kbtu.edu.kz/ru/akademiya-korporativnogo-obrazovaniya/kursy-po-tselyam-ustojchivogo-razvitiya-oon-tsur-oon-i-mezhdunarodnye-stazhirovki/5066-programmy-technical-and-vocational-education-and-training-tvet",
+      "first": [], "later": ["id"], "optional": ["cv"],
+      "ru": {"title": "TVET", "sub": "Устойчивое развитие", "price": "600 000 ₸", "length": "1–2 месяца", "format": "Смешанный: онлайн и офлайн, на английском и русском"},
+      "kk": {"title": "TVET", "sub": "Тұрақты даму", "price": "600 000 ₸", "length": "1–2 ай", "format": "Аралас: онлайн және офлайн, ағылшын және орыс тілдерінде"},
+      "en": {"title": "TVET", "sub": "Sustainable Development", "price": "600,000 ₸", "length": "1–2 months", "format": "Blended: online and in person, in English and Russian"}
+    },
+    {
+      "key": "tvet-finance", "kind": "short", "interview": false,
+      "url": "https://kbtu.edu.kz/ru/akademiya-korporativnogo-obrazovaniya/kursy-po-tselyam-ustojchivogo-razvitiya-oon-tsur-oon-i-mezhdunarodnye-stazhirovki/5066-programmy-technical-and-vocational-education-and-training-tvet",
+      "first": [], "later": ["id"], "optional": ["cv"],
+      "ru": {"title": "TVET", "sub": "Финансы", "price": "500 000 ₸", "length": "1–2 месяца", "format": "Смешанный: онлайн и офлайн, на английском и русском"},
+      "kk": {"title": "TVET", "sub": "Қаржы", "price": "500 000 ₸", "length": "1–2 ай", "format": "Аралас: онлайн және офлайн, ағылшын және орыс тілдерінде"},
+      "en": {"title": "TVET", "sub": "Finance", "price": "500,000 ₸", "length": "1–2 months", "format": "Blended: online and in person, in English and Russian"}
+    },
+    {
+      "key": "tvet-data", "kind": "short", "interview": false,
+      "url": "https://kbtu.edu.kz/ru/akademiya-korporativnogo-obrazovaniya/kursy-po-tselyam-ustojchivogo-razvitiya-oon-tsur-oon-i-mezhdunarodnye-stazhirovki/5066-programmy-technical-and-vocational-education-and-training-tvet",
+      "first": [], "later": ["id"], "optional": ["cv"],
+      "ru": {"title": "TVET", "sub": "Data Science", "price": "500 000 ₸", "length": "1–2 месяца", "format": "Смешанный: онлайн и офлайн, на английском и русском"},
+      "kk": {"title": "TVET", "sub": "Data Science", "price": "500 000 ₸", "length": "1–2 ай", "format": "Аралас: онлайн және офлайн, ағылшын және орыс тілдерінде"},
+      "en": {"title": "TVET", "sub": "Data Science", "price": "500,000 ₸", "length": "1–2 months", "format": "Blended: online and in person, in English and Russian"}
+    },
+    {
+      "key": "tvet-marketing", "kind": "short", "interview": false,
+      "url": "https://kbtu.edu.kz/ru/akademiya-korporativnogo-obrazovaniya/kursy-po-tselyam-ustojchivogo-razvitiya-oon-tsur-oon-i-mezhdunarodnye-stazhirovki/5066-programmy-technical-and-vocational-education-and-training-tvet",
+      "first": [], "later": ["id"], "optional": ["cv"],
+      "ru": {"title": "TVET", "sub": "Маркетинг", "price": "600 000 ₸", "length": "1–2 месяца", "format": "Смешанный: онлайн и офлайн, на английском и русском"},
+      "kk": {"title": "TVET", "sub": "Маркетинг", "price": "600 000 ₸", "length": "1–2 ай", "format": "Аралас: онлайн және офлайн, ағылшын және орыс тілдерінде"},
+      "en": {"title": "TVET", "sub": "Marketing", "price": "600,000 ₸", "length": "1–2 months", "format": "Blended: online and in person, in English and Russian"}
+    },
+    {
+      "key": "summer", "kind": "short", "interview": false,
+      "url": "https://kbtu.edu.kz/akademiya-korporativnogo-obrazovaniya/letnie-programmy-kbtu",
+      "first": [], "later": ["id"], "optional": [],
+      "ru": {"title": "Летние программы КБТУ", "sub": "Для школьников: программирование, IoT и 3D, Germany Tech Camp, профориентация", "price": "от 65 000 ₸", "length": "От 3 дней до 1 месяца", "format": "Онлайн или очно"},
+      "kk": {"title": "ҚБТУ жазғы бағдарламалары", "sub": "Оқушыларға: бағдарламалау, IoT және 3D, Germany Tech Camp, кәсіптік бағдар", "price": "65 000 ₸-ден бастап", "length": "3 күннен 1 айға дейін", "format": "Онлайн немесе офлайн"},
+      "en": {"title": "KBTU Summer Programs", "sub": "For school students: programming, IoT and 3D, Germany Tech Camp, career guidance", "price": "from 65,000 ₸", "length": "3 days to 1 month", "format": "Online or in person"}
     }
   ]
 }

@@ -3796,6 +3796,75 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
     def ako_slot_drop(oid: int, sid: int, con: Con, v: Me, force: bool = False, reason: str = ""):
         return {"booked": logic.ako.drop_slot(con, v, oid, sid, force, reason)}
 
+    # certificates an org issues in bulk (logic/certs.py): Studio's templates and runs (head and up), a public verify page
+    @app.get("/api/orgs/{oid}/certs")
+    def certs_desk(oid: int, con: Con, v: Me):
+        return logic.certs.desk(con, v, oid)
+
+    @app.post("/api/orgs/{oid}/certs/templates")
+    async def cert_template_new(oid: int, request: Request, con: Con, v: Me, name: str = ""):
+        await run_in_threadpool(logic.certs.team, con, v, oid)  # before the body is read
+        data = await read_upload(request, logic.certs.TEMPLATE_BYTES)
+        return await run_in_threadpool(logic.certs.add_template, con, v, oid, name, data)
+
+    @app.patch("/api/orgs/{oid}/certs/templates/{tid}")
+    def cert_template_edit(oid: int, tid: int, con: Con, v: Me, body: dict = Body(...)):
+        return logic.certs.update_template(con, v, oid, tid, body)
+
+    @app.delete("/api/orgs/{oid}/certs/templates/{tid}", status_code=204)
+    def cert_template_drop(oid: int, tid: int, con: Con, v: Me):
+        logic.certs.drop_template(con, v, oid, tid)
+
+    @app.post("/api/orgs/{oid}/certs/runs")  # the body is the CSV file itself (Excel's cp1251 decodes here, not in a browser)
+    async def cert_run(oid: int, request: Request, con: Con, v: Me, template: int = 0, dry: bool = False):
+        await run_in_threadpool(logic.certs.team, con, v, oid)
+        data = await read_upload(request, logic.certs.CSV_BYTES)
+        return await run_in_threadpool(logic.certs.run, con, v, oid, template, data, dry)
+
+    @app.patch("/api/orgs/{oid}/certs/{cid}", status_code=204)
+    def cert_edit(oid: int, cid: int, con: Con, v: Me, body: dict = Body(...)):
+        logic.certs.update_cert(con, v, oid, cid, body)
+
+    @app.delete("/api/orgs/{oid}/certs/{cid}", status_code=204)
+    def cert_drop(oid: int, cid: int, con: Con, v: Me):
+        logic.certs.drop_cert(con, v, oid, cid)
+
+    @app.get("/api/orgs/{oid}/certs/templates/{tid}/preview")  # the app shows it as a blob: its own headers go along
+    def cert_preview(oid: int, tid: int, con: Con, v: Me):
+        return Response(logic.certs.preview(con, v, oid, tid, cfg.domain), media_type="image/jpeg", headers={"Cache-Control": "private, no-store"})
+
+    # a run's ZIP, one certificate's PDF: signed five-minute links, as the AKO documents above
+    @app.get("/api/orgs/{oid}/certs/runs/{rid}/link")
+    def cert_zip_link(oid: int, rid: int, con: Con, v: Me):
+        return logic.certs.link(con, v, oid, "z", rid, cfg.token_key)
+
+    @app.get("/api/orgs/{oid}/certs/{cid}/link")
+    def cert_pdf_link(oid: int, cid: int, con: Con, v: Me):
+        return logic.certs.link(con, v, oid, "f", cid, cfg.token_key)
+
+    _private = {"Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer", "X-Content-Type-Options": "nosniff"}
+
+    @app.get("/api/certs/f/{cid}")
+    def cert_pdf(cid: int, con: Con, e: str = "", s: str = ""):
+        logic.certs.signed(con, "f", cid, e, s, cfg.token_key)
+        data, name = logic.certs.pdf_of(con, cid, cfg.domain)
+        return Response(data, media_type="application/pdf", headers={**_private, "Content-Disposition": _attachment(name)})
+
+    @app.get("/api/certs/z/{rid}")
+    def cert_zip(rid: int, con: Con, e: str = "", s: str = ""):
+        logic.certs.signed(con, "z", rid, e, s, cfg.token_key)
+        path, name = logic.certs.zip_of(con, rid, cfg.domain)
+        return FileResponse(path, media_type="application/zip", background=BackgroundTask(path.unlink, missing_ok=True),
+                            headers={**_private, "Content-Disposition": _attachment(name)})
+
+    # a certificate's public page (its QR): no-cache, so a revocation shows at once; noindex, so no name lands in a search
+    @app.get("/c/{code}", include_in_schema=False)
+    def cert_page(code: str, request: Request, con: Con):
+        status, body = logic.certs.page(con, code, logic.certs.lang_of(request.headers.get("accept-language", "")))
+        return Response(body, status_code=status, media_type="text/html", headers={
+            "Cache-Control": "no-cache", "Referrer-Policy": "no-referrer", "X-Robots-Tag": "noindex",
+            "Content-Security-Policy": logic.certs.CSP})
+
     # public forms (logic/forms.py): no account, nothing about the sender kept
     @app.get("/f/{slug}")
     def form_page(con: Con, slug: str):

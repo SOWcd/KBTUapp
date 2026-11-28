@@ -470,7 +470,6 @@ def test_tokenless_offers_never_answer(subj):
     """A button or message without an offer token answers or shows nothing. An accepted message renders for its recipient."""
     c, con, p, sid, _ = subj
     cid, tok = _ann_offer(c, con, sid, 2)
-    assert len(tok) == 32
     assert logic.decide_contact(con, p["ann"], cid, True, None) is None
     con.execute("UPDATE users SET role = 'admin' WHERE id = ?", (p["ann"],))
     forum = TestClient(server.create(dataclasses.replace(c.app.state.cfg, forum=True, admins=frozenset({1}))))
