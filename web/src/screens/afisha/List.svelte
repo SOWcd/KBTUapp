@@ -342,8 +342,8 @@
   {/if}
 {/snippet}
 
-<!-- what the slab's glass shows of the cover: the picture again from its small thumb, larger, blurred and dimmed, cut to
-     the slab. A still layer drawn once: a live backdrop blur was redrawn on every frame the card moved (a swipe, the page) -->
+<!-- what lies under the words: the picture again from its small thumb, larger, blurred and dimmed, cut to
+     the words' block. A still layer drawn once: a live backdrop blur was redrawn on every frame the card moved (a swipe, the page) -->
 {#snippet lens(pic: { thumb: string; focus?: [number, number] | null } | null)}
   {#if pic}<span class="lens" aria-hidden="true"><img src={pic.thumb} alt="" decoding="async" draggable="false" style:object-position={focusPos(pic)} /></span>{/if}
 {/snippet}
@@ -637,9 +637,8 @@
   @keyframes bloom { from { opacity: 0; } 40% { opacity: calc(var(--halo) * 1.5); } }
   .art, .shade { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; }
   .art { overflow: hidden; }
-  /* the cover clear at the top (it is the screen's one picture), deeper toward the slab: the glass has something calm to sit on */
+  /* the cover clear at the top (it is the screen's one picture), deeper toward the words */
   .shade { background: linear-gradient(rgba(0, 0, 0, 0) 36%, rgba(0, 0, 0, 0.5)); box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.14); }
-  /* (the card has no lit rim of its own: the glass is the one lit object on it; two rims 6px apart read as nested boxes) */
   @media (prefers-reduced-motion: reduce) { .hero::before { animation: none; } }
   /* (r4) the words lie on the cover itself, no box inside the card: under them the picture goes soft and dark by
      degrees (the lens: the cover's thumb again, blurred and dimmed, let in through a short gradient mask that ends above the words: no edge where it starts, and the
