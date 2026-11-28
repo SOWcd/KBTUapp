@@ -55,7 +55,6 @@
   import PullSearch from '../../ui/PullSearch.svelte';
   import HeroArt from './HeroArt.svelte';
   import { coverFor, focusPos } from '../../lib/photo';
-  import { glass } from '../../ui/glass';
   import Everything from './Everything.svelte';
   import GalleryCard from './GalleryCard.svelte';
   import Chip from '../../ui/Chip.svelte';
@@ -355,13 +354,14 @@
     {@const e = c.e}
     {@const mine = e.my?.status === 'going'}
     <!-- an event: my ticket and the way there, else what it is and one tap to go -->
-    {@const art = coverFor(e.cover, 'card') ?? e.video?.poster ?? null}
+    <!-- the card is a portrait: the organizer's tall framing (the Feed's), not the wide card's, which lost half its width here -->
+    {@const art = coverFor(e.cover, 'feed') ?? e.video?.poster ?? null}
     {@const pic = !!art}
     <section class="hero theme-dark" class:tix={mine && i === 0} class:nopic={!pic} style:--c={e.cover?.color ?? e.video?.poster?.color ?? e.color ?? e.tint} onclickcapture={() => tap(c)}>
       <button class="hit" onpointerdown={(ev) => touchAhead(ev, () => prefetchEvent(e.id))} onclick={(ev) => sheets.event(e.id, ev.currentTarget.parentElement?.querySelector('.poster'))} aria-label={e.title}></button>
       <span class="art"><HeroArt pic={art} emoji={e.emoji} color={e.color ?? e.tint} first={i === 0} /></span>
       <div class="shade"></div>
-      <div class="slab" use:glass>
+      <div class="slab">
         {@render lens(art)}
         <span class="hero-tx">
           <b class="clamp-2">{e.title}</b>
@@ -388,7 +388,7 @@
       <button class="hit" onclick={v.open} aria-label={v.title}></button>
       <span class="art"><HeroArt pic={v.item.cover} emoji={v.item.emoji} color={v.color} first={i === 0} /></span>
       <div class="shade"></div>
-      <div class="slab" use:glass>
+      <div class="slab">
         {@render lens(v.item.cover)}
         <span class="hero-tx">
           <b class="clamp-2">{v.title}</b>
@@ -555,13 +555,21 @@
      card here); the stars are gold outlines, each a 44 px tall target, and a pressed one fills */
   .rate { display: flex; align-items: center; gap: var(--s-1); min-height: var(--row-h); margin: var(--s-4) calc(-1 * var(--s-2)) 0 var(--s-1); }
   .rate-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; font: 450 var(--fs-cap)/1.3 var(--font-text); color: var(--text-3); }
-  .rate-tx b { font: 600 var(--fs-body)/1.25 var(--font-text); color: var(--text); white-space: nowrap; }
+  .rate-tx b { overflow: hidden; text-overflow: ellipsis; font: 600 var(--fs-body)/1.25 var(--font-text); color: var(--text); white-space: nowrap; }
   .rate-stars { flex: none; display: flex; }
-  .rate-stars button { display: grid; place-items: center; width: 34px; height: var(--tap); color: var(--warning-text); transition: transform var(--t-fast) var(--ease); }
+  .rate-stars button { display: grid; place-items: center; width: 40px; height: var(--tap); color: var(--warning-text); transition: transform var(--t-fast) var(--ease); }
   .rate-stars button:active { transform: scale(1.18); }
   .rate-stars button:active :global(svg) { fill: currentColor; }
   .rate-x { flex: none; display: grid; place-items: center; width: 34px; height: var(--tap); color: var(--text-3); }
   .rate-x:active { opacity: 0.6; }
+  /* a narrow phone: the question and the x on one line, the five stars on their own under it (beside the words they left
+     the question 50 px) */
+  @media (max-width: 359px) {
+    .rate { flex-wrap: wrap; padding: var(--s-2) 0 0; }
+    .rate-x { order: 1; }
+    .rate-stars { order: 2; flex-basis: 100%; justify-content: space-between; }
+    .rate-stars button { width: var(--tap); }
+  }
   .off { margin: var(--s-3) var(--s-1) 0; color: var(--text-2); }
   .pastrow { margin-top: var(--s-4); }
   .pastrow + .past { margin-top: 8px; }
@@ -586,14 +594,8 @@
   .dh span::first-letter { text-transform: none; }
   .hit { position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
 
-  /* the hero: the one rich visual, kept calm (owner, Nov 22: the blurred cover and the circling light read as
-     childish). The cover sharp edge to edge, a little dimmed, and most of the card (owner, Nov 24); the words on
-     a low slab of the app's own sheet glass along the bottom (base.css .glass-sheet: the sheets' and menus' family; it
-     follows the theme and stays legible whatever the cover is): the title, one line of when and where, and my ticket and the way
-     there as two round icons at its end. No drop shadow of its own: the halo is the card's light */
-  /* (owner, Nov 27) the hero is the screen's one big card, most of the first screen: the cover tall and whole, and the words
-     on a slab of Liquid Glass at its foot. The card is media, so it is dark in both themes (.theme-dark: white words, the
-     dark tags and buttons): the glass is clear and takes its colour from the cover, not from the page */
+  /* (owner, Nov 27-28) the hero is the screen's one big card, most of the first screen: the cover tall and whole, the words
+     on the cover itself. The card is media, so it is dark in both themes (.theme-dark: white words, the dark tags) */
   .hero { --halo: 0.62; position: relative; isolation: isolate; display: flex; flex-direction: column; justify-content: flex-end; height: var(--hh);
     border-radius: var(--r-xl); background: var(--media); color: var(--text); transition: transform var(--t-fast) var(--ease); }
   .hero:has(> .hit:active) { transform: scale(0.985); }

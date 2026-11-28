@@ -47,7 +47,7 @@ test('News with 100 posts: tap to first frame, main thread after', async ({ page
       CAST(strftime('%s', 'now') AS INTEGER) - i * 3600 FROM n;`);
   await english(page);
   const p: Phone = await open('Ali');
-  const more = p.page.locator('.solo .more button, button.s.more'); // News opens from the Afisha's "More" (its menu)
+  const more = p.page.locator('[data-more]'); // News opens from the Afisha's "More" (its menu)
   await expect(more).toBeVisible();
   await p.page.waitForTimeout(4000); // the News chunk warmed in an idle moment (App warmPages), as on a phone a few seconds in
   await p.page.evaluate(() => {

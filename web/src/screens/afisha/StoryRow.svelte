@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Clubs' stories, and at the row's end one more circle, "More": the campus map, the Feed, the Gallery and the News in
+  // Clubs' stories, and before them one more circle, "More": the campus map, the Feed, the Gallery and the News in
   // one menu (owner, Nov 27: four round buttons had no place of their own; a menu at a circle works in Telegram and on the web alike).
   import { untrack } from 'svelte';
   import { SvelteSet } from 'svelte/reactivity';
@@ -10,7 +10,6 @@
   import { nowTs } from '../../lib/time';
   import { storyGroups, seenEv } from '../../lib/posts';
   import OrgLogo from '../../ui/OrgLogo.svelte';
-  import IconButton from '../../ui/IconButton.svelte';
   import MapIcon from '@lucide/svelte/icons/map';
   import Play from '@lucide/svelte/icons/play';
   import Images from '@lucide/svelte/icons/images';
@@ -60,19 +59,20 @@
 
 {#if !groups.length}
   <!-- no circles: "More" is no chip alone in a row, it is one quiet round button at the right -->
-  <div class="solo"><span class="more"><IconButton icon={Ellipsis} size="s" label={t('common.more')} onclick={openMore} /></span></div>
+  <div class="solo"><button class="dot" data-more aria-haspopup="menu" aria-label={t('common.more')} onclick={openMore}><Ellipsis size={18} /></button></div>
 {:else}
 <div class={['row hscroll', { few }]}>
+  <!-- first, before the clubs: at the row's end it was off the screen once three clubs had stories -->
+  <button class="s more" data-more aria-haspopup="menu" onclick={openMore}>
+    <span class="ring"><span class="in">{#if few}<Ellipsis size={18} />{:else}<span class="four" class:three={more.length === 3}>{#each more as m (m.label)}<m.icon size={15} strokeWidth={2} />{/each}</span>{/if}</span></span>
+    <b class="ellipsis">{t('common.more')}</b>
+  </button>
   {#each groups as g, i (g.org.id)}
     <button class="s" class:new={g.unread} onclick={() => sheets.stories(groups, i)}>
       <span class="ring"><span class="in"><OrgLogo org={g.org} size={few ? 28 : 54} /></span></span>
       <b class="ellipsis" use:fit={g.org}>{!few && tight.has(g.org.id) ? g.org.abbr : nameOf(g.org)}</b>
     </button>
   {/each}
-  <button class="s more" aria-haspopup="menu" onclick={openMore}>
-    <span class="ring"><span class="in">{#if few}<Ellipsis size={18} />{:else}<span class="four" class:three={more.length === 3}>{#each more as m (m.label)}<m.icon size={15} strokeWidth={2} />{/each}</span>{/if}</span></span>
-    <b class="ellipsis">{t('common.more')}</b>
-  </button>
 </div>
 {/if}
 
@@ -91,7 +91,8 @@
   .few .in { border-width: 2px; }
   .few b { font-size: var(--fs-sub); }
   .solo { display: flex; justify-content: flex-end; margin-bottom: var(--s-3); }
-  .solo .more { display: flex; }
+  .dot { display: grid; place-items: center; width: var(--ctl-s); height: var(--ctl-s); border-radius: 50%; background: var(--fill); color: var(--text); }
+  .dot:active { transform: scale(0.94); }
   /* "More": the same circle, a quiet fill in place of a logo, what is inside it drawn small */
   .more .in { background: var(--fill); color: var(--text-2); }
   .four { display: grid; grid-template-columns: repeat(2, auto); gap: 5px; }
