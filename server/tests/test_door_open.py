@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import time
 
-from kbtu import db, logic, outbox
+from kbtu import logic, outbox
 from test_admin_events import _as, _setup
 from test_core import env, login, tma  # noqa: F401  (env is a fixture)
 from test_team_guests import _club, _event, _go, _uid
@@ -98,24 +98,6 @@ def test_opens_by_itself_at_t30(env):
     _start(con, eid, 20 * 60)
     logic.door_round(con)
     assert _sent(con, eid) == [_uid(con, 10)]
-
-
-def test_deploy_keeps_a_door_already_in_use(env):
-    """Migration 137: an event the old 3-hour rule already let people into keeps its door open (its guests hear it,
-    as the first scan is behind it); one nobody came to yet goes shut until T-30."""
-    c, cfg = env
-    con = _team(c, cfg)
-    busy, idle = _event(c), _event(c)
-    for eid in (busy, idle):
-        assert _go(c, eid, 10)["my"]["status"] == "going"
-        assert _go(c, eid, 11)["my"]["status"] == "going"
-        _start(con, eid, 2 * 3600)
-    con.execute("UPDATE registrations SET checked_in_at = ? WHERE event_id = ? AND user_id = ?", (int(time.time()) - 60, busy, _uid(con, 10)))
-    con.executescript(f"BEGIN;\n{dict(db.MIGRATIONS)[137].split(';', 1)[1]}\nCOMMIT;")  # its UPDATE (the column is there)
-    assert _scan(c, idle, con, 11) == "not_open"
-    logic.door_round(con)
-    assert _sent(con, busy) == [_uid(con, 11)] and _sent(con, idle) == []
-    assert _scan(c, busy, con, 11) == "ok"
 
 
 def test_admin_never_opens_the_door(env):

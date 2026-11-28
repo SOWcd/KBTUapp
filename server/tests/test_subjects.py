@@ -467,11 +467,10 @@ def test_hourly_counters_go(subj, monkeypatch):
 
 
 def test_tokenless_offers_never_answer(subj):
-    """Review 2, P1: an offer from before tokens whose id another took: the migration gives every row a token, and a
-    button or message without one answers or shows nothing (bot and app alike); an accepted message renders for its
-    own recipient only."""
+    """A button or message without an offer token answers or shows nothing. An accepted message renders for its recipient."""
     c, con, p, sid, _ = subj
     cid, tok = _ann_offer(c, con, sid, 2)
+    assert len(tok) == 32
     assert logic.decide_contact(con, p["ann"], cid, True, None) is None
     con.execute("UPDATE users SET role = 'admin' WHERE id = ?", (p["ann"],))
     forum = TestClient(server.create(dataclasses.replace(c.app.state.cfg, forum=True, admins=frozenset({1}))))
@@ -481,40 +480,6 @@ def test_tokenless_offers_never_answer(subj):
     ok = {"kind": "contact_ok", "ref": f"co:{cid}:to:{tok}", "lang": "en"}
     assert outbox._render(con, ok | {"user_id": p["bob"]}) and outbox._render(con, ok | {"user_id": p["cat"]}) is None
     assert outbox._render(con, {"kind": "contact_ok", "ref": f"co:{cid}:to", "lang": "en", "user_id": p["bob"]}) is None
-
-
-def test_migration_gives_old_offers_tokens(env, before_door_migration):  # noqa: F811
-    c, cfg = env
-    a, b = login(c, 1, "ann")["id"], login(c, 2, "bob")["id"]
-    con = db.connect(cfg.db_path)
-    before_door_migration(con)
-    con.execute("DROP INDEX asks_subject")
-    con.execute("ALTER TABLE asks DROP COLUMN subject")
-    con.execute("ALTER TABLE contacts DROP COLUMN token")
-    con.execute("DROP TABLE subject_holds")
-    con.execute("INSERT INTO contacts (from_id, to_id, created_at) VALUES (?, ?, 0)", (b, a))
-    con.execute("ALTER TABLE events DROP COLUMN online")  # 188's, added again on the way up
-    con.execute("ALTER TABLE credits DROP COLUMN gh")  # 191's
-    con.execute("ALTER TABLE users DROP COLUMN tg_photo_at")  # 194's
-    con.executescript("""DROP TABLE reg_age; DROP TABLE event_guests;
-        ALTER TABLE events DROP COLUMN age_check; ALTER TABLE events DROP COLUMN guest_list;""")
-    con.execute("ALTER TABLE events DROP COLUMN silent_publish")  # 198's
-    con.execute("ALTER TABLE org_invites DROP COLUMN consumed")  # 200's
-    if con.execute("SELECT 1 FROM sqlite_master WHERE name = 'event_guests'").fetchone():
-        con.execute("ALTER TABLE event_guests DROP COLUMN team")  # 212's
-        con.execute("ALTER TABLE event_guests DROP COLUMN username")  # 211's
-        con.execute("ALTER TABLE event_guests DROP COLUMN name")  # 210's
-        con.execute("ALTER TABLE event_guests DROP COLUMN came_at")  # 209's
-    con.execute("ALTER TABLE registrations DROP COLUMN door_team")  # 212's
-    con.execute("ALTER TABLE events DROP COLUMN door_extra")  # 208's
-    con.execute("ALTER TABLE users DROP COLUMN n_forum_comments")  # 206's
-    con.executescript("DROP TABLE fchan_hearts; ALTER TABLE users DROP COLUMN forum_seen_msg;")  # 205
-    con.execute("PRAGMA user_version = 176")
-    con.close()
-    db.init(cfg.db_path)
-    con = db.connect(cfg.db_path)
-    assert len(con.execute("SELECT token FROM contacts").fetchone()[0]) == 32
-    con.close()
 
 
 def test_subject_moderation_needs_the_policy_too(subj):

@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import json
 
-from kbtu import db
 from test_admin_create_event import _body, _org
 from test_admin_full import _full_setup
 from test_core import tma  # noqa: F401
@@ -67,10 +66,6 @@ def test_creator_sets_the_kaspi_payee(env):
     lines = [(t, json.loads(d)) for t, d in con.execute("SELECT target, data FROM audit_log WHERE action = 'staff_kaspi' ORDER BY id")]
     assert lines == [("org:1", {"event": None, "changed": ["name", "phone"]}),
                      ("org:1", {"event": e["id"], "changed": ["name"]})]
-    old = {"event": e["id"], "was": {"name": "Dana S", "phone": "+77011234567"}, "now": {"name": "Aru K", "phone": "+77011234567"}}
-    log_id = con.execute("INSERT INTO audit_log (action, target, data, at) VALUES ('staff_kaspi', 'org:1', ?, 0)", (json.dumps(old),)).lastrowid
-    con.executescript(dict(db.MIGRATIONS)[231])
-    assert json.loads(con.execute("SELECT data FROM audit_log WHERE id = ?", (log_id,)).fetchone()[0]) == {"event": e["id"]}
     # once someone paid, fixed for him as for anyone
     con.execute("INSERT INTO registrations (event_id, user_id, status, ticket_code, created_at, updated_at) VALUES (?, ?, 'going', 'TCK9', 0, 0)", (e["id"], ids["ali"]))
     con.execute("INSERT INTO files (id, sha256, kind, mime, bytes, path, created_at) VALUES (900, 'x', 'receipt', 'image/webp', 1, 'r/x', 0)")

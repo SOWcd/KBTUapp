@@ -218,7 +218,7 @@ def _on_disk(root, path):
 
 def test_cover_from_the_posts_picture(env, monkeypatch):
     c, cfg, con, ids = _setup(env)
-    _model(monkeypatch, [_form(), _form(title="Chess night")])
+    _model(monkeypatch, [_form(), _form(title="Chess night"), _form(title="Quiz")])
     pic, root = _pic(cfg)
     pid = mirror.take(con, 500, mirror.Msg(id=1, date=logic.now(), text=TEXT, photo=pic))
     eid = _look(con, cfg, pid, TEXT)
@@ -230,10 +230,13 @@ def test_cover_from_the_posts_picture(env, monkeypatch):
     card = next(x for x in c.get("/api/admin/inbox", headers=tma(60)).json()["items"] if x["kind"] == "autoev")["data"]
     assert card["cover"]["url"] == f"media/{pic['path']}.webp" and card["cover"]["focus"] == [0.5, 0.2] and card["emoji"] == "microphone_3d"
     assert [x["cover"]["id"] for x in c.get("/api/orgs/1/events", headers=tma(20)).json()] == [cv["cover_file_id"]]
-    # a post without a picture: no cover
     t2 = "2 " + TEXT.replace("Open mic", "Chess")
-    e2 = _look(con, cfg, _post(con, 2, t2), t2)
-    assert e2 and _cov(con, e2)["cover_file_id"] is None
+    pid2 = mirror.take(con, 500, mirror.Msg(id=2, date=logic.now(), text=t2, photo=pic))
+    e2 = _look(con, cfg, pid2, t2)
+    assert e2 and e2 != eid and _cov(con, e2)["cover_file_id"] == cv["cover_file_id"]
+    t3 = "3 " + TEXT.replace("Open mic", "Quiz")
+    e3 = _look(con, cfg, _post(con, 3, t3), t3)
+    assert e3 and _cov(con, e3)["cover_file_id"] is None
 
 
 def test_cover_when_the_photo_comes_later(env, monkeypatch):
@@ -307,27 +310,6 @@ def test_post_taken_down_after(env, monkeypatch):
     from kbtu import media
     media.drop(root, logic.events_gone(con)[1])
     assert not _on_disk(root, pic["path"])
-
-
-def test_backfill_once(env, monkeypatch):
-    c, cfg, con, ids = _setup(env)
-    _model(monkeypatch, [_form(), _form(title="Chess night"), _form(title="Quiz")])
-    pic, _ = _pic(cfg)
-    made = []
-    for n in (1, 2, 3):
-        t = f"{n} " + TEXT
-        pid = mirror.take(con, 500, mirror.Msg(id=n, date=logic.now(), text=t, photo=pic))
-        made.append(_look(con, cfg, pid, t))
-    # as on production before: drafts without a cover; the third one a person saved already
-    con.execute("UPDATE events SET cover_file_id = NULL, cover_focus = NULL")
-    con.execute("DELETE FROM files WHERE kind = 'event_cover'")
-    con.execute("UPDATE events SET updated_at = updated_at + 60 WHERE id = ?", (made[2],))
-    for _ in range(2):
-        con.executescript(dict(db.MIGRATIONS)[186])
-    covers = [_cov(con, e) for e in made]
-    assert [x["path"] for x in covers] == [pic["path"], pic["path"], None]
-    assert covers[0]["cover_focus"] == autoev.TALL_FOCUS and covers[0]["kind"] == "event_cover" and covers[0]["owner_id"] is None
-    assert con.execute("SELECT COUNT(*) FROM files WHERE kind = 'event_cover'").fetchone()[0] == 1  # once, shared
 
 
 def test_a_meeting_link_makes_it_online(env, monkeypatch):

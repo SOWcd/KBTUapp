@@ -226,12 +226,6 @@ def test_deadline_and_free_first(env):
     con.execute("UPDATE students SET course = 1, student_id = printf('%02dB%07d', ?, user_id) WHERE user_id IN (SELECT id FROM users WHERE tg_id IN (10, 11, 13))",
                 (INTAKE % 100,))  # ann, bob, dan: this year's intake (the ID says the year, audit M3)
     con.execute("UPDATE students SET ms_oid = 'oid' || user_id, ms_profile = json_object('employeeId', student_id)")
-    # migration 58 (M3): a year typed in since the portal closed becomes the ID's; the portal's own stays (a repeater)
-    con.execute("UPDATE students SET course = 1, consent_at = 1792350000 WHERE user_id = (SELECT id FROM users WHERE tg_id = 12)")
-    con.execute("UPDATE students SET course = 1, consent_at = 1792000000 WHERE user_id = (SELECT id FROM users WHERE tg_id = 13)")
-    con.executescript(dict(db.MIGRATIONS)[58])
-    assert [r[0] for r in con.execute("SELECT course FROM students s JOIN users u ON u.id = s.user_id WHERE u.tg_id IN (12, 13) ORDER BY u.tg_id")] \
-        == [logic.course_of("24B0000001"), 1] != [1, 1]
     con.execute("UPDATE students SET course = 2 WHERE user_id = (SELECT id FROM users WHERE tg_id = 12)")
     start = int(time.time()) + 7200
     body = {"title": "Gala", "place": "Hall", "startsAt": start, "emoji": "laptop_3d", "color": "#3B6BFF", "seats": 3,

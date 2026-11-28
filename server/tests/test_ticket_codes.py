@@ -1,5 +1,5 @@
 """Ticket codes are 4 characters, unique within their event (owner, Nov 8): stored as '<event id>-<code>'; the door
-finds a code in its own event only; migration 140 gave every ticket a new one and the old 6-character codes stopped."""
+finds a code in its own event only."""
 from __future__ import annotations
 
 import itertools
@@ -52,19 +52,3 @@ def test_door_reads_own_event_only(env):
     assert scan(b, f"{a}-{code}")["result"] == "not_found"  # nor its stored form
     assert scan(a, "KBTU" + code)["result"] == "ok"  # the QR
     assert scan(a, f" {code[:2].lower()} - {code[2:].lower()} ")["result"] == "already"  # typed by hand
-
-
-def test_migration_140(env):
-    c, cfg = env
-    con, (a, b) = _setup(c, cfg)
-    ids = {tg: con.execute("SELECT id FROM users WHERE tg_id = ?", (tg,)).fetchone()[0] for tg in (10, 11)}
-    for eid, tg, old in ((a, 10, "ABC234"), (a, 11, "XYZ789"), (b, 10, "QWE234")):
-        con.execute("INSERT INTO registrations (event_id, user_id, status, ticket_code, created_at, updated_at) VALUES (?, ?, 'going', ?, 0, 0)",
-                    (eid, ids[tg], old))
-    con.executescript(f"BEGIN;\n{dict(db.MIGRATIONS)[140]}\nCOMMIT;")
-    got = con.execute("SELECT event_id, ticket_code FROM registrations").fetchall()
-    assert len(got) == 3 and all(re.fullmatch(rf"{e}-[2-9A-HJKMNP-Z]{{4}}", t) for e, t in got)
-    scan = lambda eid, raw: c.post(f"/api/events/{eid}/checkin", headers=tma(20), json={"code": raw}).json()
-    assert scan(a, "KBTUABC234")["result"] == "not_found"  # the old codes are gone (owner)
-    new = c.get(f"/api/events/{a}", headers=tma(10)).json()["my"]["ticketCode"]
-    assert scan(a, "KBTU" + new)["result"] == "ok"

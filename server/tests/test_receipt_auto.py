@@ -5,7 +5,7 @@ import time
 
 import pytest
 
-from kbtu import db, logic, receipt
+from kbtu import logic, receipt
 from kbtu.logic import seats
 from test_core import env, login, set_clock, tma  # noqa: F401 (env is a fixture)
 from test_event_teams import _event, _go, _list, _people
@@ -122,18 +122,6 @@ def test_ocr_outage_requires_manual_approval_at_the_door(paid, monkeypatch):
     _unchecked(paid, tg, row)
     assert c.post(f"/api/receipts/{row['id']}/review", headers=tma(20), json={"reject": False}).status_code == 204
     assert checkin()["result"] == "ok"
-
-
-def test_legacy_unread_receipt_requires_review(paid, monkeypatch):
-    c, con, eid, (a, b, _), now = paid
-    for tg in (a, b):
-        _go(c, eid, tg)
-    unread = _send(paid, monkeypatch, a, None)
-    partial = _send(paid, monkeypatch, b, {**_fields(now), "recipient": None}, 241)
-    con.execute("UPDATE receipts SET flags = 'partial' WHERE id = ?", (unread["id"],))
-    con.executescript(dict(db.MIGRATIONS)[201])
-    assert logic.organizing.flagged(con, unread["registration_id"])
-    assert logic.organizing.flagged(con, partial["registration_id"])
 
 
 def test_empty_ocr_result_is_not_clean(paid, monkeypatch):
@@ -270,37 +258,6 @@ def test_deleted_human_reviewer_does_not_become_app(paid, monkeypatch):
     assert con.execute("SELECT COUNT(*) FROM receipt_auto_checks").fetchone()[0] == 0
     logic.account.delete_me(con, logic.Viewer(reviewer["id"], "user", True))
     assert con.execute("SELECT reviewed_by FROM receipts WHERE id = ?", (row["id"],)).fetchone()[0] is None
-    assert _attendee(paid, tg)["reviewed"] is True and _attendee(paid, tg)["auto"] is False
-
-
-def test_migration_does_not_backfill_old_receipts(paid, monkeypatch, before_door_migration):
-    c, con, eid, (tg, _, _), now = paid
-    _go(c, eid, tg)
-    row = _send(paid, monkeypatch, tg, None)
-    # A legacy human review whose reviewer was deleted is indistinguishable in the old columns.
-    con.execute("UPDATE receipts SET reviewed_at = ? WHERE id = ?", (now, row["id"]))
-    before_door_migration(con)
-    con.execute("DROP TABLE receipt_auto_checks")
-    con.execute("ALTER TABLE events DROP COLUMN online")  # 188's, added again on the way up
-    con.execute("ALTER TABLE credits DROP COLUMN gh")  # 191's
-    con.execute("ALTER TABLE users DROP COLUMN tg_photo_at")  # 194's
-    con.executescript("""DROP TABLE reg_age; DROP TABLE event_guests;
-        ALTER TABLE events DROP COLUMN age_check; ALTER TABLE events DROP COLUMN guest_list;""")
-    con.execute("ALTER TABLE events DROP COLUMN silent_publish")  # 198's
-    con.execute("ALTER TABLE org_invites DROP COLUMN consumed")  # 200's
-    if con.execute("SELECT 1 FROM sqlite_master WHERE name = 'event_guests'").fetchone():
-        con.execute("ALTER TABLE event_guests DROP COLUMN team")  # 212's
-        con.execute("ALTER TABLE event_guests DROP COLUMN username")  # 211's
-        con.execute("ALTER TABLE event_guests DROP COLUMN name")  # 210's
-        con.execute("ALTER TABLE event_guests DROP COLUMN came_at")  # 209's
-    con.execute("ALTER TABLE registrations DROP COLUMN door_team")  # 212's
-    con.execute("ALTER TABLE events DROP COLUMN door_extra")  # 208's
-    con.execute("ALTER TABLE users DROP COLUMN n_forum_comments")  # 206's
-    con.executescript("DROP TABLE fchan_hearts; ALTER TABLE users DROP COLUMN forum_seen_msg;")  # 205
-    con.execute("PRAGMA user_version = 186")
-    path = con.execute("PRAGMA database_list").fetchone()[2]
-    db.init(path)
-    assert con.execute("SELECT COUNT(*) FROM receipt_auto_checks").fetchone()[0] == 0
     assert _attendee(paid, tg)["reviewed"] is True and _attendee(paid, tg)["auto"] is False
 
 

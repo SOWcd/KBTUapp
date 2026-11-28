@@ -45,9 +45,6 @@ def test_stale_receipt_review_cannot_touch_replacement(env, reject):
     assert c.post(f"/api/events/{eid}/receipt", headers=tma(10), content=_shot()).status_code == 200
     old = con.execute("SELECT id FROM receipts").fetchone()[0]
     assert c.get(f"/api/receipts/{old}/image", headers=tma(20)).status_code == 200
-    # Seed existing uploads on upgrade, then ensure both replacement and later deletion preserve the high-water mark.
-    con.execute("DELETE FROM meta WHERE key = 'seq:receipts'")
-    con.executescript(dict(db.MIGRATIONS)[230])
     assert int(con.execute("SELECT value FROM meta WHERE key = 'seq:receipts'").fetchone()[0]) == old
     assert c.post(f"/api/events/{eid}/receipt", headers=tma(10), content=_shot(241)).status_code == 200
     new = con.execute("SELECT * FROM receipts").fetchone()

@@ -11,7 +11,7 @@ import time
 from collections.abc import Callable, Iterator
 from pathlib import Path
 
-from .migrations import MIGRATIONS  # Re-export for callers that import db.MIGRATIONS.
+from .migrations import BASE, MIGRATIONS
 
 SCHEMA = (Path(__file__).with_name("schema.sql")).read_text(encoding="utf-8")
 
@@ -75,9 +75,12 @@ def init(path: str, after: Callable[[sqlite3.Connection], None] | None = None) -
 def _init(path: str) -> None:
     con = connect(path)
     try:
-        con.execute("PRAGMA journal_mode = WAL")
         version = con.execute("PRAGMA user_version").fetchone()[0]
-        steps = ([(1, SCHEMA)] if version == 0 else []) + [m for m in MIGRATIONS if m[0] > version]
+        if 0 < version < BASE:
+            raise RuntimeError(f"Database schema version {version} is older than baseline {BASE}. "
+                               f"Restore it with an older image and upgrade it to version {BASE} before using this image.")
+        con.execute("PRAGMA journal_mode = WAL")
+        steps = ([(BASE, SCHEMA)] if version == 0 else []) + [m for m in MIGRATIONS if m[0] > version]
         if version and steps:  # a live file about to change: a full copy next to it first (the way back, by hand)
             con.execute("VACUUM INTO ?", (f"{path}.v{version}-{int(time.time())}.bak",))
         for target, sql in steps:

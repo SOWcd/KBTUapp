@@ -234,20 +234,6 @@ def test_account_deletion(env):
     assert r["filledBy"] is None and r["editedBy"] is None
 
 
-def test_vice_role_migration(env):
-    """158: a Vice's role with its own toggles gets the reports right once, on a replay too."""
-    _, cfg = env
-    con = db.connect(cfg.db_path)
-    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 1, 0)")
-    con.execute("INSERT INTO org_roles (org_id, name, color, level, rights, fixed, created_at) VALUES (1, 'Vice', '#7C4DFF', 'vice', 'team,money', 1, 0)")
-    con.execute("INSERT INTO org_roles (org_id, name, color, level, rights, created_at) VALUES (1, 'X', '#3B6BFF', 'head', 'events', 0)")
-    sql = dict(db.MIGRATIONS)[158].split("UPDATE org_roles", 1)[1]
-    for _ in range(2):
-        con.execute("UPDATE org_roles" + sql)
-    got = dict(con.execute("SELECT level, rights FROM org_roles WHERE org_id = 1 AND rights IS NOT NULL").fetchall())
-    assert got == {"vice": "team,money,reports", "head": "events"}
-
-
 def test_consent(env):
     """The old marks-only consent leaves marks stored, hidden until each person accepts the new version."""
     c, _, _, con, eid, _, _ = _setup(env, agreed=(10, 11, 20))
@@ -492,25 +478,3 @@ def test_cohost_switch_off_and_deletion(env):
     delete_now(c, cfg, tma(41))
     assert tuple(con.execute("SELECT filled_by, edited_by FROM club_reports WHERE org_id = 2").fetchone()) == (None, None)
     assert hr not in {p["person"]["id"] for p in _co(c, eid, 30).json()["people"]}
-
-
-def test_migration_keeps_reports_as_the_hosts(env):
-    """160: 158's reports and marks move over as the host's; 158's tables go."""
-    _, cfg = env
-    con = db.connect(cfg.db_path)
-    con.execute("INSERT INTO orgs (id, slug, kind, name, short, emoji, official, created_at) VALUES (1, 'it', 'club', 'IT Club', 'IT', 'laptop_3d', 1, 0)")
-    con.execute("INSERT INTO users (id, tg_id, created_at, seen_at) VALUES (500, 500, 0, 0), (501, 501, 0, 0)")
-    eid = con.execute("""INSERT INTO events (org_id, status, title, place, starts_at, emoji, color, created_at, updated_at)
-        VALUES (1, 'published', 'Case', 'Hall', 0, 'laptop_3d', '#3B6BFF', 0, 0)""").lastrowid
-    con.execute("DROP TABLE club_report_marks")
-    con.execute("DROP TABLE club_reports")
-    con.executescript("BEGIN;" + dict(db.MIGRATIONS)[158].split("UPDATE org_roles", 1)[0] + "COMMIT;")
-    con.execute("INSERT INTO event_reports (event_id, guests, note, filled_by, filled_at, edited_by, edited_at) VALUES (?, 5, 'kept', 500, 1, 501, 2)", (eid,))
-    con.execute("INSERT INTO report_marks (event_id, user_id, status) VALUES (?, 500, 'late'), (?, 501, 'present')", (eid, eid))
-    con.executescript("BEGIN;" + dict(db.MIGRATIONS)[160] + "COMMIT;")
-    assert [tuple(r) for r in con.execute("SELECT event_id, org_id, guests, note, filled_by, filled_at, edited_by, edited_at FROM club_reports")] \
-        == [(eid, 1, 5, "kept", 500, 1, 501, 2)]
-    assert sorted(tuple(r) for r in con.execute("SELECT event_id, org_id, user_id, status FROM club_report_marks")) \
-        == [(eid, 1, 500, "late"), (eid, 1, 501, "present")]
-    assert not con.execute("SELECT 1 FROM sqlite_master WHERE name IN ('event_reports', 'report_marks')").fetchone()
-    assert con.execute("PRAGMA foreign_key_check").fetchall() == []

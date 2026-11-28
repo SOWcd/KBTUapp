@@ -1,5 +1,5 @@
-"""Writes schema.current.sql: the database as it is after every migration, for reading (schema.sql is the frozen
-start and migrations.py the history; neither alone says what a table has today). Run after adding a migration:
+"""Writes schema.current.sql for reading, from the frozen schema.sql baseline and the migrations after it.
+Run after adding a migration:
 .venv/bin/python tools/schema_dump.py  (tests/test_schema_current.py fails while the file is stale)."""
 import sqlite3
 import sys
