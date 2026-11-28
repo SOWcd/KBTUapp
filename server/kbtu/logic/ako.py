@@ -3,7 +3,7 @@ often without Telegram) opens one link, picks a program, attaches the documents 
 when the program has one, and sends. The same link opens the package later to add what came after (a medical
 certificate, a signed application) or to move the interview.
 
-The link is the credential: /ako/<secret>, 256 bits, kept here only as its SHA-256 (ako_apps.token). With it one adds
+The link is the credential: /ako#<secret> (a fragment: browsers never send it, so no access log holds it), 256 bits, kept here only as its SHA-256 (ako_apps.token). With it one adds
 and replaces files and never downloads them; the files go only to the org's own people (org_members: head and up
 manage, a member reads: the Academic Programs department reviewing a package). No account, no Telegram.
 
@@ -33,16 +33,18 @@ from .core import ApiError, Viewer, at_least, one, role_in, rows
 from .organizing import kz_phone
 from .seats import _calendar, _ics_text
 
-CONSENT = "ako-1"           # the applicant's own notice (web i18n ako.consent*): a new wording, a new version
+CONSENT = "ako-2"        # the applicant's own notice (web i18n ako.consent*): a new wording, a new version
 DOCS = ("cv", "diploma", "application", "id", "photo", "med", "fluoro", "work", "extra")
-MAX_FILES = 24              # an application's files: ~9 documents, a few with several pages (ponytail: replacing is
-                            # unlimited within it; a per-day cap on uploads if a link is ever abused)
+MAX_FILES = 24              # an application's files: ~9 documents, a few with several pages
+UPLOADS_A_DAY = 60          # pages one link may upload in a day, replaced ones too (ako_uploads)
+DRAFT_BYTES_A_DAY = 3 << 30  # what one org's drafts may store in a day: junk drafts can't fill the disk (ponytail: a
+                            # flood stops uploads to drafts till tomorrow, sent packages go on; the upgrade is per address)
 FILE_BYTES = 10 * 1024 * 1024
 SIDE = 2400                 # a photographed page is kept at most this long: a diploma's small print stays readable
 STARTS_A_DAY = 20           # drafts one address (an IPv6 /64) may start from the public link in a day
-ORG_STARTS_A_DAY = 300      # and everyone together, for one org: a flood can't bury the real ones
 PDF_PAGES, PDF_SIDE = 15, 1700  # a PDF is rebuilt from its pages' pictures: nothing of the upload but what it shows
-_pdf = threading.BoundedSemaphore(2)  # two PDFs at a time (a child each, up to 1 GB)
+_pdf = threading.BoundedSemaphore(2)  # two PDFs at a time (a child each, up to 1 GB); a third is refused, never
+                                      # waits: a parked thread is one fewer for every route of the app
 BIG = 1 << 53
 CUTOFF = 6 * 3600           # a slot closes for booking this long before it starts
 DRAFT_KEEP = 7 * 86400      # a draft nobody sent, from its last change
@@ -167,9 +169,10 @@ def start(con, slug: str, body: dict, ip: str, key: bytes) -> dict:
     who = hmac.new(key, f"ako-ip:{ip}".encode(), hashlib.sha256).hexdigest()[:24]
     token, digest = new_token()
     t = core.now()
+    # no cap for the org as a whole: a few addresses could shut the link for everyone; a flood's real cost is disk,
+    # and DRAFT_BYTES_A_DAY caps that
     with tx(con):  # the starts' own rows: a draft that is sent or deleted still counts for its day
-        if one(con, "SELECT COUNT(*) FROM ako_starts WHERE ip = ? AND at > ?", who, t - 86400)[0] >= STARTS_A_DAY \
-                or one(con, "SELECT COUNT(*) FROM ako_starts WHERE org_id = ? AND at > ?", o["id"], t - 86400)[0] >= ORG_STARTS_A_DAY:
+        if one(con, "SELECT COUNT(*) FROM ako_starts WHERE ip = ? AND at > ?", who, t - 86400)[0] >= STARTS_A_DAY:
             raise ApiError("rate_limited", "ako_starts")
         con.execute("INSERT INTO ako_starts (org_id, ip, at) VALUES (?, ?, ?)", (o["id"], who, t))
         con.execute("""INSERT INTO ako_apps (org_id, token, program_id, lang, created_at, updated_at)
@@ -249,16 +252,21 @@ def patch(con, token: str, body: dict) -> None:
 def _picture(data: bytes) -> tuple[bytes, str]:
     """A document as kept: a photo upright as a JPEG (no other bytes of the upload survive), or a PDF that opens."""
     if data[:5] == b"%PDF-":  # rebuilt from its pages' pictures (a child with limits): no script, action or attachment survives
-        with _pdf, tempfile.TemporaryDirectory(prefix="ako-pdf-") as out:
-            try:
-                pages = pdfpages.run(data, Path(out), PDF_PAGES, PDF_SIDE, 20, 1 << 30)
-            except ValueError as exc:
-                raise ApiError("bad_input", "too_many_pages" if str(exc) == "too_many_pages" else "bad_file") from None
-            ims = [Image.open(p).convert("RGB") for p in pages]
-            if not ims:
-                raise ApiError("bad_input", "bad_file")
-            buf = io.BytesIO()
-            ims[0].save(buf, "PDF", save_all=True, append_images=ims[1:], resolution=150)
+        if not _pdf.acquire(blocking=False):
+            raise ApiError("rate_limited", "ako_busy")  # the page tries again in a moment
+        try:
+            with tempfile.TemporaryDirectory(prefix="ako-pdf-") as out:
+                try:
+                    pages = pdfpages.run(data, Path(out), PDF_PAGES, PDF_SIDE, 20, 1 << 30)
+                except ValueError as exc:
+                    raise ApiError("bad_input", "too_many_pages" if str(exc) == "too_many_pages" else "bad_file") from None
+                ims = [Image.open(p).convert("RGB") for p in pages]
+                if not ims:
+                    raise ApiError("bad_input", "bad_file")
+                buf = io.BytesIO()
+                ims[0].save(buf, "PDF", save_all=True, append_images=ims[1:], resolution=150)
+        finally:
+            _pdf.release()
         return buf.getvalue(), "application/pdf"
     try:
         im = media.decode(data)
@@ -270,16 +278,28 @@ def _picture(data: bytes) -> tuple[bytes, str]:
     return out.getvalue(), "image/jpeg"
 
 
+def _room(con, a) -> None:
+    """Room for one more page: the package's files, the link's uploads today (replacing counts: ako_uploads keeps a
+    row for each, a deleted file's too), and for a draft its org's bytes from drafts today."""
+    t = core.now() - 86400
+    if one(con, "SELECT COUNT(*) FROM ako_files WHERE app_id = ?", a["id"])[0] >= MAX_FILES:
+        raise ApiError("rate_limited", "ako_files")
+    if one(con, "SELECT COUNT(*) FROM ako_uploads WHERE app_id = ? AND at > ?", a["id"], t)[0] >= UPLOADS_A_DAY:
+        raise ApiError("rate_limited", "ako_uploads")
+    if a["status"] == "draft" and one(con, "SELECT COALESCE(SUM(bytes), 0) FROM ako_uploads WHERE org_id = ? AND draft = 1 AND at > ?",
+                                      a["org_id"], t)[0] >= DRAFT_BYTES_A_DAY:
+        raise ApiError("rate_limited", "ako_uploads")
+
+
 def may_add(con, token: str, doc: str):
-    """Before an upload's body is read: the link, its document, the notice agreed to, room for one more file."""
+    """Before an upload's body is read: the link, its document, the notice agreed to, room for one more page."""
     if doc not in DOCS:
         raise ApiError("bad_input", "doc")
     a = _app(con, token)
     if a["consent"] != CONSENT:
         raise ApiError("forbidden", "ako_consent")
     _editable(a)
-    if one(con, "SELECT COUNT(*) FROM ako_files WHERE app_id = ?", a["id"])[0] >= MAX_FILES:
-        raise ApiError("rate_limited", "ako_files")
+    _room(con, a)
     return a
 
 
@@ -295,10 +315,12 @@ def add_file(con, token: str, doc: str, data: bytes) -> dict:
     try:
         with tx(con):
             a = _app(con, token)
-            if one(con, "SELECT COUNT(*) FROM ako_files WHERE app_id = ?", a["id"])[0] >= MAX_FILES:
-                raise ApiError("rate_limited", "ako_files")
+            _editable(a)
+            _room(con, a)
             fid = con.execute("INSERT INTO ako_files (app_id, doc, path, mime, bytes, created_at) VALUES (?, ?, ?, ?, ?, ?)",
                               (a["id"], doc, rel, mime, len(body), core.now())).lastrowid
+            con.execute("INSERT INTO ako_uploads (org_id, app_id, draft, bytes, at) VALUES (?, ?, ?, ?, ?)",
+                        (a["org_id"], a["id"], int(a["status"] == "draft"), len(body), core.now()))
             con.execute("UPDATE ako_apps SET updated_at = ? WHERE id = ?", (core.now(), a["id"]))
     except BaseException:
         _unlink(root, [rel])
@@ -418,13 +440,21 @@ def _team(con, v: Viewer, oid: int, manage: bool = False) -> None:
         raise ApiError("forbidden")
 
 
-def manages(con, oid: int, role: str, uid: int | None) -> str | None:
+Desks = tuple[set[int], set[int]]  # the orgs taking applications, and those I review for
+
+
+def desks(con, oids, uid: int) -> Desks:
+    """/api/me's admissions for all my memberships in two reads, never one per membership."""
+    oids = list(oids)
+    taking = {r[0] for r in rows(con, f"SELECT DISTINCT org_id FROM ako_programs WHERE org_id IN ({core._qs(oids)})", *oids)} if oids else set()
+    return taking, {r[0] for r in rows(con, "SELECT org_id FROM ako_reviewers WHERE user_id = ?", uid)} if taking else set()
+
+
+def manages(oid: int, role: str, d: Desks) -> str | None:
     """/api/me's membership: "manage" or "review" when the org takes applications and I run or review them."""
-    if not one(con, "SELECT 1 FROM ako_programs WHERE org_id = ? LIMIT 1", oid):
+    if oid not in d[0]:
         return None
-    if at_least(role, "head"):
-        return "manage"
-    return "review" if uid and one(con, "SELECT 1 FROM ako_reviewers WHERE org_id = ? AND user_id = ?", oid, uid) else None
+    return "manage" if at_least(role, "head") else "review" if oid in d[1] else None
 
 
 def _row(a, have: set[str], program: dict | None, slot) -> dict:
@@ -746,6 +776,7 @@ def sweep(con) -> None:
         if ids:
             con.execute(f"DELETE FROM ako_apps WHERE id IN ({core._qs(ids)})", ids)
         con.execute("DELETE FROM ako_starts WHERE at < ?", (t - IP_KEEP,))
+        con.execute("DELETE FROM ako_uploads WHERE at < ?", (t - 86400,))
         # a draft holds a seat a day at most without a change: a seat is for people who send
         con.execute("UPDATE ako_apps SET slot_id = NULL WHERE status = 'draft' AND slot_id IS NOT NULL AND updated_at < ?", (t - 86400,))
         con.execute("""DELETE FROM ako_slots WHERE starts_at < ? AND id NOT IN (SELECT slot_id FROM ako_apps WHERE slot_id IS NOT NULL)""",

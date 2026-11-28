@@ -1,4 +1,4 @@
-// The applicant's own calls (server logic/ako.py): no account and no Telegram. The secret in /ako/<secret> is the
+// The applicant's own calls (server logic/ako.py): no account and no Telegram. The secret in /ako#<secret> is the
 // credential, sent as X-Ako (never in an API path or query: no log or Referer carries it). Only the /ako screen's chunk
 // imports this; the team's calls are in client.ts (api.ako*).
 import { ApiErr } from './errors';

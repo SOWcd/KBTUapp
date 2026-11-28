@@ -12,8 +12,8 @@ import './lib/state/power.svelte'; // power saving's look before the first paint
 import './lib/state/keyboard.svelte'; // the app's box at its height without a keyboard, before the first paint
 
 document.documentElement.lang = i18n.lang;
-// /ako/...: admissions (server logic/ako.py), a page of its own in any browser, never the app's web shell
-const admissions = /^\/ako\//.test(location.pathname);
+// /ako#<secret>, /ako/o/<org>: admissions (server logic/ako.py), a page of its own in any browser, never the app's web shell
+const admissions = /^\/ako(\/|$)/.test(location.pathname);
 if (!inTelegram && !admissions && !/^\/(show|screen)\/?$/.test(location.pathname)) document.documentElement.dataset.web = '';
 // the iPhone app draws the tab bar itself (UITabBar): Nav keeps only its corner button (lib/native.ts 'tabs')
 if (native.has('tabs')) document.documentElement.dataset.ntabs = '';
@@ -48,7 +48,7 @@ void loadLang(i18n.lang).catch(() => {}).then(async () => {
   // checkin.py), the app otherwise (the screen into the body: #app is a phone-wide column on a computer)
   // (its own chunk: the app's first chunk doesn't carry it, nor the QR encoder it draws with)
   // /show?lib=<key>: a library room's seats on its wall (screens/library/LibraryScreen.svelte), its own chunk too
-  // /ako/<secret> or /ako/o/<org>: an applicant's page (no account, no Telegram, no tabs), its own chunk; in Telegram too
+  // /ako#<secret> or /ako/o/<org>: an applicant's page (no account, no Telegram, no tabs), its own chunk; in Telegram too
   if (admissions) bootOut(), mount((await import('./screens/ako/Ako.svelte')).default, { target: document.body });
   else if (/^\/(show|screen)\/?$/.test(location.pathname)) mount((await (new URLSearchParams(location.search).has('lib') ? import('./screens/library/LibraryScreen.svelte') : import('./screens/Screen.svelte'))).default, { target: document.body });
   // the design system's lab (every ui/ component in every state): the dev server only, its own chunk, `?lab` in the URL;

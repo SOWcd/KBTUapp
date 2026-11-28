@@ -8,9 +8,10 @@
   }
   /** The general message for an error (each step maps its own special cases first). */
   export function errKey(e: unknown): AkoKey {
-    const { code } = errOf(e);
-    return code === 'unavailable' ? 'ako.err.network' : code === 'not_found' ? 'ako.err.gone' : code === 'conflict' ? 'ako.err.closed'
-      : code === 'rate_limited' ? 'ako.err.tooMany' : 'ako.err.generic';
+    const { code, msg } = errOf(e);
+    if (code === 'closed') return msg === 'ako_slot_late' ? 'ako.err.late' : msg === 'ako_sent' ? 'ako.err.sent' : 'ako.err.closed';
+    if (code === 'rate_limited') return msg === 'ako_files' ? 'ako.err.tooMany' : msg === 'ako_busy' ? 'ako.err.busy' : 'ako.err.today';
+    return code === 'unavailable' ? 'ako.err.network' : code === 'not_found' ? 'ako.err.gone' : code === 'full' ? 'ako.err.full' : 'ako.err.generic';
   }
 </script>
 
@@ -82,7 +83,7 @@
     el.value = '';
   }
   const forget = (u: Up) => (ups = ups.filter((x) => x.id !== u.id));
-  async function run(u: Up) {
+  async function run(u: Up, tries = 0) {
     u.err = ''; u.p = 0;
     if (u.pdf && u.src.size > view.maxBytes) { u.again = false; u.err = 'ako.err.big'; return; }
     try {
@@ -93,7 +94,13 @@
     } catch (e) {
       const { code, msg } = errOf(e);
       if (code === 'forbidden' && msg.includes('ako_consent')) { forget(u); nudge = true; onchange({ ...view, consent: false }); return; }
-      u.again = code !== 'bad_input' && code !== 'rate_limited';
+      // the server rebuilds two PDFs at a time and refuses a third: a few PDFs picked at once take turns by themselves
+      if (msg === 'ako_busy' && tries < 8) {
+        await new Promise((ok) => setTimeout(ok, 1500 + Math.random() * 2000));
+        if (ups.some((x) => x.id === u.id)) await run(u, tries + 1);  // unless taken back meanwhile
+        return;
+      }
+      u.again = code !== 'bad_input' && (code !== 'rate_limited' || msg === 'ako_busy');
       u.err = code === 'bad_input' ? 'ako.err.file' : errKey(e);
     }
   }

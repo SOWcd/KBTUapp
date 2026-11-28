@@ -143,7 +143,7 @@
     try {
       const { token } = await akoTeam.akoUpdate(org, id, { newLink: true });
       if (!token) throw new Error('no token');
-      link = `${location.origin}/ako/${token}`; haptic.ok();
+      link = `${location.origin}/ako#${token}`; haptic.ok();
     } catch { fail(); }
   }
   async function remove() {

@@ -49,3 +49,14 @@ it('puts a soft hyphen in every long ru and kk word', () => {
     .filter((w) => w.replace(/­/g, '').length >= 15 && !w.includes('­'));
   expect([...words(ru), ...words(kk), ...words(sru), ...words(skk), ...words(aru), ...words(akk)]).toEqual([]);
 });
+
+// Admissions' own consent (server ako.CONSENT 'ako-2') says what the policy's section 17 says: health data (075/u and the
+// fluorography) and the Academic Programs reviewers besides AKO's heads, in every language
+it('names health data and the reviewers in the admissions consent', () => {
+  for (const d of [aru, akk, aen]) {
+    const t = d['ako.consentText'];
+    expect(t).toMatch(/075/);
+    expect(t).toMatch(/флюорограф|fluorograph/i);
+    expect(t).toMatch(/академических программ|академиялық бағдарламалар|Academic Programs/);
+  }
+});

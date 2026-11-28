@@ -385,8 +385,8 @@ def main() -> None:
     for _, tg, first, _ in PEOPLE:
         print(f"{first}: {link(a.port, tg, first)}", flush=True)
     if a.ako:  # the admissions' pages open in any browser, no Telegram: a manager's prefilled link, a sent package, the website's start
-        print(f"AKO link: /ako/{AKO_LINK}", flush=True)
-        print(f"AKO sent: /ako/{AKO_SENT}", flush=True)
+        print(f"AKO link: /ako#{AKO_LINK}", flush=True)
+        print(f"AKO sent: /ako#{AKO_SENT}", flush=True)
         print("AKO start: /ako/o/ako", flush=True)
     env = {**os.environ, "DB_PATH": a.db, "BOT_TOKEN": BOT, "TOKEN_KEY": base64.b64encode(os.urandom(32)).decode(), "BACKGROUND": "0",
            "ADMIN_TG_IDS": os.environ.get("QA_ADMIN_TG_IDS", "1001" if a.big else ""), "WEB_DIST": str(SERVER.parent / "web" / "dist"),

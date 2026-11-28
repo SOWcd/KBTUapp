@@ -42,12 +42,12 @@
     pending = s.id; err = '';
     try { onchange(await ako.book(token, s.id)); }
     catch (e) {
-      const { code, msg, data } = errOf(e);
-      const tag = (t: string) => msg.includes(t) || Object.values(data).includes(t);
-      if (code === 'conflict' && tag('full')) {
+      // the server: 'full' (ako_slot_taken) someone just took it; 'closed' (ako_slot_late, ako_decided) too late or decided
+      const { code, msg } = errOf(e);
+      if (code === 'full') {
         err = 'ako.err.full';
         try { onchange(await ako.view(token)); } catch { /* the old list stays */ }
-      } else if (code === 'conflict') err = decided ? 'ako.err.closed' : 'ako.err.late';
+      } else if (code === 'closed') err = decided || msg === 'ako_decided' ? 'ako.err.closed' : 'ako.err.late';
       else err = errKey(e);
     } finally { pending = null; }
   }

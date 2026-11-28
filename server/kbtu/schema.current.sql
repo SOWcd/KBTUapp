@@ -86,6 +86,13 @@ CREATE TABLE ako_starts (
       ip     TEXT NOT NULL,
       at     INTEGER NOT NULL
     ) STRICT;
+CREATE TABLE ako_uploads (
+      org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
+      app_id INTEGER NOT NULL,
+      draft  INTEGER NOT NULL CHECK (draft IN (0, 1)),
+      bytes  INTEGER NOT NULL,
+      at     INTEGER NOT NULL
+    ) STRICT;
 CREATE TABLE android_app (
       user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
       seen_at INTEGER NOT NULL
@@ -1751,6 +1758,8 @@ CREATE INDEX ako_reviewers_by_user ON ako_reviewers(user_id);
 CREATE INDEX ako_slots_by_time ON ako_slots(org_id, starts_at);
 CREATE INDEX ako_starts_by_ip ON ako_starts(ip, at);
 CREATE INDEX ako_starts_by_org ON ako_starts(org_id, at);
+CREATE INDEX ako_uploads_by_app ON ako_uploads(app_id, at);
+CREATE INDEX ako_uploads_by_org ON ako_uploads(org_id, draft, at);
 CREATE INDEX anon_feedback_by_day ON anon_feedback(day);
 CREATE INDEX appeal_authors_user ON appeal_authors(user_id);
 CREATE INDEX appeal_sends_user ON appeal_sends(user_id, at);

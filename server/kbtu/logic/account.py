@@ -488,12 +488,12 @@ def _channel(c) -> dict | None:
     return {"title": c["title"], "mirror": chatlist.mirrored(c) and c["kind"] == "channel" and bool(mirror.username(c["url"]))} if c else None
 
 
-def _membership(con, m, mains: dict, logos: dict) -> dict:
-    """One of /api/me's memberships (and the creator's lent one, lent_studio)."""
+def _membership(con, m, mains: dict, logos: dict, desks: tuple[set[int], set[int]] | None = None) -> dict:
+    """One of /api/me's memberships (and the creator's lent one, lent_studio: no admissions there, ako._access refuses it)."""
     return {"org": org_ref(con, m, logos), "role": m["role"], **core.titled(m), "rights": _ordered(core.club_rights(m["role"], m["rights"], m)),
             "oversee": bool(m["can_oversee"] and m["role"] != "member"),
-            # admissions (logic/ako.py): the org takes applications; head and up run them, a member reviews
-            **({"ako": a} if (a := ako.manages(con, m["id"], m["role"], m["user_id"] if "user_id" in m.keys() else None)) else {}),
+            # admissions (logic/ako.py): the org takes applications; head and up run them, a named reviewer reads
+            **({"ako": a} if desks and (a := ako.manages(m["id"], m["role"], desks)) else {}),
             **({"channel": _channel(mains.get(m["id"]))} if "profile" in _rights_from(m["role"], m["rights"]) else {}),
             # the composer's locked state (clubs.stories_open): read only for a writer of a student initiative
             **({"storiesLocked": True} if "posts" in _rights_from(m["role"], m["rights"]) and not m["official"]
@@ -566,6 +566,7 @@ def me(con, v: Viewer) -> dict:
     mains = {c["org_id"]: c for c in rows(con, f"SELECT org_id, title, kind, url, mirror, tg_chat_id FROM chats WHERE main = 1 AND org_id IN ({','.join('?' * len(members))})",
                                           *(m["id"] for m in members))} if members else {}
     logos = core._by_id(con, "files", (m["logo_file_id"] for m in members))  # every club's logo in one read, not one per membership
+    desks = ako.desks(con, (m["id"] for m in members), v.id)  # admissions, likewise
     tickets = one(con, """SELECT COUNT(*) FROM registrations r JOIN events e ON e.id = r.event_id
         WHERE r.user_id = ? AND r.status = 'going' AND COALESCE(e.ends_at, e.starts_at + ?) > ?""", v.id, NO_END, core.now())[0]
     name_row = one(con, PERSON + " WHERE u.id = ?", v.id)
@@ -614,7 +615,7 @@ def me(con, v: Viewer) -> dict:
         "bio": u["bio"], "showcase": [x for x in u["showcase"].split(",") if x],
         "settings": {**{k: (u[c] if k in ("lang", "theme") else bool(u[c])) for k, c in SETTINGS.items()}, "suggestMe": pymk.is_on(con, v.id)},
         # oversee: this org is DMP and I lead in it: Studio shows the registry with it picked
-        "memberships": [_membership(con, m, mains, logos) for m in members],
+        "memberships": [_membership(con, m, mains, logos, desks) for m in members],
         # an office's own person before the KBTU sign-in: the app greets them as the team once (web App teamHi); no rights in it
         # (DMP's own hello already left on another phone: not again as the office's)
         "office": org_ref(con, o) if not s and (o := one(con, """SELECT o.* FROM org_members m JOIN orgs o ON o.id = m.org_id

@@ -89,9 +89,23 @@ def test_public_link_makes_a_draft_only_on_a_post(env, monkeypatch):
     # a sent or deleted draft still counts for its day
     con.execute("DELETE FROM ako_apps")
     assert c.post("/api/ako/o/ako", json={"program": "dba"}).status_code == 429
-    monkeypatch.setattr(ako, "STARTS_A_DAY", 99)
-    monkeypatch.setattr(ako, "ORG_STARTS_A_DAY", 2)  # two started today (the refused one made none)
-    assert c.post("/api/ako/o/ako", json={"program": "dba"}).status_code == 429
+    # no cap for the org as a whole: other addresses still start (a few addresses can't shut the link for everyone)
+    for n in range(3):
+        r = c.post("/api/ako/o/ako", json={"program": "dba"}, headers={"CF-Connecting-IP": f"203.0.113.{n + 1}"})
+        assert r.status_code == 200, r.text
+    assert not hasattr(ako, "ORG_STARTS_A_DAY")
+
+
+def test_the_secret_rides_in_the_fragment(env, monkeypatch):
+    """/ako#<secret>: a browser never sends a fragment, so the page's own request (and every log of it) has no secret."""
+    c, cfg, con, oid, t0 = _setup(env, monkeypatch)
+    r = c.get("/ako")
+    assert r.status_code == 200 and '<base href="/">' in r.text and r.headers["referrer-policy"] == "no-referrer"
+    web = Path(__file__).resolve().parents[2] / "web" / "src"
+    for f in ("screens/club/AkoNewSheet.svelte", "screens/club/AkoAppSheet.svelte"):
+        src = (web / f).read_text(encoding="utf-8")
+        assert "/ako#${token}" in src and "/ako/${token}" not in src, f
+    assert "location.hash" in (web / "screens/ako/Ako.svelte").read_text(encoding="utf-8")
 
 
 def test_the_link_is_the_credential(env, monkeypatch):
@@ -128,6 +142,81 @@ def test_the_link_is_the_credential(env, monkeypatch):
     assert c.post("/api/ako/a/files?doc=cv", headers={"X-Ako": tok}, content=_jpeg()).status_code == 200
     assert c.post("/api/ako/a/files?doc=cv", headers={"X-Ako": tok}, content=_jpeg()).status_code == 429
     assert len(list((Path(cfg.db_path).parent / "ako").rglob("*.*"))) == 2  # the refused one left nothing
+    assert con.execute("SELECT consent FROM ako_apps").fetchone()[0] == ako.CONSENT == "ako-2"  # the notice naming health data and reviewers
+
+
+def test_uploads_are_capped_a_day(env, monkeypatch):
+    """Replacing a page counts (upload, delete, upload), and one org's drafts store at most so many bytes a day."""
+    c, cfg, con, oid, t0 = _setup(env, monkeypatch)
+    tok = _new(c, oid)
+    h = {"X-Ako": tok}
+    c.patch("/api/ako/a", headers=h, json={"consent": True})
+    monkeypatch.setattr(ako, "UPLOADS_A_DAY", 3)
+    for _ in range(3):
+        f = c.post("/api/ako/a/files?doc=cv", headers=h, content=_jpeg(300, 400))
+        assert f.status_code == 200
+        assert c.delete(f"/api/ako/a/files/{f.json()['id']}", headers=h).status_code == 204
+    r = c.post("/api/ako/a/files?doc=cv", headers=h, content=_jpeg(300, 400))
+    assert r.status_code == 429 and r.json()["message"] == "ako_uploads"
+    set_clock(monkeypatch, lambda: t0 + 86401)  # a day on: room again, and the night sweeps the old rows
+    assert c.post("/api/ako/a/files?doc=cv", headers=h, content=_jpeg(300, 400)).status_code == 200
+    ako.sweep(con)
+    assert con.execute("SELECT COUNT(*) FROM ako_uploads").fetchone()[0] == 1
+    # the org's drafts, together: another draft is refused once today's bytes are spent; a sent package is not
+    monkeypatch.setattr(ako, "UPLOADS_A_DAY", 99)
+    monkeypatch.setattr(ako, "DRAFT_BYTES_A_DAY", con.execute("SELECT SUM(bytes) FROM ako_uploads").fetchone()[0])
+    other = _new(c, oid, name="Gulnara A")
+    c.patch("/api/ako/a", headers={"X-Ako": other}, json={"consent": True})
+    r = c.post("/api/ako/a/files?doc=cv", headers={"X-Ako": other}, content=_jpeg(300, 400))
+    assert r.status_code == 429 and r.json()["message"] == "ako_uploads"
+    con.execute("UPDATE ako_apps SET status = 'sent', sent_at = ? WHERE token = ?", (t0, hashlib.sha256(other.encode()).digest()))
+    assert c.post("/api/ako/a/files?doc=med", headers={"X-Ako": other}, content=_jpeg(300, 400)).status_code == 200
+
+
+def test_a_third_pdf_at_once_is_refused_not_parked(env, monkeypatch):
+    """Two PDFs rebuild at a time; a third gets 429 ako_busy at once instead of holding a thread every route shares."""
+    c, cfg, con, oid, t0 = _setup(env, monkeypatch)
+    tok = _new(c, oid)
+    c.patch("/api/ako/a", headers={"X-Ako": tok}, json={"consent": True})
+    assert ako._pdf.acquire(blocking=False) and ako._pdf.acquire(blocking=False)
+    try:
+        r = c.post("/api/ako/a/files?doc=diploma", headers={"X-Ako": tok}, content=_pdf())
+        assert r.status_code == 429 and r.json()["message"] == "ako_busy"
+        assert c.post("/api/ako/a/files?doc=cv", headers={"X-Ako": tok}, content=_jpeg()).status_code == 200  # photos never wait
+    finally:
+        ako._pdf.release()
+        ako._pdf.release()
+    assert c.post("/api/ako/a/files?doc=diploma", headers={"X-Ako": tok}, content=_pdf()).status_code == 200
+
+
+def test_me_reads_admissions_once_for_all_memberships(env, monkeypatch):
+    """/api/me: two reads of the admissions' tables however many memberships, never one or two per membership."""
+    from kbtu import logic
+    from kbtu.logic.core import Viewer
+    c, cfg, con, oid, t0 = _setup(env, monkeypatch)
+    uid = con.execute("SELECT user_id FROM org_members WHERE org_id = ? AND role = 'head'", (oid,)).fetchone()[0]
+    with db.tx(con):
+        for n in range(3):
+            o = con.execute("""INSERT INTO orgs (slug, kind, name, short, emoji, official, created_at)
+                VALUES (?, 'office', 'X', 'X', 'briefcase_3d', 1, ?)""", (f"x{n}", t0)).lastrowid
+            con.execute("INSERT INTO org_members (org_id, user_id, role, joined_at) VALUES (?, ?, 'head', ?)", (o, uid, t0))
+    seen: list[str] = []
+    con.set_trace_callback(lambda q: seen.append(q) if "ako_" in q else None)
+    me = logic.account.me(con, Viewer(id=uid, role="user", student=True))
+    con.set_trace_callback(None)
+    assert len(seen) == 2, seen
+    assert {m["org"]["id"]: m.get("ako") for m in me["memberships"]}[oid] == "manage" and sum("ako" in m for m in me["memberships"]) == 1
+
+
+def test_the_creators_lent_studio_shows_no_admissions(env):
+    """X-Staff-Org lends a President's Studio, but ako._access refuses it (health data): no Admissions row that 403s."""
+    from test_admin_create_event import _org
+    from test_admin_full import _full_setup
+    c, con, ids = _full_setup(env)
+    ako.seed(con, 1)
+    lent = c.get("/api/orgs/1/lent", headers=_org(60)).json()["membership"]
+    assert "ako" not in lent
+    assert c.get("/api/orgs/1/ako", headers=_org(60)).status_code == 403
 
 
 def test_documents_reach_the_team_alone(env, monkeypatch):

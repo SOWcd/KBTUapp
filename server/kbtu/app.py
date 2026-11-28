@@ -3659,15 +3659,17 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
 </style></head><body><main><nav><a href="{other}?lang={lang}">{LEGAL_NAMES[other][lang]}</a><span>{langs}</span></nav>{body}</main></body></html>"""
         return Response(html, media_type="text/html", headers={"Cache-Control": "no-cache"})
 
-    # admissions (logic/ako.py). The applicant has no account: the secret in /ako/<secret> is the credential, sent by the
-    # page as X-Ako (never in an API path or a query, so no log or Referer carries it); the page itself never leaks its
-    # address (no-referrer) nor is kept or indexed. A GET changes nothing (WhatsApp previews fetch links).
+    # admissions (logic/ako.py). The applicant has no account: the secret in /ako#<secret> is the credential. A fragment
+    # never leaves the browser, so no access log (ours, Cloudflare's) holds it; the page sends it as X-Ako (never in an
+    # API path or a query); the page itself never leaks its address (no-referrer) nor is kept or indexed. A GET changes
+    # nothing (WhatsApp previews fetch links).
     def ako_token(request: Request) -> str:
         return request.headers.get("x-ako", "")
 
+    @app.get("/ako", include_in_schema=False)
     @app.get("/ako/{rest:path}", include_in_schema=False)
-    def ako_page(rest: str):
-        # the build's links are relative (./assets/...): from /ako/<secret> they'd resolve under /ako/, so the page says
+    def ako_page(rest: str = ""):
+        # the build's links are relative (./assets/...): from /ako/o/<org> they'd resolve under /ako/, so the page says
         # where it lives
         html = (dist / "index.html").read_text(encoding="utf-8").replace("<head>", '<head><base href="/">', 1)
         return Response(html, media_type="text/html", headers={"Cache-Control": "no-store", "Referrer-Policy": "no-referrer",

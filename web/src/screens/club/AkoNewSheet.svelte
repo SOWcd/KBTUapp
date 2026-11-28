@@ -34,7 +34,7 @@
   }
   const tag = (e: unknown) => (e instanceof ApiErr ? [e.message, (e as { field?: string }).field, (e as { detail?: string }).detail].join(' ') : '');
 
-  const link = $derived(`${location.origin}/ako/${token}`);
+  const link = $derived(`${location.origin}/ako#${token}`);  // the secret in the fragment: no server log holds it
   const picked = $derived(desk.programs.find((p) => p.key === program));
 
   async function make() {

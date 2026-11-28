@@ -1061,7 +1061,7 @@ export type AkoStatus = 'draft' | 'sent' | 'review' | 'accepted' | 'declined';
 export interface AkoOrg { slug: string; name: Partial<Record<'ru' | 'kk' | 'en', string>> & { ru: string } }
 /** the public start link (/ako/o/<slug>): nothing made until a program is picked */
 export interface AkoStart { org: AkoOrg; programs: AkoProgram[] }
-/** the applicant's page (/ako/<secret>): files by name only, never their contents; slots: the times free to book */
+/** the applicant's page (/ako#<secret>): files by name only, never their contents; slots: the times free to book */
 export interface AkoView extends AkoStart {
   program: string | null; name: string; phone: string; email: string; lang: 'ru' | 'kk' | 'en'; status: AkoStatus;
   consent: boolean; sentAt: Ts | null; rebook: string | null; files: AkoFile[];

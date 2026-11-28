@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The applicant's page (/ako/<secret>, /ako/o/<slug>): its own root outside the app's shell. Header, the wizard's
+  // The applicant's page (/ako#<secret>, /ako/o/<slug>): its own root outside the app's shell. Header, the wizard's
   // frame (progress, slide, sticky main button), the program step; the other steps and the status page are components.
   // Shared looks live here under :global(.ako .a-*) (see "Design language").
   import ChevronLeft from '@lucide/svelte/icons/chevron-left';
@@ -24,10 +24,13 @@
   type Step = 'program' | 'docs' | 'slot' | 'send';
   const LANGS: [Lang, AkoKey][] = [['ru', 'ako.lang.ru'], ['kk', 'ako.lang.kk'], ['en', 'ako.lang.en']];
 
+  // the secret rides in the fragment (/ako#<secret>): a browser never sends it, so no server or proxy log holds it
   const path = location.pathname;
   const pub = /^\/ako\/o\/([^/]+)\/?$/.exec(path);
   const slug = pub ? decodeURIComponent(pub[1]) : '';
-  let token = $state(pub ? '' : (/^\/ako\/([A-Za-z0-9_-]{43})\/?$/.exec(path)?.[1] ?? ''));
+  let token = $state(pub ? '' : (/^#([A-Za-z0-9_-]{43})$/.exec(location.hash)?.[1] ?? ''));
+  // another link pasted into this tab changes only the fragment: the page starts over with it
+  addEventListener('hashchange', () => location.reload());
 
   let phase = $state<'loading' | 'gone' | 'offline' | 'ready'>('loading');
   let start = $state<AkoStart | null>(null);
@@ -86,7 +89,7 @@
       try {
         if (!token) {
           const r = await ako.begin(slug, pick, i18n.lang);
-          token = r.token; history.replaceState(null, '', '/ako/' + token);
+          token = r.token; history.replaceState(null, '', '/ako#' + token);
           await open();
         } else if (view && pick !== view.program) { await ako.patch(token, { program: pick }); view = await ako.view(token); }
         go('docs', 1);
