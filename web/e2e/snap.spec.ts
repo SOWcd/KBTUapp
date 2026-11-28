@@ -75,26 +75,31 @@ const POSTER = {
     <text x="60" y="900" font-family="sans-serif" font-weight="800" font-size="210" fill="#111">GAMES</text><text x="64" y="1060" font-family="sans-serif" font-weight="800" font-size="150" fill="#111">NIGHT</text>
     <text x="68" y="1130" font-family="sans-serif" font-weight="600" font-size="40" letter-spacing="8" fill="#555">BOARD GAMES · ROOM 305</text></svg>`,
 };
-for (const [name, svg] of Object.entries(POSTER)) test(`Afisha, the hero over a poster (${name})`, async ({ open }) => {
-  const p = await open('Ali');
+/** every event wears the drawn poster `name` */
+async function covered(p: Phone, name: keyof typeof POSTER) {
   const cover = { url: `fx/${name}.svg`, thumb: `fx/${name}.svg`, w: 900, h: 1200, blur: '', color: name === 'cover' ? '#c2185b' : '#f4f1e6' };
-  await p.page.route((u) => u.pathname.endsWith(`/fx/${name}.svg`), (route) => route.fulfill({ contentType: 'image/svg+xml', body: svg }));
+  await p.page.route((u) => u.pathname.endsWith(`/fx/${name}.svg`), (route) => route.fulfill({ contentType: 'image/svg+xml', body: POSTER[name] }));
   await p.page.route((u) => u.pathname === '/api/events', async (route) => {
     const r = await route.fetch();
     await route.fulfill({ response: r, json: ((await r.json()) as object[]).map((e) => ({ ...e, cover })) });
   });
   await p.page.reload();
-  await settled(p);
-  await shot(p, `afisha-${name}`); // the whole first screen: the card among the circles and the list
+  return settled(p);
+}
+for (const name of ['cover', 'cover-bright'] as const) test(`Afisha, the hero over a poster (${name})`, async ({ open }) => {
+  await shot(await covered(await open('Ali'), name), `afisha-${name}`); // the whole first screen: the card among the circles and the list
 });
 
-test('an event', async ({ open }) => {
-  const p = await ali(open);
+/** the Open Mic's sheet, alone: the Afisha under it scrolls to the card the tap found */
+async function eventSheet(p: Phone, name: string) {
   await p.page.getByRole('button', { name: 'Open Mic: stand-up and music', exact: true }).first().click();
   const sheet = p.page.getByRole('dialog').filter({ hasText: 'Atrium' });
   await expect(sheet).toBeVisible();
-  await shot(p, 'event', sheet); // the sheet alone: the Afisha under it scrolls to the card the tap found
-});
+  await shot(p, name, sheet);
+}
+test('an event', async ({ open }) => eventSheet(await ali(open), 'event'));
+// its words lie on the picture: over a dark poster and a near-white one
+for (const name of ['cover', 'cover-bright'] as const) test(`an event over a poster (${name})`, async ({ open }) => eventSheet(await covered(await open('Ali'), name), `event-${name}`));
 
 test('Clubs', async ({ open }) => {
   const p = await ali(open);
