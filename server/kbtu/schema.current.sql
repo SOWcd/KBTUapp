@@ -33,7 +33,11 @@ CREATE TABLE ako_apps (
       created_at   INTEGER NOT NULL,
       updated_at   INTEGER NOT NULL,
       sent_at      INTEGER
-    , tg_chat INTEGER) STRICT;
+    ) STRICT;
+CREATE TABLE ako_chats (  -- IF NOT EXISTS: tests rewind user_version
+      app_id INTEGER PRIMARY KEY REFERENCES ako_apps(id) ON DELETE CASCADE,
+      chat   INTEGER NOT NULL                         -- the applicant's private chat with the bot
+    ) STRICT;
 CREATE TABLE ako_days (
       org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
       day    TEXT NOT NULL,                         -- YYYY-MM-DD in Almaty

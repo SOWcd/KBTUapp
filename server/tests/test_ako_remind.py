@@ -33,6 +33,11 @@ def _aid(con, tok) -> int:
     return con.execute("SELECT id FROM ako_apps WHERE token = ?", (ako._digest(tok),)).fetchone()[0]
 
 
+def _chat(con, aid: int) -> int | None:
+    r = con.execute("SELECT chat FROM ako_chats WHERE app_id = ?", (aid,)).fetchone()
+    return r[0] if r else None
+
+
 def _start(con, cfg, payload: str, chat: int = CHAT) -> dict | None:
     return bot_dm._welcome(con, cfg, {"chat": {"id": chat, "type": "private"}, "date": logic.now(), "text": f"/start {payload}",
                                       "from": {"id": chat, "language_code": "en"}})
@@ -94,17 +99,17 @@ def test_the_bot_link_binds_one_chat(env, monkeypatch):
     assert payload.startswith(f"ako_{aid}_") and len(payload) <= 64
     reply = _start(con, cfg, payload)
     assert reply["text"].startswith("🔔") and "reply_markup" not in reply
-    assert con.execute("SELECT tg_chat FROM ako_apps WHERE id = ?", (aid,)).fetchone()[0] == CHAT
+    assert _chat(con, aid) == CHAT
     assert c.get("/api/ako/a", headers={"X-Ako": tok}).json()["remind"]["linked"] is True
     assert _start(con, cfg, payload)["text"].startswith("🔔")  # the same chat again: fine
     # a forwarded link takes nothing over; a forged one binds nothing
     assert _start(con, cfg, payload, chat=502)["text"].startswith("⏳")
     assert _start(con, cfg, forged, chat=503)["text"].startswith("⏳")
     assert _start(con, cfg, f"ako_{10 ** 20}_x", chat=503)["text"].startswith("⏳")
-    assert con.execute("SELECT tg_chat FROM ako_apps WHERE id = ?", (aid,)).fetchone()[0] == CHAT
+    assert _chat(con, aid) == CHAT
     # a new link frees the chat and stops the old payload
     c.patch(f"/api/orgs/{oid}/ako/apps/{aid}", headers=tma(HEAD), json={"newLink": True})
-    assert con.execute("SELECT tg_chat FROM ako_apps WHERE id = ?", (aid,)).fetchone()[0] is None
+    assert _chat(con, aid) is None
     assert _start(con, cfg, payload)["text"].startswith("⏳")
     # a decided package binds nothing
     tok2, _ = _sent(c, oid, t0, slot_index=1)
@@ -137,7 +142,7 @@ def test_reminders_go_once_in_their_windows(env, monkeypatch):
     # a day after the interview the chat and the marks go
     set_clock(monkeypatch, lambda: at + 2 * 86400)
     ako.sweep(con)
-    assert con.execute("SELECT tg_chat FROM ako_apps WHERE id = ?", (_aid(con, tok),)).fetchone()[0] is None
+    assert _chat(con, _aid(con, tok)) is None
     assert con.execute("SELECT COUNT(*) FROM ako_sends").fetchone()[0] == 0
 
 
@@ -162,7 +167,7 @@ def test_no_stale_reminder_for_a_moved_taken_or_decided_time(env, monkeypatch):
     _tick(cfg, con, monkeypatch, later["at"] - 600, telegram=tg)
     assert len(tg.got) == 1
     ako.sweep(con)
-    assert con.execute("SELECT tg_chat FROM ako_apps WHERE id = ?", (aid,)).fetchone()[0] is None
+    assert _chat(con, aid) is None
 
 
 def test_a_failed_send_retries_and_a_blocked_chat_is_forgotten(env, monkeypatch):
@@ -176,7 +181,7 @@ def test_a_failed_send_retries_and_a_blocked_chat_is_forgotten(env, monkeypatch)
     _tick(cfg, con, monkeypatch, at - 23 * 3600 + 60, telegram=_Log("blocked"))
     row = con.execute("SELECT sent_at, error FROM ako_sends").fetchone()
     assert row["sent_at"] is None and row["error"] == "blocked"
-    assert con.execute("SELECT tg_chat FROM ako_apps WHERE id = ?", (aid,)).fetchone()[0] is None
+    assert _chat(con, aid) is None
 
 
 def test_the_telegram_channel_sends_the_template(env, monkeypatch):

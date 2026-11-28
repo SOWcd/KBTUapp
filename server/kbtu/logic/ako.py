@@ -210,7 +210,7 @@ def view(con, token: str) -> dict:
             "files": [{"id": f["id"], "doc": f["doc"], "mime": f["mime"], "bytes": f["bytes"], "at": f["created_at"]} for f in files],
             "slot": {"id": slot["id"], "at": slot["starts_at"], "minutes": slot["minutes"], "teams": _teams(con, a["org_id"], slot)} if slot else None,
             "slots": _free(con, a) if interview and a["status"] in ("draft", "sent", "review") else [],
-            "maxFiles": MAX_FILES, "maxBytes": FILE_BYTES, "remind": _reach(a, slot)}
+            "maxFiles": MAX_FILES, "maxBytes": FILE_BYTES, "remind": _reach(con, a, slot)}
 
 
 def _free(con, a) -> list[dict]:
@@ -467,12 +467,12 @@ def _mac(what: str, a) -> str:
     return base64.urlsafe_b64encode(d).rstrip(b"=").decode()
 
 
-def _reach(a, slot) -> dict:
+def _reach(con, a, slot) -> dict:
     """view()'s ways to be reminded: the invite in one tap (a plain GET a phone hands to its calendar, no header to
     send), the bot's link (only while AKO_REMIND is on), and whether a chat already gets them."""
     return {"ics": f"/api/ako/ics/{a['id']}?s={_mac('ics', a)}" if slot else None,
             "telegram": f"https://t.me/{BOT}?start=ako_{a['id']}_{_mac('tg', a)}" if BOT else None,
-            "linked": a["tg_chat"] is not None}
+            "linked": bool(one(con, "SELECT 1 FROM ako_chats WHERE app_id = ?", a["id"]))}
 
 
 def signed_ics(con, aid: int, s: object) -> str:
@@ -491,10 +491,12 @@ def bind(con, payload: str, chat: int) -> str | None:
         return None
     with tx(con):
         a = one(con, "SELECT * FROM ako_apps WHERE id = ?", int(aid))
-        if not a or not mac.isascii() or not hmac.compare_digest(mac, _mac("tg", a)) or a["status"] in ("accepted", "declined") \
-                or a["tg_chat"] not in (None, chat):
+        if not a or not mac.isascii() or not hmac.compare_digest(mac, _mac("tg", a)) or a["status"] in ("accepted", "declined"):
             return None
-        con.execute("UPDATE ako_apps SET tg_chat = ? WHERE id = ?", (chat, a["id"]))
+        cur = one(con, "SELECT chat FROM ako_chats WHERE app_id = ?", a["id"])
+        if cur and cur[0] != chat:
+            return None
+        con.execute("INSERT OR IGNORE INTO ako_chats (app_id, chat) VALUES (?, ?)", (a["id"], chat))
     return a["lang"]
 
 
@@ -512,9 +514,9 @@ def due(con, mail: bool) -> list[dict]:
     t = core.now()
     out: list[dict] = []
     with tx(con):
-        for a in rows(con, """SELECT a.*, s.starts_at, s.teams FROM ako_apps a JOIN ako_slots s ON s.id = a.slot_id
-                WHERE a.status IN ('sent', 'review') AND s.starts_at > ?
-                  AND ((? AND a.email != '') OR (a.tg_chat IS NOT NULL AND s.starts_at <= ?))""", t, mail, t + D1[0]):
+        for a in rows(con, """SELECT a.*, s.starts_at, s.teams, c.chat AS tg_chat FROM ako_apps a JOIN ako_slots s ON s.id = a.slot_id
+                LEFT JOIN ako_chats c ON c.app_id = a.id WHERE a.status IN ('sent', 'review') AND s.starts_at > ?
+                  AND ((? AND a.email != '') OR (c.chat IS NOT NULL AND s.starts_at <= ?))""", t, mail, t + D1[0]):
             left = a["starts_at"] - t
             kinds = [k for k, (hi, lo) in (("d1", D1), ("h1", H1)) if lo < left <= hi]
             sends = [(k, "telegram") for k in kinds if a["tg_chat"] is not None]
@@ -532,7 +534,7 @@ def due(con, mail: bool) -> list[dict]:
                 out.append({"app": a["id"], "kind": kind, "channel": channel, "at": a["starts_at"], "lang": a["lang"],
                             "org": org.get(a["lang"]) or org["ru"],
                             "to": a["tg_chat"] if channel == "telegram" else a["email"], "program": program, "teams": teams,
-                            "ics": _invite(con, a) if channel == "email" else None})
+                            "ics": _invite(con, a) if kind == "booked" else None})
     return out
 
 
@@ -547,7 +549,7 @@ def sent(con, m: dict, error: str | None) -> None:
         con.execute("UPDATE ako_sends SET sent_at = ?, error = ? WHERE app_id = ? AND kind = ? AND channel = ? AND slot_at = ?",
                     (None if error else core.now(), error, *key))
         if error == "blocked":
-            con.execute("UPDATE ako_apps SET tg_chat = NULL WHERE id = ? AND tg_chat = ?", (m["app"], m["to"]))
+            con.execute("DELETE FROM ako_chats WHERE app_id = ? AND chat = ?", (m["app"], m["to"]))
 
 
 def preview(kind: str, lang: str) -> tuple[str, str | None, str | list]:
@@ -776,7 +778,8 @@ def update_app(con, v: Viewer, oid: int, aid: int, body: dict) -> dict:
                 con.execute("UPDATE ako_apps SET slot_id = ?, rebook = NULL, updated_at = ? WHERE id = ?", (s["id"], core.now(), aid))
         if body.get("newLink") is True:
             token, digest = new_token()
-            con.execute("UPDATE ako_apps SET token = ?, tg_chat = NULL WHERE id = ?", (digest, aid))  # the reminders' chat too
+            con.execute("UPDATE ako_apps SET token = ? WHERE id = ?", (digest, aid))
+            con.execute("DELETE FROM ako_chats WHERE app_id = ?", (aid,))  # the reminders' chat too
             out["token"] = token
         core.log_action(con, v.id, "ako_update", f"ako:{aid}", json.dumps({k: body[k] for k in ("status", "slot", "program") if k in body}))
     return out
@@ -921,7 +924,7 @@ def sweep(con) -> None:
         con.execute("""DELETE FROM ako_slots WHERE starts_at < ? AND id NOT IN (SELECT slot_id FROM ako_apps WHERE slot_id IS NOT NULL)""",
                     (t - 30 * 86400,))
         # the reminders' chat once there is nothing to remind of: decided, or a day after the interview
-        con.execute("""UPDATE ako_apps SET tg_chat = NULL WHERE tg_chat IS NOT NULL AND (status IN ('accepted', 'declined')
+        con.execute("""DELETE FROM ako_chats WHERE app_id IN (SELECT id FROM ako_apps WHERE status IN ('accepted', 'declined')
             OR slot_id IN (SELECT id FROM ako_slots WHERE starts_at < ?))""", (t - 86400,))
         con.execute("DELETE FROM ako_sends WHERE slot_at < ?", (t - 86400,))  # by the interview's time: a mark gone early sends again
     _unlink(root_of(con), paths)
