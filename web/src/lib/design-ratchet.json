@@ -150,14 +150,30 @@
   "rawColor": 1
  },
  "screens/map/CampusMap.svelte": {
-  "font": 11,
-  "radius": 14,
-  "hex": 37,
-  "mix": 2,
-  "weight": 7,
+  "font": 0,
+  "radius": 0,
+  "hex": 4,
+  "mix": 0,
+  "weight": 0,
   "legacy": 0,
-  "backdrop": 2,
-  "rawColor": 41
+  "rawColor": 8
+ },
+ "screens/map/MapDock.svelte": {
+  "font": 2,
+  "radius": 1,
+  "hex": 0,
+  "mix": 0,
+  "weight": 1,
+  "legacy": 0
+ },
+ "screens/map/MapMarks.svelte": {
+  "font": 3,
+  "radius": 4,
+  "hex": 10,
+  "mix": 0,
+  "weight": 2,
+  "legacy": 0,
+  "rawColor": 17
  },
  "screens/map/MapPad.svelte": {
   "font": 13,
@@ -168,6 +184,25 @@
   "legacy": 0,
   "rawColor": 21
  },
+ "screens/map/MapTopRow.svelte": {
+  "font": 2,
+  "radius": 5,
+  "hex": 4,
+  "mix": 0,
+  "weight": 2,
+  "legacy": 0,
+  "backdrop": 2,
+  "rawColor": 10
+ },
+ "screens/map/RoomCard.svelte": {
+  "font": 4,
+  "radius": 4,
+  "hex": 5,
+  "mix": 0,
+  "weight": 2,
+  "legacy": 0,
+  "rawColor": 5
+ },
  "screens/map/RouteUI.svelte": {
   "font": 11,
   "radius": 10,
@@ -177,6 +212,9 @@
   "legacy": 0,
   "backdrop": 4,
   "rawColor": 40
+ },
+ "screens/map/mapLayers.ts": {
+  "rawColor": 1
  },
  "screens/profile/AddFriend.svelte": {
   "font": 0,

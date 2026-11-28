@@ -18,7 +18,6 @@
   import Zap from '@lucide/svelte/icons/zap';
   import ArrowUpDown from '@lucide/svelte/icons/arrow-up-down';
   import Shuffle from '@lucide/svelte/icons/shuffle';
-  import DoorOpen from '@lucide/svelte/icons/door-open';
   import Pencil from '@lucide/svelte/icons/pencil';
   import { t } from '../../lib/i18n/index.svelte';
   import { haptic } from '../../lib/tg';
@@ -28,6 +27,7 @@
   import { attach, routes, openAt, showsOpen, examOnly, liftRush, RUSH_WAIT, type Mode } from '../../lib/route';
   import { glass, refract, jelly } from '../../ui/glass';
   import MapPad, { placeGroups, exitTiles, doorHint, adminNote, type PadCheck } from './MapPad.svelte';
+  import { floorName, doorNamed } from './mapFind';
 
   let { rt, cur, ar, rooms, to = null, out = false, go, pick, onclose }: {
     rt: RouteView; cur: number; ar: number; rooms: Record<string, number[][]>[]; to?: string | null; out?: boolean;
@@ -48,7 +48,7 @@
   let cand = $state<{ text: string; pin: Pt | null } | null>(null);
   const spotName = (k: string) => t(`route.spot.${k}` as 'route.spot.canteen');
   /** an entrance by its name on the graph: a start too (A16: people come in from Tole bi, Kazybek bi, Panfilov) */
-  const exitNamed = (text: string) => rt.graph?.n.find((n) => n.k === 'x' && n.name === text) ?? null;
+  const exitNamed = (text: string) => doorNamed(rt.graph, text);
   const exits = $derived(exitTiles(rt.graph));
   /** a picked entrance that won't open now: said by its name, the way still goes */
   const shut = (text: string) => { const n = exitNamed(text); return !n ? (adminZone(roomOf(text) ?? spotOf(text)?.room) ? t('route.admin') : '') : n.e ? t('pad.evac') : showsOpen(n, new Date()) ? '' : t(examOnly(n, new Date()) ? 'pad.exam' : 'pad.closed'); };
@@ -106,7 +106,6 @@
   /** the step card's X: back to the ways, A kept (looked at the fast one, wants the lift); the exit has one way */
   function toWays() { if (leaving) return stop(); haptic.tap(); chosen = null; rt.route = null; rt.ends = undefined; }
   const hours = (x: MapNode): string => { const d = new Date(), h = x.h?.[d.getDay() === 0 ? 2 : d.getDay() === 6 ? 1 : 0]; return h ? h.split('-')[1] : ''; };
-  function floorName(n: number) { return n ? t('route.floor', { n }) : t('route.basement'); }
   /** a step in words: walk past the named points to the stairs or lift and go up or down, or arrive */
   function words(i: number): string {
     const route = rt.route!, leg = route.legs[i], last = i === route.legs.length - 1;
