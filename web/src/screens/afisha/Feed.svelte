@@ -214,7 +214,7 @@
   .ring { touch-action: none; width: 58px; height: 58px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(20, 22, 32, 0.42); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16); transition: transform var(--t-fast) var(--ease), background-color var(--t-base) var(--ease), color var(--t-base); }
   .ring.sm { width: 48px; height: 48px; }
   .act:active .ring { transform: scale(0.9); }
-  .go .ring { background: var(--accent); box-shadow: 0 10px 26px -8px rgba(59, 107, 255, 0.9); }
+  .go .ring { background: var(--accent); box-shadow: 0 10px 26px -10px rgba(0, 0, 0, 0.5); }
   .go.on .ring { background: var(--on-accent); color: var(--accent); }
   .go.wait .ring { background: rgba(20, 22, 32, 0.42); }
   .go.busy .ring { transform: scale(0.9); animation: busy 0.9s var(--ease) infinite alternate; } /* waits for the server: pressed */

@@ -14,6 +14,17 @@
      club's name in their sheet, big numbers in stat tiles, menu-like rows (Settings, the admin hub, pickers: data rows
      stay at --fs-body), the tab bar's labels. Weights: 450, 600, 700 (titles), 800 (big numbers). The classes: base.css .fs-* */
   --fs-t1: 28px; --fs-t3: 20px; --fs-row: 17px; --fs-tab: 10.5px;
+  /* composite type: one token is the whole voice (weight, size, line height, face), `font: var(--type-body)`; its
+     tracking is the --track-* beside it. Three weights: 450 text, 600 labels, 700 titles. base.css .fs-* are these. */
+  --type-title: 700 var(--fs-t1)/1.1 var(--font-display); --track-title: -0.022em;      /* a person's or a club's name in their sheet */
+  --type-section: 700 var(--fs-sec)/1.18 var(--font-display); --track-section: -0.018em; /* a sheet's heading */
+  --type-heading: 700 var(--fs-t3)/1.2 var(--font-display); --track-heading: -0.016em;   /* a section's or a group's head */
+  --type-row: 450 var(--fs-row)/1.25 var(--font-text); --track-row: -0.012em;            /* menu-like rows, big buttons */
+  --type-body: 450 var(--fs-body)/1.35 var(--font-text); --track-body: -0.008em;
+  --type-sub: 450 var(--fs-sub)/1.35 var(--font-text);
+  --type-label: 600 var(--fs-sub)/1 var(--font-text);                                    /* chips, small buttons, segmented */
+  --type-cap: 600 var(--fs-cap)/1.25 var(--font-text);
+  --type-micro: 600 var(--fs-micro)/1.2 var(--font-text);
 
   /* spacing: 4-pt grid; 22 between list groups (Settings), 28 between a screen's sections */
   --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 20px; --s-6: 24px; --s-7: 28px; --s-8: 32px; --s-10: 40px;
@@ -31,23 +42,36 @@
   --fw-row: 450; /* a row's title, every row system (Row, .set-row) */
   --fw-light: 300; /* display type's second voice: a headline's light line beside its 600 one (Afisha's date, KRI's greeting, an empty state's title) */
 
-  /* row icon tiles: one flat iOS colour each, a white glyph (Settings' palette) */
+  /* hues for drawings (the streak's metals, the anthem's aura, the orb): never a tile behind an icon */
   --tile-gray: #8E8E93; --tile-indigo: #5856D6; --tile-red: #FF3B30; --tile-orange: #FF9500; --tile-green: #34C759;
   --tile-teal: #30B0C7; --tile-blue: #007AFF; --tile-accent: #3B6BFF; --tile-purple: #AF52DE; --tile-pink: #FF2D55;
   /* ink on white: a filled button over a photo or a poster (onmedia) */
   --ink: #0B1433;
   /* the ground under media (a hero cover, its lit mark): black in both themes */
   --media: #000;
+  /* on media, the same in both themes: the dark under the words on a cover, the lighter one a drawn cover needs, the
+     words' own soft shadow, a clear tag, a hairline (the card's edge, the lockup's rule), and the plain shadow a cover
+     the size of a card throws */
+  --media-scrim: linear-gradient(to top, rgba(0, 0, 0, 0.94), rgba(0, 0, 0, 0.86) 30%, rgba(0, 0, 0, 0.5) 50%, rgba(0, 0, 0, 0) 70%);
+  --media-shade: linear-gradient(rgba(0, 0, 0, 0) 36%, rgba(0, 0, 0, 0.5));
+  --media-text-shadow: 0 1px 8px rgba(0, 0, 0, 0.28);
+  --media-chip: rgba(255, 255, 255, 0.18);
+  --media-line: rgba(255, 255, 255, 0.18);
+  --media-lift: 0 1px 2px rgba(0, 0, 0, 0.1), 0 22px 36px -22px rgba(0, 0, 0, 0.42);
 
-  /* motion: transform and opacity only */
-  --ease: cubic-bezier(.2, .9, .22, 1);          /* morphs, slides */
-  --ease-spring: cubic-bezier(.32, .72, 0, 1);   /* sheets, iOS-like settle */
-  --ease-in: cubic-bezier(.4, 0, 1, 1);
-  --ease-bounce: cubic-bezier(.34, 1.45, .5, 1); /* a press let go: a small overshoot */
-  /* a tab switch: the nav's lens and the pages' crossfade move on this one spring, so they read as one motion
-     (Nav reads both for the lens's stretch: keep --t-tab in ms) */
-  --t-tab: 340ms; --ease-tab: var(--ease-spring);
-  --t-fast: 120ms; --t-base: 220ms; --t-slow: 380ms;
+  /* motion: transform and opacity only, never blur. The language is the context menu's (ui/Menu): things grow out of
+     what was tapped on a spring with a small overshoot, opacity catches up fast, and they leave quicker than they came.
+     Five durations, four curves; script-driven animation reads them through ui/motion.ts. */
+  --t-press: 80ms;   /* a press going in */
+  --t-fast: 120ms;   /* colour, opacity, a leave's fade */
+  --t-base: 220ms;   /* small moves, a leave */
+  --t-slow: 380ms;   /* sheets, tabs, the nav's lens (Nav reads it: keep it in ms) */
+  --t-spring: 420ms; /* what pops on --ease-bounce: a menu, a press let go */
+  --ease: cubic-bezier(.2, .9, .22, 1);           /* out: morphs, slides */
+  --ease-in: cubic-bezier(.4, 0, 1, 1);           /* leaving */
+  --ease-spring: cubic-bezier(.32, .72, 0, 1);    /* a settle with no overshoot: sheets, tabs */
+  --ease-bounce: cubic-bezier(.32, 1.25, .4, 1);  /* a damped spring, 8% overshoot: the menu's pop, a press let go
+     (ponytail: a bezier, not linear(): iOS < 17.2 drops the whole declaration; swap inside @supports once they're gone) */
 
   /* layers */
   --z-sticky: 10; --z-nav: 30; --z-capsule: 40; --z-sheet: 50; --z-toast: 60; --z-ask: 70;
@@ -144,6 +168,32 @@
   --danger-soft: rgba(240, 82, 74, 0.16);
   --warning-text: #FFC66B;
   --warning-soft: rgba(255, 178, 61, 0.16);
+  /* ---- the three materials ----
+     1. floating glass (base.css .glass.glass-pill): controls and navigation over content, the islands. The tab bar's
+        recipe is its definition; these are its values. One backdrop filter; the rest is static paint.
+     2. solid surface: content. --surface cards on the ground, --sheet under a sheet's content.
+     3. quiet fill: flat controls inside content (--fill, --fill-2 above): no rim, no fringe, no shadow. */
+  --glass-filter: blur(20px) saturate(160%) brightness(1.04);
+  --glass-filter-thick: blur(24px) saturate(190%); /* menus, alerts: large glass, near opaque (--menu-bg) */
+  --glass-rim-w: 1.2px;
+  --glass-rim-hi: rgba(255, 255, 255, 0.95); --glass-rim-mid: rgba(255, 255, 255, 0.35); /* the arc facing the light */
+  --glass-rim-lo: rgba(255, 255, 255, 0.45); --glass-rim-base: rgba(255, 255, 255, 0.16); /* its reflection opposite; the rest of the edge */
+  --glass-fringe-a: rgba(255, 120, 200, 0.4); --glass-fringe-b: rgba(90, 190, 255, 0.45); /* the pink/blue fringe at the rim's ends */
+  --glass-spot: rgba(255, 255, 255, 0.28); --glass-spot-size: 34% 26%; --glass-wash: rgba(255, 255, 255, 0.32);
+  --glass-edge-hi: rgba(255, 255, 255, 0.3); --glass-edge-lo: rgba(255, 255, 255, 0.1);   /* the thickness, inside the lit edge */
+  --glass-in-a: transparent; --glass-in-b: transparent; --glass-in-w: 0px;                 /* the fringe inside the body (light theme) */
+  --glass-shade: transparent; --glass-glow: rgba(255, 255, 255, 0.2);
+  --sheet: #131314;
+  /* ---- light: there are no lighting effects (owner, Nov 28) ----
+     Nothing glows and nothing has a halo: a card stands out by its content (a real cover, its words, its place on the
+     page), the way Apple's featured cards do. What is left is plain: the hair of edge and the neutral shadow of each
+     elevation step below, never a coloured one; colour stays inside its object (a cover, a 3D object) and shows
+     through the glass floating over it; a press lights glass from inside at the finger (.glass-bloom).
+     elevation: four neutral steps */
+  --elev-1: inset 0 0 0 1px rgba(255, 255, 255, 0.075);  /* a card: near-black on black shows by its hair rim */
+  --elev-2: 0 2px 8px rgba(0, 0, 0, 0.32);               /* a raised control: a knob, a floating solid capsule */
+  --elev-3: 0 12px 32px -10px rgba(0, 0, 0, 0.55);       /* a glass island */
+  --elev-4: 0 22px 44px -14px rgba(0, 0, 0, 0.45), 0 3px 10px rgba(0, 0, 0, 0.1), 0 0 0 0.5px rgba(255, 255, 255, 0.12); /* a sheet, a menu */
   --glass-bg: rgba(28, 28, 30, 0.6);
   --tint-veil: rgba(0, 0, 0, 0.5); /* the ground over a page's tint (--bg at half): the event editor and what opens over it */
   --glass-pill-bg: rgba(28, 28, 30, 0.6);
@@ -151,13 +201,11 @@
   --glass-solid: rgba(28, 28, 30, 0.96);
   --glass-bloom: rgba(255, 255, 255, 0.5);
   --glass-sheen: rgba(255, 255, 255, 0.32);
-  --glass-shadow: 0 22px 44px -14px rgba(0, 0, 0, 0.45), 0 3px 10px rgba(0, 0, 0, 0.1), 0 0 0 0.5px rgba(255, 255, 255, 0.12);
-  --shadow-card: none;
-  --shadow-thumb: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --glass-shadow: var(--elev-4); --shadow-card: none; --shadow-thumb: 0 1px 3px rgba(0, 0, 0, 0.3); /* the names from before */
   --scrim: rgba(0, 0, 0, 0.62);
-  --card-rim: inset 0 0 0 1px rgba(255, 255, 255, 0.075); /* a card's hair rim: near-black on black shows by its edge */
+  --card-rim: var(--elev-1);
   --glow: none; /* no coloured light behind pages: a plain, strict ground seen every day */
-  /* the button family's glass (ui/Button): rim arcs, a top sheen, the bevel with the pink/blue fringes, the lift */
+  /* legacy (the Forum's and the assistant's own controls still read it; ui/ no longer does): a rim on a flat control */
   --lg-rim-hi: rgba(255, 255, 255, 0.8); --lg-rim-lo: rgba(255, 255, 255, 0.32); --lg-rim-base: rgba(255, 255, 255, 0.08);
   --lg-spot: rgba(255, 255, 255, 0.14); --lg-sheen: rgba(255, 255, 255, 0.07);
   --lg-bevel: inset 0 1px 1px rgba(255, 255, 255, 0.16), inset 0 -8px 14px -8px rgba(0, 0, 0, 0.3),
@@ -196,9 +244,9 @@
   --lens-top: rgba(255, 255, 255, 0);
   --lens-rim: rgba(255, 255, 255, 1);
   --lens-rim-low: rgba(11, 20, 51, 0.12);
-  --lens-shadow: 0 0 0 0.5px rgba(11, 20, 51, 0.06), inset 0 -1.5px 2px rgba(11, 20, 51, 0.05), 0 2px 8px rgba(11, 20, 51, 0.14);
+  --lens-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.05), inset 0 -1.5px 2px rgba(0, 0, 0, 0.04), 0 2px 8px rgba(0, 0, 0, 0.1);
   --lens-lift: rgba(255, 255, 255, 0.5);
-  --lens-lift-shadow: 0 0 0 0.5px rgba(11, 20, 51, 0.08), inset 0 0 10px rgba(255, 255, 255, 0.85), 0 8px 20px rgba(11, 20, 51, 0.2);
+  --lens-lift-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.06), inset 0 0 10px rgba(255, 255, 255, 0.85), 0 8px 20px rgba(0, 0, 0, 0.16);
   --dock-ink: rgba(11, 20, 51, 0.45);
   --menu-bg: rgba(255, 255, 255, 0.9);
   --text: #0A0A0C;
@@ -212,26 +260,41 @@
   --danger-soft: rgba(240, 82, 74, 0.12);
   --warning-text: #965A00;
   --warning-soft: rgba(255, 178, 61, 0.18);
+  /* floating glass on the pale ground: white rims vanish on white, so it is clearer and shows by its shadow and a hair
+     of neutral edge the bright arc breaks like glare (a dark drawn outline read as a sticker); the fringes, faint,
+     inside the body */
+  --glass-filter: blur(8px) saturate(190%);
+  --glass-rim-w: 1.4px;
+  --glass-rim-hi: #fff; --glass-rim-mid: rgba(255, 255, 255, 0.85);
+  --glass-rim-lo: rgba(0, 0, 0, 0.16); --glass-rim-base: rgba(0, 0, 0, 0.09);
+  --glass-fringe-a: transparent; --glass-fringe-b: transparent;
+  --glass-spot: rgba(255, 255, 255, 0.95); --glass-spot-size: 30% 70%; --glass-wash: transparent;
+  --glass-edge-hi: #fff; --glass-edge-lo: rgba(0, 0, 0, 0.08);
+  --glass-in-a: rgba(255, 110, 190, 0.3); --glass-in-b: rgba(70, 170, 255, 0.34); --glass-in-w: 3px;
+  --glass-shade: rgba(0, 0, 0, 0.1); --glass-glow: transparent;
+  --sheet: #F2F2F7; /* Apple's grouped grey: the white cards stand on it as they do on the page */
+  --elev-1: inset 0 0 0 0.5px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.03), 0 10px 24px -14px rgba(0, 0, 0, 0.12);
+  --elev-2: 0 3px 8px rgba(0, 0, 0, 0.1), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
+  --elev-3: 0 16px 32px -14px rgba(0, 0, 0, 0.3), 0 2px 6px rgba(0, 0, 0, 0.08), 0 0 0 0.5px rgba(0, 0, 0, 0.05);
+  --elev-4: 0 22px 44px -14px rgba(0, 0, 0, 0.22), 0 3px 10px rgba(0, 0, 0, 0.06), 0 0 0 0.5px rgba(0, 0, 0, 0.05);
   --glass-bg: rgba(255, 255, 255, 0.78);
   --tint-veil: rgba(242, 242, 247, 0.72);
   --glass-pill-bg: rgba(255, 255, 255, 0.34); /* a pill is clearer than a sheet: there is little to read on it */
-  --glass-clear: rgba(255, 255, 255, 0.42);
+  --glass-clear: rgba(255, 255, 255, 0.14);
   --glass-solid: rgba(255, 255, 255, 0.97);
   --glass-bloom: rgba(255, 255, 255, 0.95);
   --glass-sheen: rgba(255, 255, 255, 0.32);
-  --glass-shadow: 0 22px 44px -14px rgba(24, 36, 90, 0.28), 0 3px 10px rgba(24, 36, 90, 0.08), 0 0 0 0.5px rgba(11, 20, 51, 0.06);
-  --shadow-card: 0 1px 2px rgba(24, 36, 90, 0.04), 0 6px 18px rgba(24, 36, 90, 0.05);
-  --shadow-thumb: 0 3px 8px rgba(24, 36, 90, 0.12), 0 0 0 0.5px rgba(11, 20, 51, 0.05);
-  --scrim: rgba(11, 20, 51, 0.32);
-  --card-rim: inset 0 0 0 0.5px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.03), 0 10px 24px -14px rgba(0, 0, 0, 0.12);
+  --glass-shadow: var(--elev-4); --shadow-thumb: var(--elev-2);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.03), 0 6px 18px rgba(0, 0, 0, 0.04);
+  --scrim: rgba(0, 0, 0, 0.3);
+  --card-rim: var(--elev-1);
   --glow: none;
-  /* white rims vanish on white cards: here the glass shows by its edge (base.css's light pill: an ink rim the bright arc
-     breaks like glare, stronger fringes, a navy lift) */
+  /* legacy, as in the dark theme */
   --lg-rim-hi: #fff; --lg-rim-lo: rgba(11, 20, 51, 0.3); --lg-rim-base: rgba(11, 20, 51, 0.12);
   --lg-spot: rgba(255, 255, 255, 0.9); --lg-sheen: rgba(255, 255, 255, 0.7);
   --lg-bevel: inset 0 1.5px 1px #fff, inset 0 -10px 16px -10px rgba(11, 20, 51, 0.14),
     inset 3px 0 3px -1px rgba(255, 110, 190, 0.45), inset -3px 0 3px -1px rgba(70, 170, 255, 0.5);
-  --lg-lift: 0 6px 14px -8px rgba(24, 36, 90, 0.32), 0 1px 2px rgba(24, 36, 90, 0.08);
+  --lg-lift: 0 6px 14px -8px rgba(0, 0, 0, 0.24), 0 1px 2px rgba(0, 0, 0, 0.06);
   /* the orb on the pale ground: a frosted pearl, its shadow under it */
   --orb-shell: radial-gradient(circle, rgba(255, 255, 255, 0) 40%, rgba(255, 255, 255, 0.7) 76%, #fff 97%), #E9ECFB;
   --orb-core-a: rgba(124, 77, 255, 0.78); --orb-core-b: rgba(59, 107, 255, 0.74); --orb-hot: rgba(255, 255, 255, 0.55);

@@ -21,7 +21,7 @@
 
 <style>
   .grp { display: flex; flex-direction: column; }
-  .box { display: flex; flex-direction: column; overflow: hidden; border-radius: var(--r-group); background: var(--group-bg, var(--surface)); box-shadow: var(--card-rim, none); }
+  .box { display: flex; flex-direction: column; overflow: hidden; border-radius: var(--r-group); background: var(--group-bg, var(--surface)); box-shadow: var(--elev-1); }
   .ghd { display: flex; align-items: baseline; gap: var(--s-3); margin: 0 var(--s-1) 10px; }
   .gcap { min-width: 0; margin: 0; font: 700 var(--fs-t3)/1.2 var(--font-display); letter-spacing: -0.016em; color: var(--text); }
   .note { margin-left: 0.3em; white-space: nowrap; color: var(--text-3); font-weight: 600; }

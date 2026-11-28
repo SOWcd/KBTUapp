@@ -63,6 +63,7 @@
 
   const TIMETABLE = 'kbtu.afisha.classes';
   let showClasses = $state((() => { try { return localStorage.getItem(TIMETABLE) !== 'hidden'; } catch { return true; } })());
+  const hasCls = $derived(data.schedule.length > 0 || !showClasses);
   function toggleClasses() {
     haptic.tap();
     showClasses = !showClasses;
@@ -209,7 +210,6 @@
     return [...lead, ...keep, ...rankHero(cands.filter((x) => !taken(x) && !keep.some((y) => y.key === x.key)), was, today)].slice(0, 3);
   });
   // with no picture the lead is a field of one colour: the row is lower then (a tall empty card read as a blank screen)
-  const leadPic = $derived.by(() => { const c = cards[0]; return !!c && ('e' in c ? !!(c.e.cover || c.e.video?.poster) : 'p' in c ? !!c.p.photo : 'f' in c ? !!c.f.photos[0] : false); });
   let at = $state(0); // the card in view
   const atCard = $derived(Math.min(at, cards.length - 1));
   $effect(() => {
@@ -344,49 +344,52 @@
 
 <!-- one hero card, any kind: the lead's slot (i 0) and the swiped-to ones -->
 {#snippet heroCard(c: Card, i: number)}
+  <!-- a featured card the way the App Store's Today and Music's top cards are built: the picture whole, then three
+       levels of words on it (a small caps line: when; the title; a lockup under a hairline: whose it is and where, the
+       one action at its end). The same card for every kind -->
   {#if 'e' in c}
     {@const e = c.e}
     {@const mine = e.my?.status === 'going'}
-    <!-- an event: my ticket and the way there, else what it is and one tap to go -->
     <!-- the card is a portrait: the organizer's tall framing (the Feed's), not the wide card's, which lost half its width here -->
     {@const art = coverFor(e.cover, 'feed') ?? e.video?.poster ?? null}
-    {@const pic = !!art}
-    <section class="hero theme-dark" class:tix={mine && i === 0} class:nopic={!pic} style:--c={e.cover?.color ?? e.video?.poster?.color ?? e.color ?? e.tint} onclickcapture={() => tap(c)}>
+    <section class="hero theme-dark" class:tix={mine && i === 0} class:nopic={!art} onclickcapture={() => tap(c)}>
       <button class="hit" onpointerdown={(ev) => touchAhead(ev, () => prefetchEvent(e.id))} onclick={(ev) => sheets.event(e.id, ev.currentTarget.parentElement?.querySelector('.poster'))} aria-label={e.title}></button>
       <span class="art"><HeroArt pic={art} emoji={e.emoji} color={e.color ?? e.tint} first={i === 0} /></span>
-      <div class="shade"></div>
+      <div class="shade media-rim"></div>
       <div class="slab">
-        <span class="hero-tx">
-          <b class="clamp-2">{e.title}</b>
-          <span class="where"><span class="ellipsis"><b class="num">{multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : time(e.startsAt)}</b> · {soon(e.startsAt, now)}</span><span class="by ellipsis">&nbsp;· {shortOf(e.org)}{#if e.coHost} × {shortOf(e.coHost)}{/if}</span></span>
-          <span class="hero-place"><EventPlace {e} pin /></span>
-        </span>
-        <!-- the slab's foot: who goes and what it is, and under the thumb my ticket or the one tap to sign up -->
-        <span class="foot">
-          <span class="hsub">{@render status(e)}</span>
+        <span class="hsub">{@render status(e)}</span>
+        <span class="eye ellipsis num">{soon(e.startsAt, now)} · {multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : time(e.startsAt)}</span>
+        <b class="hero-tt clamp-2">{e.title}</b>
+        <span class="lock">
+          <OrgLogo org={e.org} size={36} />
+          <span class="who"><b class="ellipsis">{shortOf(e.org)}{#if e.coHost} × {shortOf(e.coHost)}{/if}</b><span class="hero-place"><EventPlace {e} pin /></span></span>
+          <!-- under the thumb: my ticket, or the one tap to sign up -->
           {#if mine}
-            <span class="acts"><Button onmedia size="m" onclick={() => sheets.ticket(e.id)}>{#snippet icon()}<QrCode size={17} />{/snippet}{t('event.ticket')}</Button></span>
+            <span class="acts"><Button onmedia size="s" onclick={() => sheets.ticket(e.id)}>{#snippet icon()}<QrCode size={15} />{/snippet}{t('event.ticket')}</Button></span>
           {:else if e.my?.status === 'hold'}
-            <span class="acts"><Button onmedia size="m" onclick={() => sheets.pay(e.id)}>{t('event.pay', { price: money(e.price ?? 0) })}</Button></span>
+            <span class="acts"><Button onmedia size="s" onclick={() => sheets.pay(e.id)}>{t('event.pay', { price: money(e.price ?? 0) })}</Button></span>
           {:else if canGo(e)}
-            <span class="acts"><Button onmedia size="m" loading={goingBusy.has(e.id)} onclick={() => toggleGoing(e.id, () => sheets.pay(e.id))}>{e.price ? e.freeLeft && session.me?.student?.freeFirst ? t('event.goFree') : t('event.goPrice', { price: money(e.price) }) : t('event.go')}</Button></span>
+            <span class="acts"><Button onmedia size="s" loading={goingBusy.has(e.id)} onclick={() => toggleGoing(e.id, () => sheets.pay(e.id))}>{e.price ? e.freeLeft && session.me?.student?.freeFirst ? t('event.goFree') : t('event.goPrice', { price: money(e.price) }) : t('event.go')}</Button></span>
           {/if}
         </span>
       </div>
     </section>
   {:else}
     {@const v = look(c)}
-    <!-- news, a forum post, my next class: the same card, its picture or a 3D mark, the title and one line -->
-    <section class="hero theme-dark" class:nopic={!v.item.cover} style:--c={v.color} onclickcapture={() => tap(c)}>
+    <!-- news, a forum post, my next class: the same card, its picture or a 3D mark, the same three levels -->
+    <section class="hero theme-dark" class:nopic={!v.item.cover} onclickcapture={() => tap(c)}>
       <button class="hit" onclick={v.open} aria-label={v.title}></button>
       <span class="art"><HeroArt pic={v.item.cover} emoji={v.item.emoji} color={v.color} first={i === 0} /></span>
-      <div class="shade"></div>
+      <div class="shade media-rim"></div>
       <div class="slab">
-        <span class="hero-tx">
-          <b class="clamp-2">{v.title}</b>
-          <span class="where"><span class="ellipsis">{#if v.lead}<b class="num">{v.lead}</b> · {/if}{v.line}</span>{#if v.by}<span class="by ellipsis">&nbsp;· {v.by}</span>{/if}</span>
-        </span>
-        {#if v.room}{@const room = v.room}<span class="foot"><span class="acts"><Button onmedia size="m" onclick={() => sheets.map(room)}>{#snippet icon()}<MapPin size={17} />{/snippet}{room}</Button></span></span>{/if}
+        <span class="eye ellipsis num">{#if v.lead}{v.lead} · {/if}{v.line}</span>
+        <b class="hero-tt clamp-2">{v.title}</b>
+        {#if v.by || v.room}{@const room = v.room}
+          <span class="lock">
+            <span class="who"><b class="ellipsis">{v.by}</b></span>
+            {#if room}<span class="acts"><Button onmedia size="s" onclick={() => sheets.map(room)}>{#snippet icon()}<MapPin size={15} />{/snippet}{room}</Button></span>{/if}
+          </span>
+        {/if}
       </div>
     </section>
   {/if}
@@ -406,7 +409,7 @@
 
   {#if cards.length}
     <!-- the hero, personal: the first card, a swipe brings #2 and #3 (snapped); one markup for every kind -->
-    <div class="heroes" class:short={!leadPic} role="group" aria-label={t('list.heroPicks')} onscroll={slid}>
+    <div class="heroes" role="group" aria-label={t('list.heroPicks')} onscroll={slid}>
     {#each cards as c, i (i ? c.key : '')}
       {#if i}{@render heroCard(c, i)}
       {:else}
@@ -420,8 +423,8 @@
 
   {#if ratePrompt && !ratingBusy.has(ratePrompt.id)}
     {@const e = ratePrompt}
-    <!-- one quiet line under the hero (owner, Nov 27: a card of five grey tiles read as another app): what it asks and of
-         which event, the five stars bare at its end, one tap rates; the x leaves it -->
+    <!-- Apple's "Tap to Rate" row on a surface of its own: what it asks and of which event at the left, the five stars
+         bare at the right, one tap rates; the x leaves it. Never over anything, never asked twice (canAskRating) -->
     <div class="rate">
       <span class="rate-tx"><b>{t('rate.ask')}</b><span class="ellipsis">{e.title}</span></span>
       <span class="rate-stars" role="group" aria-label={t('rate.ask')}>
@@ -453,16 +456,17 @@
     <div class="ask"><ActionCard icon={CalendarPlus} title={t('sched.cardTitle')} action={t('sched.cardAdd')} onclick={() => sheets.schedHowTo()} /></div>
   {/if}
 
-  <div class="events-head">
-    <h2 class="sec two">{t('list.title')}</h2>
-    <!-- no timetable: nothing to show or hide (kept while off: switching it back on brings the card that asks for one) -->
-    {#if data.schedule.length || !showClasses}<label class="cls sw-on">{t('list.classes')}<input type="checkbox" role="switch" checked={showClasses} onchange={toggleClasses} /></label>{/if}
-  </div>
-  {#if filtering || coming.length > 1}
+  <h2 class="sec events">{t('list.title')}</h2>
+  <!-- no timetable: nothing to show or hide (kept while off: switching it back on brings the card that asks for one) -->
+  {#if hasCls || filtering || coming.length > 1}
     <div class="chips" role="group" aria-label={t('list.f.label')} use:showPicked>
-      {#each chips.types as k (k)}<Chip selected={afishaFilter.type === k} onclick={() => { haptic.select(); count('do.filter'); pick('type', k); }}>{t(`list.f.${k}`)}</Chip>{/each}
-      {#if chips.types.length && chips.schools.length}<i class="sep" aria-hidden="true"></i>{/if}
-      {#each chips.schools as s (s)}<Chip selected={afishaFilter.school === s} onclick={() => { haptic.select(); count('do.filter'); pick('school', s); }}>{schoolName(s)}</Chip>{/each}
+      {#if hasCls}<Chip selected={showClasses} onclick={toggleClasses}>{t('list.classes')}</Chip>{/if}
+      {#if filtering || coming.length > 1}
+        {#if hasCls && (chips.types.length || chips.schools.length)}<i class="sep" aria-hidden="true"></i>{/if}
+        {#each chips.types as k (k)}<Chip selected={afishaFilter.type === k} onclick={() => { haptic.select(); count('do.filter'); pick('type', k); }}>{t(`list.f.${k}`)}</Chip>{/each}
+        {#if chips.types.length && chips.schools.length}<i class="sep" aria-hidden="true"></i>{/if}
+        {#each chips.schools as s (s)}<Chip selected={afishaFilter.school === s} onclick={() => { haptic.select(); count('do.filter'); pick('school', s); }}>{schoolName(s)}</Chip>{/each}
+      {/if}
     </div>
   {/if}
   {#if filtering && !matched}
@@ -543,23 +547,23 @@
   .page { position: absolute; inset: 0; padding: var(--page-top) var(--gutter) 0; background: var(--bg); color: var(--text); }
   .ttl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .offline { margin-bottom: var(--s-6); }
-  /* the rating: one bare line on the ground between the card and the list (no surface of its own: the hero is the
-     card here); the stars are gold outlines, each a 44 px tall target, and a pressed one fills */
-  .rate { display: flex; align-items: center; gap: var(--s-1); min-height: var(--row-h); margin: var(--s-4) calc(-1 * var(--s-2)) 0 var(--s-1); }
-  .rate-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; font: 450 var(--fs-cap)/1.3 var(--font-text); color: var(--text-3); }
+  /* the rating: one row on a surface (label left, stars right, the way the App Store asks); the stars are plain line
+     icons in the text's colour, each a 44 px tall target, and a pressed one fills */
+  .rate { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; min-height: var(--row-h2); margin-top: var(--s-4); padding: 0 var(--s-1) 0 var(--s-4);
+    border-radius: var(--r-group); background: var(--surface); box-shadow: var(--card-rim); }
+  .rate-tx { min-width: 0; display: flex; flex-direction: column; gap: 1px; font: var(--type-sub); color: var(--text-2); }
   .rate-tx b { overflow: hidden; text-overflow: ellipsis; font: 600 var(--fs-body)/1.25 var(--font-text); color: var(--text); white-space: nowrap; }
-  .rate-stars { flex: none; display: flex; }
-  .rate-stars button { display: grid; place-items: center; width: 40px; height: var(--tap); color: var(--warning-text); transition: transform var(--t-fast) var(--ease); }
-  .rate-stars button:active { transform: scale(1.18); }
+  .rate-stars { display: flex; }
+  .rate-stars button { display: grid; place-items: center; width: 34px; height: var(--tap); color: var(--text-2); transition: transform var(--t-fast) var(--ease); }
+  .rate-stars button:active { transform: scale(1.18); color: var(--text); }
   .rate-stars button:active :global(svg) { fill: currentColor; }
-  .rate-x { flex: none; display: grid; place-items: center; width: 34px; height: var(--tap); color: var(--text-3); }
+  .rate-x { display: grid; place-items: center; width: 34px; height: var(--tap); color: var(--text-3); }
   .rate-x:active { opacity: 0.6; }
-  /* a narrow phone: the question and the x on one line, the five stars on their own under it (beside the words they left
-     the question 50 px) */
+  /* a narrow phone: the question and the x on one line, the five stars on their own under it, spread */
   @media (max-width: 359px) {
-    .rate { flex-wrap: wrap; padding: var(--s-2) 0 0; }
-    .rate-x { order: 1; }
-    .rate-stars { order: 2; flex-basis: 100%; justify-content: space-between; }
+    .rate { grid-template-columns: minmax(0, 1fr) auto; padding-top: var(--s-1); }
+    .rate-x { grid-area: 1 / 2; }
+    .rate-stars { grid-area: 2 / 1 / 3 / 3; justify-content: space-between; margin: 0 var(--s-2) var(--s-1) calc(-1 * var(--s-2)); }
     .rate-stars button { width: var(--tap); }
   }
   .off { margin: var(--s-3) var(--s-1) 0; color: var(--text-2); }
@@ -569,14 +573,12 @@
   .lnk { align-self: center; }
 
   .sec { margin: var(--s-7) var(--s-1) var(--s-3); font: 700 var(--fs-sec)/1.15 var(--font-display); letter-spacing: -0.03em; } /* the hero title's own voice, a step smaller */
-  .events-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); min-height: var(--tap); margin: var(--s-5) var(--s-1) 0; padding-top: var(--s-4); box-shadow: inset 0 0.5px 0 var(--separator); } /* a hairline, then the section's title */
-  .sec.two { min-width: 0; margin: 0; }
+  .sec.events { margin-top: var(--s-5); padding-top: var(--s-5); box-shadow: inset 0 0.5px 0 var(--separator); } /* a hairline, then the section's title */
   /* the filters: one row of chips under the heading, scrolled sideways edge to edge; types, a hairline, schools */
   .chips { display: flex; align-items: center; gap: var(--s-2); overflow-x: auto; margin: var(--s-2) calc(-1 * var(--gutter)) 0; padding: var(--s-1) var(--gutter); scrollbar-width: none; }
   .chips::-webkit-scrollbar { display: none; }
   .sep { flex: none; width: 0.5px; height: 20px; background: var(--separator); }
   .none { margin-top: var(--s-4); }
-  .cls { flex: none; display: flex; align-items: center; gap: 10px; font: 500 var(--fs-body)/1 var(--font-text); color: var(--text-2); cursor: pointer; }
   /* a day: skipped while off screen (its size remembered once seen); a paint box, so it spans the gutters too (a row's
      press and shadow are never clipped) and takes the heading's top margin itself (inside, it would no longer collapse
      with the one above) */
@@ -586,18 +588,18 @@
   .dh span::first-letter { text-transform: none; }
   .hit { position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
 
-  /* (owner, Nov 27-28) the hero is the screen's one big card, most of the first screen: the cover tall and whole, the words
-     on the cover itself. The card is media, so it is dark in both themes (.theme-dark: white words, the dark tags) */
-  .hero { --halo: 0.62; position: relative; isolation: isolate; display: flex; flex-direction: column; justify-content: flex-end; height: var(--hh);
-    border-radius: var(--r-xl); background: var(--media); color: var(--text); transition: transform var(--t-fast) var(--ease); }
+  /* the hero is the screen's one featured card. It stands out by what is on it (the cover whole, three levels of words),
+     never by light: no glow, no halo; a hair of edge, and on the pale ground the plain shadow any card that size throws.
+     The card is media, so it is dark in both themes (.theme-dark: white words) */
+  .hero { position: relative; isolation: isolate; display: flex; flex-direction: column; justify-content: flex-end; height: var(--hh);
+    border-radius: var(--r-xl); background: var(--media); color: var(--text); box-shadow: var(--media-lift); transition: transform var(--t-fast) var(--ease); }
   .hero:has(> .hit:active) { transform: scale(0.985); }
   /* the hero's cards side by side, one in view, snapped; edge to edge so the next one waits just past the gutter. A
-     scroller clips, so it leaves room around the cards for their light (the glow reaches 44px under a card) and takes it
+     scroller clips, so it leaves room under the cards for their shadow (it reaches 48px under a card) and takes it
      back with its margins */
-  .heroes { --hh: clamp(340px, 60vh, 540px); display: flex; gap: var(--s-3); overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; scrollbar-width: none;
-    margin: calc(-1 * var(--s-4)) calc(-1 * var(--gutter)) -44px; padding: var(--s-4) 0 44px var(--gutter); }
+  .heroes { --hh: clamp(380px, 53vh, 440px); display: flex; gap: var(--s-3); overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; scrollbar-width: none;
+    margin: calc(-1 * var(--s-4)) calc(-1 * var(--gutter)) -48px; padding: var(--s-4) 0 48px var(--gutter); }
   .heroes::-webkit-scrollbar { display: none; }
-  .heroes.short { --hh: clamp(320px, 52vh, 440px); }
   .heroes::after { content: ''; flex: 0 0 calc(var(--gutter) - var(--s-3)); } /* the end's gutter (a scroller's end padding is lost in older WebKit) */
   /* 100% here is the scroller's box minus its left padding: the page's width plus one gutter, so a card takes one gutter
      less and snaps to its start inside the gutter (centre snapping pushed it past both edges) */
@@ -611,52 +613,31 @@
   .dots { display: flex; justify-content: center; gap: 6px; margin-top: var(--s-3); }
   .dots i { width: 6px; height: 6px; border-radius: var(--r-full); background: var(--text-3); opacity: 0.45; transition: opacity var(--t-fast) var(--ease); }
   .dots i.on { opacity: 1; }
-  /* Opal's neon under the card, in the cover's own colour (--c): a close halo and a wide pool below. It blooms once as
-     the page opens and rests; the shadow is painted once and only its opacity moves. The card no longer clips (the
-     cover does), so the light can leave it */
-  .hero::before { content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none; opacity: var(--halo);
-    box-shadow: 0 0 14px 0 var(--c, transparent), 0 16px 38px -10px var(--c, transparent); animation: bloom 2.2s var(--ease) 0.2s backwards; }
-  /* the halo always shows against the theme (owner: a pale cover's light vanished on the light ground): the cover's hue,
-     lifted on black and deepened on light, its colour strengthened in proportion (owner: a cream cover glowed yellow
-     when a floor of colour was forced onto its near-grey). Where relative colour isn't known (older iOS) none of it
-     applies and the cover's own colour stays */
-  :global(:root[data-theme='light']) .hero { --halo: 0.26; }
-  @supports (color: oklch(from red l c h)) {
-    .hero::before { box-shadow: 0 0 14px 0 var(--cg), 0 16px 38px -10px var(--cg); }
-    .hero { --cg: oklch(from var(--c, transparent) max(l, 0.66) min(calc(c * 2.5), 0.2) h); }
-    :global(:root[data-theme='light']) .hero { --halo: 0.3; --cg: oklch(from var(--c, transparent) min(l, 0.58) min(calc(c * 2.5), 0.2) h); }
-  }
-  @keyframes bloom { from { opacity: 0; } 40% { opacity: calc(var(--halo) * 1.5); } }
-  .art, .shade { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; }
-  .art { overflow: hidden; }
-  /* the card's hair rim; with no cover, the mesh deeper toward the words */
-  .shade { box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.14); }
-  .nopic .shade { background: linear-gradient(rgba(0, 0, 0, 0) 36%, rgba(0, 0, 0, 0.5)); } /* a cover has HeroArt's own scrim */
-  @media (prefers-reduced-motion: reduce) { .hero::before { animation: none; } }
+  .art { position: absolute; inset: 0; overflow: hidden; border-radius: inherit; pointer-events: none; }
+  /* the hair of edge is base.css .media-rim; with no cover, the field deeper toward the words */
+  .nopic .shade { background: var(--media-shade); } /* a cover has HeroArt's own scrim */
   /* the words lie on the cover itself, no box inside the card: HeroArt darkens the picture under them */
-  .slab { position: relative; z-index: 2; /* over the card's own tap */ isolation: isolate; display: flex; flex-direction: column; padding: 76px 18px var(--s-4);
-    border-radius: 0 0 var(--r-xl) var(--r-xl); color: var(--text); pointer-events: none; }
-  /* over media the tags are white on a clear chip (the accent's blue on a blue cover was 2:1), the place has no underline
-     (the whole card opens the event; the pin says it is a place) */
-  .hsub :global(.chip) { background: rgba(255, 255, 255, 0.18); color: var(--on-accent); }
-  .hsub .fr { color: var(--text-2); }
-  .hero-place :global(.place) { text-decoration: none; }
-  .foot { display: flex; align-items: center; gap: 10px; min-height: var(--ctl-m); margin-top: var(--s-3); }
-  .foot:not(:has(.acts, .hsub *)) { display: none; }
-  .acts { position: relative; z-index: 2; flex: none; display: flex; gap: 8px; max-width: 60%; margin-left: auto; pointer-events: auto; }
-  .acts :global(.btn) { min-width: 0; }
-  .acts :global(.btn.round)::before { inset: -4px; } /* 36 seen, 44 to the finger on every side; 8px apart, so two meet and never overlap */
-  /* contain: the words take the width that is left and never ask for more. Without it the one-line meta's full width
-     (nowrap) is the card's min-content, and a flex card grows to it: the root of the card past the right edge (PRs 324, 328) */
-  .hero-tx { flex: none; display: flex; flex-direction: column; gap: 3px; min-width: 0; contain: inline-size; text-shadow: 0 1px 8px rgba(0, 0, 0, 0.28); }
-  .hero-tx > b { margin-bottom: var(--s-1); font: 700 var(--fs-t1)/1.08 var(--font-display); letter-spacing: -0.035em; }
-  .where, .hero-place { min-width: 0; font: 500 var(--fs-body)/1.3 var(--font-text); color: var(--text-2); }
-  .where { display: flex; flex-wrap: wrap; max-height: 1.3em; overflow: hidden; }
-  .where > span { flex: 0 1 auto; min-width: 0; }
-  @media (max-width: 340px) { .where > .by { display: none; } }
-  .where b { font-weight: 600; color: var(--text); }
-  .hsub { flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .slab { position: relative; z-index: 2; /* over the card's own tap */ display: flex; flex-direction: column; padding: var(--s-10) 18px 14px; color: var(--text); pointer-events: none; text-shadow: var(--media-text-shadow); }
+  /* contain: the words take the card's width and never ask for more. Without it a one-line label's full width (nowrap)
+     is the card's min-content, and a flex card grows to it: the root of the card past the right edge (PRs 324, 328) */
+  .slab { min-width: 0; contain: inline-size; }
+  .slab > * { min-width: 0; }
+  /* over media the tags are white on a clear chip (the accent's blue on a blue cover was 2:1) */
+  .hsub { display: flex; align-items: center; gap: 8px; margin-bottom: var(--s-3); text-shadow: none; }
   .hsub:not(:has(*)) { display: none; } /* nothing to say: no line (:empty misses it, the snippet leaves white space) */
+  .hsub :global(.chip) { background: var(--media-chip); color: var(--on-accent); }
+  .hsub .fr { color: var(--text-2); }
+  .eye { margin-bottom: 6px; font: var(--type-cap); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-2); }
+  .hero-tt { font: 700 var(--fs-t1)/1.08 var(--font-display); letter-spacing: -0.035em; }
+  /* the lockup: whose it is, where, and the one action; a hairline over it instead of a band of blur */
+  .lock { display: flex; align-items: center; gap: 10px; min-height: var(--ctl-s); margin-top: 14px; padding-top: var(--s-3); box-shadow: inset 0 0.5px 0 var(--media-line); text-shadow: none; }
+  .who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; font: 500 var(--fs-sub)/1.25 var(--font-text); color: var(--text-2); }
+  .who > b { font: 600 var(--fs-body)/1.25 var(--font-text); color: var(--text); }
+  .hero-place { display: flex; min-width: 0; }
+  .hero-place :global(.place) { text-decoration: none; }
+  .hero-place :global(button) { pointer-events: auto; } /* the whole card opens the event; the pin says it is a place */
+  .acts { position: relative; z-index: 2; flex: none; display: flex; max-width: 56%; margin-left: auto; pointer-events: auto; }
+  .acts :global(.btn) { min-width: 0; }
 
   /* the featured post: its own card, the body folded to two lines */
   .pin { margin: var(--s-3) 0 0; }
