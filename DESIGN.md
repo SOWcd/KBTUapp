@@ -10,7 +10,7 @@ screen must look like it was always part of it. Apple-level minimalism. Speed co
 ## Anchors: what he likes (start from these, never from nothing)
 - **Profile tab.** No page H1. It opens with one physical object (the lanyard badge). Everything else sits on rounded surface
   cards, each with its own head (title left, count right) on a 16 px rhythm, as grouped rows with hairlines.
-- **Lanyard badges** (Profile, recruiting cards on Clubs). A club with a badge always shows its REAL badge art, never a
+- **Lanyard badges** (Profile, and the recruiting cards on top of Clubs, which he likes: a club's own badge shown while it recruits). A club with a badge always shows its REAL badge art, never a
   generated background.
 - **Afisha hero** (`web/src/screens/afisha/HeroArt.svelte`, #493 r4). Words sit on the cover itself, with no inner box.
 - **The top-right context menu.** He likes its animation. It is the base for the app's motion language (see Motion).
