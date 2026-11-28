@@ -3328,7 +3328,15 @@ def create(cfg: config.Config | None = None) -> FastAPI:
 
     @app.put("/api/forum-posts/{pid}/heart")
     def fchan_heart(pid: int, con: Con, v: FChanWrite, body: dict = Body(...)):
-        return F.set_heart(con, v, pid, body.get("hearted"))
+        return F.set_heart(con, v, pid, body.get("hearted"))  # builds before reactions
+
+    @app.put("/api/forum-posts/{pid}/react")
+    def fchan_react(pid: int, con: Con, v: FChanWrite, body: dict = Body(...)):
+        return F.set_reaction(con, v, pid, body.get("emoji"))  # one of fchannel.REACTIONS, or null: mine taken back
+
+    @app.put("/api/forum-posts/{pid}/vote")
+    def fchan_vote(pid: int, con: Con, v: FChanWrite, body: dict = Body(...)):
+        return F.vote(con, v, pid, body.get("choice"))  # final; the poll as my card shows it now
 
     @app.put("/api/forum-posts/{pid}/coming")
     def fchan_coming(pid: int, con: Con, v: FChanWrite, body: dict = Body(...)):
@@ -3340,7 +3348,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
         verdict = await ai.screen_post(cfg, ai_http(), text, **_ai_eu())
         p = await run_in_threadpool(F.settle, con, v, pid, verdict)  # live: the bot's round publishes it within seconds
         if p["status"] == "gone":  # the AI saw no message in it, or an ad: said, never silently (the app gives the words back)
-            raise ApiError("bad_input", "ad" if verdict == "ad" else "noise", {"post": pid, "appeal": await run_in_threadpool(F.appeals_left, con, v.id) > 0})
+            raise ApiError("bad_input", "ad" if verdict == "ad" else "noise", {"post": pid, "appeal": body.get("poll") is None  # a poll: written anew
+                                                                                   and await run_in_threadpool(F.appeals_left, con, v.id) > 0})
         return p | {"ai": verdict in ("person", "flag")}  # held by the AI's word: the app asks why (/why)
 
     @app.post("/api/forum-posts/{pid}/edit")

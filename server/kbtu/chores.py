@@ -325,3 +325,5 @@ def _chores(cfg: Config, con) -> None:
     logic.close_gone(con)  # reports of what went by itself (the queue, a GET, never writes)
     logic.tgcomments.sweep(con)  # the policy's retention even with the forum switched off (its old rows still go)
     logic.fchannel.sweep(con)
+    if cfg.forum_channel:
+        logic.fchannel.digest_week(con)  # Friday evening: the Forum's week, counts only (off until the owner's yes)

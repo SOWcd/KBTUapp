@@ -2258,6 +2258,8 @@ const ru = {
   'set.newEventsHint': "От клубов из твоих подписок",
   'set.forumComments': "Комментарии к моим постам на форуме",
   'set.forumCommentsHint': "Не чаще раза в 3 часа для каждого поста",
+  'set.forumDigest': "Неделя на форуме",
+  'set.forumDigestHint': "По пятницам одно сообщение: что нового на форуме",
   'set.broadcasts': "Объявления",
   'set.broadcastsHint': "Новости клубов и объявления Тайного Санты",
   'set.digests': "Сводки",

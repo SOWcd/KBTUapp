@@ -2235,6 +2235,8 @@ const en: Dict = {
   'set.newEventsHint': "From clubs you follow",
   'set.forumComments': "Comments on my forum posts",
   'set.forumCommentsHint': "At most once every 3 hours for each post",
+  'set.forumDigest': "The week in the Forum",
+  'set.forumDigestHint': "On Fridays, one message: what's new in the Forum",
   'set.broadcasts': "Announcements",
   'set.broadcastsHint': "Club news and Secret Santa announcements",
   'set.digests': "Digests",

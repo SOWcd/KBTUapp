@@ -1403,7 +1403,8 @@ _DEL_GONE = {
     ("event_crew", "user_id"),  # my door-helper rights (crew.py)
     ("qr_helpers", "user_id"),  # my right to help run a check-in (checkin.py)
     ("qr_meet_scans", "user_id"),  # every scan of a team meetup, including membership exceptions
-    ("fchan_hearts", "user_id"),
+    ("fchan_hearts", "user_id"),  # my reactions
+    ("fchan_voted", "user_id"),  # that I voted in a poll (the counts have no account on them and stay)
     ("fchan_coming", "user_id"),  # my "I'm coming" under others' asks for help
     ("fchan_signed", "user_id"),  # who my signed comments under channel posts are (the comments are deleted above, with their messages in the group)
     ("fchan_comments", "user_id"),  # my face under channel posts (the comments stay in Telegram, Telegram's own)

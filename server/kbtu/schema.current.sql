@@ -559,7 +559,7 @@ CREATE TABLE fchan_feed_pages (
     ) STRICT;
 CREATE TABLE fchan_hearts (
       post_id INTEGER NOT NULL REFERENCES fchan_posts(id) ON DELETE CASCADE,
-      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, emoji TEXT NOT NULL DEFAULT '❤️',
       PRIMARY KEY (post_id, user_id)
     ) STRICT;
 CREATE TABLE fchan_photos (
@@ -573,6 +573,12 @@ CREATE TABLE fchan_photos (
       color      TEXT,
       msg        INTEGER,
       created_at INTEGER NOT NULL, edit_id INTEGER, sync INTEGER NOT NULL DEFAULT 0 CHECK (sync IN (0, 1))) STRICT;
+CREATE TABLE fchan_polls (  -- IF NOT EXISTS: tests rewind user_version
+      post_id   INTEGER PRIMARY KEY REFERENCES fchan_posts(id) ON DELETE CASCADE,
+      options   TEXT NOT NULL CHECK (json_valid(options)),
+      days      INTEGER NOT NULL CHECK (days IN (1, 3, 7)),
+      closes_at INTEGER
+    ) STRICT;
 CREATE TABLE fchan_posts (
       id         INTEGER PRIMARY KEY,
       user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -605,6 +611,17 @@ CREATE TABLE fchan_signed (
       reply_id INTEGER PRIMARY KEY REFERENCES fchan_replies(id) ON DELETE CASCADE,
       user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE
     ) STRICT;
+CREATE TABLE fchan_tally (
+      post_id INTEGER NOT NULL REFERENCES fchan_polls(post_id) ON DELETE CASCADE,
+      choice  INTEGER NOT NULL CHECK (choice BETWEEN 0 AND 5),
+      n       INTEGER NOT NULL,
+      PRIMARY KEY (post_id, choice)
+    ) STRICT, WITHOUT ROWID;
+CREATE TABLE fchan_voted (
+      post_id INTEGER NOT NULL REFERENCES fchan_polls(post_id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (post_id, user_id)
+    ) STRICT, WITHOUT ROWID;
 CREATE TABLE files (
   id         INTEGER PRIMARY KEY,
   sha256     TEXT NOT NULL,
@@ -1516,7 +1533,7 @@ CREATE TABLE users (
   ban_reason      TEXT,
   created_at      INTEGER NOT NULL,
   seen_at         INTEGER NOT NULL
-, qr_code TEXT, cal_token TEXT, card_no INTEGER, nick TEXT CHECK (nick IS NULL OR length(nick) BETWEEN 2 AND 24), avatar_tg INTEGER NOT NULL DEFAULT 1, mark TEXT, skin_org INTEGER REFERENCES orgs(id) ON DELETE SET NULL, skin_pick TEXT CHECK (skin_pick IN ('kbtu', 'org', 'sower')), delete_at INTEGER, city TEXT, city_hidden INTEGER NOT NULL DEFAULT 0, open_projects INTEGER NOT NULL DEFAULT 0, ask_pings INTEGER NOT NULL DEFAULT 0, referred_by INTEGER REFERENCES users(id) ON DELETE SET NULL, tg_photo_path TEXT, tg_photo_src TEXT, n_forum INTEGER NOT NULL DEFAULT 1, link_code TEXT, frame TEXT, can_friend INTEGER NOT NULL DEFAULT 1, announce_ok INTEGER, tg_photo_at INTEGER, forum_seen_msg INTEGER NOT NULL DEFAULT 0, n_forum_comments INTEGER NOT NULL DEFAULT 1, n_broadcasts INTEGER NOT NULL DEFAULT 1, n_digests INTEGER NOT NULL DEFAULT 1, n_door INTEGER NOT NULL DEFAULT 1, notification_undo TEXT NOT NULL DEFAULT '{}', notify_via TEXT NOT NULL DEFAULT 'app' CHECK (notify_via IN ('app', 'telegram')), skin_look TEXT) STRICT;
+, qr_code TEXT, cal_token TEXT, card_no INTEGER, nick TEXT CHECK (nick IS NULL OR length(nick) BETWEEN 2 AND 24), avatar_tg INTEGER NOT NULL DEFAULT 1, mark TEXT, skin_org INTEGER REFERENCES orgs(id) ON DELETE SET NULL, skin_pick TEXT CHECK (skin_pick IN ('kbtu', 'org', 'sower')), delete_at INTEGER, city TEXT, city_hidden INTEGER NOT NULL DEFAULT 0, open_projects INTEGER NOT NULL DEFAULT 0, ask_pings INTEGER NOT NULL DEFAULT 0, referred_by INTEGER REFERENCES users(id) ON DELETE SET NULL, tg_photo_path TEXT, tg_photo_src TEXT, n_forum INTEGER NOT NULL DEFAULT 1, link_code TEXT, frame TEXT, can_friend INTEGER NOT NULL DEFAULT 1, announce_ok INTEGER, tg_photo_at INTEGER, forum_seen_msg INTEGER NOT NULL DEFAULT 0, n_forum_comments INTEGER NOT NULL DEFAULT 1, n_broadcasts INTEGER NOT NULL DEFAULT 1, n_digests INTEGER NOT NULL DEFAULT 1, n_door INTEGER NOT NULL DEFAULT 1, notification_undo TEXT NOT NULL DEFAULT '{}', notify_via TEXT NOT NULL DEFAULT 'app' CHECK (notify_via IN ('app', 'telegram')), skin_look TEXT, n_forum_digest INTEGER NOT NULL DEFAULT 1) STRICT;
 CREATE TABLE videos (
       id         INTEGER PRIMARY KEY,
       owner_id   INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -1732,6 +1749,7 @@ CREATE INDEX fchan_replies_by_msg ON fchan_replies(tg_msg) WHERE tg_msg > 0;
 CREATE INDEX fchan_replies_by_post ON fchan_replies(post_id, created_at);
 CREATE INDEX fchan_replies_todo ON fchan_replies(status, send_at) WHERE tg_msg IS NULL;
 CREATE INDEX fchan_reply_reports_by_user ON fchan_reply_reports(user_id);
+CREATE INDEX fchan_voted_by_user ON fchan_voted(user_id);
 CREATE INDEX files_by_hash ON files(sha256);
 CREATE INDEX form_answers_by_form ON form_answers(form_id, created_at);
 CREATE INDEX friend_requests_to ON friend_requests(to_id, status);
