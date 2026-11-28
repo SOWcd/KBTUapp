@@ -179,7 +179,44 @@ def test_spy_guesses_during_the_talk(env):
     assert end["phase"] == "reveal" and end["result"]["winner"] == "spy" and end["result"]["why"] == "guessed"
 
 
-def test_limits_leaving_and_account_deletion(env, monkeypatch):
+def test_one_more_round_in_the_same_room(env, monkeypatch):
+    """After the reveal the host plays again: the same room and code, those still there, a new place; not a new room."""
+    c, cfg = env
+    t0 = int(time.time())
+    set_clock(monkeypatch, lambda: t0)
+    monkeypatch.setattr(logic.rooms, "A_DAY", 1)
+    monkeypatch.setattr(logic.spy, "LOCATIONS", ("submarine", "space_station"))
+    room = _start(c, _room(c, (HOST, P2, P3, P4)))
+    first = _state(cfg, room["id"])
+    assert _act(c, HOST, room, "again-0000", type="again").json()["message"] == "phase"  # not before the reveal
+    set_clock(monkeypatch, lambda: t0 + 300 + logic.spy.VOTE_S)  # nobody voted: the spy wins
+    for tg in (HOST, P2, P3):  # P4 put the phone away a while ago
+        end = _get(c, tg, room["id"]).json()
+    assert end["phase"] == "reveal"
+    assert _act(c, P2, end, "again-0001", type="again").status_code == 403  # the host's move
+    assert _act(c, HOST, end, "again-0002", type="again", minutes=99).status_code == 400
+    assert len(_get(c, HOST, room["id"]).json()["players"]) == 4  # a refused move drops nobody
+    lobby = _act(c, HOST, end, "again-0003", type="again").json()
+    assert lobby["applied"] and lobby["room"]["v"] == end["v"] + 1
+    r = lobby["room"]
+    assert (r["id"], r["code"], r["host"], r["phase"], r["deadline"], r["live"]) == (room["id"], room["code"], room["host"], "lobby", None, False)
+    assert len(r["players"]) == 3 and not {"role", "location", "result", "first"} & r.keys()
+    assert _get(c, P4, room["id"]).status_code == 404  # away: out
+    assert _act(c, HOST, end, "again-0003", type="again").json()["room"]["v"] == r["v"]  # a double tap: once
+    assert _act(c, HOST, end, "again-0004", type="again").json()["applied"] is False  # an old screen: nothing
+    assert c.post("/api/rooms/join", headers=tma(P4), json={"code": room["code"]}).json()["phase"] == "lobby"  # in again
+    # the room keeps its action ids across rounds: the first round's start-0001 would be a double tap
+    nxt = _act(c, HOST, _get(c, HOST, room["id"]).json(), "start-0002", type="start", minutes=5).json()["room"]
+    assert nxt["phase"] == "play" and _state(cfg, room["id"])["loc"] != first["loc"]  # never the same place twice in a row
+    # straight into the next round with minutes, and no room counted against the day's cap (A_DAY 1, used)
+    set_clock(monkeypatch, lambda: t0 + 2 * (300 + logic.spy.VOTE_S))
+    for tg in (HOST, P2, P3, P4):
+        end = _get(c, tg, room["id"]).json()
+    played = _state(cfg, room["id"])["loc"]
+    again = _act(c, HOST, end, "again-0005", type="again", minutes=3).json()["room"]
+    assert again["phase"] == "play" and again["deadline"] - again["now"] == 180 and len(again["players"]) == 4
+    assert _state(cfg, room["id"])["loc"] != played and "last" not in again
+    assert c.post("/api/rooms", headers=tma(HOST), json={"game": "spy"}).status_code == 429  # the one room of the day
     c, cfg = env
     monkeypatch.setattr(logic.rooms, "A_DAY", 2)
     _room(c)

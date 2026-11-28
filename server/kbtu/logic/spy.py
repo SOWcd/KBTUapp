@@ -2,7 +2,7 @@
 gets the same place; the spy gets none and tries to work it out from the talk. One round: the host starts it with a
 discussion timer, then everyone votes whom they think is the spy. A majority on the spy: caught, and the spy names the
 place (right: the spy wins after all); anyone else or no majority: the spy wins. The spy may also name the place at any
-moment of the talk, which ends the round either way.
+moment of the talk, which ends the round either way. After the reveal the host may play again in the same room (`again`).
 The place lives in the state alone: view() gives it to the locals, never to the spy before the reveal (a test reads the
 spy's every answer). Location ids here; their names in web/src/lib/i18n (spy.loc.<id>), the list in web/src/lib/games."""
 from __future__ import annotations
@@ -15,6 +15,7 @@ MIN, MAX = 3, 12
 MINUTES = (1, 15)  # the discussion timer the host picks
 VOTE_S, GUESS_S = 60, 30  # the vote's and the caught spy's guess's time
 LIVE = ("play", "vote", "guess")
+ROUND = ("spy", "loc", "first", "votes", "accused", "guess", "winner", "why")  # a round's own keys, gone at a rematch
 # campus places first, then the city's and the classic ones
 LOCATIONS = ("library", "canteen", "lecture_hall", "dorm", "gym", "dean_office", "lab", "coworking", "exam", "graduation",
              "hackathon", "assembly_hall", "club_fair", "career_fair", "metro", "bus", "coffee_shop", "hospital", "airport",
@@ -79,8 +80,20 @@ def act(s: dict, players: list[int], host: int, uid: int, body: dict, t: int) ->
             raise ApiError("bad_input", "minutes")
         if not MIN <= len(players) <= MAX:
             raise ApiError("conflict", "players")
+        places = [x for x in LOCATIONS if x != s.get("last")] or LOCATIONS  # never the last round's place again
         s.update(phase="play", minutes=minutes, deadline=t + minutes * 60, spy=secrets.choice(players),
-                 loc=secrets.choice(LOCATIONS), first=secrets.choice(players), votes={}, accused=None, guess=None)
+                 loc=secrets.choice(places), first=secrets.choice(players), votes={}, accused=None, guess=None)
+    elif kind == "again":  # one more round in the same room: back to the lobby, or straight into play given minutes
+        if uid != host:
+            raise ApiError("forbidden", "host")
+        if s["phase"] != "reveal":
+            raise ApiError("conflict", "phase")
+        last = s["loc"]
+        for k in ROUND:
+            s.pop(k, None)
+        s.update(phase="lobby", deadline=None, last=last)
+        if "minutes" in body:
+            act(s, players, host, uid, {**body, "type": "start"}, t)
     elif kind == "vote_now":  # the talk is over before the timer: the host takes everyone to the vote
         if uid != host:
             raise ApiError("forbidden", "host")

@@ -7,7 +7,9 @@ version it was made on, and lands only on that version (UPDATE ... WHERE version
 (the same action id) or a tap on an old screen (another version) changes nothing, and the answer is the room as it is.
 Deadlines are absolute moments in the state, resolved by whoever reads or acts after one (the game's tick): no timer runs
 anywhere. Each player's view is built here by the game's own view(), so a secret never leaves the server for whom it isn't
-meant. Presence (game_players.seen_at) is written at most every SEEN_EVERY seconds of polling and never moves the version.
+meant. Presence (game_players.seen_at) is written at most every SEEN_EVERY seconds of polling and never moves the version;
+a rematch (`again`: the same room, code and host, another round) keeps only the players seen in the last AWAY seconds,
+and is not a new room for the daily cap.
 A room unchanged for KEEP is gone (purge: each new room and the nightly stats_day sweep), and so is one whose host or any
 player deletes their account (account.delete_me)."""
 from __future__ import annotations
@@ -23,6 +25,7 @@ from .core import PERSON, ApiError, Viewer, one, person_ref, rows  # core.now: t
 GAMES = {"spy": spy}
 KEEP = 3 * 3600
 SEEN_EVERY = 10
+AWAY = 60  # unseen this long at a rematch: gone from the room (a phone at the reveal polls every 5 s)
 A_DAY = 30  # rooms a person makes in a day
 MISSES = 20  # wrong codes a person may type in an hour: 10,000 codes aren't many to walk through
 ACTS_KEPT = 64  # the latest action ids each room remembers (a retry comes within seconds)
@@ -169,6 +172,11 @@ def act(con, v: Viewer, rid: int, body: dict) -> dict:
         applied = key in s["acts"]
         if not applied and have == r["version"]:
             t = core.now()
+            if body.get("type") == "again":  # one more round: whoever stopped polling is out (the game's checks roll it back)
+                away = [x[0] for x in rows(con, "SELECT user_id FROM game_players WHERE room_id = ? AND user_id != ?"
+                                           " AND seen_at <= ?", rid, v.id, t - AWAY)]
+                con.executemany("DELETE FROM game_players WHERE room_id = ? AND user_id = ?", [(rid, p) for p in away])
+                players = [p for p in players if p not in away]
             _game(r).act(s, players, r["host_id"], v.id, body, t)
             s["acts"] = [*s["acts"], key][-ACTS_KEPT:]
             con.execute("UPDATE game_rooms SET state = ?, version = version + 1, updated_at = ? WHERE id = ? AND version = ?",
