@@ -36,9 +36,10 @@
   // Sizes by one rule: WORK (many steps, minutes: admin, registry, event management, forms) is `full`,
   // the whole screen under the capsule, closed by Back only (a pull must not drop work); LOOKING at one thing is `tall`,
   // up to the capsule; ONE DECISION is neither: as tall as its content.
-  type Props = { overlay: Overlay; title?: string; heading?: string; actions?: Snippet; icon?: Component<any>; tint?: string | null; tall?: boolean; full?: boolean; see?: boolean; shut?: boolean;
+  // float: the footer's actions are islands over the content (the tab bar's way): no bar, the body scrolls under them
+  type Props = { overlay: Overlay; title?: string; heading?: string; actions?: Snippet; icon?: Component<any>; tint?: string | null; tall?: boolean; full?: boolean; see?: boolean; shut?: boolean; float?: boolean;
     children: Snippet; footer?: Snippet; opener?: HTMLElement | null; hold?: () => boolean; onhold?: () => void };
-  let { overlay, title = '', heading, actions, icon, tint = null, tall = false, full = false, see = false, shut = false, children, footer, opener, hold, onhold }: Props = $props();
+  let { overlay, title = '', heading, actions, icon, tint = null, tall = false, full = false, see = false, shut = false, float = false, children, footer, opener, hold, onhold }: Props = $props();
   const iris = takeIris(); // opened out of a round button (lib/state/sheets irisFrom) instead of the rise
   $effect(() => { overlay.title = heading ?? title; overlay.icon = icon; overlay.mark = heading != null; });
   // opened over a tinted page (the event editor) without a tint of its own: the page's colour, not plain navy
@@ -240,7 +241,7 @@
 
 <!-- (the second tap of a double tap on what opened it lands on the new scrim: not a close) -->
 <div class="scrim" class:clear={see} bind:this={scrim} onclick={(e) => { if (e.timeStamp - born > 350) close(overlay.id, true); }} role="presentation"></div>
-<div class="sheet glass glass-sheet" use:glass class:tall class:full class:see class:hasfoot={!!footer} class:flat={onAndroid} class:under class:ground bind:this={panel} role="dialog" aria-modal="true" aria-label={title || undefined} tabindex="-1" style={tint ? `--tint:${tint}` : ground ? `--ground:${ground}` : ''}>
+<div class="sheet glass glass-sheet" use:glass class:tall class:full class:see class:float class:hasfoot={!!footer} class:flat={onAndroid} class:under class:ground bind:this={panel} role="dialog" aria-modal="true" aria-label={title || undefined} tabindex="-1" style={tint ? `--tint:${tint}` : ground ? `--ground:${ground}` : ''}>
   {#if tint}<div class="tint" aria-hidden="true"></div>{/if}
   {#if !full}<div class="grip" aria-hidden="true"></div>{/if}
   <!-- the scroll edge: what scrolls up fades out under the top (the grip, the capsule) instead of running into it -->
@@ -296,6 +297,9 @@
   /* a footer with nothing in it (its {#if} false: a club I'm in) is no bar at all: never an empty strip over the bottom */
   .foot:not(:has(*)) { display: none; }
   .hasfoot .body { --pb: var(--s-4); }
+  .float .foot { position: absolute; left: 0; right: 0; bottom: 0; border-top: 0; pointer-events: none; }
+  .float .foot > :global(*) { pointer-events: auto; }
+  .float.hasfoot .body { --pb: calc(var(--ctl-l) + var(--s-8) + var(--s-3) + var(--safe-bottom)); } /* the last line clear of the island */
   /* Keep the moving scroll body free of an extra masked layer on Android. */
   .sheet:not(.flat) .scrolled { -webkit-mask-image: linear-gradient(transparent, black 18px); mask-image: linear-gradient(transparent, black 18px); }
   .full:not(.flat) .scrolled { -webkit-mask-image: linear-gradient(transparent var(--edge-from), black var(--edge-to));

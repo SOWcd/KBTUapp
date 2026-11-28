@@ -135,7 +135,7 @@
   // what it costs, said once under the title (a club's own meeting or a partner's event names no price)
   const cost = $derived(!e ? '' : e.price ? money(e.price) : e.guestHost || inner(e) || e.meeting ? '' : t('event.free'));
   const seatsLeft = $derived(!e?.seats ? '' : e.taken >= e.seats ? t('event.full') : tn('event.seatsLeft', e.seats - e.taken));
-  // the header's still picture, and the same one soft under the words (photos swiped sideways and a clip move under them: no lens there)
+  // the header's still picture (HeroArt, its own scrim under the words); photos swiped sideways and a clip get the header's shade
   const art = $derived(e ? coverFor(e.cover, 'card') ?? e.video?.poster ?? null : null);
   const strip = $derived(!!e && !e.video?.url && !!e.cover && !!e.slides?.length);
   const still = $derived(!wide && !strip && !e?.video?.url);
@@ -361,10 +361,10 @@
   }
 </script>
 
-<Sheet {overlay} icon={CalendarHeart} title={preview ? t('ed.preview') : t('cap.event')} tint={e?.tint}>
+<Sheet {overlay} icon={CalendarHeart} title={preview ? t('ed.preview') : t('cap.event')} tint={e?.tint} float>
   {#if e}
     {#if preview}<p class="pv"><Tag tone="accent"><Eye size={15} />{t('event.preview')}</Tag></p>{/if}
-    <div class="hero theme-dark" class:cancelled class:deep={!still} class:pics={strip} class:clip={!wide && !!e.video?.url && !cancelled} bind:this={hero}>
+    <div class="hero theme-dark" class:cancelled class:deep={!still} class:nopic={still && !art} class:pics={strip} class:clip={!wide && !!e.video?.url && !cancelled} bind:this={hero}>
       <!-- the header: the horizontal clip behind it, else the vertical one, else the photos swiped sideways, else the cover
            (none: the club's colour as a mesh with the event's 3D mark, the Afisha hero's own picture) -->
       {#if wide}
@@ -391,10 +391,8 @@
       <span class="acts" class:on={e.saved} inert={!!preview}>
         <IconButton icon={Bookmark} kind="glass" size="s" on={e.saved} label={e.saved ? t('event.saved') : t('event.save')} onclick={() => toggleSaved(id)} />
         {#if inTelegram}<IconButton icon={Share} kind="glass" size="s" label={t('event.share')} onclick={share} />{/if}</span></div>
-      <!-- what, when, where: the words on the picture, read in one look. Under them the picture goes soft and dark (the
-           lens: its small thumb again, blurred, a still layer drawn once); taps fall through to the photos -->
+      <!-- what, when, where: the words on the picture, read in one look; taps fall through to the photos -->
       <div class="slab">
-        {#if still && art}<span class="lens" aria-hidden="true"><img src={art.thumb} alt="" decoding="async" draggable="false" style:object-position={focusPos(art)} /></span>{/if}
         <div class="tags">
         {#if e.meeting}<Tag tone="onphoto">{t('event.meeting')}</Tag>{:else if e.visibility === 'members'}<Tag tone="onphoto">{t('event.teamOnly')}</Tag>{:else if e.visibility === 'leaders'}<Tag tone="onphoto">{t('event.leaders')}</Tag>{:else if e.firstYear}<Tag tone="warning">{t('event.firstYear')}</Tag>{/if}
         {#if e.school}<Tag tone="onphoto">{t('event.schoolOnly', { school: shortOf(e.org) })}</Tag>{/if}
@@ -679,10 +677,12 @@
 
   {#snippet footer()}
     {#if e && soon}
+      <!-- an island over the content (the tab bar's glass): what to know before the tap, then the one action -->
+      <div class="island glass glass-pill" inert={!!preview}>
       {#if noGuest}<p class="tnote">{t('ta.cant')}</p>
       {:else if regNote}<p class="tnote">{t('event.regUntil', { when: relDay(e.regUntil!) + ', ' + time(e.regUntil!) })}</p>{/if}<!-- the deadline where the decision is made -->
       {#if askable}<p class="tnote">{t(e.teamAsk === 'pending' ? 'ta.pendingNote' : 'ta.note')}</p>{/if}
-      <div class="actions btns" inert={!!preview}>
+      <div class="actions btns">
         {#if cancelled}
           <Button kind="neutral" size="l" full disabled>{t('event.cancelledLong')}</Button>
         {:else if e.visibility === 'leaders' && !crew && !going && !started}
@@ -738,6 +738,7 @@
           <Button kind="primary" size="l" full loading={goingBusy.has(id)} onclick={() => toggleGoing(id, () => sheets.pay(id))}>{e.price ? freeMe ? t('event.goFree') : t('event.goPrice', { price: money(e.price) }) : t(e.santa ? 'santa.join' : 'event.go')}</Button>
         {/if}
       </div>
+      </div>
     {/if}
   {/snippet}
 </Sheet>
@@ -770,8 +771,9 @@
   .dots { position: absolute; left: 0; right: 0; bottom: 10px; z-index: 3; display: flex; justify-content: center; gap: 5px; pointer-events: none; }
   .dots i { width: 6px; height: 6px; border-radius: var(--r-full); background: rgba(255, 255, 255, 0.5); box-shadow: 0 0 4px rgba(0, 0, 0, 0.4); transition: transform var(--t-fast); }
   .dots i.on { background: var(--on-accent); transform: scale(1.25); }
-  /* the picture clear at the top, deeper toward the words; with no lens under them (photos, a clip) deeper still */
-  .shade { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: linear-gradient(rgba(0, 0, 0, 0) 36%, rgba(0, 0, 0, 0.5)); box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.14); }
+  /* the hair rim; a cover has HeroArt's own scrim under the words, the mesh a lighter one, photos and a clip a deep one */
+  .shade { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.14); }
+  .nopic .shade { background: linear-gradient(rgba(0, 0, 0, 0) 36%, rgba(0, 0, 0, 0.5)); }
   .deep .shade { background: linear-gradient(rgba(0, 0, 0, 0) 30%, rgba(0, 0, 0, 0.82)); }
   .top { position: absolute; z-index: 3; left: 12px; right: 12px; top: 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px; pointer-events: none; } /* a long name yields to the buttons, never under them */
   .top > * { pointer-events: auto; }
@@ -781,16 +783,10 @@
   .acts.on :global(.ib:first-child svg) { fill: currentColor; color: var(--warning); }
 
   /* the words (the Afisha hero's slab): the title in the display face, the time in white, the place a step quieter */
-  .slab { position: relative; z-index: 2; isolation: isolate; display: flex; flex-direction: column; gap: 3px; padding: 104px 18px var(--s-4); pointer-events: none;
+  .slab { position: relative; z-index: 2; isolation: isolate; display: flex; flex-direction: column; gap: 3px; padding: var(--s-6) 18px var(--s-4); pointer-events: none;
     text-shadow: 0 1px 8px rgba(0, 0, 0, 0.28); }
   .pics .slab { padding-bottom: var(--s-6); } /* the photos' dots under the words */
   .clip .slab { padding-right: 60px; } /* the clip's sound button */
-  .lens { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none;
-    -webkit-mask-image: linear-gradient(transparent, rgba(0, 0, 0, 0.35) 36px, rgba(0, 0, 0, 0.8) 68px, black 96px); mask-image: linear-gradient(transparent, rgba(0, 0, 0, 0.35) 36px, rgba(0, 0, 0, 0.8) 68px, black 96px); }
-  /* the picture runs 64px past the lens on every side but the top: a blurred layer fades out at its own edges.
-     It comes in over a long fade (the header is shorter than the Afisha's card: a short one drew a line across the picture) */
-  .lens img { position: absolute; left: -64px; bottom: -64px; width: calc(100% + 128px); max-width: none; /* base.css caps every img at its box */ height: calc(var(--hh) + 64px); object-fit: cover;
-    filter: blur(32px) saturate(1.7) brightness(0.6); }
   .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: var(--s-2); text-shadow: none; }
   .tags:not(:has(*)) { display: none; }
   .ttl { margin-bottom: var(--s-1); font: 700 var(--fs-t1)/1.08 var(--font-display); letter-spacing: -0.035em; text-wrap: balance; overflow-wrap: break-word; }
@@ -830,9 +826,13 @@
   .stack :global(.av + .av) { margin-left: -8px; }
   .stack :global(.av) { box-shadow: 0 0 0 2px var(--surface-solid); }
 
-  /* the footer: the one primary action, alone */
+  /* the footer: the one primary action, alone, in a glass island over the content. The main button is calm: white with
+     ink words on the dark, ink with white words on the light (the accent's blue shouted over every poster) */
+  .island { --cta: var(--ink); display: flex; flex-direction: column; padding: 5px; border-radius: var(--r-xl); }
+  :global(:root[data-theme='light']) .island { --cta: var(--on-accent); }
+  .island :global(.btn.k-primary:not(.red):not(.done):not(:disabled)) { --body: var(--text); color: var(--cta); --rim-lo: rgba(11, 20, 51, 0.2); }
   .actions { display: flex; gap: 8px; align-items: center; }
-  .tnote { margin: 0 0 8px; text-align: center; color: var(--text-2); font: 450 var(--fs-sub)/1.3 var(--font-text); }
+  .tnote { margin: 6px var(--s-3) 8px; text-align: center; color: var(--text-2); font: 450 var(--fs-sub)/1.3 var(--font-text); }
   .gl { flex: 1; margin: 0; padding: var(--s-2) var(--s-4); text-wrap: pretty; }
   .ans { flex: 1; display: flex; gap: 8px; min-width: 0; }
   .ans > :global(*) { flex: 1 1 0; min-width: 0; } /* two halves, whatever each says */
