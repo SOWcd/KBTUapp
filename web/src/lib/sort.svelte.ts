@@ -3,6 +3,7 @@
 //   const ORDERS: Order<Row>[] = [usual(), byName((r) => r.fullName)];
 //   const rows = $derived(sorted('friends', ORDERS, list));  +  <SortChip list="friends" orders={ORDERS} />
 import type { Key } from './i18n/index.svelte';
+import { cyrKey } from './search';
 
 /** One way to order a list. The first of a list's orders is its default; without `by` the rows stay as they came
  *  (the server's order). `desc`: biggest first. Rows without a value go last either way. */
@@ -10,7 +11,8 @@ export type Order<T> = { id: string; label: Key; by?: (row: T) => string | numbe
 
 /** The orders most lists share. */
 export const usual = <T>(label: Key = 'sort.usual'): Order<T> => ({ id: 'usual', label });
-export const byName = <T>(by: (row: T) => string): Order<T> => ({ id: 'name', label: 'sort.name', by });
+// Latin and Cyrillic names mixed: "Misgarli" among the Cyrillic M names (cyrKey), not before them all
+export const byName = <T>(by: (row: T) => string): Order<T> => ({ id: 'name', label: 'sort.name', by: (row) => cyrKey(by(row) ?? '') });
 export const newest = <T>(by: (row: T) => number | null | undefined, label: Key = 'sort.new'): Order<T> => ({ id: 'new', label, by, desc: true });
 
 const KEY = 'kbtu.sort';
