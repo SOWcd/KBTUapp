@@ -12,11 +12,13 @@ import './lib/state/power.svelte'; // power saving's look before the first paint
 import './lib/state/keyboard.svelte'; // the app's box at its height without a keyboard, before the first paint
 
 document.documentElement.lang = i18n.lang;
-if (!inTelegram && !/^\/(show|screen)\/?$/.test(location.pathname)) document.documentElement.dataset.web = '';
+// /ako#<secret>, /ako/o/<org>: admissions (server logic/ako.py), a page of its own in any browser, never the app's web shell
+const admissions = /^\/ako(\/|$)/.test(location.pathname);
+if (!inTelegram && !admissions && !/^\/(show|screen)\/?$/.test(location.pathname)) document.documentElement.dataset.web = '';
 // the iPhone app draws the tab bar itself (UITabBar): Nav keeps only its corner button (lib/native.ts 'tabs')
 if (native.has('tabs')) document.documentElement.dataset.ntabs = '';
 // Telegram on Android reports its bottom inset (the system bar, 48 px) though the web view already ends above that bar
-// or the bar is hidden in fullscreen: tokens.css drops it there (measured Nov 27, startapp=vp: dock 58 px off the bottom)
+// or the bar is hidden in fullscreen: tokens.css drops it there (measured Nov 27: dock 58 px off the bottom)
 if (inTelegram && onAndroid) document.documentElement.dataset.android = '';
 // theme before the first paint: no white flash in dark mode
 applyTheme(initialTheme(tg.colorScheme()));
@@ -46,7 +48,9 @@ void loadLang(i18n.lang).catch(() => {}).then(async () => {
   // checkin.py), the app otherwise (the screen into the body: #app is a phone-wide column on a computer)
   // (its own chunk: the app's first chunk doesn't carry it, nor the QR encoder it draws with)
   // /show?lib=<key>: a library room's seats on its wall (screens/library/LibraryScreen.svelte), its own chunk too
-  if (/^\/(show|screen)\/?$/.test(location.pathname)) mount((await (new URLSearchParams(location.search).has('lib') ? import('./screens/library/LibraryScreen.svelte') : import('./screens/Screen.svelte'))).default, { target: document.body });
+  // /ako#<secret> or /ako/o/<org>: an applicant's page (no account, no Telegram, no tabs), its own chunk; in Telegram too
+  if (admissions) bootOut(), mount((await import('./screens/ako/Ako.svelte')).default, { target: document.body });
+  else if (/^\/(show|screen)\/?$/.test(location.pathname)) mount((await (new URLSearchParams(location.search).has('lib') ? import('./screens/library/LibraryScreen.svelte') : import('./screens/Screen.svelte'))).default, { target: document.body });
   // the design system's lab (every ui/ component in every state): the dev server only, its own chunk, `?lab` in the URL;
   // a production build drops this branch and the chunk with it
   else if (import.meta.env.DEV && new URLSearchParams(location.search).has('lab')) bootOut(), mount((await import('./screens/lab/Lab.svelte')).default, { target: app });

@@ -1610,6 +1610,13 @@ WALLET = {
 }
 
 # The bot's command menu (Telegram's "/" list), per scope and language (bot._commands): groups get /all, private chats /start
+# an applicant's interview as a calendar invite (logic/ako.py ics): its title and the line above the meeting link
+AKO_ICS = {
+    "ru": {"title": "Собеседование: {program} · {org}", "body": "Онлайн-собеседование в Microsoft Teams. Ссылка для входа:"},
+    "kk": {"title": "Сұхбат: {program} · {org}", "body": "Microsoft Teams-тегі онлайн сұхбат. Кіру сілтемесі:"},
+    "en": {"title": "Interview: {program} · {org}", "body": "Online interview in Microsoft Teams. Link to join:"},
+}
+
 COMMANDS = {
     "all_group_chats": {"ru": [("all", "Позвать всех участников клуба")], "kk": [("all", "Клубтың барлық мүшелерін шақыру")],
                         "en": [("all", "Call all the club's members")]},

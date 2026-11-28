@@ -27,9 +27,10 @@ type Funnel = 'signup.tap' | 'signup.done' | 'signup.fail'
   | 'streak.t0' | 'streak.t1' | 'streak.t2' | 'streak.t3' | 'streak.t4' | 'streak.tap';
 // a JS error's class (by its constructor, or a chunk that didn't load), never its message (server stats.JS_KINDS)
 type JsKind = 'type' | 'ref' | 'range' | 'syntax' | 'chunk' | 'other';
-// a failed API call: no answer, a 5xx, or the server's error code (server stats.API_KINDS; api/types.ts ApiError)
+// a failed API call: no answer, a 5xx, or the server's error code (server stats.API_KINDS; api/types.ts ApiError); two
+// of forbidden's reasons are no failure, so they count apart: the policy's consent asked, Telegram's sign-in data expired
 export type ApiKind = 'network' | 'server' | 'unauthorized' | 'need_student' | 'forbidden' | 'not_found' | 'full' | 'closed' | 'conflict'
-  | 'guest_list' | 'rate_limited' | 'bad_input' | 'unavailable';
+  | 'guest_list' | 'rate_limited' | 'bad_input' | 'unavailable' | 'consent' | 'expired';
 type Platform = 'ios' | 'android' | 'desktop' | 'web';
 type Bucket = 0 | 1 | 2 | 3 | 4 | 5;
 type Long = Bucket | 6;
@@ -126,7 +127,10 @@ export function timed(screen: Screen, since: number): void {
 /** An uncaught error or rejection on `screen`: its class only; the message is looked at here and never sent. */
 export function crashed(screen: Screen, e: unknown): void {
   if (e && typeof e === 'object' && 'code' in e && 'data' in e) return; // an ApiErr: already counted as a failed call
-  const kind = /dynamically imported module|module script failed|Unable to preload/i.test(e instanceof Error ? e.message : String(e)) ? 'chunk'
+  const text = e instanceof Error ? e.message : String(e);
+  // the browser's notice that some resize callbacks wait for the next frame: nothing broke (ui/fly.ts had one per open)
+  if (/^ResizeObserver loop/.test(text)) return;
+  const kind = /dynamically imported module|module script failed|Unable to preload/i.test(text) ? 'chunk'
     : JS[(e as Error)?.name] ?? 'other';
   count(`js.${screen}.${kind}`);
 }

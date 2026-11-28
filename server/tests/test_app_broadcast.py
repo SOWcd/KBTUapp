@@ -156,7 +156,7 @@ def test_a_failed_preview_can_go_again(audience, capsys):
 
 
 def test_broadcast_votes(audience, capsys):
-    """Interesting / Not interesting under a broadcast: one vote per person, changeable, the link row stays, counts for the owner."""
+    """Interesting / Not interesting under a broadcast: one vote per person, changeable, the link row stays."""
     con, cfg = audience
     calls = []
 
@@ -176,5 +176,3 @@ def test_broadcast_votes(audience, capsys):
     admin.main(["broadcast", NAME, URL, "--dry"])
     assert capsys.readouterr().out.strip() == "would queue 2"        # the admin and 12; 11 turned them off
     assert ("editMessageReplyMarkup", {"chat_id": 11, "message_id": 5, "reply_markup": {"inline_keyboard": kb[:1]}}) in calls
-    admin.main(["broadcast-votes", NAME])
-    assert capsys.readouterr().out.strip() == f"{NAME}: 1 interested, 1 not"

@@ -3,11 +3,8 @@
   import Clock from '@lucide/svelte/icons/clock';
   import MapPin from '@lucide/svelte/icons/map-pin';
   import MapIcon from '@lucide/svelte/icons/map';
-  import Play from '@lucide/svelte/icons/play';
   import QrCode from '@lucide/svelte/icons/qr-code';
   import Sparkles from '@lucide/svelte/icons/sparkles';
-  import Images from '@lucide/svelte/icons/images';
-  import Newspaper from '@lucide/svelte/icons/newspaper';
   import CalendarPlus from '@lucide/svelte/icons/calendar-plus';
   import Bookmark from '@lucide/svelte/icons/bookmark';
   import UsersRound from '@lucide/svelte/icons/users-round';
@@ -23,13 +20,13 @@
   import { lead as leadHero, load as loadHero, rank as rankHero, save as saveHero, shown as heroShown, stale as heroStale, tapped as heroTapped, type Pick as HeroPick } from '../../lib/hero';
   import { data, skipped, classKey, skipClass, prefetchEvent, canAskRating, dismissEventRating, loadMyPast, ratingBusy, rateFromPrompt, toggleGoing, goingBusy } from '../../lib/state/data.svelte';
   import { touchAhead } from '../../lib/touch';
-  import { session, kriCorner } from '../../lib/state/session.svelte';
-  import { sheets, openMapFrom, irisFrom } from '../../lib/state/sheets';
+  import { session } from '../../lib/state/session.svelte';
+  import { sheets } from '../../lib/state/sheets';
   import { ui, toTickets, goTab } from '../../lib/state/ui.svelte';
-  import { t, tn, money, subjectOf, friendsLine } from '../../lib/i18n/index.svelte';
+  import { t, money, subjectOf, friendsLine } from '../../lib/i18n/index.svelte';
   import EventPlace from '../../ui/EventPlace.svelte';
   import { lessonKind } from '../../lib/i18n/subjects';
-  import { dayNo, nowTs, parts, weekday, weekdayShort, dayMonth, dayMonthShort, OFFSET, soon, time, dateInput, multiDay, daySpan } from '../../lib/time';
+  import { dayNo, nowTs, parts, weekday, dayMonth, dayMonthShort, OFFSET, soon, time, dateInput, multiDay, daySpan } from '../../lib/time';
   import { byStart, classesOn, classesLeft } from '../../lib/classes';
   import { noClasses } from '../../lib/academic';
   import { floorOf, atDorm, DORM_2GIS, atBldg2, bldg2Room, BLDG2_2GIS, awayOf } from '../../lib/map';
@@ -49,14 +46,15 @@
   import CastingBlock from '../../ui/CastingBlock.svelte';
   import TwoGisMark from '../../ui/TwoGisMark.svelte';
   import EventRow from '../../ui/EventRow.svelte';
-  import { fitTitle, largeTitle } from '../../ui/title';
+  import { largeTitle } from '../../ui/title';
   import Button from '../../ui/Button.svelte';
-  import IconButton from '../../ui/IconButton.svelte';
   import Card from '../../ui/Card.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
   import ActionCard from '../../ui/ActionCard.svelte';
   import StoryRow from './StoryRow.svelte';
   import PullSearch from '../../ui/PullSearch.svelte';
+  import HeroArt from './HeroArt.svelte';
+  import { coverFor } from '../../lib/photo';
   import Everything from './Everything.svelte';
   import GalleryCard from './GalleryCard.svelte';
   import Chip from '../../ui/Chip.svelte';
@@ -156,7 +154,6 @@
     const id = requestIdleCallback(() => (upto += STEP), { timeout: 1000 });
     return () => cancelIdleCallback(id);
   });
-  const weekCount = $derived(shown.filter((e) => endOf(e) > now && dayNo(e.startsAt) < today + 7).length);
   // a day off by the academic calendar on a class day: say why the classes are gone
   const offToday = $derived(noClasses(dateInput(now)) && data.schedule.some((c) => c.weekday === (parts(now).wd || 7)));
 
@@ -211,6 +208,8 @@
     const keep = held.d === today ? held.keys.map((k) => cands.find((x) => x.key === k)).filter((x): x is Card => !!x && !taken(x)) : [];
     return [...lead, ...keep, ...rankHero(cands.filter((x) => !taken(x) && !keep.some((y) => y.key === x.key)), was, today)].slice(0, 3);
   });
+  // with no picture the lead is a field of one colour: the row is lower then (a tall empty card read as a blank screen)
+  const leadPic = $derived.by(() => { const c = cards[0]; return !!c && ('e' in c ? !!(c.e.cover || c.e.video?.poster) : 'p' in c ? !!c.p.photo : 'f' in c ? !!c.f.photos[0] : false); });
   let at = $state(0); // the card in view
   const atCard = $derived(Math.min(at, cards.length - 1));
   $effect(() => {
@@ -260,20 +259,6 @@
   // (the sheet's own rule is longer: a partner's link, a guest list, a club's own event keep the whole-card tap)
   const canGo = (e: EventCard) => e.status === 'published' && (!e.my || e.my.status === 'cancelled') && e.startsAt > now && !(e.regUntil && e.regUntil <= now)
     && !e.externalUrl && !e.guestHost && !e.guestList && !inner(e) && !e.santa && !(e.seats != null && e.taken >= e.seats) && !onTeam(e, session.me?.memberships);
-  // the week at a glance, in place of the lone counters: seven days from today, a dot where something is on (the accent:
-  // I'm going), a tap goes to that day's card. Built from the days above: nothing is read twice
-  const strip = $derived(Array.from({ length: 7 }, (_, i) => {
-    const d = today + i, ev = days.find((x) => x.d === d)?.items.filter((x) => 'e' in x) ?? [];
-    return { d, on: days.some((x) => x.d === d && (x.items.length || (showClasses && data.schedule.length))), n: ev.length, mine: ev.some((x) => 'e' in x && x.e.my?.status === 'going') };
-  }));
-  async function toDay(d: number) {
-    haptic.select();
-    // its rows drawn first, only as far as that day (the list draws a few days per idle moment)
-    upto = Math.max(upto, days.slice(0, days.findIndex((x) => x.d === d) + 1).reduce((n, x) => n + x.items.length, 0));
-    await tick();
-    document.querySelector(`.tab.on .day[data-d="${d}"]`)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
-  }
-
   // no timetable: the one card that asks for it (after the first load: a returning student never sees it flash)
   const askSched = $derived(data.scheduleReady && !!session.me?.student && !data.schedule.length);
   // opened without the network: my kept tickets first, their QR ready for the door (lib/offlineTickets)
@@ -363,89 +348,65 @@
     {@const e = c.e}
     {@const mine = e.my?.status === 'going'}
     <!-- an event: my ticket and the way there, else what it is and one tap to go -->
-    <section class="hero" class:tix={mine && i === 0} class:nopic={!(e.cover || e.video?.poster)} style:--c={e.cover?.color ?? e.video?.poster?.color ?? e.color ?? e.tint} onclickcapture={() => tap(c)}>
+    <!-- the card is a portrait: the organizer's tall framing (the Feed's), not the wide card's, which lost half its width here -->
+    {@const art = coverFor(e.cover, 'feed') ?? e.video?.poster ?? null}
+    {@const pic = !!art}
+    <section class="hero theme-dark" class:tix={mine && i === 0} class:nopic={!pic} style:--c={e.cover?.color ?? e.video?.poster?.color ?? e.color ?? e.tint} onclickcapture={() => tap(c)}>
       <button class="hit" onpointerdown={(ev) => touchAhead(ev, () => prefetchEvent(e.id))} onclick={(ev) => sheets.event(e.id, ev.currentTarget.parentElement?.querySelector('.poster'))} aria-label={e.title}></button>
-      <span class="art"><Poster item={e} big radius={0} /></span>
+      <span class="art"><HeroArt pic={art} emoji={e.emoji} color={e.color ?? e.tint} first={i === 0} /></span>
       <div class="shade"></div>
-      <div class="slab glass glass-sheet">
+      <div class="slab">
         <span class="hero-tx">
           <b class="clamp-2">{e.title}</b>
           <span class="where"><span class="ellipsis"><b class="num">{multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : time(e.startsAt)}</b> · {soon(e.startsAt, now)}</span><span class="by ellipsis">&nbsp;· {shortOf(e.org)}{#if e.coHost} × {shortOf(e.coHost)}{/if}</span></span>
           <span class="hero-place"><EventPlace {e} pin /></span>
-          {#if !mine}<span class="hsub">{@render status(e)}</span>{/if}
         </span>
-        <!-- under the thumb, at the slab's end: my ticket, or one tap to sign up -->
-        {#if mine}
-          <span class="acts">
-            <IconButton kind="tinted" size="s" icon={QrCode} label={t('event.ticket')} onclick={() => sheets.ticket(e.id)} />
-          </span>
-        {:else if e.my?.status === 'hold'}
-          <span class="acts"><Button kind="tinted" size="s" onclick={() => sheets.pay(e.id)}>{t('event.pay', { price: money(e.price ?? 0) })}</Button></span>
-        {:else if canGo(e)}
-          <span class="acts"><Button kind="tinted" size="s" loading={goingBusy.has(e.id)} onclick={() => toggleGoing(e.id, () => sheets.pay(e.id))}>{e.price ? e.freeLeft && session.me?.student?.freeFirst ? t('event.goFree') : t('event.goPrice', { price: money(e.price) }) : t('event.go')}</Button></span>
-        {/if}
+        <!-- the slab's foot: who goes and what it is, and under the thumb my ticket or the one tap to sign up -->
+        <span class="foot">
+          <span class="hsub">{@render status(e)}</span>
+          {#if mine}
+            <span class="acts"><Button onmedia size="m" onclick={() => sheets.ticket(e.id)}>{#snippet icon()}<QrCode size={17} />{/snippet}{t('event.ticket')}</Button></span>
+          {:else if e.my?.status === 'hold'}
+            <span class="acts"><Button onmedia size="m" onclick={() => sheets.pay(e.id)}>{t('event.pay', { price: money(e.price ?? 0) })}</Button></span>
+          {:else if canGo(e)}
+            <span class="acts"><Button onmedia size="m" loading={goingBusy.has(e.id)} onclick={() => toggleGoing(e.id, () => sheets.pay(e.id))}>{e.price ? e.freeLeft && session.me?.student?.freeFirst ? t('event.goFree') : t('event.goPrice', { price: money(e.price) }) : t('event.go')}</Button></span>
+          {/if}
+        </span>
       </div>
-      <span class="rim" aria-hidden="true"></span>
     </section>
   {:else}
     {@const v = look(c)}
     <!-- news, a forum post, my next class: the same card, its picture or a 3D mark, the title and one line -->
-    <section class="hero" class:nopic={!v.item.cover} style:--c={v.color} onclickcapture={() => tap(c)}>
+    <section class="hero theme-dark" class:nopic={!v.item.cover} style:--c={v.color} onclickcapture={() => tap(c)}>
       <button class="hit" onclick={v.open} aria-label={v.title}></button>
-      <span class="art"><Poster item={v.item} big radius={0} /></span>
+      <span class="art"><HeroArt pic={v.item.cover} emoji={v.item.emoji} color={v.color} first={i === 0} /></span>
       <div class="shade"></div>
       <div class="slab">
         <span class="hero-tx">
           <b class="clamp-2">{v.title}</b>
           <span class="where"><span class="ellipsis">{#if v.lead}<b class="num">{v.lead}</b> · {/if}{v.line}</span>{#if v.by}<span class="by ellipsis">&nbsp;· {v.by}</span>{/if}</span>
         </span>
-        {#if v.room}{@const room = v.room}<span class="acts"><IconButton kind="secondary" size="s" icon={MapPin} label={t('route.open')} onclick={() => sheets.map(room)} /></span>{/if}
+        {#if v.room}{@const room = v.room}<span class="foot"><span class="acts"><Button onmedia size="m" onclick={() => sheets.map(room)}>{#snippet icon()}<MapPin size={17} />{/snippet}{room}</Button></span></span>{/if}
       </div>
-      <span class="rim" aria-hidden="true"></span>
     </section>
   {/if}
 {/snippet}
 
 <div class="page scroll stagger">
   <PullSearch bind:value={q} placeholder={t('list.search')} />
-  <header class="hd">
-    <span><h1 class="ttl" use:fitTitle use:largeTitle={'afisha'}>{t('common.today')}</h1></span>
-    <!-- the map (its home here once KRI took the bar's corner; a guest's corner is the map itself), the Feed full screen, the Gallery, the clubs' news -->
-    <span class="tools">
-      {#if kriCorner()}<IconButton icon={MapIcon} size="s" label={t('map.open')} onclick={openMapFrom} />{/if}
-      {#if shown.length}<IconButton icon={Play} size="s" label={t('list.inRow')} onclick={(e) => { irisFrom(e); sheets.feed(); }} />{/if}
-      <IconButton icon={Images} size="s" label={t('gallery.title')} onclick={(e) => { irisFrom(e); sheets.gallery(); }} />
-      <IconButton icon={Newspaper} size="s" label={t('page.news')} onclick={(e) => { irisFrom(e); sheets.news(); }} />
-    </span>
-  </header>
-  <p class="date" use:fitTitle={20}>{weekday(dayTs(today) + 12 * 3600)}, {dayMonth(dayTs(today) + 12 * 3600)}</p>
-  {#if data.eventsReady && weekCount}<p class="kick">{tn('list.week', weekCount)}</p>{/if}
+  <!-- no headline (owner, Nov 27): the clubs' circles, then the one big card. The screen's name stays for a reader and for
+       the capsule, which shows it once this has scrolled away -->
+  <h1 class="ttl" use:largeTitle={'afisha'}>{t('common.today')}</h1>
   {#if kept.length}{#await import('../../ui/OfflineTickets.svelte') then m}<div class="offline"><m.default tickets={kept} /></div>{/await}{/if}
   {#if searching}
     <Everything {q} events={searchable} />
   {:else}
-  {#if ratePrompt && !ratingBusy.has(ratePrompt.id)}
-    {@const e = ratePrompt}
-    <div class="rate-prompt">
-      <Card>
-        <div class="rate-head">
-          <div><h2 class="t-body">{t('rate.ask')}</h2><p class="t-foot clamp-2">{e.title}</p></div>
-          <IconButton icon={X} label={t('rate.dismiss')} kind="plain" onclick={() => void dismissEventRating(e.id)} />
-        </div>
-        <div class="rate-stars" role="group" aria-label={t('rate.ask')}>
-          {#each [1, 2, 3, 4, 5] as score (score)}
-            <button type="button" aria-label={t('rate.score', { n: score })} onclick={() => void rateFromPrompt(e.id, score)}><Star size={23} /></button>
-          {/each}
-        </div>
-      </Card>
-    </div>
-  {/if}
-  <StoryRow />
+  <StoryRow feed={shown.length > 0} />
   {#if showClasses && offToday}<p class="off t-foot">{t('list.dayOff')}</p>{/if}
 
   {#if cards.length}
     <!-- the hero, personal: the first card, a swipe brings #2 and #3 (snapped); one markup for every kind -->
-    <div class="heroes" role="group" aria-label={t('list.heroPicks')} onscroll={slid}>
+    <div class="heroes" class:short={!leadPic} role="group" aria-label={t('list.heroPicks')} onscroll={slid}>
     {#each cards as c, i (i ? c.key : '')}
       {#if i}{@render heroCard(c, i)}
       {:else}
@@ -456,18 +417,21 @@
     </div>
     {#if cards.length > 1}<div class="dots" aria-hidden="true">{#each cards as c, i (c.key)}<i class={{ on: i === atCard }}></i>{/each}</div>{/if}
   {/if}
-  {#if data.eventsReady && days.length}
-    <nav class="week" aria-label={t('list.title')}>
-      {#each strip as w (w.d)}
-        {@const ts = dayTs(w.d) + 12 * 3600}
-        <!-- named as it shows ("Fri 27", for voice control), then the whole date; the space between them isn't drawn (a flex column) -->
-        <button class={['wd', { today: w.d === today, has: w.n }]} disabled={!w.on} aria-label={`${weekdayShort(ts)} ${parts(ts).d} · ${weekday(ts)}, ${dayMonth(ts)}${w.n ? ' · ' + w.n : ''}`} onclick={() => void toDay(w.d)}>
-          <span>{weekdayShort(ts)}</span> <b class="num">{parts(ts).d}</b><i class={{ on: w.mine }}></i>
-        </button>
-      {/each}
-    </nav>
-  {/if}
 
+  {#if ratePrompt && !ratingBusy.has(ratePrompt.id)}
+    {@const e = ratePrompt}
+    <!-- one quiet line under the hero (owner, Nov 27: a card of five grey tiles read as another app): what it asks and of
+         which event, the five stars bare at its end, one tap rates; the x leaves it -->
+    <div class="rate">
+      <span class="rate-tx"><b>{t('rate.ask')}</b><span class="ellipsis">{e.title}</span></span>
+      <span class="rate-stars" role="group" aria-label={t('rate.ask')}>
+        {#each [1, 2, 3, 4, 5] as score (score)}
+          <button type="button" aria-label={t('rate.score', { n: score })} onclick={() => void rateFromPrompt(e.id, score)}><Star size={22} strokeWidth={1.75} /></button>
+        {/each}
+      </span>
+      <button type="button" class="rate-x" aria-label={t('rate.dismiss')} onclick={() => void dismissEventRating(e.id)}><X size={16} /></button>
+    </div>
+  {/if}
   {#if rest.length}
     <!-- the rest of my week (all of it when another card leads): one grouped card, a ticket pill at each row's end -->
     <h2 class="sec">{t('list.yours')}</h2>
@@ -577,34 +541,35 @@
 <style>
   /* Opal (design-spec-opal.md): black first, one hero, big left title, near-black cards with a hair rim, grey caps */
   .page { position: absolute; inset: 0; padding: var(--page-top) var(--gutter) 0; background: var(--bg); color: var(--text); }
-  .hd > span:first-child { min-width: 0; }
-  /* the date yields: too narrow for it beside the buttons (320 px, four of them), the buttons take their own line above,
-     at the right (wrap-reverse: the second line goes on top, and flex-start is the line's bottom) */
-  .hd { display: flex; flex-wrap: wrap-reverse; align-items: center; justify-content: space-between; gap: var(--s-3); }
-  .hd > span:first-child { flex: 1 0 120px; }
-  /* a headline of two lines in two weights (display type): the day, then its date, light; the week's count is a quiet line under them */
-  .ttl { font: 600 var(--fs-title)/1.06 var(--font-display); letter-spacing: -0.045em; }
-  .date { margin-bottom: var(--s-5); white-space: nowrap; font: var(--fw-light) var(--fs-title)/1.1 var(--font-display); letter-spacing: -0.045em; color: var(--text-3); }
-  .date:has(+ .kick) { margin-bottom: var(--s-1); }
-  .kick { margin: 0 0 var(--s-5); font: 450 var(--fs-sub)/1.3 var(--font-text); color: var(--text-3); }
+  .ttl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .offline { margin-bottom: var(--s-6); }
-  .tools { flex: none; display: flex; gap: var(--s-3); margin-left: auto; }
-  .rate-prompt { margin-bottom: var(--s-3); }
-  .rate-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); }
-  .rate-head > div { min-width: 0; }
-  .rate-head h2 { font-weight: 600; }
-  .rate-head p { margin-top: 2px; color: var(--text-2); overflow-wrap: anywhere; }
-  .rate-stars { display: grid; grid-template-columns: repeat(5, 1fr); gap: var(--s-1); margin-top: var(--s-2); }
-  .rate-stars button { display: grid; place-items: center; min-height: var(--tap); border-radius: var(--r-m); background: var(--fill); color: var(--warning-text); }
-  .rate-stars button:active { transform: scale(0.94); }
+  /* the rating: one bare line on the ground between the card and the list (no surface of its own: the hero is the
+     card here); the stars are gold outlines, each a 44 px tall target, and a pressed one fills */
+  .rate { display: flex; align-items: center; gap: var(--s-1); min-height: var(--row-h); margin: var(--s-4) calc(-1 * var(--s-2)) 0 var(--s-1); }
+  .rate-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; font: 450 var(--fs-cap)/1.3 var(--font-text); color: var(--text-3); }
+  .rate-tx b { overflow: hidden; text-overflow: ellipsis; font: 600 var(--fs-body)/1.25 var(--font-text); color: var(--text); white-space: nowrap; }
+  .rate-stars { flex: none; display: flex; }
+  .rate-stars button { display: grid; place-items: center; width: 40px; height: var(--tap); color: var(--warning-text); transition: transform var(--t-fast) var(--ease); }
+  .rate-stars button:active { transform: scale(1.18); }
+  .rate-stars button:active :global(svg) { fill: currentColor; }
+  .rate-x { flex: none; display: grid; place-items: center; width: 34px; height: var(--tap); color: var(--text-3); }
+  .rate-x:active { opacity: 0.6; }
+  /* a narrow phone: the question and the x on one line, the five stars on their own under it (beside the words they left
+     the question 50 px) */
+  @media (max-width: 359px) {
+    .rate { flex-wrap: wrap; padding: var(--s-2) 0 0; }
+    .rate-x { order: 1; }
+    .rate-stars { order: 2; flex-basis: 100%; justify-content: space-between; }
+    .rate-stars button { width: var(--tap); }
+  }
   .off { margin: var(--s-3) var(--s-1) 0; color: var(--text-2); }
   .pastrow { margin-top: var(--s-4); }
   .pastrow + .past { margin-top: 8px; }
   .past { display: flex; flex-direction: column; gap: 8px; }
   .lnk { align-self: center; }
 
-  .sec { margin: var(--s-7) var(--s-1) var(--s-3); font: var(--fw-light) var(--fs-t1)/1.1 var(--font-display); letter-spacing: -0.04em; }
-  .events-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); min-height: var(--tap); margin: var(--s-7) var(--s-1) 0; padding-top: var(--s-5); box-shadow: inset 0 0.5px 0 var(--separator); } /* a hairline, then the section's light title */
+  .sec { margin: var(--s-7) var(--s-1) var(--s-3); font: 700 var(--fs-sec)/1.15 var(--font-display); letter-spacing: -0.03em; } /* the hero title's own voice, a step smaller */
+  .events-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); min-height: var(--tap); margin: var(--s-5) var(--s-1) 0; padding-top: var(--s-4); box-shadow: inset 0 0.5px 0 var(--separator); } /* a hairline, then the section's title */
   .sec.two { min-width: 0; margin: 0; }
   /* the filters: one row of chips under the heading, scrolled sideways edge to edge; types, a hairline, schools */
   .chips { display: flex; align-items: center; gap: var(--s-2); overflow-x: auto; margin: var(--s-2) calc(-1 * var(--gutter)) 0; padding: var(--s-1) var(--gutter); scrollbar-width: none; }
@@ -621,20 +586,18 @@
   .dh span::first-letter { text-transform: none; }
   .hit { position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
 
-  /* the hero: the one rich visual, kept calm (owner, Nov 22: the blurred cover and the circling light read as
-     childish). The cover sharp edge to edge, a little dimmed, and most of the card (owner, Nov 24); the words on
-     a low slab of the app's own sheet glass along the bottom (base.css .glass-sheet: the sheets' and menus' family; it
-     follows the theme and stays legible whatever the cover is): the title, one line of when and where, and my ticket and the way
-     there as two round icons at its end. No drop shadow of its own: the halo is the card's light */
-  .hero { --halo: 0.62; position: relative; isolation: isolate; display: flex; flex-direction: column; justify-content: flex-end; min-height: 196px; padding: 72px 6px 6px; /* the picture always keeps its strip, a two-line title under it too */
-    border-radius: var(--r-xl); background: var(--media); transition: transform var(--t-fast) var(--ease); }
+  /* (owner, Nov 27-28) the hero is the screen's one big card, most of the first screen: the cover tall and whole, the words
+     on the cover itself. The card is media, so it is dark in both themes (.theme-dark: white words, the dark tags) */
+  .hero { --halo: 0.62; position: relative; isolation: isolate; display: flex; flex-direction: column; justify-content: flex-end; height: var(--hh);
+    border-radius: var(--r-xl); background: var(--media); color: var(--text); transition: transform var(--t-fast) var(--ease); }
   .hero:has(> .hit:active) { transform: scale(0.985); }
   /* the hero's cards side by side, one in view, snapped; edge to edge so the next one waits just past the gutter. A
      scroller clips, so it leaves room around the cards for their light (the glow reaches 44px under a card) and takes it
      back with its margins */
-  .heroes { display: flex; gap: var(--s-3); overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; scrollbar-width: none;
+  .heroes { --hh: clamp(340px, 60vh, 540px); display: flex; gap: var(--s-3); overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; scrollbar-width: none;
     margin: calc(-1 * var(--s-4)) calc(-1 * var(--gutter)) -44px; padding: var(--s-4) 0 44px var(--gutter); }
   .heroes::-webkit-scrollbar { display: none; }
+  .heroes.short { --hh: clamp(320px, 52vh, 440px); }
   .heroes::after { content: ''; flex: 0 0 calc(var(--gutter) - var(--s-3)); } /* the end's gutter (a scroller's end padding is lost in older WebKit) */
   /* 100% here is the scroller's box minus its left padding: the page's width plus one gutter, so a card takes one gutter
      less and snaps to its start inside the gutter (centre snapping pushed it past both edges) */
@@ -657,76 +620,43 @@
      lifted on black and deepened on light, its colour strengthened in proportion (owner: a cream cover glowed yellow
      when a floor of colour was forced onto its near-grey). Where relative colour isn't known (older iOS) none of it
      applies and the cover's own colour stays */
-  :global(:root[data-theme='light']) .hero { --halo: 0.5; }
+  :global(:root[data-theme='light']) .hero { --halo: 0.26; }
   @supports (color: oklch(from red l c h)) {
     .hero::before { box-shadow: 0 0 14px 0 var(--cg), 0 16px 38px -10px var(--cg); }
     .hero { --cg: oklch(from var(--c, transparent) max(l, 0.66) min(calc(c * 2.5), 0.2) h); }
-    :global(:root[data-theme='light']) .hero { --halo: 0.62; --cg: oklch(from var(--c, transparent) min(l, 0.58) min(calc(c * 2.5), 0.2) h); }
+    :global(:root[data-theme='light']) .hero { --halo: 0.3; --cg: oklch(from var(--c, transparent) min(l, 0.58) min(calc(c * 2.5), 0.2) h); }
   }
   @keyframes bloom { from { opacity: 0; } 40% { opacity: calc(var(--halo) * 1.5); } }
-  .art, .shade, .rim { position: absolute; inset: 0; }
-  .art, .shade, .rim { border-radius: inherit; pointer-events: none; }
+  .art, .shade { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; }
   .art { overflow: hidden; }
-  /* the cover clear at the top (it is the screen's one picture), deeper toward the slab: the glass has something calm to sit on */
-  .shade { background: linear-gradient(rgba(0, 0, 0, 0.04), rgba(0, 0, 0, 0.38)); }
-  /* no cover: the club's colour lit from the top left and deep at the far corner, the event's 3D mark large and
-     tilted at the right, its foot behind the frost (the title's side stays clean) */
-  .nopic .shade { background: radial-gradient(90% 130% at 0% 0%, rgba(255, 255, 255, 0.2), transparent 60%), linear-gradient(155deg, transparent 35%, rgba(0, 0, 0, 0.5)); }
-  .nopic .art :global(.poster) { align-items: flex-start; justify-content: flex-end; padding: var(--s-1) var(--s-5) 0 0; }
-  .nopic .art :global(.poster > *) { transform: rotate(9deg) scale(1.2); transform-origin: 50% 0; }
-  /* the rim: a hair of white lit at the top left in the cover's colour, as neon glass is. The light comes round once as the card arrives and rests
-     there: a big conic square turning under a ring mask, transform only (and no @property: Button owns --rim) */
-  .rim { z-index: 1; overflow: hidden; padding: 1px;
-    -webkit-mask: linear-gradient(black 0 0) content-box, linear-gradient(black 0 0); -webkit-mask-composite: xor;
-    mask: linear-gradient(black 0 0) content-box, linear-gradient(black 0 0); mask-composite: exclude; }
-  .rim::before { content: ''; position: absolute; left: 50%; top: 50%; width: 150%; aspect-ratio: 1; margin: -75% 0 0 -75%;
-    background: conic-gradient(rgba(255, 255, 255, 0.12) 0deg, rgba(255, 255, 255, 0.1) 95deg, var(--c, rgba(255, 255, 255, 0.22)) 125deg, rgba(255, 255, 255, 0.1) 155deg,
-      rgba(255, 255, 255, 0.1) 250deg, var(--c, rgba(255, 255, 255, 0.55)) 284deg, rgba(255, 255, 255, 0.7) 296deg, var(--c, rgba(255, 255, 255, 0.55)) 308deg, rgba(255, 255, 255, 0.12) 345deg);
-    animation: arrive 1.8s var(--ease-spring) 0.25s backwards; }
-  @keyframes arrive { from { transform: rotate(-200deg); } }
-  @media (prefers-reduced-motion: reduce) { .hero::before, .rim::before { animation: none; } }
-  /* the slab: the shared sheet glass (body, blur, rim and fringes all from base.css, by theme), a static blur over a
-     still picture; 6px in, so its corners follow the card's */
-  .slab { position: relative; z-index: 2; /* over the card's own tap: its blur makes it a stacking context, so the buttons' own z-index never left it */ display: flex; align-items: center; gap: 10px; padding: 9px 10px 10px 14px;
-    border-radius: var(--r-l); color: var(--text); pointer-events: none; }
-  .acts { position: relative; z-index: 2; flex: none; display: flex; gap: 8px; max-width: 55%; pointer-events: auto; }
+  /* the card's hair rim; with no cover, the mesh deeper toward the words */
+  .shade { box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.14); }
+  .nopic .shade { background: linear-gradient(rgba(0, 0, 0, 0) 36%, rgba(0, 0, 0, 0.5)); } /* a cover has HeroArt's own scrim */
+  @media (prefers-reduced-motion: reduce) { .hero::before { animation: none; } }
+  /* the words lie on the cover itself, no box inside the card: HeroArt darkens the picture under them */
+  .slab { position: relative; z-index: 2; /* over the card's own tap */ isolation: isolate; display: flex; flex-direction: column; padding: 76px 18px var(--s-4);
+    border-radius: 0 0 var(--r-xl) var(--r-xl); color: var(--text); pointer-events: none; }
+  /* over media the tags are white on a clear chip (the accent's blue on a blue cover was 2:1), the place has no underline
+     (the whole card opens the event; the pin says it is a place) */
+  .hsub :global(.chip) { background: rgba(255, 255, 255, 0.18); color: var(--on-accent); }
+  .hsub .fr { color: var(--text-2); }
+  .hero-place :global(.place) { text-decoration: none; }
+  .foot { display: flex; align-items: center; gap: 10px; min-height: var(--ctl-m); margin-top: var(--s-3); }
+  .foot:not(:has(.acts, .hsub *)) { display: none; }
+  .acts { position: relative; z-index: 2; flex: none; display: flex; gap: 8px; max-width: 60%; margin-left: auto; pointer-events: auto; }
   .acts :global(.btn) { min-width: 0; }
   .acts :global(.btn.round)::before { inset: -4px; } /* 36 seen, 44 to the finger on every side; 8px apart, so two meet and never overlap */
   /* contain: the words take the width that is left and never ask for more. Without it the one-line meta's full width
      (nowrap) is the card's min-content, and a flex card grows to it: the root of the card past the right edge (PRs 324, 328) */
-  .hero-tx { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; contain: inline-size; }
-  .hero-tx > b { font: 700 var(--fs-t3)/1.18 var(--font-display); letter-spacing: -0.02em; }
-  .where, .hero-place { min-width: 0; font: 500 var(--fs-sub)/1.3 var(--font-text); color: var(--text-2); }
+  .hero-tx { flex: none; display: flex; flex-direction: column; gap: 3px; min-width: 0; contain: inline-size; text-shadow: 0 1px 8px rgba(0, 0, 0, 0.28); }
+  .hero-tx > b { margin-bottom: var(--s-1); font: 700 var(--fs-t1)/1.08 var(--font-display); letter-spacing: -0.035em; }
+  .where, .hero-place { min-width: 0; font: 500 var(--fs-body)/1.3 var(--font-text); color: var(--text-2); }
   .where { display: flex; flex-wrap: wrap; max-height: 1.3em; overflow: hidden; }
   .where > span { flex: 0 1 auto; min-width: 0; }
   @media (max-width: 340px) { .where > .by { display: none; } }
   .where b { font-weight: 600; color: var(--text); }
-  .hsub { display: flex; align-items: center; gap: 8px; min-width: 0; margin-top: 5px; }
+  .hsub { flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; }
   .hsub:not(:has(*)) { display: none; } /* nothing to say: no line (:empty misses it, the snippet leaves white space) */
-  /* the week: seven even columns on the bare ground (no card: the hero above and the days below are the cards); today
-     on the one selected pill (the tab bar's lens), a day with events bold with a dot under it, a quiet day dimmed and
-     not a button; the accent dot: I'm going */
-  .week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); margin: var(--s-4) 0 0; }
-  .wd { display: flex; flex-direction: column; align-items: center; gap: var(--s-1); min-height: var(--tap); padding: 2px 0; color: var(--text); }
-  .wd span { font: 600 var(--fs-micro)/1.2 var(--font-text); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); }
-  .wd b { position: relative; display: grid; place-items: center; width: var(--ctl-s); height: var(--ctl-s); border-radius: var(--r-full); font: 600 var(--fs-row)/1 var(--font-display); letter-spacing: -0.02em;
-    transition: transform 450ms var(--ease-bounce), background-color var(--t-base) var(--ease); }
-  .wd:active b { transform: scale(0.88); transition-duration: 80ms; background: var(--fill); }
-  .wd.has b { font-weight: 700; }
-  .wd.today b { background: linear-gradient(var(--lens-top), transparent 70%), var(--lens); box-shadow: var(--lens-shadow); }
-  .wd.today b::after { content: ''; position: absolute; inset: 0; padding: 1px; border-radius: inherit; pointer-events: none;
-    background:
-      radial-gradient(ellipse 60% 150% at 24% 0%, var(--lens-rim), transparent 72%),
-      radial-gradient(ellipse 50% 140% at 76% 100%, var(--lens-rim-low), transparent 72%);
-    -webkit-mask: linear-gradient(black 0 0) content-box, linear-gradient(black 0 0);
-    mask: linear-gradient(black 0 0) content-box, linear-gradient(black 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude; }
-  .wd:disabled:not(.today) { opacity: 0.6; }
-  .wd:disabled:not(.today) b { color: var(--text-3); font-weight: 450; }
-  .wd i { width: 5px; height: 5px; border-radius: var(--r-full); }
-  .wd.has i { background: var(--text-3); }
-  .wd i.on { background: var(--accent); }
 
   /* the featured post: its own card, the body folded to two lines */
   .pin { margin: var(--s-3) 0 0; }

@@ -5,6 +5,7 @@ import type { ResearchAnswers, ResearchSurvey, ResearchInput, ResearchRequest, S
 import type { BracketMatch, BracketSeed, EventBracket, EventGroups, EventMatch, MatchScore } from './types';
 import type { Archived, ReportLogEntry, ReportMarkPatch, ReviewReason, SantaChats, SantaMsg, SantaReport } from './types';
 import type { LibAct, LibRoom, LibState, LibTable, LibWall } from './types';
+import type { Room, RoomMove } from './types';
 import type { Graph } from '../route';
 import { splitVariants } from '../awards';
 import { ApiErr } from './errors';
@@ -65,7 +66,8 @@ const staffOf = (method: string, path: string, event?: Id): Record<string, strin
 /** told of each failed call by its class only (App counts it against the screen in front, lib/stats.ts) */
 export const onFail: { fn: ((kind: ApiKind) => void) | null } = { fn: null };
 
-async function call<T>(method: string, path: string, body?: unknown, staffEvent?: Id): Promise<T> {
+// exported for lib/api/akoTeam.ts, the admissions desk's calls: kept out of the start bundle
+export async function call<T>(method: string, path: string, body?: unknown, staffEvent?: Id): Promise<T> {
   if (accountClosed()) throw new ApiErr('forbidden', 'init_data');
   const account = accountRequest();
   let r: Response, data: unknown;
@@ -115,7 +117,8 @@ async function call<T>(method: string, path: string, body?: unknown, staffEvent?
   if (r.status === 403 && (data as ApiError | null)?.message === 'banned') dispatchEvent(new CustomEvent('kb:banned', { detail: data }));
   // held for the policy in force: the gate asks now, in place (App: sheets.consent), never on opening the app
   if (!r.ok && (data as ApiError | null)?.error === 'forbidden' && (data as ApiError | null)?.message === 'consent') sheets.consent();
-  if (!r.ok) onFail.fn?.(r.status >= 500 ? 'server' : (data as ApiError | null)?.error ?? 'unavailable');
+  const why = r.status === 403 ? (data as ApiError | null)?.message : undefined; // a 400's 'consent' is a stale version sent: an error
+  if (!r.ok) onFail.fn?.(r.status >= 500 ? 'server' : why === 'consent' ? 'consent' : why === 'init_data' ? 'expired' : (data as ApiError | null)?.error ?? 'unavailable');
   if (!r.ok) throw new ApiErr((data as ApiError | null)?.error ?? 'unavailable', (data as ApiError | null)?.message || undefined, (data as Record<string, unknown> | null) ?? {});
   // an event the creator made in the Studio: its routes go as the club's from here on
   if (staffOrg.full && method === 'POST' && path === `/orgs/${staffOrg.id}/events`) staffOrg.events.add((data as { id: Id }).id);
@@ -256,6 +259,13 @@ export const server = {
   adminOrgs: (): Promise<AdminOrg[]> => call('GET', '/admin/orgs'),
   adminOrgEvents: (org: Id): Promise<AdminEvent[]> => call('GET', `/admin/orgs/${org}/events`),
   setRegUntil: (id: Id, until: Ts | 'now' | null): Promise<EventFull> => call('PUT', `/events/${id}/reg-until`, { until }), // registration closes now / then / at the start
+  // game rooms (server logic/rooms.py): errors rate_limited rooms (a day's) / codes (wrong codes, an hour's), not_found
+  // code, closed started, full; a move made on another version comes back applied: false with the room as it is
+  roomCreate: (game: 'spy'): Promise<Room> => call('POST', '/rooms', { game }),
+  roomJoin: (code: string): Promise<Room> => call('POST', '/rooms/join', { code }),
+  room: (id: Id, v?: number): Promise<Room | undefined> => call('GET', `/rooms/${id}${v === undefined ? '' : `?v=${v}`}`), // undefined: still version v
+  roomMove: (id: Id, v: number, move: RoomMove, actionId: string = Math.random().toString(36).slice(2) + Date.now().toString(36)): Promise<{ applied: boolean; room: Room | null }> =>
+    call('POST', `/rooms/${id}`, { id: actionId, v, ...move }),
   santaStart: (org: Id, title: string, startsAt: Ts, budget: number, regUntil: Ts): Promise<EventFull> => call('POST', `/orgs/${org}/santa`, { title, startsAt, budget, regUntil }), // Studio's one button: the club's game made and published, or the running one (errors bad_input budget (none or out of bounds) / until)
   santaSettings: (id: Id, s: { budget?: number; regUntil?: Ts }): Promise<EventFull> => call('PUT', `/events/${id}/santa`, s), // the game's budget and deadline, until the draw
   santaWish: (id: Id, wish: string): Promise<{ wish: string }> => call('PUT', `/events/${id}/santa/wish`, { wish }), // my own wishlist changed while I'm in (errors bad_input wish, closed after the gifts day began)

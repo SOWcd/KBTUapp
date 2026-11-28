@@ -92,6 +92,7 @@ describe('usage counters', () => {
     crashed('tab.forum', new Error('Failed to fetch dynamically imported module: https://x/Map.js'));
     crashed('tab.forum', 'weird');
     crashed('tab.forum', Object.assign(new Error('full'), { code: 'full', data: {} })); // an ApiErr: counted as the call
+    crashed('tab.forum', 'ResizeObserver loop completed with undelivered notifications.'); // the browser's notice, not a crash
     count('api.sheet.pay.network');
     timed('sheet.event', performance.now() - 300);
     vi.advanceTimersByTime(40);

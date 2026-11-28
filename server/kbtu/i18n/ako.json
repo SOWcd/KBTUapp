@@ -1,0 +1,53 @@
+{
+  "_": "KBTU's Academy of Corporate Education: its programs as the admissions show them (logic/ako.py seed). Russian is copied from each program's page (url, read Nov 27, 2026); Kazakh and English are machine translations until the Academy checks them. first: asked before sending; later: needed for enrolment, may come after; optional: welcome. Document names and how-tos are UI strings (web i18n ako.doc.*).",
+  "programs": [
+    {
+      "key": "mba", "kind": "degree", "interview": true,
+      "url": "https://kbtu.edu.kz/ru/akademiya-korporativnogo-obrazovaniya/akademicheskie-programmy/4895-master-delovogo-administrirovaniya-mba",
+      "first": ["cv", "diploma"], "later": ["application", "id", "photo", "med", "fluoro"], "optional": ["work", "extra"],
+      "ru": {"title": "MBA", "sub": "Менеджмент и экономика бизнеса", "price": "3 000 000 ₸", "length": "1,5 года", "format": "Очно, вечером 3 раза в неделю и в субботу"},
+      "kk": {"title": "MBA", "sub": "Бизнес менеджменті және экономикасы", "price": "3 000 000 ₸", "length": "1,5 жыл", "format": "Күндізгі, аптасына 3 рет кешке және сенбіде"},
+      "en": {"title": "MBA", "sub": "Business Management and Economics", "price": "3,000,000 ₸", "length": "1.5 years", "format": "In person, 3 evenings a week and Saturdays"}
+    },
+    {
+      "key": "mba-law", "kind": "degree", "interview": true,
+      "url": "https://kbtu.edu.kz/ru/akademiya-korporativnogo-obrazovaniya/akademicheskie-programmy/4895-master-delovogo-administrirovaniya-mba",
+      "first": ["cv", "diploma"], "later": ["application", "id", "photo", "med", "fluoro"], "optional": ["work", "extra"],
+      "ru": {"title": "MBA", "sub": "Бизнес-право", "price": "4 200 000 ₸", "length": "1,5 года", "format": "Офлайн или гибридно, 3 вечера и суббота"},
+      "kk": {"title": "MBA", "sub": "Бизнес құқығы", "price": "4 200 000 ₸", "length": "1,5 жыл", "format": "Офлайн немесе гибридті, 3 кеш және сенбі"},
+      "en": {"title": "MBA", "sub": "Business Law", "price": "4,200,000 ₸", "length": "1.5 years", "format": "In person or hybrid, 3 evenings and Saturdays"}
+    },
+    {
+      "key": "emba", "kind": "degree", "interview": true,
+      "url": "https://kbtu.edu.kz/ru/akademiya-korporativnogo-obrazovaniya/akademicheskie-programmy/4896-master-delovogo-administrirovaniya-dlya-rukovoditelej-executive-mba",
+      "first": ["cv", "diploma"], "later": ["application", "id", "photo", "med", "fluoro", "work"], "optional": ["extra"],
+      "ru": {"title": "Executive MBA", "sub": "Деловое администрирование для руководителей", "price": "3 150 000 ₸", "length": "12–15 месяцев", "format": "Модульный"},
+      "kk": {"title": "Executive MBA", "sub": "Басшыларға арналған іскерлік әкімшілік", "price": "3 150 000 ₸", "length": "12–15 ай", "format": "Модульдік"},
+      "en": {"title": "Executive MBA", "sub": "Business Administration for Executives", "price": "3,150,000 ₸", "length": "12–15 months", "format": "Modular"}
+    },
+    {
+      "key": "emba-risk", "kind": "degree", "interview": true,
+      "url": "https://kbtu.edu.kz/ru/akademiya-korporativnogo-obrazovaniya/akademicheskie-programmy/4896-master-delovogo-administrirovaniya-dlya-rukovoditelej-executive-mba",
+      "first": ["cv", "diploma"], "later": ["application", "id", "photo", "med", "fluoro", "work"], "optional": ["extra"],
+      "ru": {"title": "Executive MBA", "sub": "Стратегический риск-менеджмент", "price": "3 150 000 ₸", "length": "12–15 месяцев", "format": "Модульный"},
+      "kk": {"title": "Executive MBA", "sub": "Стратегиялық тәуекел-менеджмент", "price": "3 150 000 ₸", "length": "12–15 ай", "format": "Модульдік"},
+      "en": {"title": "Executive MBA", "sub": "Strategic Risk Management", "price": "3,150,000 ₸", "length": "12–15 months", "format": "Modular"}
+    },
+    {
+      "key": "dba", "kind": "degree", "interview": true,
+      "url": "https://kbtu.edu.kz/ru/akademiya-korporativnogo-obrazovaniya/akademicheskie-programmy/4897-doktor-delovogo-administrirovaniya-dba",
+      "first": ["cv", "diploma"], "later": ["application", "id", "photo", "med", "fluoro", "work"], "optional": ["extra"],
+      "ru": {"title": "DBA", "sub": "Доктор делового администрирования", "price": "5 400 000 ₸", "length": "3 года", "format": "Вечером и по выходным"},
+      "kk": {"title": "DBA", "sub": "Іскерлік әкімшілік докторы", "price": "5 400 000 ₸", "length": "3 жыл", "format": "Кешке және демалыс күндері"},
+      "en": {"title": "DBA", "sub": "Doctor of Business Administration", "price": "5,400,000 ₸", "length": "3 years", "format": "Evenings and weekends"}
+    },
+    {
+      "key": "mini-mba", "kind": "short", "interview": false,
+      "url": "https://kbtu.edu.kz/ru/akademiya-korporativnogo-obrazovaniya/nepreryvnoe-obrazovanie/4909-mini-mba",
+      "first": [], "later": ["id"], "optional": ["cv"],
+      "ru": {"title": "Mini MBA", "sub": "6 модулей из программы Executive MBA", "price": "990 000 ₸", "length": "6 месяцев", "format": "Онлайн, по вечерам"},
+      "kk": {"title": "Mini MBA", "sub": "Executive MBA бағдарламасының 6 модулі", "price": "990 000 ₸", "length": "6 ай", "format": "Онлайн, кешке"},
+      "en": {"title": "Mini MBA", "sub": "6 modules of the Executive MBA", "price": "990,000 ₸", "length": "6 months", "format": "Online, evenings"}
+    }
+  ]
+}

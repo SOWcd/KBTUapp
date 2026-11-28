@@ -331,7 +331,7 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         if not e or not one(con, "SELECT 1 FROM event_team_members WHERE team_id = ? AND user_id = ?", int(ref[2]), m["user_id"]):
             return None
         return (*texts.bot_message(lang, kind, **ev(e)), f"ev_{e['id']}")
-    if kind == "team_consent":  # tc:<event>[:<when>], evteams.consent_ask / remind; quiet once agreed, out of the event, or it started
+    if kind == "team_consent":  # tc:<event>[:<when>], evteams.remind; quiet once agreed, out of the event, or it started
         e = one(con, "SELECT * FROM events WHERE id = ? AND status = 'published' AND hidden_at IS NULL AND starts_at > ? AND team_max IS NOT NULL", int(ref[1]), logic.now())
         if not e or one(con, "SELECT 1 FROM team_consents WHERE user_id = ?", m["user_id"]) or not one(  # agreed, or withdrew it: never asked
                 con, "SELECT 1 FROM registrations WHERE event_id = ? AND user_id = ? AND status IN ('going', 'hold', 'waitlist')", e["id"], m["user_id"]):
@@ -457,7 +457,7 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         return (*texts.bot_message(lang, kind), "donate")
     if kind == "credit_ask":  # cra, kbtu.admin credit ask: "shall we name you?", once; quiet once answered or nothing shipped is theirs
         return (*texts.bot_message(lang, kind), "people") if logic.credits.asking(con, m["user_id"]) else None  # (send_due reads where to again)
-    if kind == "santa_news":  # sn:<org>, to its President or Vice (kbtu.admin santa-news), opens the Santa welcome over Studio: quiet once they aren't
+    if kind == "santa_news":  # sn:<org>, to its President or Vice (queued before the announcement was retired), opens the Santa welcome over Studio: quiet once they aren't
         o = one(con, """SELECT o.name FROM orgs o JOIN org_members mm ON mm.org_id = o.id AND mm.user_id = ? AND mm.role IN ('president', 'vice')
             WHERE o.id = ? AND o.status = 'active'""", m["user_id"], int(ref[1]))
         return (*texts.bot_message(lang, kind, org=o["name"]), f"sn_{ref[1]}") if o else None

@@ -7,7 +7,7 @@
 // Then the picker's minis (SettingsList): every lanyard's whole card art at the swatch's 74 x 48, one small picture each
 // (tools/minis draws them as the picker drew them live: 20+ full scenes mounted at once for the creator, all their
 // layers decoded at full size for a thumbnail). Their sources' hash is the manifest's "minis".
-// usage: node tools/scene-rasters.mjs [--all | --covers]   (from web/; Playwright's Chromium, as the QA tools use)
+// usage: node tools/scene-rasters.mjs [--all]   (from web/; Playwright's Chromium, as the QA tools use)
 import { readFileSync, writeFileSync, readdirSync, mkdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
@@ -64,8 +64,7 @@ const MINI_SRC = ['src/ui/LanyardBand.svelte', 'src/ui/ClubScene.svelte', 'src/u
 const WEB = new URL('../', import.meta.url);
 const svgs = (d) => readdirSync(new URL(d, ROOT), { recursive: true }).filter((f) => f.endsWith('.svg')).map((f) => new URL(d + f, ROOT));
 out.minis = sha(Buffer.concat([...MINI_SRC.map((f) => new URL(f, WEB)), ...svgs('').sort((a, b) => (a.href < b.href ? -1 : 1))].map((u) => readFileSync(u))));
-const onlyCovers = process.argv.includes('--covers');
-if (onlyCovers || process.argv.includes('--all') || old.minis !== out.minis) {
+if (process.argv.includes('--all') || old.minis !== out.minis) {
   const vite = await createServer({ root: WEB.pathname, logLevel: 'error', server: { port: 0 } });
   await vite.listen();
   const shoot = async (name, scale, quality, css) => {
@@ -91,9 +90,7 @@ if (onlyCovers || process.argv.includes('--all') || old.minis !== out.minis) {
     console.log(`${name}:`, (await p.$$('.cell')).length);
     await ctx.close();
   };
-  if (!onlyCovers) await shoot('minis', 3, 0.9);
-  // the same art whole, the Clubs tab's cards behind a club's name (lib/covers.ts)
-  await shoot('covers', 2, 0.72, '.cell { width: 340px !important; height: 221px !important; margin: 0 !important; } .mini { transform: none !important; }');
+  await shoot('minis', 3, 0.9);
   await vite.close();
 }
 await b.close();

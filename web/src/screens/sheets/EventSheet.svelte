@@ -1,7 +1,7 @@
 <script lang="ts">
-  // Event sheet, tinted by the poster colour, in a student's order: what, when and how much (type alone), where,
-  // which friends go, then the one action in the bottom bar, alone (Going / price / ticket / waitlist); save and share
-  // sit on the picture. Cancelling a sign-up lives on the ticket. Everything secondary follows as plain rows.
+  // Event sheet, tinted by the poster colour, in the Afisha hero's language: what, when and where are words on the
+  // picture itself; under it one slab of facts (the price and the seats, the way there, which friends go), then the one
+  // action in the bottom bar, alone (Going / price / ticket / waitlist); save and share sit on the picture. Cancelling a sign-up lives on the ticket. Everything secondary follows as plain rows.
   // The organizing team's tools are one group under its own heading: the door (Member+), attendees, edit, cancel (Head+).
   // `preview`: the editor's unsaved form, shown exactly as students will see it (no team tools, buttons inert).
   import Linked from '../../ui/Linked.svelte';
@@ -46,6 +46,9 @@
   import CalendarHeart from '@lucide/svelte/icons/calendar-heart';
   import Button from '../../ui/Button.svelte';
   import Poster from '../../ui/Poster.svelte';
+  import HeroArt from '../afisha/HeroArt.svelte';
+  import MapPin from '@lucide/svelte/icons/map-pin';
+  import { eventPlace } from '../../lib/map';
   import Santa from './Santa.svelte';
   import Tag from '../../ui/Tag.svelte';
   import Avatar from '../../ui/Avatar.svelte';
@@ -131,7 +134,13 @@
     && !(navigator as { connection?: { saveData?: boolean } }).connection?.saveData ? wv.url : null);
   // what it costs, said once under the title (a club's own meeting or a partner's event names no price)
   const cost = $derived(!e ? '' : e.price ? money(e.price) : e.guestHost || inner(e) || e.meeting ? '' : t('event.free'));
-  const pct = $derived(e && e.seats ? Math.min(100, Math.round((e.taken / e.seats) * 100)) : 0);
+  const seatsLeft = $derived(!e?.seats ? '' : e.taken >= e.seats ? t('event.full') : tn('event.seatsLeft', e.seats - e.taken));
+  // the header's still picture (HeroArt, its own scrim under the words); photos swiped sideways and a clip get the header's shade
+  const art = $derived(e ? coverFor(e.cover, 'card') ?? e.video?.poster ?? null : null);
+  const strip = $derived(!!e && !e.video?.url && !!e.cover && !!e.slides?.length);
+  const still = $derived(!wide && !strip && !e?.video?.url);
+  // a place that leads somewhere has a row (our map for a room or a campus spot, 2GIS, the meeting's link); the picture says it in words
+  const leads = $derived(!e ? false : e.online ? !!(meetUrl && meetAt) : !!eventPlace(e.place, e.placeUrl));
   const started = $derived(!!e && e.startsAt <= nowTs());
   // the registration deadline closes "Going" for those not in yet; a 1st-year takes a paid event's free seat
   const regShut = $derived(!!e?.regUntil && e.regUntil <= nowTs() && st !== 'going' && st !== 'hold' && st !== 'waitlist');
@@ -352,15 +361,16 @@
   }
 </script>
 
-<Sheet {overlay} icon={CalendarHeart} title={preview ? t('ed.preview') : t('cap.event')} tint={e?.tint}>
+<Sheet {overlay} icon={CalendarHeart} title={preview ? t('ed.preview') : t('cap.event')} tint={e?.tint} float>
   {#if e}
     {#if preview}<p class="pv"><Tag tone="accent"><Eye size={15} />{t('event.preview')}</Tag></p>{/if}
-    <div class="hero" class:cancelled bind:this={hero}>
-      <!-- the header: the horizontal clip behind it, else the vertical one, else the photos swiped sideways, else the cover -->
+    <div class="hero theme-dark" class:cancelled class:deep={!still} class:nopic={still && !art} class:pics={strip} class:clip={!wide && !!e.video?.url && !cancelled} bind:this={hero}>
+      <!-- the header: the horizontal clip behind it, else the vertical one, else the photos swiped sideways, else the cover
+           (none: the club's colour as a mesh with the event's 3D mark, the Afisha hero's own picture) -->
       {#if wide}
-        <Poster item={e} big radius={22} />
+        <Poster item={e} big radius={0} />
         <video class="wide" src={wide} poster={wv?.poster?.url} autoplay muted loop playsinline preload="none"></video>
-      {:else if !e.video?.url && e.cover && e.slides?.length}
+      {:else if strip}
         <div class="strip" onscroll={(s) => (pic = Math.round(s.currentTarget.scrollLeft / s.currentTarget.clientWidth))}>
           {#each [coverFor(e.cover, 'card')!, ...e.slides] as p, i (p.id)}
             <button class="pic" aria-label={t('fc.photo')} onclick={() => sheets.photos([coverFor(e.cover, 'card')!, ...e.slides].map((x, k) => ({ ...x, id: x.id ?? -k, by: null, mine: true, canDelete: false })), i)}>
@@ -368,9 +378,12 @@
           {/each}
         </div>
         <span class="dots" aria-hidden="true">{#each [e.cover, ...e.slides] as _, k (k)}<i class:on={k === pic}></i>{/each}</span>
+      {:else if e.video?.url}
+        <Poster item={e} big play radius={0} dim={cancelled} />
       {:else}
-        <Poster item={e} big play radius={22} dim={cancelled} />
+        <HeroArt pic={art} emoji={e.emoji} color={e.color ?? e.tint} first />
       {/if}
+      <div class="shade"></div>
       <!-- over the picture, the floating layer: whose it is, and the two quiet actions (save, share) in glass; the bar
            below keeps the one main action alone -->
       <div class="top">{#if e.coHost}<span class="org"><OrgTag org={e.org} co={e.coHost} onpick={(o) => sheets.club(o)} /></span>
@@ -378,23 +391,19 @@
       <span class="acts" class:on={e.saved} inert={!!preview}>
         <IconButton icon={Bookmark} kind="glass" size="s" on={e.saved} label={e.saved ? t('event.saved') : t('event.save')} onclick={() => toggleSaved(id)} />
         {#if inTelegram}<IconButton icon={Share} kind="glass" size="s" label={t('event.share')} onclick={share} />{/if}</span></div>
-      <div class="tags">
-      {#if e.meeting}<Tag tone="onphoto">{t('event.meeting')}</Tag>{:else if e.visibility === 'members'}<Tag tone="onphoto">{t('event.teamOnly')}</Tag>{:else if e.visibility === 'leaders'}<Tag tone="onphoto">{t('event.leaders')}</Tag>{:else if e.firstYear}<Tag tone="warning">{t('event.firstYear')}</Tag>{/if}
-      {#if e.school}<Tag tone="onphoto">{t('event.schoolOnly', { school: shortOf(e.org) })}</Tag>{/if}
-      {#if service(e.org)}<Tag tone="onphoto">{t('clubs.office')}</Tag>{/if}</div>
-    </div>
-
-    <!-- what, when, how much: type alone, read in one look -->
-    <div class="head">
-      <h2 class="ttl" class:strike={cancelled}>{e.title.replace(/(\p{L})-(\p{L})/gu, '$1\u2011$2')}</h2><!-- "stand-up" stays on one line -->
-      {#if cancelled}<p class="cancel">{t('event.cancelledLong')}</p>{/if}
-      <p class="when">{multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : relDay(e.startsAt)}, {time(e.startsAt)}{endTime(e.startsAt, e.endsAt) ? ' – ' + endTime(e.startsAt, e.endsAt) : ''}</p>
-      {#if e.guestHost}<p class="meta"><span>{t('event.with', { host: e.guestHost })}</span><i>·</i><span>{t('event.notKbtu')}</span></p>{/if}
-      {#if !cancelled && !over && (cost || e.seats)}
-        <p class="meta">{#if cost}<b>{cost}</b>{/if}{#if e.seats}{#if cost}<i>·</i>{/if}<span class:red={full}>{e.taken >= e.seats ? t('event.full') : tn('event.seatsLeft', e.seats - e.taken)}</span>{/if}</p>
-        {#if e.price && e.freeFirst && !started}<p class="meta">{e.freeLeft ? t('event.freeFirst', { n: e.freeLeft, of: e.freeFirst }) : t('event.freeFirstGone')}</p>{/if}
-        {#if e.seats}<div class="bar"><span style="transform:scaleX({pct / 100})" class:full={pct >= 100}></span></div>{/if}
-      {/if}
+      <!-- what, when, where: the words on the picture, read in one look; taps fall through to the photos -->
+      <div class="slab">
+        <div class="tags">
+        {#if e.meeting}<Tag tone="onphoto">{t('event.meeting')}</Tag>{:else if e.visibility === 'members'}<Tag tone="onphoto">{t('event.teamOnly')}</Tag>{:else if e.visibility === 'leaders'}<Tag tone="onphoto">{t('event.leaders')}</Tag>{:else if e.firstYear}<Tag tone="warning">{t('event.firstYear')}</Tag>{/if}
+        {#if e.school}<Tag tone="onphoto">{t('event.schoolOnly', { school: shortOf(e.org) })}</Tag>{/if}
+        {#if service(e.org)}<Tag tone="onphoto">{t('clubs.office')}</Tag>{/if}</div>
+        <h2 class="ttl" class:strike={cancelled}>{e.title.replace(/(\p{L})-(\p{L})/gu, '$1\u2011$2')}</h2><!-- "stand-up" stays on one line -->
+        {#if cancelled}<p class="cancel">{t('event.cancelledLong')}</p>{/if}
+        <p class="when">{multiDay(e.startsAt, e.endsAt) ? daySpan(e.startsAt, e.endsAt) : relDay(e.startsAt)}, {time(e.startsAt)}{endTime(e.startsAt, e.endsAt) ? ' – ' + endTime(e.startsAt, e.endsAt) : ''}</p>
+        <!-- words only (the slab takes no taps): the row below is the way there -->
+        {#if e.place.trim() || e.online || (!e.santa && !e.placeUrl)}<p class="where">{#if e.online}<VideoCall size={14} strokeWidth={1.75} />{:else}<MapPin size={14} strokeWidth={1.75} />{/if}<span>{placeOf(e.place, e.online)}</span></p>{/if}
+        {#if e.guestHost}<p class="where">{t('event.with', { host: e.guestHost })} · {t('event.notKbtu')}</p>{/if}
+      </div>
     </div>
 
     <!-- the rest of the first screen and the bar a frame later: in the tap's frame the sheet is still below the screen
@@ -491,15 +500,25 @@
       </div>
     {/if}
 
-    <!-- where: a row that ends honestly (a chevron opens the map, an arrow leaves for 2GIS) -->
-    {#if !e.santa || e.place || e.placeUrl || e.online}
+    <!-- the facts in one slab: what it costs and what is left, the way there (a row only when it leads somewhere: a
+         chevron opens the map, an arrow leaves for 2GIS or the meeting), who of mine goes and calling the rest -->
+    {#if (!cancelled && !over && (cost || e.seats)) || leads || (!cancelled && (e.friends.length || canInvite))}
     <Group>
-      {#if e.online}
-        <!-- online: the meeting opens outside, the server checked the link (core.online_url) -->
-        {#if meetUrl && meetAt}<Row icon={VideoCall} title={placeOf(e.place, true)} subtitle={meetAt} accessory="external" onclick={() => openLink(meetUrl, true)} />
-        {:else}<Row icon={VideoCall} title={placeOf(e.place, true)} />{/if}
-      {:else}<EventPlaceRow {e} />
+      {#if !cancelled && !over && (cost || e.seats)}
+        <Row icon={Ticket} title={cost || seatsLeft} value={cost ? seatsLeft || undefined : undefined} invalid={full && !!cost} whole
+          subtitle={e.price && e.freeFirst && !started ? (e.freeLeft ? t('event.freeFirst', { n: e.freeLeft, of: e.freeFirst }) : t('event.freeFirstGone')) : undefined} />
       {/if}
+      {#if leads}
+        <!-- online: the meeting opens outside, the server checked the link (core.online_url) -->
+        {#if e.online}<Row icon={VideoCall} title={placeOf(e.place, true)} subtitle={meetAt ?? undefined} accessory="external" onclick={() => openLink(meetUrl!, true)} />
+        {:else}<EventPlaceRow {e} />{/if}
+      {/if}
+      {#if !cancelled && e.friends.length}
+        <Row title={friendsLine(e.friends.map((f) => f.name), over)}>
+          {#snippet lead()}<span class="stack">{#each e.friends.slice(0, 4) as f (f.id)}<Avatar person={f} size={28} />{/each}</span>{/snippet}
+          {#snippet trailing()}{#if canInvite}<IconButton icon={UserPlus} kind="tinted" size="s" label={t('inv.title')} onclick={() => sheets.invite(id, e.title)} />{/if}{/snippet}
+        </Row>
+      {:else if !cancelled && canInvite}<Row icon={UserPlus} title={t('inv.title')} accessory="chevron" onclick={() => sheets.invite(id, e.title)} />{/if}
     </Group>
     {/if}
 
@@ -507,18 +526,6 @@
       <p class="fs-sub dim note">{e.my.note ? t('meet.yourNo', { why: e.my.note }) : t('meet.yourNoBare')}</p>{/if}
     {#if e.my?.status === 'cancelled' && (e.my.cancelReason === 'receipt_rejected' || e.my.cancelReason === 'hold_expired') && !over}
       <Notice tone="warning" text={t(e.my.cancelReason === 'receipt_rejected' ? 'pay.rejected' : 'pay.holdGone')} />
-    {/if}
-
-    <!-- who of mine goes, and calling the rest: the last thing before the bar's one action -->
-    {#if !cancelled && (e.friends.length || canInvite)}
-      <Group>
-        {#if e.friends.length}
-          <Row dense title={friendsLine(e.friends.map((f) => f.name), over)}>
-            {#snippet lead()}<span class="stack">{#each e.friends.slice(0, 4) as f (f.id)}<Avatar person={f} size={28} />{/each}</span>{/snippet}
-          </Row>
-        {/if}
-        {#if canInvite}<Row icon={UserPlus} tone="action" title={t('inv.title')} onclick={() => sheets.invite(id, e.title)} />{/if}
-      </Group>
     {/if}
 
     <!-- below the first screen: built a frame after the sheet appears, so its rise starts at once -->
@@ -671,10 +678,12 @@
 
   {#snippet footer()}
     {#if e && soon}
+      <!-- an island over the content (the tab bar's glass): what to know before the tap, then the one action -->
+      <div class="island glass glass-pill" inert={!!preview}>
       {#if noGuest}<p class="tnote">{t('ta.cant')}</p>
       {:else if regNote}<p class="tnote">{t('event.regUntil', { when: relDay(e.regUntil!) + ', ' + time(e.regUntil!) })}</p>{/if}<!-- the deadline where the decision is made -->
       {#if askable}<p class="tnote">{t(e.teamAsk === 'pending' ? 'ta.pendingNote' : 'ta.note')}</p>{/if}
-      <div class="actions btns" inert={!!preview}>
+      <div class="actions btns">
         {#if cancelled}
           <Button kind="neutral" size="l" full disabled>{t('event.cancelledLong')}</Button>
         {:else if e.visibility === 'leaders' && !crew && !going && !started}
@@ -730,6 +739,7 @@
           <Button kind="primary" size="l" full loading={goingBusy.has(id)} onclick={() => toggleGoing(id, () => sheets.pay(id))}>{e.price ? freeMe ? t('event.goFree') : t('event.goPrice', { price: money(e.price) }) : t(e.santa ? 'santa.join' : 'event.go')}</Button>
         {/if}
       </div>
+      </div>
     {/if}
   {/snippet}
 </Sheet>
@@ -746,41 +756,48 @@
   .desc { color: var(--text); white-space: pre-line; padding: 0 var(--s-1); }
   .rep { display: flex; justify-content: center; --plain-ink: var(--text-3); }
 
-  /* the head: the title is the largest thing on the page, the time right under it in the text's own colour, then one
-     grey line (price, who goes, what is left) over a hairline bar */
-  .head { display: flex; flex-direction: column; gap: 6px; margin-bottom: var(--s-5); padding: 0 var(--s-1); }
-  .ttl { font: 800 var(--fs-t1)/1.1 var(--font-display); letter-spacing: -0.028em; text-wrap: balance; overflow-wrap: break-word; }
-  .strike { text-decoration: line-through; color: var(--text-2); }
-  .cancel { font: 600 var(--fs-body)/1.35 var(--font-text); color: var(--danger-text); }
-  .when { margin-top: 2px; font: 600 var(--fs-row)/1.25 var(--font-text); letter-spacing: -0.012em; color: var(--text); }
-  .when::first-letter { text-transform: uppercase; }
-  .meta { display: flex; flex-wrap: wrap; column-gap: 6px; font: 450 var(--fs-body)/1.35 var(--font-text); letter-spacing: -0.008em; color: var(--text-2); }
-  .meta b { font-weight: 600; color: var(--text); }
-  .meta i { font-style: normal; color: var(--text-3); }
-  .red { color: var(--danger-text); }
-  .bar { height: 4px; margin-top: 6px; border-radius: var(--r-full); background: var(--fill); overflow: hidden; }
-  .bar span { display: block; height: 100%; border-radius: var(--r-full); background: var(--accent); transform-origin: 0 50%; transition: transform var(--t-slow) var(--ease); }
-  .bar span.full { background: var(--danger); }
-
-  /* the header: art (the poster, the photos swiped sideways, the clip) */
-  .hero { position: relative; height: 210px; margin: 4px 0 var(--s-4); border-radius: var(--r-l); overflow: hidden; }
+  /* the header is media, dark in both themes (.theme-dark: white words, dark glass): the picture whole, the words on it.
+     It grows with a long title, never cuts it */
+  .hero { --hh: clamp(300px, 44vh, 380px); position: relative; isolation: isolate; display: flex; flex-direction: column; justify-content: flex-end;
+    min-height: var(--hh); margin: 4px 0 var(--s-4); padding-top: 60px; /* the words stay clear of the top row */ border-radius: var(--r-xl); overflow: hidden; background: var(--media); color: var(--text); }
+  .hero > :global(.poster.poster) { position: absolute; inset: 0; } /* ui/Poster is a box in the flow */
+  .hero.cancelled > :global(.poster.poster:not(.dim)) { filter: grayscale(1); opacity: 0.6; } /* HeroArt's cover and mesh, as ui/Poster's own dim */
+  /* the 3D mark sits under the top row's buttons at the hero's size: smaller and lower here */
+  .hero :global(.mark) { top: 52px; transform-origin: 100% 0; transform: rotate(8deg) scale(0.82); }
   .wide { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
   .strip { position: absolute; inset: 0; display: flex; overflow-x: auto; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: none; }
   .strip::-webkit-scrollbar { display: none; }
   .pic { flex: 0 0 100%; scroll-snap-align: start; scroll-snap-stop: always; }
   .pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .dots { position: absolute; left: 0; right: 0; bottom: 10px; display: flex; justify-content: center; gap: 5px; pointer-events: none; }
+  .dots { position: absolute; left: 0; right: 0; bottom: 10px; z-index: 3; display: flex; justify-content: center; gap: 5px; pointer-events: none; }
   .dots i { width: 6px; height: 6px; border-radius: var(--r-full); background: rgba(255, 255, 255, 0.5); box-shadow: 0 0 4px rgba(0, 0, 0, 0.4); transition: transform var(--t-fast); }
   .dots i.on { background: var(--on-accent); transform: scale(1.25); }
-  .top { position: absolute; left: 12px; right: 12px; top: 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px; pointer-events: none; } /* a long name yields to the buttons, never under them */
+  /* the hair rim; a cover has HeroArt's own scrim under the words, the mesh a lighter one, photos and a clip a deep one */
+  .shade { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.14); }
+  .nopic .shade { background: linear-gradient(rgba(0, 0, 0, 0) 36%, rgba(0, 0, 0, 0.5)); }
+  .deep .shade { background: linear-gradient(rgba(0, 0, 0, 0) 30%, rgba(0, 0, 0, 0.82)); }
+  .top { position: absolute; z-index: 3; left: 12px; right: 12px; top: 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px; pointer-events: none; } /* a long name yields to the buttons, never under them */
   .top > * { pointer-events: auto; }
   .org { flex: 0 1 auto; min-width: 0; display: flex; }
   .org :global(.tag) { max-width: 100%; min-width: 0; }
-  .org :global(.chip) { height: 26px; padding: 0 10px 0 6px; font-size: var(--fs-cap); gap: 6px; -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
   .acts { flex: none; display: flex; gap: 8px; }
   .acts.on :global(.ib:first-child svg) { fill: currentColor; color: var(--warning); }
-  /* whom it is for, in the picture's lower corner (the photos' dots stay in the middle, the clip's sound on the right) */
-  .tags { position: absolute; left: 12px; bottom: 12px; max-width: calc(100% - 72px); display: flex; flex-wrap: wrap; gap: 6px; pointer-events: none; }
+
+  /* the words (the Afisha hero's slab): the title in the display face, the time in white, the place a step quieter */
+  .slab { position: relative; z-index: 2; isolation: isolate; display: flex; flex-direction: column; gap: 3px; padding: var(--s-6) 18px var(--s-4); pointer-events: none;
+    text-shadow: 0 1px 8px rgba(0, 0, 0, 0.28); }
+  .pics .slab { padding-bottom: var(--s-6); } /* the photos' dots under the words */
+  .clip .slab { padding-right: 60px; } /* the clip's sound button */
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: var(--s-2); text-shadow: none; }
+  .tags:not(:has(*)) { display: none; }
+  .ttl { margin-bottom: var(--s-1); font: 700 var(--fs-t1)/1.08 var(--font-display); letter-spacing: -0.035em; text-wrap: balance; overflow-wrap: break-word; }
+  .strike { text-decoration: line-through; color: var(--text-2); }
+  .cancel { font: 600 var(--fs-body)/1.35 var(--font-text); color: var(--danger-text); }
+  .when { font: 600 var(--fs-row)/1.25 var(--font-text); letter-spacing: -0.012em; }
+  .when::first-letter { text-transform: uppercase; }
+  .where { min-width: 0; font: 500 var(--fs-body)/1.3 var(--font-text); color: var(--text-2); }
+  .where { display: flex; align-items: center; gap: 5px; }
+  .where :global(svg) { flex: none; }
 
   /* the guests' album: the first photo big, two beside it, three under (whole blocks only) */
   .album { display: flex; flex-direction: column; gap: 10px; }
@@ -811,9 +828,13 @@
   .stack :global(.av + .av) { margin-left: -8px; }
   .stack :global(.av) { box-shadow: 0 0 0 2px var(--surface-solid); }
 
-  /* the footer: the one primary action, alone */
+  /* the footer: the one primary action, alone, in a glass island over the content. The main button is calm: white with
+     ink words on the dark, ink with white words on the light (the accent's blue shouted over every poster) */
+  .island { --cta: var(--ink); display: flex; flex-direction: column; padding: 5px; border-radius: var(--r-xl); }
+  :global(:root[data-theme='light']) .island { --cta: var(--on-accent); }
+  .island :global(.btn.k-primary:not(.red):not(.done):not(:disabled)) { --body: var(--text); color: var(--cta); --rim-lo: rgba(11, 20, 51, 0.2); }
   .actions { display: flex; gap: 8px; align-items: center; }
-  .tnote { margin: 0 0 8px; text-align: center; color: var(--text-2); font: 450 var(--fs-sub)/1.3 var(--font-text); }
+  .tnote { margin: 6px var(--s-3) 8px; text-align: center; color: var(--text-2); font: 450 var(--fs-sub)/1.3 var(--font-text); }
   .gl { flex: 1; margin: 0; padding: var(--s-2) var(--s-4); text-wrap: pretty; }
   .ans { flex: 1; display: flex; gap: 8px; min-width: 0; }
   .ans > :global(*) { flex: 1 1 0; min-width: 0; } /* two halves, whatever each says */
