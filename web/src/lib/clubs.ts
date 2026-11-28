@@ -28,13 +28,11 @@ export function nextByOrg(events: EventCard[]): Map<number, string> {
 export const service = (o?: Pick<OrgRef, 'kind' | 'official'> | null) => !!o && o.kind === 'office' && o.official;
 /** An initiative at the Ascent's top: its line says it's waiting for DMP. */
 export const waitsDmp = (o: Org) => !!o.top && !o.official;
-/** A club row's line: waiting for DMP; "recruiting" for one taking applications any time; what's next; its latest event
- *  of the last 30 days; its people. Never a count of followers. */
+/** A club row's line, about the club's life: waiting for DMP; what's next; its latest event of the last 30 days; its
+ *  people. Never a count of followers; recruiting is said by the tab's badges and its Recruiting filter, in one voice. */
 export function clubSub(o: Org, next: Map<number, string>): string {
   if (waitsDmp(o)) return t('clubs.awaitsDmp');
-  const open = o.recruiting && !o.round && !o.myRole ? t('clubs.openNow') : '';
-  const now = next.get(o.id) ?? (open ? '' : o.last ? `${weekdayShort(o.last.startsAt)}, ${dayMonthShort(o.last.startsAt)} · ${o.last.title}` : o.members ? tn('club.members', o.members) : '');
-  return [open, now].filter(Boolean).join(' · ');
+  return next.get(o.id) ?? (o.last ? `${weekdayShort(o.last.startsAt)}, ${dayMonthShort(o.last.startsAt)} · ${o.last.title}` : o.members ? tn('club.members', o.members) : '');
 }
 /** "Ali is in it" / "Ali and 3 more": my friends in a club. */
 export const friendsIn = (o: Org) => (o.friendsN === 1 ? t('clubs.friendIn', { name: o.friends[0].name }) : t('clubs.friendsIn', { name: o.friends[0].name, n: o.friendsN - 1 }));

@@ -36,7 +36,7 @@ async function startQa(now?: number): Promise<Qa & { stop: () => void }> {
   const port = await freePort();
   const dir = mkdtempSync(join(tmpdir(), 'kbtu-e2e-'));
   const db = join(dir, 'qa.db');
-  const proc: ChildProcess = spawn(PYTHON, ['tools/qa.py', '--port', String(port), '--db', db, ...(now ? ['--now', String(now)] : [])], {
+  const proc: ChildProcess = spawn(PYTHON, ['tools/qa.py', '--port', String(port), '--db', db, ...(now ? ['--now', String(now), '--clubs'] : [])], {
     cwd: SERVER, env: { ...process.env, PYTHONUNBUFFERED: '1' }, stdio: ['ignore', 'pipe', 'pipe'], detached: true,
   });
   const links: Partial<Record<Who, string>> = {};

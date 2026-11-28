@@ -106,6 +106,20 @@ test('Clubs', async ({ open }) => {
   await shot(p, 'clubs');
 });
 
+test('Clubs, every club in its list', async ({ open }) => {
+  const p = await ali(open);
+  await nav(p.page).getByRole('button', { name: tr('page.clubs'), exact: true }).click();
+  await p.page.getByRole('heading', { name: new RegExp(`^${tr('clubs.allClubs')}`) }).evaluate((el) => el.closest('section')!.scrollIntoView({ block: 'start' })); // the card's top clear of the capsule (its scroll margin)
+  await shot(p, 'clubs-list');
+});
+
+test('Clubs, with my own', async ({ open }) => {
+  const p = await settled(await open('Dana'));
+  await nav(p.page).getByRole('button', { name: tr('page.clubs'), exact: true }).click();
+  await expect(p.page.getByRole('heading', { name: tr('clubs.mineTitle') })).toBeVisible();
+  await shot(p, 'clubs-mine');
+});
+
 test('Forum', async ({ open }) => {
   const p = await ali(open);
   await nav(p.page).getByRole('button', { name: tr('tab.forum'), exact: true }).click();
