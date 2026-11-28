@@ -73,6 +73,8 @@ One line per top-level module (`logic/` is in the table above). Each module's do
 | `mtbot.py` | `/all`'s member list over MTProto, signed in as the bot (not the userbot) |
 | `userbot.py` | a person's Telegram account that reads clubs' channels (Telegram side only) |
 | `mirror.py` | the rules that turn what the userbot saw into a club's posts (database side only) |
+| `akosend.py` | admissions (AKO) reminders and interview invites out, by Telegram bot and e-mail (run by the postman's round) |
+| `feeds.py` | what YouTube and Instagram share (`Feed`): linked sources, first reads, posts made, links taken off; the providers only fetch and parse |
 | `instagram.py` | clubs' Instagram posts into their news (Graph API) |
 | `youtube.py` | clubs' YouTube videos into their news (public feed) |
 | `tiktok.py` | group replies with the video for TikTok, Shorts, Instagram links |
