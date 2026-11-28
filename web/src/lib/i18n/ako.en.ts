@@ -2,7 +2,7 @@
 import type { AkoDict } from './ako.ru';
 
 const en: AkoDict = {
-  'ako.on': "Powered by Sowco",
+  'ako.on': "Powered by KBTU App",
   'ako.title': "Application",
   'ako.intro': "Choose a program and attach your documents. It takes about five minutes.",
   'ako.introInterview': "Choose a program, attach your documents and pick an interview time. It takes about five minutes.",
