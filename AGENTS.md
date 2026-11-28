@@ -112,6 +112,7 @@ cd web && npm run check && npm test                   # svelte-check 0 errors, 0
 
 One file: `pytest -q tests/test_x.py -k name` (~1 min: the schema and migrations are built per process). `npm test`
 includes a design ratchet (`web/src/lib/design.test.ts`): new raw hex/font/radius values fail it.
+Outside `web/src/ui/`, per-file `backdrop-filter` and raw `rgba()`/`hsla()` counts may only go down too.
 
 Checking a screen: open a link `qa.py` prints, at phone size (375 px, also 320), in both themes. A hidden browser
 tab freezes animations and `requestAnimationFrame`: look with it visible.
