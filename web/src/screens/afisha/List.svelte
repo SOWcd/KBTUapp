@@ -640,12 +640,12 @@
   /* (the card has no lit rim of its own: the glass is the one lit object on it; two rims 6px apart read as nested boxes) */
   @media (prefers-reduced-motion: reduce) { .hero::before { animation: none; } }
   /* (r4) the words lie on the cover itself, no box inside the card: under them the picture goes soft and dark by
-     degrees (the lens: the cover's thumb again, blurred and dimmed, let in through a gradient mask, so there is no edge
-     where it starts). A still layer, drawn once: nothing blurs live */
-  .slab { position: relative; z-index: 2; /* over the card's own tap */ isolation: isolate; display: flex; flex-direction: column; padding: 96px 18px var(--s-4);
+     degrees (the lens: the cover's thumb again, blurred and dimmed, let in through a short gradient mask that ends above the words: no edge where it starts, and the
+     sharp cover never shows through behind a line of text). A still layer, drawn once: nothing blurs live */
+  .slab { position: relative; z-index: 2; /* over the card's own tap */ isolation: isolate; display: flex; flex-direction: column; padding: 76px 18px var(--s-4);
     border-radius: 0 0 var(--r-xl) var(--r-xl); color: var(--text); pointer-events: none; }
   .lens { position: absolute; inset: 0; z-index: -2; overflow: hidden; border-radius: inherit; pointer-events: none;
-    -webkit-mask-image: linear-gradient(transparent, rgba(0, 0, 0, 0.55) 56px, black 112px); mask-image: linear-gradient(transparent, rgba(0, 0, 0, 0.55) 56px, black 112px); }
+    -webkit-mask-image: linear-gradient(transparent, rgba(0, 0, 0, 0.7) 28px, black 56px); mask-image: linear-gradient(transparent, rgba(0, 0, 0, 0.7) 28px, black 56px); }
   /* the picture runs 64px past the lens on every side but the top: a blurred layer fades out at its own edges, and
      at the card's foot the sharp cover showed through that fade */
   .lens img { position: absolute; left: -64px; bottom: -64px; width: calc(100% + 128px); height: calc(var(--hh) + 64px); object-fit: cover;
