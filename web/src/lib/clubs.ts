@@ -5,7 +5,6 @@ import { hit as match, namesOf } from './search';
 import { t, tn } from './i18n/index.svelte';
 import { dayMonth, dayMonthShort, nowTs, time, weekdayShort } from './time';
 
-export const weight = (o: Org) => o.members + o.subscribers;
 export const byWeight = (a: Org, b: Org) =>
   +!a.gov - +!b.gov || b.members - a.members || b.subscribers - a.subscribers || a.name.localeCompare(b.name);
 // any of its names in any language, as the server's search (lib/search.ts)
