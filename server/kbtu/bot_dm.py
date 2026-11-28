@@ -38,6 +38,10 @@ def _welcome(con, cfg: Config, msg: dict) -> dict | None:
     arg = words[1] if len(words) == 2 and words[0] == "/start" and re.fullmatch(r"[A-Za-z0-9_-]{1,64}", words[1]) else ""
     if words[:1] == ["/exit"]:
         arg = "exit"
+    if arg.startswith("ako_") and logic.ako.BOT:  # an applicant's "Remind me in Telegram" (AKO_REMIND): this chat, or why not
+        lang = logic.ako.bind(con, arg, chat["id"])
+        tg_lang = u["lang"] if u else str((msg.get("from") or {}).get("language_code") or "")[:2]
+        return {"chat_id": chat["id"], "text": texts.bot_message(lang or tg_lang, "ako_linked" if lang else "ako_gone")[0], "parse_mode": "HTML"}
     if arg.startswith("sh_"):  # a share card made outside the Mini App (core.share_hold)
         return _share_start(cfg, con, chat["id"], arg[3:], u["lang"] if u else str((msg.get("from") or {}).get("language_code") or "")[:2])
     if [w.split("@")[0] for w in words[:1]] == ["/chat"] or arg == "chat":  # "Suggest a chat" uses Telegram's own chat picker.

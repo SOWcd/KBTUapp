@@ -2878,4 +2878,21 @@ MIGRATIONS: list[tuple[int, str]] = [
       PRIMARY KEY (post_id, choice)
     ) STRICT, WITHOUT ROWID;
     ALTER TABLE users ADD COLUMN n_forum_digest INTEGER NOT NULL DEFAULT 1;"""),
+    # Admissions reminders (logic/ako.py due, kbtu/akosend.py): the chat that tapped /start ako_... gets them (gone when
+    # decided, a day after the interview, or with a new link), and each send claimed once. No CHECK on kind or channel:
+    # a CHECK can't be altered, and WhatsApp is to come
+    (267, """CREATE TABLE IF NOT EXISTS ako_chats (  -- IF NOT EXISTS: tests rewind user_version
+      app_id INTEGER PRIMARY KEY REFERENCES ako_apps(id) ON DELETE CASCADE,
+      chat   INTEGER NOT NULL                         -- the applicant's private chat with the bot
+    ) STRICT;
+    CREATE TABLE IF NOT EXISTS ako_sends (
+      app_id  INTEGER NOT NULL REFERENCES ako_apps(id) ON DELETE CASCADE,
+      kind    TEXT NOT NULL,                          -- booked (the invite), d1 (a day before), h1 (an hour before)
+      channel TEXT NOT NULL,                          -- telegram, email
+      slot_at INTEGER NOT NULL,                       -- the interview's start it was for: a moved one is another send
+      at      INTEGER NOT NULL,                       -- claimed
+      sent_at INTEGER,
+      error   TEXT,                                   -- why it never went (an exception's class, never an address)
+      PRIMARY KEY (app_id, kind, channel, slot_at)
+    ) STRICT;"""),
 ]

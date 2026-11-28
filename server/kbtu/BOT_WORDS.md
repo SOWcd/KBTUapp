@@ -27,6 +27,11 @@ offers it in inline mode to that account alone; no new words.
 
 Also: in a group, a TikTok, YouTube Shorts or Instagram link is answered with the video file itself, or the post's photos and videos as one album (`TIKTOK=1`, `kbtu/tiktok.py`; an Instagram story's video only with `INSTAGRAM_COOKIES`), no caption, no words of the bot's own.
 
+An admissions applicant's interview reminder (`ako_d1`, `ako_h1`, `kbtu/akosend.py`, only to the chat that tapped their
+own `/start ako_…` link) names the program from the org's catalogue (`i18n/ako.json`, never typed by anyone) and has
+one URL button: the interview's Microsoft Teams link the org's managers set, accepted only on Microsoft's hosts
+(`ako._meet`). No applicant's or manager's words.
+
 The iPhone app's notifications (`kbtu/apns.py`) are the same rendered bot message to the same person, sent there
 instead of Telegram (never both): they add no words and no exception.
 

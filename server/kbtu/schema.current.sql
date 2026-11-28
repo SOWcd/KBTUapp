@@ -34,6 +34,10 @@ CREATE TABLE ako_apps (
       updated_at   INTEGER NOT NULL,
       sent_at      INTEGER
     ) STRICT;
+CREATE TABLE ako_chats (  -- IF NOT EXISTS: tests rewind user_version
+      app_id INTEGER PRIMARY KEY REFERENCES ako_apps(id) ON DELETE CASCADE,
+      chat   INTEGER NOT NULL                         -- the applicant's private chat with the bot
+    ) STRICT;
 CREATE TABLE ako_days (
       org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
       day    TEXT NOT NULL,                         -- YYYY-MM-DD in Almaty
@@ -68,6 +72,16 @@ CREATE TABLE ako_reviewers (
       org_id  INTEGER NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       PRIMARY KEY (org_id, user_id)
+    ) STRICT;
+CREATE TABLE ako_sends (
+      app_id  INTEGER NOT NULL REFERENCES ako_apps(id) ON DELETE CASCADE,
+      kind    TEXT NOT NULL,                          -- booked (the invite), d1 (a day before), h1 (an hour before)
+      channel TEXT NOT NULL,                          -- telegram, email
+      slot_at INTEGER NOT NULL,                       -- the interview's start it was for: a moved one is another send
+      at      INTEGER NOT NULL,                       -- claimed
+      sent_at INTEGER,
+      error   TEXT,                                   -- why it never went (an exception's class, never an address)
+      PRIMARY KEY (app_id, kind, channel, slot_at)
     ) STRICT;
 CREATE TABLE ako_slots (
       id         INTEGER PRIMARY KEY,

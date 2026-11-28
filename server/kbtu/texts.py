@@ -221,6 +221,11 @@ BOT = {
         "welcome": ("👋 Это <b>KBTU App</b>: мероприятия и клубы, твоё расписание и карта корпуса.\nВсё внутри приложения — открывай 👇", "🚀 Открыть KBTU App"),
         "share_gone": ("⏳ Эта ссылка уже не работает.\nНажми «Поделиться» в приложении ещё раз 👇", "🚀 Открыть KBTU App"),
         "remind_2h": ("⏰ Через 2 часа — <b>{title}</b>\n📍 {place}\nБилет уже в приложении.", "🎟 Открыть билет"),
+        # admissions (logic/ako.py): to an applicant, formal; the button is the org's Teams link
+        "ako_linked": ("🔔 Готово! Напомню о собеседовании за сутки и за час.", None),
+        "ako_gone": ("⏳ Эта ссылка уже не работает.\nОткройте страницу заявки и нажмите «Напомнить в Telegram» ещё раз.", None),
+        "ako_d1": ("⏰ Собеседование через сутки — <b>{program}</b>\n📅 {when}", "💻 Войти в Teams"),
+        "ako_h1": ("⏰ Собеседование через час — <b>{program}</b>\n📅 {when}", "💻 Войти в Teams"),
         "remind_2h_team": ("⏰ Через 2 часа — <b>{title}</b>\n📍 {place}", "Открыть событие"),
         "group_on": ("👋 Я на месте. Этот чат подключён к KBTU App, заявки на вход проверяю сам.", "Открыть KBTU App"),
         "all_none": ("👀 Пока некого звать: я никого здесь не знаю. Запомню тех, кто напишет.", ""),
@@ -461,6 +466,10 @@ BOT = {
         "welcome": ("👋 Бұл — <b>KBTU App</b>: іс-шаралар мен клубтар, сабақ кестең және корпус картасы.\nБәрі қосымшада — ашып көр 👇", "🚀 KBTU App ашу"),
         "share_gone": ("⏳ Бұл сілтеме енді жұмыс істемейді.\nҚосымшада «Бөлісу» батырмасын қайта бас 👇", "🚀 KBTU App ашу"),
         "remind_2h": ("⏰ 2 сағаттан кейін — <b>{title}</b>\n📍 {place}\nБилет қосымшада.", "🎟 Билетті ашу"),
+        "ako_linked": ("🔔 Дайын! Сұхбат туралы бір тәулік және бір сағат бұрын еске саламын.", None),
+        "ako_gone": ("⏳ Бұл сілтеме енді жұмыс істемейді.\nӨтінім бетін ашып, «Telegram-да еске салу» батырмасын қайта басыңыз.", None),
+        "ako_d1": ("⏰ Сұхбатқа бір тәулік қалды — <b>{program}</b>\n📅 {when}", "💻 Teams-ке кіру"),
+        "ako_h1": ("⏰ Сұхбатқа бір сағат қалды — <b>{program}</b>\n📅 {when}", "💻 Teams-ке кіру"),
         "remind_2h_team": ("⏰ 2 сағаттан кейін — <b>{title}</b>\n📍 {place}", "Іс-шараны ашу"),
         "group_on": ("👋 Мен осындамын. Бұл чат KBTU App-қа қосылған, кіру өтінімдерін өзім тексеремін.", "KBTU App ашу"),
         "all_none": ("👀 Әзірге шақыратын ешкім жоқ: мұнда ешкімді танымаймын. Чатқа жазғандарды есте сақтап отырамын.", ""),
@@ -693,6 +702,10 @@ BOT = {
         "welcome": ("👋 This is <b>KBTU App</b>: events and clubs, your class schedule and the campus map.\nIt's all inside the app — open it 👇", "🚀 Open KBTU App"),
         "share_gone": ("⏳ This link no longer works.\nTap Share in the app again 👇", "🚀 Open KBTU App"),
         "remind_2h": ("⏰ In 2 hours — <b>{title}</b>\n📍 {place}\nYour ticket is in the app.", "🎟 Open ticket"),
+        "ako_linked": ("🔔 Done! I'll remind you of your interview a day and an hour before.", None),
+        "ako_gone": ("⏳ This link no longer works.\nOpen your application page and tap “Remind me in Telegram” again.", None),
+        "ako_d1": ("⏰ Your interview is in a day — <b>{program}</b>\n📅 {when}", "💻 Join in Teams"),
+        "ako_h1": ("⏰ Your interview is in an hour — <b>{program}</b>\n📅 {when}", "💻 Join in Teams"),
         "remind_2h_team": ("⏰ In 2 hours — <b>{title}</b>\n📍 {place}", "Open the event"),
         "group_on": ("👋 On duty. This chat is linked to KBTU App, I check join requests myself.", "Open KBTU App"),
         "all_none": ("👀 Nobody to call yet: I don't know anyone here. I'll remember whoever writes.", ""),
@@ -1618,6 +1631,17 @@ AKO_ICS = {
     "ru": {"title": "Собеседование: {program} · {org}", "body": "Онлайн-собеседование в Microsoft Teams. Ссылка для входа:"},
     "kk": {"title": "Сұхбат: {program} · {org}", "body": "Microsoft Teams-тегі онлайн сұхбат. Кіру сілтемесі:"},
     "en": {"title": "Interview: {program} · {org}", "body": "Online interview in Microsoft Teams. Link to join:"},
+}
+
+# the same by e-mail (kbtu/akosend.py, only with AKO_MAIL_FROM): a subject per kind and one body; never the applicant's
+# name or other typed words. {teams} is a line with the link, or nothing
+AKO_MAIL = {
+    "ru": {"booked": "Собеседование: {program}", "d1": "Собеседование через сутки: {program}", "h1": "Собеседование через час: {program}",
+           "body": "Здравствуйте!\n\nВаше онлайн-собеседование в Microsoft Teams: {program}\n{when} (время Алматы)\n{teams}\n{ics}\n{org}", "ics": "Приглашение для календаря — во вложении.\n"},
+    "kk": {"booked": "Сұхбат: {program}", "d1": "Сұхбатқа бір тәулік қалды: {program}", "h1": "Сұхбатқа бір сағат қалды: {program}",
+           "body": "Сәлеметсіз бе!\n\nMicrosoft Teams-тегі онлайн сұхбатыңыз: {program}\n{when} (Алматы уақыты)\n{teams}\n{ics}\n{org}", "ics": "Күнтізбеге шақыру тіркемеде.\n"},
+    "en": {"booked": "Interview: {program}", "d1": "Your interview is in a day: {program}", "h1": "Your interview is in an hour: {program}",
+           "body": "Hello,\n\nYour online interview in Microsoft Teams: {program}\n{when} (Almaty time)\n{teams}\n{ics}\n{org}", "ics": "The calendar invite is attached.\n"},
 }
 
 COMMANDS = {

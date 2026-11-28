@@ -639,6 +639,8 @@ def create(cfg: config.Config | None = None) -> FastAPI:
     # the "To calendar" link is signed by one worker and may be opened on another: one key for all, from the env
     logic.seats.ICS_KEY = hmac.new(cfg.token_key, b"kbtu-ics", hashlib.sha256).digest()
     logic.seats.REF_KEY = hmac.new(cfg.token_key, b"kbtu-event-ref", hashlib.sha256).digest()  # "My link"'s code
+    logic.ako.KEY = hmac.new(cfg.token_key, b"kbtu-ako", hashlib.sha256).digest()  # an applicant's one-tap invite and bot link
+    logic.ako.BOT = cfg.bot_username if cfg.ako_remind else ""  # AKO_REMIND off: no reminders anywhere
     logic.appeals.ASK = cfg.ask  # the bot's help-desk answer message goes only where the desk opens (ASK)
     logic.library.MODE = cfg.library  # LIBRARY: the bot's seat messages go only while it is on
     logic.gallery.MODE = cfg.gallery  # GALLERY: who posts to the Gallery ("all", "staff"); empty: the albums alone
@@ -3724,6 +3726,12 @@ h1 {{ font-size: 28px; line-height: 1.2; margin: 24px 0 4px; }} h2 {{ font-size:
     def ako_ics(request: Request, con: Con):
         return Response(logic.ako.ics(con, ako_token(request)), media_type="text/calendar; charset=utf-8", headers={
             "Cache-Control": "no-store", "Content-Disposition": 'attachment; filename="interview.ics"'})
+
+    @app.get("/api/ako/ics/{aid}")
+    def ako_ics_tap(aid: int, con: Con, s: str = ""):
+        # the invite in one tap: a plain link the phone hands to its calendar (no header); the signature opens it alone
+        return Response(logic.ako.signed_ics(con, aid, s), media_type="text/calendar; charset=utf-8", headers={
+            "Cache-Control": "no-store", "Referrer-Policy": "no-referrer", "Content-Disposition": 'inline; filename="interview.ics"'})
 
     # the org's own people (Studio): head and up run it, a member reads (logic/ako.py _team)
     @app.get("/api/orgs/{oid}/ako")
