@@ -50,11 +50,13 @@
   /* the ground under media (a hero cover, its lit mark): black in both themes */
   --media: #000;
   /* on media, the same in both themes: the dark under the words on a cover, the lighter one a drawn cover needs, the
-     words' own soft shadow, a clear tag, and the plain shadow a cover the size of a card throws (tokens "light") */
+     words' own soft shadow, a clear tag, a hairline (the card's edge, the lockup's rule), and the plain shadow a cover
+     the size of a card throws */
   --media-scrim: linear-gradient(to top, rgba(0, 0, 0, 0.94), rgba(0, 0, 0, 0.86) 30%, rgba(0, 0, 0, 0.5) 50%, rgba(0, 0, 0, 0) 70%);
   --media-shade: linear-gradient(rgba(0, 0, 0, 0) 36%, rgba(0, 0, 0, 0.5));
   --media-text-shadow: 0 1px 8px rgba(0, 0, 0, 0.28);
   --media-chip: rgba(255, 255, 255, 0.18);
+  --media-line: rgba(255, 255, 255, 0.18);
   --media-lift: 0 1px 2px rgba(0, 0, 0, 0.1), 0 22px 36px -22px rgba(0, 0, 0, 0.42);
 
   /* motion: transform and opacity only, never blur. The language is the context menu's (ui/Menu): things grow out of
@@ -182,15 +184,11 @@
   --glass-in-a: transparent; --glass-in-b: transparent; --glass-in-w: 0px;                 /* the fringe inside the body (light theme) */
   --glass-shade: transparent; --glass-glow: rgba(255, 255, 255, 0.2);
   --sheet: #131314;
-  /* ---- light: one model for the whole app ----
-     One white light, above and a little to the left (.glass --hx; the phone's tilt moves it). Nothing gives off light.
-     - An edge that faces the light catches it: glass by its rim (--glass-rim-*), media by base.css .lit-rim.
-     - A thing throws a plain shadow down, never a coloured one and never a ring around itself: --elev-1..4. On the
-       black ground a shadow can't show, so depth there is the lit edge alone; on the pale ground it is the shadow.
-     - Colour lives inside its object (a cover, a 3D object's iridescence) and passes through the glass over it
-       (--glass-filter). It leaves its object in one place only: the Afisha hero's cover tints its own shadow, straight
-       under the card in view and narrower than the card.
-     - A press lights glass from inside, at the finger (.glass-bloom), and that is the only light that moves by itself.
+  /* ---- light: there are no lighting effects (owner, Nov 28) ----
+     Nothing glows and nothing has a halo: a card stands out by its content (a real cover, its words, its place on the
+     page), the way Apple's featured cards do. What is left is plain: the hair of edge and the neutral shadow of each
+     elevation step below, never a coloured one; colour stays inside its object (a cover, a 3D object) and shows
+     through the glass floating over it; a press lights glass from inside at the finger (.glass-bloom).
      elevation: four neutral steps */
   --elev-1: inset 0 0 0 1px rgba(255, 255, 255, 0.075);  /* a card: near-black on black shows by its hair rim */
   --elev-2: 0 2px 8px rgba(0, 0, 0, 0.32);               /* a raised control: a knob, a floating solid capsule */

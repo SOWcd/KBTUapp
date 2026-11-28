@@ -383,7 +383,7 @@
       {:else}
         <HeroArt pic={art} emoji={e.emoji} color={e.color ?? e.tint} first />
       {/if}
-      <div class="shade lit-rim"></div>
+      <div class="shade media-rim"></div>
       <!-- over the picture, the floating layer: whose it is, and the two quiet actions (save, share) in glass; the bar
            below keeps the one main action alone -->
       <div class="top">{#if e.coHost}<span class="org"><OrgTag org={e.org} co={e.coHost} onpick={(o) => sheets.club(o)} /></span>
