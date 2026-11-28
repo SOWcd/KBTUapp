@@ -985,7 +985,6 @@ const en: Dict = {
   'route.helpUnknown': "I don't know that room: check the number on the next door",
   'route.noGraph': "Routes didn't load, try again",
   'route.title': "How to get there",
-  'route.open': "Route",
   'route.m.fast': "Fastest",
   'route.m.lift': "By lift",
   'route.rush': "Rush hour: the lifts are packed, expect a wait",
