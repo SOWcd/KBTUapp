@@ -5,7 +5,11 @@
   "hex": 3,
   "mix": 1,
   "weight": 1,
-  "legacy": 0
+  "legacy": 0,
+  "rawColor": 16
+ },
+ "screens/ConsentGate.svelte": {
+  "rawColor": 8
  },
  "screens/Screen.svelte": {
   "font": 7,
@@ -13,7 +17,8 @@
   "hex": 3,
   "mix": 4,
   "weight": 0,
-  "legacy": 0
+  "legacy": 0,
+  "rawColor": 1
  },
  "screens/admin/AdminAi.svelte": {
   "font": 3,
@@ -47,6 +52,9 @@
   "weight": 0,
   "legacy": 0
  },
+ "screens/admin/AdminOrg.svelte": {
+  "rawColor": 1
+ },
  "screens/admin/AdminStats.svelte": {
   "font": 0,
   "radius": 0,
@@ -54,6 +62,12 @@
   "mix": 0,
   "weight": 1,
   "legacy": 0
+ },
+ "screens/admin/AwardPane.svelte": {
+  "rawColor": 5
+ },
+ "screens/admin/BadgeQr.svelte": {
+  "rawColor": 5
  },
  "screens/admin/MapFlaws.svelte": {
   "font": 1,
@@ -71,13 +85,38 @@
   "weight": 1,
   "legacy": 0
  },
+ "screens/afisha/Clubs.svelte": {
+  "rawColor": 10
+ },
+ "screens/afisha/Feed.svelte": {
+  "rawColor": 15
+ },
+ "screens/afisha/Gallery.svelte": {
+  "rawColor": 7
+ },
+ "screens/afisha/HeroArt.svelte": {
+  "rawColor": 9
+ },
+ "screens/afisha/List.svelte": {
+  "rawColor": 5
+ },
+ "screens/afisha/News.svelte": {
+  "rawColor": 3
+ },
+ "screens/assistant/Assistant.svelte": {
+  "rawColor": 4
+ },
  "screens/club/EventEditor.svelte": {
   "font": 0,
   "radius": 0,
   "hex": 13,
   "mix": 0,
   "weight": 0,
-  "legacy": 0
+  "legacy": 0,
+  "rawColor": 8
+ },
+ "screens/club/EventQr.svelte": {
+  "rawColor": 5
  },
  "screens/club/Scanner.svelte": {
   "font": 5,
@@ -85,7 +124,21 @@
   "hex": 1,
   "mix": 0,
   "weight": 4,
-  "legacy": 0
+  "legacy": 0,
+  "rawColor": 6
+ },
+ "screens/club/TeamSetupSheet.svelte": {
+  "rawColor": 1
+ },
+ "screens/forum/Channel.svelte": {
+  "rawColor": 1
+ },
+ "screens/forum/ChannelCompose.svelte": {
+  "backdrop": 2,
+  "rawColor": 1
+ },
+ "screens/games/Spy.svelte": {
+  "rawColor": 1
  },
  "screens/lab/Lab.svelte": {
   "font": 0,
@@ -93,7 +146,8 @@
   "hex": 0,
   "mix": 0,
   "weight": 0,
-  "legacy": 4
+  "legacy": 4,
+  "rawColor": 1
  },
  "screens/map/CampusMap.svelte": {
   "font": 0,
@@ -101,7 +155,8 @@
   "hex": 4,
   "mix": 0,
   "weight": 0,
-  "legacy": 0
+  "legacy": 0,
+  "rawColor": 8
  },
  "screens/map/MapDock.svelte": {
   "font": 2,
@@ -117,7 +172,8 @@
   "hex": 10,
   "mix": 0,
   "weight": 2,
-  "legacy": 0
+  "legacy": 0,
+  "rawColor": 17
  },
  "screens/map/MapPad.svelte": {
   "font": 13,
@@ -125,7 +181,8 @@
   "hex": 21,
   "mix": 4,
   "weight": 8,
-  "legacy": 0
+  "legacy": 0,
+  "rawColor": 21
  },
  "screens/map/MapTopRow.svelte": {
   "font": 2,
@@ -133,7 +190,9 @@
   "hex": 4,
   "mix": 0,
   "weight": 2,
-  "legacy": 0
+  "legacy": 0,
+  "backdrop": 2,
+  "rawColor": 10
  },
  "screens/map/RoomCard.svelte": {
   "font": 4,
@@ -141,7 +200,8 @@
   "hex": 5,
   "mix": 0,
   "weight": 2,
-  "legacy": 0
+  "legacy": 0,
+  "rawColor": 5
  },
  "screens/map/RouteUI.svelte": {
   "font": 11,
@@ -149,7 +209,12 @@
   "hex": 14,
   "mix": 0,
   "weight": 3,
-  "legacy": 0
+  "legacy": 0,
+  "backdrop": 4,
+  "rawColor": 40
+ },
+ "screens/map/mapLayers.ts": {
+  "rawColor": 1
  },
  "screens/profile/AddFriend.svelte": {
   "font": 0,
@@ -157,7 +222,8 @@
   "hex": 7,
   "mix": 0,
   "weight": 0,
-  "legacy": 0
+  "legacy": 0,
+  "rawColor": 4
  },
  "screens/profile/AppCard.svelte": {
   "font": 0,
@@ -173,7 +239,9 @@
   "hex": 6,
   "mix": 1,
   "weight": 9,
-  "legacy": 0
+  "legacy": 0,
+  "backdrop": 2,
+  "rawColor": 11
  },
  "screens/profile/Friends.svelte": {
   "font": 0,
@@ -181,7 +249,8 @@
   "hex": 4,
   "mix": 0,
   "weight": 0,
-  "legacy": 0
+  "legacy": 0,
+  "rawColor": 4
  },
  "screens/profile/Hero.svelte": {
   "font": 8,
@@ -189,7 +258,11 @@
   "hex": 21,
   "mix": 0,
   "weight": 7,
-  "legacy": 0
+  "legacy": 0,
+  "rawColor": 88
+ },
+ "screens/profile/Invite.svelte": {
+  "rawColor": 4
  },
  "screens/profile/LookPage.svelte": {
   "font": 2,
@@ -197,7 +270,8 @@
   "hex": 35,
   "mix": 0,
   "weight": 1,
-  "legacy": 0
+  "legacy": 0,
+  "rawColor": 12
  },
  "screens/profile/Me.svelte": {
   "font": 2,
@@ -205,7 +279,8 @@
   "hex": 15,
   "mix": 0,
   "weight": 0,
-  "legacy": 0
+  "legacy": 0,
+  "rawColor": 8
  },
  "screens/profile/MyQr.svelte": {
   "font": 5,
@@ -213,7 +288,19 @@
   "hex": 29,
   "mix": 0,
   "weight": 4,
-  "legacy": 0
+  "legacy": 0,
+  "backdrop": 4,
+  "rawColor": 60
+ },
+ "screens/profile/PhotoCrop.svelte": {
+  "rawColor": 3
+ },
+ "screens/profile/RefSheet.svelte": {
+  "rawColor": 1
+ },
+ "screens/sheets/AnthemSheet.svelte": {
+  "backdrop": 2,
+  "rawColor": 2
  },
  "screens/sheets/AwardSheet.svelte": {
   "font": 5,
@@ -221,7 +308,19 @@
   "hex": 0,
   "mix": 0,
   "weight": 7,
-  "legacy": 0
+  "legacy": 0,
+  "backdrop": 6,
+  "rawColor": 28
+ },
+ "screens/sheets/CheckinResult.svelte": {
+  "backdrop": 4,
+  "rawColor": 6
+ },
+ "screens/sheets/EventSheet.svelte": {
+  "rawColor": 10
+ },
+ "screens/sheets/InstallSheet.svelte": {
+  "rawColor": 1
  },
  "screens/sheets/LoginSheet.svelte": {
   "font": 0,
@@ -229,7 +328,8 @@
   "hex": 6,
   "mix": 0,
   "weight": 0,
-  "legacy": 0
+  "legacy": 0,
+  "rawColor": 3
  },
  "screens/sheets/PcSheet.svelte": {
   "font": 0,
@@ -245,7 +345,11 @@
   "hex": 4,
   "mix": 0,
   "weight": 1,
-  "legacy": 0
+  "legacy": 0,
+  "rawColor": 6
+ },
+ "screens/sheets/Santa.svelte": {
+  "rawColor": 1
  },
  "screens/sheets/SantaBack.svelte": {
   "font": 0,
@@ -253,7 +357,8 @@
   "hex": 7,
   "mix": 0,
   "weight": 0,
-  "legacy": 0
+  "legacy": 0,
+  "rawColor": 4
  },
  "screens/sheets/SantaReveal.svelte": {
   "font": 0,
@@ -261,7 +366,9 @@
   "hex": 6,
   "mix": 0,
   "weight": 0,
-  "legacy": 0
+  "legacy": 0,
+  "backdrop": 2,
+  "rawColor": 10
  },
  "screens/sheets/Stories.svelte": {
   "font": 8,
@@ -269,7 +376,9 @@
   "hex": 12,
   "mix": 1,
   "weight": 3,
-  "legacy": 0
+  "legacy": 0,
+  "backdrop": 4,
+  "rawColor": 13
  },
  "screens/sheets/TicketView.svelte": {
   "font": 4,
@@ -277,7 +386,9 @@
   "hex": 5,
   "mix": 2,
   "weight": 8,
-  "legacy": 0
+  "legacy": 0,
+  "backdrop": 4,
+  "rawColor": 36
  },
  "screens/sheets/Unlock.svelte": {
   "font": 6,
@@ -285,7 +396,9 @@
   "hex": 9,
   "mix": 6,
   "weight": 2,
-  "legacy": 0
+  "legacy": 0,
+  "backdrop": 4,
+  "rawColor": 8
  },
  "ui/AiBadge.svelte": {
   "font": 1,

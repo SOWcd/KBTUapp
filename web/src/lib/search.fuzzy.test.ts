@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { hit, score } from './search';
+import { cyrKey, hit, score } from './search';
 
 const aigerim = '\u0410\u0439\u0433\u0435\u0440\u0438\u043c';
 const asel = '\u04d8\u0441\u0435\u043b';
@@ -63,4 +63,11 @@ it('requires every query word within a single name and uses the best alias', () 
   expect(score('aigerim', ['Aigerm', aigerim, 'Aigerim Satpayeva'])).toBe(3);
   expect(score('aigerim', [undefined, null, ''])).toBe(0);
   expect(score('  ', ['Aigerim'])).toBe(0);
+});
+
+it('sorts Latin names among Cyrillic ones', () => {
+  const text = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' }); // as in sort.svelte.ts
+  const names = ['Misgarli Ibrahim', '\u0410\u0439\u0433\u0435\u0440\u0438\u043c', '\u042f\u043d\u0430', '\u041c\u0430\u0440\u0430\u0442', '\u041d\u0443\u0440\u043b\u0430\u043d'];
+  expect(names.sort((a, b) => text.compare(cyrKey(a), cyrKey(b))))
+    .toEqual(['\u0410\u0439\u0433\u0435\u0440\u0438\u043c', '\u041c\u0430\u0440\u0430\u0442', 'Misgarli Ibrahim', '\u041d\u0443\u0440\u043b\u0430\u043d', '\u042f\u043d\u0430']);
 });

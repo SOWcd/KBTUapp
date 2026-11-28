@@ -41,7 +41,7 @@ screen per PR, never slower than before, checked on a phone in both themes.
 | Web entry, tabs, sheets | `web/src/App.svelte`, `web/src/lib/state/ui.svelte.ts`, `web/src/lib/state/sheets.ts` |
 | API contract | `web/src/lib/api/types.ts`, `index.ts` (the interface), `client.ts` |
 | UI strings | `web/src/lib/i18n/{ru,kk,en}.ts` (ru is the source; kk and en are typed against it). ~70k tokens each: never read them whole; add a string with `node tools/i18n.mjs add <key> --ru "…" --kk "…" --en "…" [--after <key>]` (from `web/`): the same spot in all three, which keep one key order (a test checks). Words only the Admin sheet's and Studio's screens show: `staff.{ru,kk,en}.ts` (add with `--staff`), read with `sw()` from `lib/i18n/staff`, out of the start bundle |
-| Shared UI | `web/src/ui/` (tokens.css, base.css, glass, Sheet, Button, ...) |
+| Shared UI | `web/src/ui/` (tokens.css, base.css, glass, Sheet, Button, ...); the owner's taste and how design work is done: [DESIGN.md](DESIGN.md), read it before any UI change |
 | Test helpers | `env`, `login`, `tma`, `set_clock`, `delete_now` in `server/tests/helpers.py` (`from helpers import ...`; `test_core.py` re-exports them for the older tests) |
 | Android app (Play) | `android/` (a TWA from `twa-manifest.json`; README: release, demo login, Data safety), built only by `.github/workflows/android.yml` |
 | Deep links | parsed in `web/src/App.svelte` (`deepLink`): `ev_<id>`, `cl_<id>`, ... |
@@ -73,6 +73,8 @@ One line per top-level module (`logic/` is in the table above). Each module's do
 | `mtbot.py` | `/all`'s member list over MTProto, signed in as the bot (not the userbot) |
 | `userbot.py` | a person's Telegram account that reads clubs' channels (Telegram side only) |
 | `mirror.py` | the rules that turn what the userbot saw into a club's posts (database side only) |
+| `akosend.py` | admissions (AKO) reminders and interview invites out, by Telegram bot and e-mail (run by the postman's round) |
+| `feeds.py` | what YouTube and Instagram share (`Feed`): linked sources, first reads, posts made, links taken off; the providers only fetch and parse |
 | `instagram.py` | clubs' Instagram posts into their news (Graph API) |
 | `youtube.py` | clubs' YouTube videos into their news (public feed) |
 | `tiktok.py` | group replies with the video for TikTok, Shorts, Instagram links |
@@ -110,6 +112,7 @@ cd web && npm run check && npm test                   # svelte-check 0 errors, 0
 
 One file: `pytest -q tests/test_x.py -k name` (~1 min: the schema and migrations are built per process). `npm test`
 includes a design ratchet (`web/src/lib/design.test.ts`): new raw hex/font/radius values fail it.
+Outside `web/src/ui/`, per-file `backdrop-filter` and raw `rgba()`/`hsla()` counts may only go down too.
 
 Checking a screen: open a link `qa.py` prints, at phone size (375 px, also 320), in both themes. A hidden browser
 tab freezes animations and `requestAnimationFrame`: look with it visible.
