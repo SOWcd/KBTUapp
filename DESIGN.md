@@ -30,13 +30,15 @@ screen must look like it was always part of it. Apple-level minimalism. Speed co
   enlarged text). Essential actions stay reachable and never hide content.
 - Content is never glass. Cards, lists and text sit on solid surfaces beneath the islands. Glass on content turns muddy.
 - One material family with the tab bar's look as its benchmark, varied by size and background (a menu is more opaque
-  than a small capsule; `base.css`). Quiet solid fills for inline controls; glass only for floating ones.
+  than a small capsule: `--menu-bg` in `tokens.css`). Every button keeps the family's look (`ui/Button.svelte`); only
+  floating controls blur what is under them.
 - Apple's own before/after (the owner's reference): a full-width toolbar with coloured icons becomes small glass CAPSULES
   (related actions grouped) and round glass BUTTONS (a single action) floating over the content, with monochrome icons.
   Our pinned bars and decorative coloured icons are the "before". Toolbar icons default to monochrome; semantic colour
-  (selection, status, a destructive red) stays, always backed by a label or shape.
+  (selection, status, a destructive red) stays, always backed by a label or shape. Semantic colour is a tint on a mark or label, never a
+  saturated button fill or a coloured icon tile.
 
-## Never (he has rejected each of these, most of them more than once)
+## Never (the **(owner)** items are his own verdicts, most given more than once)
 - **(owner)** Coloured rounded-square icon tiles (iOS Settings style): "always childish". Use monochrome line icons, a 3D object, or type.
 - **(owner)** Muddy blur. A blurred copy of a poster under text turns bright posters into a brown or grey smear. Use a clean dark gradient
   scrim, or text where the picture is calm.
@@ -49,7 +51,7 @@ screen must look like it was always part of it. Apple-level minimalism. Speed co
 - Endless lists in summary sections: a preview shows about 6 plus "All N". Where browsing is the screen's main task
   (search, a feed, a full list) show it all and keep the scroll position.
 - Black letterbox bars on avatars and logos. Photos fill their shape (cover, cropped around the face); logos and wordmarks
-  stay whole (contain, with padding on a neutral surface).
+  stay whole (contain, with padding on a neutral surface; `ui/OrgLogo.svelte` still uses cover: a "before").
 - Coloured status rings around avatars (the green "event coming up" ring): old-fashioned. Use no ring, or a subtle modern cue.
 - **(owner)** Glow that leaks: only the active card glows, never the neighbours peeking in a carousel.
 - Flat emoji boxes as a poster stand-in. Copying another product's layout (the Luma-style editor).
@@ -61,7 +63,7 @@ Based on the context menu's animation (`web/src/ui/Menu.svelte`): it grows out o
 (about 400 ms in, 150 ms out), transform and opacity only, no animated blur or clip-path, smooth on a mid-range Android.
 One motion language for sheets, menus, cards and tabs, each motion with a role. Criticism of an effect means improve it
 first; simplify or remove it when it costs speed (goal 1 wins), hurts comprehension or comfort. Reduced motion is always
-respected (`calm()`: no spring, a plain fade or none) and motion never delays a tap.
+respected (`calm()` in `web/src/ui/fold.ts`: no spring, a plain fade or none) and motion never delays a tap.
 
 ## How design work is done here
 1. Brief: the goal, the anchors above (with their screenshots), keep every function, and full freedom on layout.
@@ -72,7 +74,7 @@ respected (`calm()`: no spring, a plain fade or none) and motion never delays a 
    added to ui/ in the same PR. A screen-local piece moves to ui/ once a second screen needs it.
 3. Check on REAL content: real posters (public event art: bright, dark and busy ones), long titles, 320 px, both themes.
    Drawn fixtures alone hide the worst cases. Also: enlarged text, reduced motion and transparency, screen-reader labels,
-   keyboard focus, tap targets at least 44x44 CSS px, text contrast WCAG AA in both themes. Never real people's names, photos or handles in screenshots: use the
-   made-up people `server/tools/qa.py` seeds.
+   keyboard focus, tap targets at least 44x44 CSS px, text contrast WCAG AA in both themes. Never real people's names,
+   photos or handles in screenshots: use the made-up people `server/tools/qa.py` seeds.
 4. Fable builds. An Opus critic reviews against this file. Fable fixes. The owner sees screenshots and picks. An adversarial
    pre-merge review runs. Merge, and the owner judges on prod. One screen per PR.
