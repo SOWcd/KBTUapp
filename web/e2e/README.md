@@ -48,6 +48,8 @@ npx playwright test e2e/a11y.spec.ts --project=snap-dark --project=snap-light   
 ## CI
 
 `.github/workflows/ci.yml`, job `e2e`, on every PR that touches `web/` or `server/`: the flows in Chromium 375 dark in
-two shards, and the snapshots and the a11y check beside them, all through `linux.sh`. When it fails, the run's artifact `e2e-<n>` has
+two shards, and the snapshots and the a11y check beside them, and Telegram on Android (`android` project,
+`android.spec.ts`: Telegram's Android launch at 360x800 on a 4x slower CPU; the tab bar under Telegram's insets, the
+LOW phone's light look, a 100-post News's tap-to-frame and main-thread numbers in the job summary), all through `linux.sh`. When it fails, the run's artifact `e2e-<n>` has
 `results/` (for a snapshot: `*-expected.png`, `*-actual.png`, `*-diff.png`; a trace per failed test) and the HTML
 report.

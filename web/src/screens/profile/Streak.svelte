@@ -38,7 +38,7 @@
     {#if lit.length}
       <button class="fr" onclick={() => { haptic.tap(); sheets.streaks(); }} aria-label={`${t('streak.friends')}: ${lit.map((f) => f.streak).join(', ')}`}>
         {#each lit as f (f.person.id)}
-          <span class="f"><Avatar person={f.person} size={28} tappable={false} /><i class="num">{f.streak}</i></span>
+          <span class="f"><Avatar person={f.person} size={28} tappable={false} /> <i class="num">{f.streak}</i></span>
         {/each}
       </button>
     {/if}

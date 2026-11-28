@@ -22,14 +22,12 @@ from pathlib import Path
 
 import httpx
 
-from . import download, media, mirror
-from .logic import now, one, photo_free, rows, tx, wipe_post
-from .logic.clubs import stories_open
+from . import download, mirror
+from .feeds import Feed
+from .logic import now, one
 
 GRAPH = "https://graph.facebook.com/v24.0/"  # a Graph API version lives two years: move it on when Meta retires it
 CDN = ("cdninstagram.com", "fbcdn.net")      # where Instagram's pictures are (media_url, thumbnail_url)
-FIRST_TAKE, FIRST_DAYS = 5, 30               # an account linked anew: at most its last 5 posts of the last 30 days
-PER_ROUND = 5                                # an account's new posts in one round at most (the rest next round)
 ASK = 12                                     # an account's latest posts asked for each round
 RETRY = 86400                                # a handle with no business/creator account behind it: asked again a day later
 CALLS, BATCH = 90, 50                        # calls a round (two rounds an hour: 180 < 200), calls in one HTTP request
@@ -58,56 +56,18 @@ def handle(url: str) -> str | None:
     return h if h and h not in _NOT_HANDLE and not h.startswith(".") and ".." not in h else None
 
 
-def wanted(con) -> list[dict]:
-    """The clubs' Instagram handles, each with what is known of it (its account id, how far it was taken)."""
-    links = []
-    # every club's, hidden ones too: hiding a club hides its posts already, only a link taken off takes them down
-    # (forget); fresh() posts for active clubs alone
-    for o in rows(con, "SELECT id, links FROM orgs WHERE links IS NOT NULL"):
-        try:
-            urls = json.loads(o["links"] or "[]")
-        except ValueError:
-            continue
-        for url in urls if isinstance(urls, list) else []:
-            if h := handle(url):
-                links.append((o["id"], h))
-    known = {(r["org_id"], r["handle"]): r for r in rows(con, "SELECT * FROM ig_accounts")}
-    return [{"org": oid, "handle": h, **({"account": k["ig_id"], "seen": k["seen_until"], "checked": k["checked_at"]}
-                                         if (k := known.get((oid, h))) else {"account": None, "seen": None, "checked": None})}
-            for oid, h in dict.fromkeys(links)]
+def _links(raw: str):
+    try:
+        urls = json.loads(raw or "[]")
+    except ValueError:
+        return []
+    return [h for url in urls if (h := handle(url))] if isinstance(urls, list) else []
 
 
 def due(con, at: int) -> list[dict]:
     """This round's accounts: the least recently read first, CALLS at most; a handle with no account waits RETRY."""
-    ws = [w for w in wanted(con) if not (w["checked"] is not None and w["account"] is None and at - w["checked"] < RETRY)]
+    ws = [w for w in feed.wanted(con) if not (w["checked"] is not None and w["account"] is None and at - w["checked"] < RETRY)]
     return sorted(ws, key=lambda w: w["checked"] or 0)[:CALLS]
-
-
-def forget(con, root: Path | None = None) -> list[int]:
-    """Handles their club no longer links: their posts taken down and wiped like a deleted channel post (mirror.gone),
-    the rows gone. The posts taken down."""
-    linked = {(w["org"], w["handle"]) for w in wanted(con)}
-    down, paths = [], []
-    with tx(con):
-        for a in rows(con, "SELECT org_id, handle FROM ig_accounts"):
-            if (a["org_id"], a["handle"]) in linked:
-                continue
-            con.execute("DELETE FROM ig_accounts WHERE org_id = ? AND handle = ?", (a["org_id"], a["handle"]))
-            for m in rows(con, "SELECT post_id FROM ig_media WHERE org_id = ? AND handle = ? AND post_id IS NOT NULL", a["org_id"], a["handle"]):
-                con.execute("UPDATE posts SET hidden_at = COALESCE(hidden_at, ?) WHERE id = ?", (now(), m["post_id"]))
-                paths += wipe_post(con, m["post_id"])
-                down.append(m["post_id"])
-            con.execute("DELETE FROM ig_media WHERE org_id = ? AND handle = ?", (a["org_id"], a["handle"]))
-    if root:
-        media.drop(root, [p for p in paths if photo_free(con, p)])
-    return down
-
-
-def read(con, oid: int, h: str, account: str | None) -> None:
-    """A handle asked about: its account id, or None (no business/creator account there: asked again after RETRY)."""
-    con.execute("""INSERT INTO ig_accounts (org_id, handle, ig_id, checked_at) VALUES (?, ?, ?, ?)
-        ON CONFLICT (org_id, handle) DO UPDATE SET ig_id = excluded.ig_id, checked_at = excluded.checked_at""",
-                (oid, h, account, now()))
 
 
 def parse_media(items) -> list[dict]:
@@ -130,44 +90,14 @@ def parse_media(items) -> list[dict]:
     return sorted(out, key=lambda x: -x["at"])
 
 
-def fresh(con, w: dict, posts: list[dict]) -> list[dict]:
-    """The posts to bring now, oldest first: newer than what was taken (on a first read: the last FIRST_DAYS, at most
-    FIRST_TAKE), not seen before, PER_ROUND at most; none for a club that may not post stories."""
-    o = one(con, "SELECT * FROM orgs WHERE id = ? AND status = 'active'", w["org"])
-    if not o or not stories_open(con, o):
-        return []
-    since = w["seen"] if w["seen"] is not None else now() - FIRST_DAYS * 86400
-    new = [p for p in posts if p["at"] > since and not one(con, "SELECT 1 FROM ig_media WHERE media_id = ?", p["id"])]
-    # first read: the newest few; after that the oldest first, so a backlog's rest comes next round (seen_until moves up)
-    return list(reversed(new[:FIRST_TAKE])) if w["seen"] is None else list(reversed(new))[:PER_ROUND]
-
-
 def text(caption: str, name: str, link: str) -> tuple[str, str]:
     """A post's title and body: the caption split as a channel post's (mirror._split), the post's link last."""
     p = mirror._split(caption, name)
     return p["title"], f"{p['body']}\n\n{link}" if p["body"] else link
 
 
-def take(con, w: dict, posts: list[dict], photos: dict[str, dict]) -> list[int]:
-    """The new posts as the club's (photos: media.save's answer per media id), and how far the account was read.
-    The posts made."""
-    made = []
-    with tx(con):
-        name = one(con, "SELECT name FROM orgs WHERE id = ?", w["org"])["name"]
-        for p in posts:
-            if one(con, "SELECT 1 FROM ig_media WHERE media_id = ?", p["id"]):
-                continue
-            fid = mirror._photo(con, photos[p["id"]]) if p["id"] in photos else None
-            title, body = text(p["caption"], name, p["link"])
-            pid = con.execute("""INSERT INTO posts (org_id, author_id, audience, title, body, photo_file_id, comments_on, created_at)
-                VALUES (?, NULL, 'public', ?, ?, ?, 1, ?)""", (w["org"], title, body, fid, p["at"])).lastrowid
-            con.execute("INSERT INTO ig_media (media_id, org_id, handle, post_id, published_at) VALUES (?, ?, ?, ?, ?)",
-                        (p["id"], w["org"], w["handle"], pid, p["at"]))
-            made.append(pid)
-        base = w["seen"] if w["seen"] is not None else now() - FIRST_DAYS * 86400
-        con.execute("UPDATE ig_accounts SET seen_until = ? WHERE org_id = ? AND handle = ?",
-                    (max([base, *(p["at"] for p in posts)]), w["org"], w["handle"]))
-    return made
+feed = Feed("ig_accounts", "ig_media", "handle", "ig_id", "media_id", _links,
+            lambda p, name: text(p["caption"], name, p["link"]), lambda p: p["picture"], CDN, PIC_TIMEOUT)
 
 
 def query(cfg, h: str) -> str:
@@ -243,7 +173,7 @@ async def sweep(cfg, http: httpx.AsyncClient, con) -> int:
     if not (cfg.ig_user_id and cfg.ig_token):
         return 0
     root = Path(cfg.db_path).resolve().parent / "media"
-    await asyncio.to_thread(forget, con, root)
+    await asyncio.to_thread(feed.forget, con, root)
     if await asyncio.to_thread(paused, con, now()):
         return 0
     ws = await asyncio.to_thread(due, con, now())
@@ -263,26 +193,14 @@ async def sweep(cfg, http: httpx.AsyncClient, con) -> int:
                     if code in RATE or code == TOKEN:
                         trouble = code
                     elif code not in TRANSIENT:  # not a business or creator account, renamed, gone: asked again a day later
-                        await asyncio.to_thread(read, con, w["org"], w["handle"], None)
+                        await asyncio.to_thread(feed.read, con, w["org"], w["handle"], None)
                     continue
                 found = json.loads(a.get("body") or "{}").get("business_discovery") or {}
                 w["account"] = str(found.get("id") or "") or None
-                await asyncio.to_thread(read, con, w["org"], w["handle"], w["account"])
+                await asyncio.to_thread(feed.read, con, w["org"], w["handle"], w["account"])
                 if not w["account"]:
                     continue
-                new = await asyncio.to_thread(fresh, con, w, parse_media((found.get("media") or {}).get("data")))
-                photos = {}
-                for p in new:
-                    if not p["picture"] or time.monotonic() >= end:
-                        continue
-                    data = await download.fetch(http, p["picture"], CDN, media.MAX_BYTES, types=("image/",), seconds=PIC_TIMEOUT)
-                    try:
-                        if data:
-                            photos[p["id"]] = await asyncio.to_thread(media.save, data, root)
-                    except media.BadImage:
-                        pass  # no picture: the post goes without one
-                if new or w["seen"] is None:
-                    made += len(await asyncio.to_thread(take, con, w, new, photos))
+                made += await feed.post(con, http, root, w, parse_media((found.get("media") or {}).get("data")), end)
             except Exception as exc:  # noqa: BLE001  one account's trouble never stops the others or the round
                 log.warning("instagram %s: %s", w["handle"], type(exc).__name__)
         if trouble is not None or busy(headers):

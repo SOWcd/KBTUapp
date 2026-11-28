@@ -293,13 +293,15 @@
     {#if rest && streak}<Streak a={streak} mine {friends} />{/if}
     <!-- two squares: my friends as a cluster of faces, and my invite -->
     {#if rest}<div class="duo" data-away>
-      <button class="sq fr surface" onclick={() => { haptic.tap(); sheets.friends(); }} aria-label={asked ? `${t('page.friends')}, ${t('fr.requests')}: ${asked}` : t('page.friends')}>
+      <!-- its name reads as it shows ("Friends 3"), then the requests (the badge drawn in the corner, last in the DOM) -->
+      <button class="sq fr surface" onclick={() => { haptic.tap(); sheets.friends(); }}
+        aria-label={asked ? `${t('page.friends')} ${friends.length ? friends.length : t('fr.add')} ${asked}, ${t('fr.requests')}` : undefined}>
         {#if friends.length}
           <span class="cluster" aria-hidden="true">{#each faces.slice(0, SPOTS.length) as r, i (r.person.id)}
             {@const [w, x, y] = SPOTS[i]}<span class="spot" style="--i:{i};width:{w}%;left:{x}%;top:{y}%"><Avatar person={r.person} size={Math.round(w * 1.3)} tappable={false} /></span>{/each}</span>
         {:else}<span class="cluster ghost" aria-hidden="true">{#each SPOTS.slice(0, 9) as [w, x, y], i (i)}<span class="spot" style="--i:{i};width:{w}%;left:{x}%;top:{y}%">{#if !i}<Plus size={22} strokeWidth={2.4} />{/if}</span>{/each}</span>{/if}
+        <span class="ft"><b>{t('page.friends')}</b> {#if friends.length}<span class="num fn">{friends.length}</span>{:else}<i>{t('fr.add')}</i>{/if}</span>
         {#if asked}<b class="req num">{asked}</b>{/if}
-        <span class="ft"><b>{t('page.friends')}</b>{#if friends.length}<span class="num fn">{friends.length}</span>{:else}<i>{t('fr.add')}</i>{/if}</span>
       </button>
       {#if me.referrals}<Invite r={me.referrals} ach={card?.awards.achievements.find((a) => a.code === 'referral')} />{/if}
     </div>{/if}
