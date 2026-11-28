@@ -351,7 +351,7 @@
     <!-- the card is a portrait: the organizer's tall framing (the Feed's), not the wide card's, which lost half its width here -->
     {@const art = coverFor(e.cover, 'feed') ?? e.video?.poster ?? null}
     {@const pic = !!art}
-    <section class="hero theme-dark" class:tix={mine && i === 0} class:nopic={!pic} style:--c={e.cover?.color ?? e.video?.poster?.color ?? e.color ?? e.tint} onclickcapture={() => tap(c)}>
+    <section class="hero theme-dark" class:lit={i === atCard} class:tix={mine && i === 0} class:nopic={!pic} style:--c={e.cover?.color ?? e.video?.poster?.color ?? e.color ?? e.tint} onclickcapture={() => tap(c)}>
       <button class="hit" onpointerdown={(ev) => touchAhead(ev, () => prefetchEvent(e.id))} onclick={(ev) => sheets.event(e.id, ev.currentTarget.parentElement?.querySelector('.poster'))} aria-label={e.title}></button>
       <span class="art"><HeroArt pic={art} emoji={e.emoji} color={e.color ?? e.tint} first={i === 0} /></span>
       <div class="shade"></div>
@@ -377,7 +377,7 @@
   {:else}
     {@const v = look(c)}
     <!-- news, a forum post, my next class: the same card, its picture or a 3D mark, the title and one line -->
-    <section class="hero theme-dark" class:nopic={!v.item.cover} style:--c={v.color} onclickcapture={() => tap(c)}>
+    <section class="hero theme-dark" class:lit={i === atCard} class:nopic={!v.item.cover} style:--c={v.color} onclickcapture={() => tap(c)}>
       <button class="hit" onclick={v.open} aria-label={v.title}></button>
       <span class="art"><HeroArt pic={v.item.cover} emoji={v.item.emoji} color={v.color} first={i === 0} /></span>
       <div class="shade"></div>
@@ -588,14 +588,14 @@
 
   /* (owner, Nov 27-28) the hero is the screen's one big card, most of the first screen: the cover tall and whole, the words
      on the cover itself. The card is media, so it is dark in both themes (.theme-dark: white words, the dark tags) */
-  .hero { --halo: 0.62; position: relative; isolation: isolate; display: flex; flex-direction: column; justify-content: flex-end; height: var(--hh);
+  .hero { position: relative; isolation: isolate; display: flex; flex-direction: column; justify-content: flex-end; height: var(--hh);
     border-radius: var(--r-xl); background: var(--media); color: var(--text); transition: transform var(--t-fast) var(--ease); }
   .hero:has(> .hit:active) { transform: scale(0.985); }
   /* the hero's cards side by side, one in view, snapped; edge to edge so the next one waits just past the gutter. A
-     scroller clips, so it leaves room around the cards for their light (the glow reaches 44px under a card) and takes it
+     scroller clips, so it leaves room under the cards for their shadow (it reaches 48px under a card) and takes it
      back with its margins */
   .heroes { --hh: clamp(340px, 60vh, 540px); display: flex; gap: var(--s-3); overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; scrollbar-width: none;
-    margin: calc(-1 * var(--s-4)) calc(-1 * var(--gutter)) -44px; padding: var(--s-4) 0 44px var(--gutter); }
+    margin: calc(-1 * var(--s-4)) calc(-1 * var(--gutter)) -48px; padding: var(--s-4) 0 48px var(--gutter); }
   .heroes::-webkit-scrollbar { display: none; }
   .heroes.short { --hh: clamp(320px, 52vh, 440px); }
   .heroes::after { content: ''; flex: 0 0 calc(var(--gutter) - var(--s-3)); } /* the end's gutter (a scroller's end padding is lost in older WebKit) */
@@ -611,28 +611,23 @@
   .dots { display: flex; justify-content: center; gap: 6px; margin-top: var(--s-3); }
   .dots i { width: 6px; height: 6px; border-radius: var(--r-full); background: var(--text-3); opacity: 0.45; transition: opacity var(--t-fast) var(--ease); }
   .dots i.on { opacity: 1; }
-  /* Opal's neon under the card, in the cover's own colour (--c): a close halo and a wide pool below. It blooms once as
-     the page opens and rests; the shadow is painted once and only its opacity moves. The card no longer clips (the
-     cover does), so the light can leave it */
-  .hero::before { content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none; opacity: var(--halo);
-    box-shadow: 0 0 14px 0 var(--c, transparent), 0 16px 38px -10px var(--c, transparent); animation: bloom 2.2s var(--ease) 0.2s backwards; }
-  /* the halo always shows against the theme (owner: a pale cover's light vanished on the light ground): the cover's hue,
-     lifted on black and deepened on light, its colour strengthened in proportion (owner: a cream cover glowed yellow
-     when a floor of colour was forced onto its near-grey). Where relative colour isn't known (older iOS) none of it
-     applies and the cover's own colour stays */
-  :global(:root[data-theme='light']) .hero { --halo: 0.26; }
-  @supports (color: oklch(from red l c h)) {
-    .hero::before { box-shadow: 0 0 14px 0 var(--cg), 0 16px 38px -10px var(--cg); }
-    .hero { --cg: oklch(from var(--c, transparent) max(l, 0.66) min(calc(c * 2.5), 0.2) h); }
-    :global(:root[data-theme='light']) .hero { --halo: 0.3; --cg: oklch(from var(--c, transparent) min(l, 0.58) min(calc(c * 2.5), 0.2) h); }
-  }
-  @keyframes bloom { from { opacity: 0; } 40% { opacity: calc(var(--halo) * 1.5); } }
+  /* Light (the engine's one model): a white light from above, nothing radiates. The card shows it three ways: its top
+     edge catches it (.shade's rim), it throws a plain shadow down (seen on the pale ground, nothing on black), and its
+     cover's colour falls only into that shadow: a soft pool straight under the card, narrower than the card, so it never
+     reaches the cards beside it, and only under the card in view. The cover's own colour, as it is: no ring, no boost */
+  .hero { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1), 0 22px 36px -22px rgba(0, 0, 0, 0.42); }
+  .hero::before { content: ''; position: absolute; left: 12%; right: 12%; bottom: -10px; height: 40px; z-index: -1; border-radius: 50%; pointer-events: none;
+    background: var(--c, transparent); filter: blur(20px); opacity: 0; transition: opacity var(--t-slow) var(--ease); }
+  .hero.lit::before { opacity: 0.5; }
+  :global(:root[data-theme='light']) .hero.lit::before { opacity: 0.34; }
   .art, .shade { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; }
   .art { overflow: hidden; }
-  /* the card's hair rim; with no cover, the mesh deeper toward the words */
-  .shade { box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.14); }
+  /* the card's rim, lit: bright where it faces the light (the top left), a hair along the sides, a faint return at the
+     foot. With no cover, the mesh deeper toward the words */
+  .shade::after { content: ''; position: absolute; inset: 0; padding: 1px; border-radius: inherit;
+    background: linear-gradient(170deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.14) 28%, rgba(255, 255, 255, 0.04) 60%, rgba(255, 255, 255, 0.1));
+    -webkit-mask: linear-gradient(black 0 0) content-box, linear-gradient(black 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
   .nopic .shade { background: linear-gradient(rgba(0, 0, 0, 0) 36%, rgba(0, 0, 0, 0.5)); } /* a cover has HeroArt's own scrim */
-  @media (prefers-reduced-motion: reduce) { .hero::before { animation: none; } }
   /* the words lie on the cover itself, no box inside the card: HeroArt darkens the picture under them */
   .slab { position: relative; z-index: 2; /* over the card's own tap */ isolation: isolate; display: flex; flex-direction: column; padding: 76px 18px var(--s-4);
     border-radius: 0 0 var(--r-xl) var(--r-xl); color: var(--text); pointer-events: none; }
