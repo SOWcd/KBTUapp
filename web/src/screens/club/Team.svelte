@@ -37,6 +37,8 @@
   import Row from '../../ui/Row.svelte';
   import Chip from '../../ui/Chip.svelte';
   import EmptyState from '../../ui/EmptyState.svelte';
+  import SearchField from '../../ui/SearchField.svelte';
+  import { hit } from '../../lib/search';
   import Skeleton from '../../ui/Skeleton.svelte';
   import { menu } from '../../ui/menu';
   import SortChip from '../../ui/SortChip.svelte';
@@ -52,7 +54,7 @@
   let setup = $state<TeamSetup | null>(null);
   const loadSetup = (org: number) => api.teamSetup(org).then((x) => { if (m?.org.id === org) setup = x; }).catch(() => {});
   const orgId = $derived(m?.org.id); // the same club with a fresh membership (a return refresh) keeps the filter
-  $effect(() => { const org = orgId; untrack(() => { filter = null; setup = null; off = false; if (org) { void loadTeam(org); void loadSetup(org); if (first != null) sheets.member(org, first, () => setup, deptChoices, refresh); } first = undefined; }); });
+  $effect(() => { const org = orgId; untrack(() => { filter = null; q = ''; setup = null; off = false; if (org) { void loadTeam(org); void loadSetup(org); if (first != null) sheets.member(org, first, () => setup, deptChoices, refresh); } first = undefined; }); });
   let linkOpen = $state(false); // the link icon's two cards
   let off = $state(false); // the open link turned off here, ahead of the server (and of a setup fetched before it)
   const link = $derived(off ? null : (setup?.teamLink ?? null));
@@ -84,12 +86,13 @@
   }
   let busy = $state(false);
   let filter = $state<number | 'probation' | null>(null); // a tag's id, or those on probation
+  let q = $state(''); // a name or @username (a Head of HR's ask): the box shows once the list is long
   const me = $derived(session.me?.id);
   const vice = $derived(may(m, 'team'));  // roles, removing at once, probation off
   const tagOf = $derived(new Map((setup?.tags ?? []).map((g) => [g.id, g])));
   const onProbation = $derived((list ?? []).filter((x) => x.probation).length);
   const ORDERS: Order<TeamMember>[] = [usual('sort.role'), byName((x) => x.fullName), newest((x) => x.joinedAt)]; // the server's: highest role first
-  const shown = $derived(sorted('team', ORDERS, (list ?? []).filter((x) => filter == null || (filter === 'probation' ? x.probation : x.tags?.includes(filter)))));
+  const shown = $derived(sorted('team', ORDERS, (list ?? []).filter((x) => (filter == null || (filter === 'probation' ? x.probation : x.tags?.includes(filter))) && (!q.trim() || hit(q, [x.fullName, x.person.nick, x.username]))));
   // one list, highest role first (the server's order); departments are their own chips (grouped, the
   // President would sit last under "no department" and the heads would scatter)
   const depts = $derived((setup?.tags ?? []).filter((g) => g.department));
@@ -240,6 +243,7 @@
     {/if}
 
     {#if list}
+      {#if list.length > 8}<SearchField bind:value={q} placeholder={t('door.search')} />{/if}
         {#if depts.length}
           <div class="chips">
             <Chip selected={filter == null} onclick={() => (filter = null)}>{t('common.all')}<span class="n num">{list.length}</span></Chip>
