@@ -17,7 +17,7 @@ from collections.abc import Awaitable, Callable
 import anyio.to_thread
 import httpx
 
-from . import casting, checkin, db, instagram, logic, mirror, push, texts, tgc, youtube
+from . import akosend, casting, checkin, db, instagram, logic, mirror, push, texts, tgc, youtube
 from .bot import _send, _stopping, _tg
 from .bot_dm import MUTE_ROW, _feedback_buttons
 from .chores import _chores, _userpics, offsite_round, post_channel, refresh_chats
@@ -59,6 +59,8 @@ def _render(con, m) -> tuple[str, str | None, str | list] | None:
         return text, button, f"ev_{evs[0]['id']}"
     if kind.startswith("tgc_"):  # the forum channel's comments (tgc.py)
         return tgc.render(con, m, lang)
+    if kind.startswith("ako_"):  # an applicant's reminder with sample data, to the owner first (admin ako-preview)
+        return logic.ako.preview(kind, lang)
     if kind.startswith("lib_"):  # library seats (logic/library.py): a seat's number and its table's label, never a name
         return logic.library.render(con, m, lang)
     if kind == "fch_comments":
@@ -655,6 +657,7 @@ async def send_due(cfg: Config, http: httpx.AsyncClient) -> None:
         await tgc.tick(cfg, http, con)  # the forum channel's comments: strangers' texts after the hour, deletions, unbans
         await tgc.post_tick(cfg, http, con)  # the forum channel's posts: taken down, then the new ones published
         await _withdrawn_offers(cfg, http, con)
+        await akosend.tick(cfg, http, con)  # applicants' interview reminders (AKO_REMIND), once a minute
         await _userpics(cfg, http, con)  # Telegram photos copied to /media: t.me takes ~1 s on every open
         if await anyio.to_thread.run_sync(logic._once, con, "yt_hour", str(now() // 3600)):
             await youtube.sweep(cfg, http, con)  # hourly: the clubs' YouTube channels' new videos as their posts

@@ -2853,4 +2853,18 @@ MIGRATIONS: list[tuple[int, str]] = [
     CREATE INDEX IF NOT EXISTS ako_uploads_by_app ON ako_uploads(app_id, at);
     CREATE INDEX IF NOT EXISTS ako_uploads_by_ip ON ako_uploads(ip, at);
     CREATE INDEX IF NOT EXISTS ako_uploads_by_org ON ako_uploads(org_id, at);"""),
+    # Admissions reminders (logic/ako.py due, kbtu/akosend.py): the chat that tapped /start ako_... gets them (cleared when
+    # decided, a day after the interview, or with a new link), and each send claimed once. No CHECK on kind or channel:
+    # a CHECK can't be altered, and WhatsApp is to come
+    (266, """ALTER TABLE ako_apps ADD COLUMN tg_chat INTEGER;
+    CREATE TABLE IF NOT EXISTS ako_sends (
+      app_id  INTEGER NOT NULL REFERENCES ako_apps(id) ON DELETE CASCADE,
+      kind    TEXT NOT NULL,                          -- booked (the invite), d1 (a day before), h1 (an hour before)
+      channel TEXT NOT NULL,                          -- telegram, email
+      slot_at INTEGER NOT NULL,                       -- the interview's start it was for: a moved one is another send
+      at      INTEGER NOT NULL,                       -- claimed
+      sent_at INTEGER,
+      error   TEXT,                                   -- why it never went (an exception's class, never an address)
+      PRIMARY KEY (app_id, kind, channel, slot_at)
+    ) STRICT;"""),
 ]

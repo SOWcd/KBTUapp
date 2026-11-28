@@ -205,6 +205,12 @@ Ideas and fixes are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Security is
   path to it, or its base64. Any one unset, or a key that isn't the certificate's: off (no button, `/wallet/…` is a
   404). The download link is in `/api/me` only (Safari has no session), signed with `TOKEN_KEY` over the badge's
   code: it gives what `/api/me` already gives, and dies with the code (a deleted account) or a ban. Never in the repo.
+- `AKO_REMIND=1`: an admissions applicant's interview reminders (`logic/ako.py`, `kbtu/akosend.py`): their page offers
+  the bot's link (`/start ako_…`), and the bot writes a day and an hour before. Off (the default): no link and no send
+  by any channel. Only after the owner's yes on `admin ako-preview @who`, and once the policy names the chat and the
+  e-mails. `AKO_MAIL_FROM` + `SMTP_HOST` (`SMTP_PORT`, 587 by default, 465 is TLS; `SMTP_USER`, `SMTP_PASSWORD`): the
+  same reminders and the invite (`.ics`) by e-mail to the address the applicant gave; either unset: no e-mail. Never in
+  the repo. WhatsApp is the next channel (the note atop `akosend.py`).
 - No switch changes the policy or the consent version.
 - `WEB_CONCURRENCY`: uvicorn workers (the app is multi-worker safe).
 
