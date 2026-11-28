@@ -47,7 +47,8 @@ test('News with 100 posts: tap to first frame, main thread after', async ({ page
       CAST(strftime('%s', 'now') AS INTEGER) - i * 3600 FROM n;`);
   await english(page);
   const p: Phone = await open('Ali');
-  await expect(p.page.getByRole('button', { name: tr('page.news'), exact: true })).toBeVisible();
+  const more = p.page.locator('.more button, button.more'); // News opens from the Afisha's "More" (its menu)
+  await expect(more).toBeVisible();
   await p.page.waitForTimeout(4000); // the News chunk warmed in an idle moment (App warmPages), as on a phone a few seconds in
   await p.page.evaluate(() => {
     const w = window as unknown as { __long: { start: number; duration: number }[] };
@@ -58,8 +59,10 @@ test('News with 100 posts: tap to first frame, main thread after', async ({ page
   // is on the screen (lib/stats.ts timed()), the long tasks in the 3 s after, the last post scrolled to, then Back
   const runs: { tti: number; max: number; tbt: number; posts: number; last: number }[] = [];
   for (let i = 0; i < 5; i++) {
+    await more.click(); // the menu first, outside the measure: the tap timed is the one on "News"
+    await expect(p.page.getByRole('menuitem', { name: tr('page.news'), exact: true })).toBeVisible();
     const { tti, t0 } = await p.page.evaluate(async (label) => {
-      const b = document.querySelector<HTMLElement>(`button[aria-label="${label}"]`)!;
+      const b = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((x) => x.textContent?.trim() === label)!;
       const t0 = performance.now();
       b.click();
       await new Promise<void>((done) => {

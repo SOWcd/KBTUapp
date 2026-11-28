@@ -646,8 +646,10 @@
     border-radius: 0 0 var(--r-xl) var(--r-xl); color: var(--text); pointer-events: none; }
   .lens { position: absolute; inset: 0; z-index: -2; overflow: hidden; border-radius: inherit; pointer-events: none;
     -webkit-mask-image: linear-gradient(transparent, rgba(0, 0, 0, 0.55) 56px, black 112px); mask-image: linear-gradient(transparent, rgba(0, 0, 0, 0.55) 56px, black 112px); }
-  .lens img { position: absolute; left: 0; bottom: 0; width: 100%; height: var(--hh); object-fit: cover;
-    transform: scale(1.2); transform-origin: 50% 100%; filter: blur(28px) saturate(1.7) brightness(0.6); }
+  /* the picture runs 64px past the lens on every side but the top: a blurred layer fades out at its own edges, and
+     at the card's foot the sharp cover showed through that fade */
+  .lens img { position: absolute; left: -64px; bottom: -64px; width: calc(100% + 128px); height: calc(var(--hh) + 64px); object-fit: cover;
+    filter: blur(32px) saturate(1.7) brightness(0.6); }
   /* over media the tags are white on a clear chip (the accent's blue on a blue cover was 2:1), the place has no underline
      (the whole card opens the event; the pin says it is a place) */
   .hsub :global(.chip) { background: rgba(255, 255, 255, 0.18); color: var(--on-accent); }
