@@ -64,7 +64,7 @@
   import MapTopRow from './MapTopRow.svelte';
   import MapDock from './MapDock.svelte';
   import { floorName, doorNamed, checkFind as checkFindIn, roomTitle } from './mapFind';
-  import { flawsOn, sendFlaw, type Flaw } from './mapFlaws';
+  import { flawsOn, sendFlaw, type Flaw } from './myFlaws';
   import { api } from '../../lib/api';
   import { session } from '../../lib/state/session.svelte';
   import { takeMapIris, fadeIn, irisIn, fadeOut, irisOut } from './mapIris';
@@ -164,7 +164,7 @@
   // a long press in place: "something's wrong here" (the map's flaws marked in the app, not by screenshots),
   // a line of text, the spot to the admin's list with its floor and the plan's units
   // where it was marked (the spot was saved, but nothing showed where): a pin at the pressed point while the note
-  // is written, a check on it once saved, and my own open ones on the floor as small pins (mapFlaws.ts); a tap on one
+  // is written, a check on it once saved, and my own open ones on the floor as small pins (myFlaws.ts); a tap on one
   // shows its words
   let mine = $state<Flaw[]>([]);
   let draft = $state<{ ver: Ver; f: number; u: number; v: number } | null>(null);
