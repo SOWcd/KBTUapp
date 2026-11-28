@@ -117,7 +117,7 @@ export async function call<T>(method: string, path: string, body?: unknown, staf
   if (r.status === 403 && (data as ApiError | null)?.message === 'banned') dispatchEvent(new CustomEvent('kb:banned', { detail: data }));
   // held for the policy in force: the gate asks now, in place (App: sheets.consent), never on opening the app
   if (!r.ok && (data as ApiError | null)?.error === 'forbidden' && (data as ApiError | null)?.message === 'consent') sheets.consent();
-  const why = (data as ApiError | null)?.message;
+  const why = r.status === 403 ? (data as ApiError | null)?.message : undefined; // a 400's 'consent' is a stale version sent: an error
   if (!r.ok) onFail.fn?.(r.status >= 500 ? 'server' : why === 'consent' ? 'consent' : why === 'init_data' ? 'expired' : (data as ApiError | null)?.error ?? 'unavailable');
   if (!r.ok) throw new ApiErr((data as ApiError | null)?.error ?? 'unavailable', (data as ApiError | null)?.message || undefined, (data as Record<string, unknown> | null) ?? {});
   // an event the creator made in the Studio: its routes go as the club's from here on

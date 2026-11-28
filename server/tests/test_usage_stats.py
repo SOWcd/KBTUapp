@@ -143,7 +143,8 @@ def test_web_flows_errors_and_timings_match_the_allowlist():
     assert tuple(union("JsKind")) == stats.JS_KINDS and tuple(union("ApiKind")) == stats.API_KINDS
     codes = re.search(r"interface ApiError \{ error: (.*?);", (web / "lib/api/types.ts").read_text(encoding="utf-8")).group(1)
     assert set(re.findall(r"'([a-z_]+)'", codes)) == set(stats.API_KINDS) - {"network", "server", *stats.EXPECTED}  # the server's codes, all of them
-    assert "why === 'consent' ? 'consent' : why === 'init_data' ? 'expired'" in (web / "lib/api/client.ts").read_text(encoding="utf-8")
+    client = (web / "lib/api/client.ts").read_text(encoding="utf-8")  # a 403's reason only (a 400 may say 'consent' too)
+    assert "r.status === 403 ? (data as ApiError | null)?.message" in client and "why === 'consent' ? 'consent' : why === 'init_data' ? 'expired'" in client
     assert len(re.search(r"TTI_EDGES = \[(.*?)\]", src).group(1).split(",")) + 1 == len(stats.TTI)
     for steps, ends in stats.FUNNELS.values():                              # every step is a key someone can count
         assert all(k in stats.KEYS or k.startswith("andr.") for k in (*steps, *ends))
