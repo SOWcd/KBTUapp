@@ -54,6 +54,6 @@ test('a round of Spy: a room, three players, the role, the vote, the reveal', as
   for (const c of others) await act(c, (r) => (r.phase === 'guess' && r.role === 'spy' ? { type: 'guess', location: 'library' } : null));
   const mine = await dana.api<Room>('/api/rooms/join', { code });
   if (mine.phase === 'guess') await dana.api(`/api/rooms/${mine.id}`, { id: crypto.randomUUID(), v: mine.v, type: 'guess', location: 'library' });
-  await expect(sheet.locator('.end')).toBeVisible();
+  await expect(sheet.locator('header.end')).toBeVisible();
   await dana.look('spy reveal');
 });
